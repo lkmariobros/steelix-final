@@ -22,3 +22,35 @@ export const protectedProcedure = t.procedure.use(({ ctx, next }) => {
 		},
 	});
 });
+
+// Admin procedure with role validation
+export const adminProcedure = protectedProcedure.use(async ({ ctx, next }) => {
+	// Get user role from database since Better Auth session might not include it
+	const { db } = await import("../db");
+	const { user } = await import("../db/schema/auth");
+	const { eq } = await import("drizzle-orm");
+
+	const [userRecord] = await db
+		.select({ role: user.role })
+		.from(user)
+		.where(eq(user.id, ctx.session.user.id))
+		.limit(1);
+
+	const userRole = userRecord?.role;
+
+	if (!userRole || !["admin", "team_lead"].includes(userRole)) {
+		throw new TRPCError({
+			code: "FORBIDDEN",
+			message: "Admin access required",
+			cause: `User role '${userRole}' is not authorized for admin operations`,
+		});
+	}
+
+	return next({
+		ctx: {
+			...ctx,
+			session: ctx.session,
+			userRole,
+		},
+	});
+});

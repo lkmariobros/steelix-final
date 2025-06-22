@@ -1,13 +1,63 @@
-import { boolean, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
+import {
+	boolean,
+	pgTable,
+	serial,
+	text,
+	timestamp,
+	uuid,
+} from "drizzle-orm/pg-core";
 
+// Agencies table - top level of hierarchy
+export const agencies = pgTable("agencies", {
+	id: uuid("id").primaryKey().defaultRandom(),
+	name: text("name").notNull(),
+	slug: text("slug").notNull().unique(),
+	settings: text("settings"), // JSON string for agency settings
+	createdAt: timestamp("created_at").defaultNow().notNull(),
+	updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Teams table - belongs to agencies
+export const teams = pgTable("teams", {
+	id: uuid("id").primaryKey().defaultRandom(),
+	agencyId: uuid("agency_id")
+		.notNull()
+		.references(() => agencies.id, { onDelete: "cascade" }),
+	name: text("name").notNull(),
+	slug: text("slug").notNull(),
+	settings: text("settings"), // JSON string for team settings
+	createdAt: timestamp("created_at").defaultNow().notNull(),
+	updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Extended user table with hierarchy relationships
 export const user = pgTable("user", {
 	id: text("id").primaryKey(),
 	name: text("name").notNull(),
 	email: text("email").notNull().unique(),
 	emailVerified: boolean("email_verified").notNull(),
 	image: text("image"),
+	// Hierarchy relationships
+	agencyId: uuid("agency_id").references(() => agencies.id),
+	teamId: uuid("team_id").references(() => teams.id),
+	role: text("role").default("agent"), // 'agent', 'team_lead', 'admin'
+	permissions: text("permissions"), // JSON string for role permissions
 	createdAt: timestamp("created_at").notNull(),
 	updatedAt: timestamp("updated_at").notNull(),
+});
+
+// Dashboard preferences for customization
+export const dashboardPreferences = pgTable("dashboard_preferences", {
+	id: uuid("id").primaryKey().defaultRandom(),
+	userId: text("user_id")
+		.notNull()
+		.references(() => user.id, { onDelete: "cascade" }),
+	dashboardType: text("dashboard_type").notNull(), // 'agent' or 'admin'
+	layoutConfig: text("layout_config"), // JSON string for layout configuration
+	widgetVisibility: text("widget_visibility"), // JSON string for widget visibility
+	notificationSettings: text("notification_settings"), // JSON string for notifications
+	createdAt: timestamp("created_at").defaultNow().notNull(),
+	updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
 export const session = pgTable("session", {

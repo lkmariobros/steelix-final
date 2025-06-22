@@ -1,4 +1,7 @@
+"use client";
+
 import type * as React from "react";
+import { usePathname } from "next/navigation";
 
 import { SearchForm } from "@/components/search-form";
 import {
@@ -16,17 +19,15 @@ import {
 } from "@/components/sidebar";
 import { TeamSwitcher } from "@/components/team-switcher";
 import {
-	RiBardLine,
-	RiCodeSSlashLine,
-	RiLayoutLeftLine,
-	RiLeafLine,
-	RiLoginCircleLine,
-	RiLogoutBoxLine,
-	RiScanLine,
-	RiSettings3Line,
-	RiUserFollowLine,
+	RiBarChartLine,
+	RiCheckboxCircleLine,
+	RiDashboardLine,
 	RiFileTextLine,
+	RiLogoutBoxLine,
+	RiSettings3Line,
+	RiTeamLine,
 } from "@remixicon/react";
+import { authClient } from "@/lib/auth-client";
 
 // This is sample data.
 const data = {
@@ -44,74 +45,95 @@ const data = {
 			logo: "https://raw.githubusercontent.com/origin-space/origin-images/refs/heads/main/exp1/logo-01_kp2j8x.png",
 		},
 	],
-	navMain: [
+	// Default navigation - will be overridden in component
+	navMain: [],
+};
+
+export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+	// const { data: session } = authClient.useSession(); // Temporarily disabled
+	const pathname = usePathname();
+
+	// Role-based navigation logic
+	// TODO: Replace with real role check from tRPC once working
+	const isAdmin = true; // For testing - will be replaced with actual role check
+	const isCurrentlyInAdminPortal = pathname.startsWith('/admin');
+
+	// Generate navigation based on current portal - NO portal switching in sidebar
+	const navigationItems = isCurrentlyInAdminPortal ? [
+		// Admin Portal Navigation
 		{
-			title: "Sections",
+			title: "Admin Portal",
 			url: "#",
 			items: [
 				{
-					title: "Dashboard",
-					url: "#",
-					icon: RiScanLine,
+					title: "Dashboard Overview",
+					url: "/admin",
+					icon: RiDashboardLine,
 				},
 				{
-					title: "Insights",
-					url: "#",
-					icon: RiBardLine,
+					title: "Commission Approvals",
+					url: "/admin/approvals",
+					icon: RiCheckboxCircleLine,
 				},
 				{
-					title: "Contacts",
-					url: "#",
-					icon: RiUserFollowLine,
-					isActive: true,
+					title: "Agent Management",
+					url: "/admin/agents",
+					icon: RiTeamLine,
 				},
 				{
-					title: "Sales Entry",
-					url: "/sales",
-					icon: RiFileTextLine,
-				},
-				{
-					title: "Tools",
-					url: "#",
-					icon: RiCodeSSlashLine,
-				},
-				{
-					title: "Integration",
-					url: "#",
-					icon: RiLoginCircleLine,
-				},
-				{
-					title: "Layouts",
-					url: "#",
-					icon: RiLayoutLeftLine,
-				},
-				{
-					title: "Reports",
-					url: "#",
-					icon: RiLeafLine,
+					title: "Reports & Analytics",
+					url: "/admin/reports",
+					icon: RiBarChartLine,
 				},
 			],
 		},
 		{
-			title: "Other",
+			title: "Configuration",
 			url: "#",
 			items: [
 				{
 					title: "Settings",
-					url: "#",
+					url: "/admin/settings",
 					icon: RiSettings3Line,
-				},
-				{
-					title: "Help Center",
-					url: "#",
-					icon: RiLeafLine,
 				},
 			],
 		},
-	],
-};
+	] : [
+		// Agent Portal Navigation
+		{
+			title: "Agent Dashboard",
+			url: "#",
+			items: [
+				{
+					title: "Dashboard",
+					url: "/dashboard",
+					icon: RiDashboardLine,
+				},
+				{
+					title: "Pipeline",
+					url: "/dashboard/pipeline",
+					icon: RiBarChartLine,
+				},
+				{
+					title: "Transactions",
+					url: "/dashboard/transactions",
+					icon: RiFileTextLine,
+				},
+			],
+		},
+		{
+			title: "Configuration",
+			url: "#",
+			items: [
+				{
+					title: "Settings",
+					url: "/dashboard/settings",
+					icon: RiSettings3Line,
+				},
+			],
+		},
+	];
 
-export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 	return (
 		<Sidebar {...props}>
 			<SidebarHeader>
@@ -121,29 +143,29 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 			</SidebarHeader>
 			<SidebarContent>
 				{/* We create a SidebarGroup for each parent. */}
-				{data.navMain.map((item) => (
+				{navigationItems.map((item) => (
 					<SidebarGroup key={item.title}>
 						<SidebarGroupLabel className="text-muted-foreground/60 uppercase">
 							{item.title}
 						</SidebarGroupLabel>
 						<SidebarGroupContent className="px-2">
 							<SidebarMenu>
-								{item.items.map((item) => (
-									<SidebarMenuItem key={item.title}>
+								{item.items.map((menuItem) => (
+									<SidebarMenuItem key={menuItem.title}>
 										<SidebarMenuButton
 											asChild
 											className="group/menu-button h-9 gap-3 rounded-md bg-gradient-to-r font-medium hover:bg-transparent hover:from-sidebar-accent hover:to-sidebar-accent/40 data-[active=true]:from-primary/20 data-[active=true]:to-primary/5 [&>svg]:size-auto"
-											isActive={item.isActive}
+											isActive={pathname === menuItem.url}
 										>
-											<a href={item.url}>
-												{item.icon && (
-													<item.icon
+											<a href={menuItem.url}>
+												{menuItem.icon && (
+													<menuItem.icon
 														className="text-muted-foreground/60 group-data-[active=true]/menu-button:text-primary"
 														size={22}
 														aria-hidden="true"
 													/>
 												)}
-												<span>{item.title}</span>
+												<span>{menuItem.title}</span>
 											</a>
 										</SidebarMenuButton>
 									</SidebarMenuItem>

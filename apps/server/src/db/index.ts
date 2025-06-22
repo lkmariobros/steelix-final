@@ -8,3 +8,7 @@ const schema = {
 };
 
 export const db = drizzle(process.env.DATABASE_URL || "", { schema });
+
+// Export types for use in other files
+export type Database = typeof db;
+export type Schema = typeof schema;

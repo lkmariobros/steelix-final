@@ -1,4 +1,6 @@
 import { protectedProcedure, publicProcedure, router } from "../lib/trpc";
+import { adminRouter } from "./admin";
+import { dashboardRouter } from "./dashboard";
 import { transactionsRouter } from "./transactions";
 
 export const appRouter = router({
@@ -12,6 +14,8 @@ export const appRouter = router({
 		};
 	}),
 	transactions: transactionsRouter,
+	dashboard: dashboardRouter,
+	admin: adminRouter,
 });
 
 export type AppRouter = typeof appRouter;

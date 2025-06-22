@@ -3,6 +3,7 @@ import { useForm } from "@tanstack/react-form";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import z from "zod/v4";
+import { useState, useEffect } from "react";
 import Loader from "./loader";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -14,7 +15,13 @@ export default function SignInForm({
 	onSwitchToSignUp: () => void;
 }) {
 	const router = useRouter();
+	const [isClient, setIsClient] = useState(false);
 	const { isPending } = authClient.useSession();
+
+	// Prevent hydration mismatch by only showing loading on client
+	useEffect(() => {
+		setIsClient(true);
+	}, []);
 
 	const form = useForm({
 		defaultValues: {
@@ -46,7 +53,8 @@ export default function SignInForm({
 		},
 	});
 
-	if (isPending) {
+	// Only show loader on client to prevent hydration mismatch
+	if (isClient && isPending) {
 		return <Loader />;
 	}
 

@@ -16,7 +16,8 @@ import {
 	DropdownMenuShortcut,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { RiAddLine, RiExpandUpDownLine } from "@remixicon/react";
+import { RiAddLine, RiExpandUpDownLine, RiShieldUserLine, RiUserLine } from "@remixicon/react";
+import { useRouter, usePathname } from "next/navigation";
 
 export function TeamSwitcher({
 	teams,
@@ -27,6 +28,15 @@ export function TeamSwitcher({
 	}[];
 }) {
 	const [activeTeam, setActiveTeam] = React.useState(teams[0] ?? null);
+	const router = useRouter();
+	const pathname = usePathname();
+
+	// Determine current portal
+	const isInAdminPortal = pathname.startsWith('/admin');
+	const currentPortal = isInAdminPortal ? 'Admin Portal' : 'Agent Dashboard';
+
+	// TODO: Replace with real role check from tRPC
+	const isAdmin = true; // For testing
 
 	if (!teams.length) return null;
 
@@ -53,6 +63,9 @@ export function TeamSwitcher({
 								<span className="truncate font-medium">
 									{activeTeam?.name ?? "Select a Team"}
 								</span>
+								<span className="truncate text-xs text-muted-foreground">
+									{currentPortal}
+								</span>
 							</div>
 							<RiExpandUpDownLine
 								className="ms-auto text-muted-foreground/60"
@@ -67,6 +80,35 @@ export function TeamSwitcher({
 						side="bottom"
 						sideOffset={4}
 					>
+						{/* Portal Switching Section - Only for Admin Users */}
+						{isAdmin && (
+							<>
+								<DropdownMenuLabel className="text-muted-foreground/60 text-xs uppercase">
+									Portal Access
+								</DropdownMenuLabel>
+								<DropdownMenuItem
+									onClick={() => router.push('/dashboard')}
+									className="gap-2 p-2"
+									disabled={!isInAdminPortal}
+								>
+									<RiUserLine className="opacity-60" size={16} aria-hidden="true" />
+									<div className="font-medium">Agent Dashboard</div>
+									{!isInAdminPortal && <span className="ml-auto text-xs text-muted-foreground">Current</span>}
+								</DropdownMenuItem>
+								<DropdownMenuItem
+									onClick={() => router.push('/admin')}
+									className="gap-2 p-2"
+									disabled={isInAdminPortal}
+								>
+									<RiShieldUserLine className="opacity-60" size={16} aria-hidden="true" />
+									<div className="font-medium">Admin Portal</div>
+									{isInAdminPortal && <span className="ml-auto text-xs text-muted-foreground">Current</span>}
+								</DropdownMenuItem>
+								<DropdownMenuSeparator />
+							</>
+						)}
+
+						{/* Teams Section */}
 						<DropdownMenuLabel className="text-muted-foreground/60 text-xs uppercase">
 							Teams
 						</DropdownMenuLabel>
