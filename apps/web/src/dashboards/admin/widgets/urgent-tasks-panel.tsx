@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { trpc } from "@/utils/trpc";
+import { useQuery } from "@tanstack/react-query";
 import {
 	RiAlertLine,
 	RiArrowRightLine,
@@ -26,44 +27,18 @@ export function UrgentTasksPanel({
 	refreshKey,
 	className,
 }: UrgentTasksPanelProps) {
-	// TEMPORARILY DISABLED - Mock data for testing
-	// const {
-	// 	data: urgentTasks,
-	// 	isLoading,
-	// 	error,
-	// 	refetch
-	// } = trpc.admin.getUrgentTasks.useQuery(
-	// 	undefined,
-	// 	{
-	// 		refetchOnWindowFocus: false,
-	// 		staleTime: 30000, // 30 seconds
-	// 	}
-	// );
-
-	// Mock data for testing
-	const urgentTasks = [
-		{
-			id: "1",
-			type: "overdue_approval",
-			title: "Overdue Commission Approval",
-			description: "Transaction for Alice Johnson pending approval for 8 days",
-			priority: "high" as const,
-			agentName: "John Smith",
-			createdAt: "2024-01-07T09:00:00Z",
-		},
-		{
-			id: "2",
-			type: "overdue_approval",
-			title: "Overdue Commission Approval",
-			description: "Transaction for Bob Martinez pending approval for 9 days",
-			priority: "high" as const,
-			agentName: "Sarah Wilson",
-			createdAt: "2024-01-06T11:30:00Z",
-		},
-	];
-	const isLoading = false;
-	const error = null;
-	const refetch = () => {};
+	// Real tRPC query - replaces mock data
+	const {
+		data: urgentTasks,
+		isLoading,
+		error,
+		refetch,
+	} = useQuery(
+		trpc.admin.getUrgentTasks.queryOptions(undefined, {
+			refetchOnWindowFocus: false,
+			staleTime: 30000, // 30 seconds
+		}),
+	);
 
 	// Refetch when refreshKey changes
 	React.useEffect(() => {
@@ -145,7 +120,14 @@ export function UrgentTasksPanel({
 		);
 	}
 
-	const tasks = urgentTasks || [];
+	// Type-safe task processing - handle unknown types from SQL literals
+	const tasks = (urgentTasks || []).map((task) => ({
+		...task,
+		type: String(task.type || "overdue_approval"),
+		title: String(task.title || "Overdue Commission Approval"),
+		description: String(task.description || "Transaction pending approval"),
+		priority: String(task.priority || "high") as "low" | "medium" | "high" | "critical",
+	}));
 
 	return (
 		<Card className={className}>

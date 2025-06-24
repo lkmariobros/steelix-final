@@ -1,7 +1,6 @@
 "use client";
 
 import { AppSidebar } from "@/components/app-sidebar";
-import FeedbackDialog from "@/components/feedback-dialog";
 import { Separator } from "@/components/separator";
 import {
 	SidebarInset,
@@ -48,7 +47,6 @@ export default function DashboardPage() {
 						</Breadcrumb>
 					</div>
 					<div className="ml-auto flex gap-3">
-						<FeedbackDialog />
 						<UserDropdown />
 					</div>
 				</header>

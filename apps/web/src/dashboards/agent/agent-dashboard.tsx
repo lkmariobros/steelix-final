@@ -2,7 +2,6 @@
 
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
 	Popover,
 	PopoverContent,
@@ -24,7 +23,8 @@ import { useEffect, useState } from "react";
 
 // Import dashboard widgets
 import { FinancialOverview } from "./components/financial-overview";
-import { PipelineSummary } from "./components/pipeline-summary";
+import { SalesPipeline } from "./components/sales-pipeline";
+import { TransactionStatus } from "./components/transaction-status";
 import { RecentTransactions } from "./components/recent-transactions";
 import { TeamLeaderboard } from "./components/team-leaderboard";
 
@@ -167,15 +167,16 @@ export function AgentDashboard({ className }: AgentDashboardProps) {
 					<FinancialOverview dateRange={dateRange} />
 				</div>
 
-				{/* Second Row - Pipeline Summary and Team Leaderboard */}
+				{/* Second Row - Sales Pipeline and Transaction Status */}
 				<div className="grid gap-6 md:grid-cols-2">
-					<PipelineSummary />
-					<TeamLeaderboard />
+					<SalesPipeline />
+					<TransactionStatus />
 				</div>
 
-				{/* Third Row - Recent Transactions - Full Width */}
-				<div className="col-span-full">
+				{/* Third Row - Recent Transactions and Team Leaderboard */}
+				<div className="grid gap-6 md:grid-cols-2">
 					<RecentTransactions limit={8} />
+					<TeamLeaderboard />
 				</div>
 			</div>
 

@@ -21,12 +21,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
-// import { trpc } from "@/utils/trpc"; // Temporarily disabled
-// import { toast } from "sonner"; // Temporarily disabled
+import { trpc } from "@/utils/trpc";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { toast } from "sonner";
 import {
 	RiCheckLine,
 	RiCloseLine,
-	RiEyeLine,
 	RiTimeLine,
 } from "@remixicon/react";
 import React, { useState } from "react";
@@ -55,7 +55,6 @@ interface ApprovalDialogState {
 }
 
 export function CommissionApprovalQueue({
-	dateRange,
 	refreshKey,
 	className,
 }: CommissionApprovalQueueProps) {
@@ -70,116 +69,54 @@ export function CommissionApprovalQueue({
 
 	const pageSize = 10;
 
-	// TEMPORARILY DISABLED - Mock data for testing
-	// const {
-	// 	data: queueData,
-	// 	isLoading,
-	// 	error,
-	// 	refetch
-	// } = trpc.admin.getCommissionApprovalQueue.useQuery(
-	// 	{
-	// 		limit: pageSize,
-	// 		offset: page * pageSize,
-	// 		status: "submitted", // Only show submitted transactions
-	// 	},
-	// 	{
-	// 		refetchOnWindowFocus: false,
-	// 		staleTime: 30000, // 30 seconds
-	// 	}
-	// );
-
-	// Mock data for testing
-	const queueData = {
-		transactions: [
+	// Real tRPC query - replaces mock data
+	const {
+		data: queueData,
+		isLoading,
+		error,
+		refetch,
+	} = useQuery(
+		trpc.admin.getCommissionApprovalQueue.queryOptions(
 			{
-				id: "1",
-				agentId: "agent1",
-				agentName: "John Smith",
-				agentEmail: "john@example.com",
-				clientData: {
-					name: "Alice Johnson",
-					email: "alice@example.com",
-					phone: "555-0123",
-					type: "buyer" as const,
-					source: "referral",
-				},
-				propertyData: {
-					address: "123 Main St, City, State",
-					propertyType: "Single Family",
-					price: 450000,
-				},
-				transactionType: "sale" as const,
-				commissionAmount: "22500",
-				commissionValue: "5.0",
-				status: "submitted" as const,
-				submittedAt: "2024-01-15T10:30:00Z",
-				createdAt: "2024-01-15T10:30:00Z",
+				limit: pageSize,
+				offset: page * pageSize,
+				status: "submitted", // Only show submitted transactions
 			},
 			{
-				id: "2",
-				agentId: "agent2",
-				agentName: "Sarah Wilson",
-				agentEmail: "sarah@example.com",
-				clientData: {
-					name: "Bob Martinez",
-					email: "bob@example.com",
-					phone: "555-0456",
-					type: "seller" as const,
-					source: "website",
-				},
-				propertyData: {
-					address: "456 Oak Ave, City, State",
-					propertyType: "Condo",
-					price: 320000,
-				},
-				transactionType: "sale" as const,
-				commissionAmount: "16000",
-				commissionValue: "5.0",
-				status: "submitted" as const,
-				submittedAt: "2024-01-14T14:20:00Z",
-				createdAt: "2024-01-14T14:20:00Z",
+				refetchOnWindowFocus: false,
+				staleTime: 30000, // 30 seconds
 			},
-		],
-		totalCount: 12,
-		hasMore: true,
-	};
-	const isLoading = false;
-	const error = null;
-	const refetch = () => {};
+		),
+	);
 
-	// TEMPORARILY DISABLED - Mock mutation for testing
-	// const processApprovalMutation = trpc.admin.processCommissionApproval.useMutation({
-	// 	onSuccess: (updatedTransaction) => {
-	// 		toast.success(
-	// 			`Transaction ${dialogState.action === "approve" ? "approved" : "rejected"} successfully`
-	// 		);
-	// 		refetch(); // Refresh the queue
-	// 		closeDialog();
-	// 	},
-	// 	onError: (error) => {
-	// 		toast.error(`Failed to ${dialogState.action} transaction: ${error.message}`);
-	// 		setDialogState(prev => ({ ...prev, isSubmitting: false }));
-	// 	},
-	// });
-
-	// Mock mutation for testing
-	const processApprovalMutation = {
-		mutate: (data: {
-			id?: string;
-			action: string;
-			notes?: string;
-			transactionId?: string;
-			reviewNotes?: string;
-		}) => {
-			// Simulate processing
-			setTimeout(() => {
-				console.log(
-					`Transaction ${dialogState.action === "approve" ? "approved" : "rejected"} successfully`,
-				);
-				closeDialog();
-			}, 1000);
+	// Real tRPC mutation - replaces mock mutation
+	const processApprovalMutation = useMutation({
+		mutationFn: async (input: { transactionId: string; action: "approve" | "reject"; reviewNotes?: string }) => {
+			const response = await fetch(`${process.env.NEXT_PUBLIC_SERVER_URL}/trpc/admin.processCommissionApproval`, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+				},
+				credentials: 'include',
+				body: JSON.stringify({ json: input }),
+			});
+			if (!response.ok) {
+				throw new Error('Failed to process approval');
+			}
+			return response.json();
 		},
-	};
+		onSuccess: () => {
+			toast.success(
+				`Transaction ${dialogState.action === "approve" ? "approved" : "rejected"} successfully`,
+			);
+			refetch(); // Refresh the queue
+			closeDialog();
+		},
+		onError: (error: Error) => {
+			toast.error(`Failed to ${dialogState.action} transaction: ${error.message}`);
+			setDialogState((prev) => ({ ...prev, isSubmitting: false }));
+		},
+	});
 
 	// Refetch when refreshKey changes
 	React.useEffect(() => {
@@ -291,7 +228,11 @@ export function CommissionApprovalQueue({
 		);
 	}
 
-	const transactions = queueData?.transactions || [];
+	// Type-safe transaction processing - handle null status values
+	const transactions = (queueData?.transactions || []).map((transaction) => ({
+		...transaction,
+		status: (transaction.status || "submitted") as "submitted" | "under_review" | "approved" | "rejected",
+	}));
 
 	return (
 		<>

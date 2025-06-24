@@ -4,6 +4,7 @@ import { Badge } from "@/components/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { trpc } from "@/utils/trpc";
+import { useQuery } from "@tanstack/react-query";
 // Simple utility functions to avoid import issues
 const formatPercentage = (value: number): string => {
 	return `${value.toFixed(1)}%`;
@@ -27,28 +28,26 @@ const statusLabels = {
 	completed: "Completed",
 } as const;
 
-const getStatusColor = (status: string): string => {
+const getStatusColor = (status: string | null): string => {
+	if (!status) return "bg-gray-100 text-gray-800";
 	return (
 		statusColors[status as keyof typeof statusColors] ||
 		"bg-gray-100 text-gray-800"
 	);
 };
 
-const getStatusLabel = (status: string): string => {
+const getStatusLabel = (status: string | null): string => {
+	if (!status) return "Unknown";
 	return statusLabels[status as keyof typeof statusLabels] || status;
 };
 
 export function TransactionStatus() {
-	// Mock data for demonstration (replace with tRPC call when database is ready)
-	const statusData = [
-		{ status: "completed", count: 8, percentage: 40.0 },
-		{ status: "under_review", count: 4, percentage: 20.0 },
-		{ status: "submitted", count: 3, percentage: 15.0 },
-		{ status: "approved", count: 3, percentage: 15.0 },
-		{ status: "draft", count: 2, percentage: 10.0 },
-	];
-	const isLoading = false;
-	const error = null;
+	// Real tRPC query - replaces mock data
+	const {
+		data: statusData,
+		isLoading,
+		error,
+	} = useQuery(trpc.dashboard.getTransactionStatus.queryOptions());
 
 	if (isLoading) {
 		return (
@@ -162,7 +161,7 @@ export function TransactionStatus() {
 							(s) => s.status === "completed",
 						);
 						const pendingStatuses = statusData.filter((s) =>
-							["submitted", "under_review", "approved"].includes(s.status),
+							s.status && ["submitted", "under_review", "approved"].includes(s.status),
 						);
 						const pendingCount = pendingStatuses.reduce(
 							(sum, s) => sum + s.count,

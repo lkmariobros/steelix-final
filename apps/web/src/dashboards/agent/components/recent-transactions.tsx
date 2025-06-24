@@ -5,6 +5,7 @@ import { Badge } from "@/components/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { trpc } from "@/utils/trpc";
+import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 // Simple utility functions to avoid import issues
 const formatCurrency = (amount: number): string => {
@@ -66,14 +67,16 @@ const statusLabels = {
 	completed: "Completed",
 } as const;
 
-const getStatusColor = (status: string): string => {
+const getStatusColor = (status: string | null): string => {
+	if (!status) return "bg-gray-100 text-gray-800";
 	return (
 		statusColors[status as keyof typeof statusColors] ||
 		"bg-gray-100 text-gray-800"
 	);
 };
 
-const getStatusLabel = (status: string): string => {
+const getStatusLabel = (status: string | null): string => {
+	if (!status) return "Unknown";
 	return statusLabels[status as keyof typeof statusLabels] || status;
 };
 
@@ -88,12 +91,16 @@ function TransactionItem({
 		propertyAddress: string;
 		propertyPrice: number;
 		clientName: string;
-		status: string;
-		transactionDate: Date;
-		updatedAt: Date;
+		status: string | null;
+		transactionDate: string | Date;
+		updatedAt: string | Date;
 	};
 }) {
-	const relativeTime = useRelativeTime(transaction.updatedAt);
+	const relativeTime = useRelativeTime(
+		typeof transaction.updatedAt === "string"
+			? new Date(transaction.updatedAt)
+			: transaction.updatedAt,
+	);
 
 	return (
 		<div className="flex items-center gap-3">
@@ -143,44 +150,16 @@ interface RecentTransactionsProps {
 }
 
 export function RecentTransactions({ limit = 10 }: RecentTransactionsProps) {
-	// Mock data for demonstration (replace with tRPC call when database is ready)
-	const transactions = [
-		{
-			id: "1",
-			agentId: "agent1",
-			agentName: "John Doe",
-			propertyAddress: "123 Main St, Downtown",
-			propertyPrice: 450000,
-			clientName: "Alice Smith",
-			status: "completed",
-			transactionDate: new Date("2024-01-15"),
-			updatedAt: new Date("2024-01-20"),
-		},
-		{
-			id: "2",
-			agentId: "agent2",
-			agentName: "Jane Wilson",
-			propertyAddress: "456 Oak Ave, Suburbs",
-			propertyPrice: 320000,
-			clientName: "Bob Johnson",
-			status: "under_review",
-			transactionDate: new Date("2024-01-18"),
-			updatedAt: new Date("2024-01-19"),
-		},
-		{
-			id: "3",
-			agentId: "agent1",
-			agentName: "John Doe",
-			propertyAddress: "789 Pine Rd, Uptown",
-			propertyPrice: 275000,
-			clientName: "Carol Davis",
-			status: "submitted",
-			transactionDate: new Date("2024-01-22"),
-			updatedAt: new Date("2024-01-22"),
-		},
-	];
-	const isLoading = false;
-	const error = null;
+	// Real tRPC query - replaces mock data
+	const {
+		data: transactions,
+		isLoading,
+		error,
+	} = useQuery(
+		trpc.dashboard.getRecentTransactions.queryOptions({
+			limit,
+		}),
+	);
 
 	if (isLoading) {
 		return (

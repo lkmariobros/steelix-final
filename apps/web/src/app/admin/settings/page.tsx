@@ -1,7 +1,6 @@
 "use client";
 
 import { AppSidebar } from "@/components/app-sidebar";
-import FeedbackDialog from "@/components/feedback-dialog";
 import {
 	SidebarInset,
 	SidebarProvider,
@@ -149,7 +148,6 @@ export default function AdminSettingsPage() {
 						</Breadcrumb>
 					</div>
 					<div className="ml-auto flex gap-3">
-						<FeedbackDialog />
 						<UserDropdown />
 					</div>
 				</header>

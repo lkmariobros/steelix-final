@@ -3,6 +3,8 @@
 import { Avatar } from "@/components/avatar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { trpc } from "@/utils/trpc";
+import { useQuery } from "@tanstack/react-query";
 import { RiAwardLine, RiMedalLine, RiTrophyLine } from "@remixicon/react";
 // Simple utility function to avoid import issues
 const formatCurrency = (amount: number): string => {
@@ -15,43 +17,12 @@ const formatCurrency = (amount: number): string => {
 };
 
 export function TeamLeaderboard() {
-	// Mock data for demonstration (replace with tRPC call when database is ready)
-	const leaderboard = [
-		{
-			agentId: "agent1",
-			agentName: "John Doe",
-			agentImage: null,
-			totalCommission: 125000,
-			completedDeals: 8,
-			activeDeals: 3,
-		},
-		{
-			agentId: "agent2",
-			agentName: "Jane Wilson",
-			agentImage: null,
-			totalCommission: 98000,
-			completedDeals: 6,
-			activeDeals: 4,
-		},
-		{
-			agentId: "agent3",
-			agentName: "Mike Johnson",
-			agentImage: null,
-			totalCommission: 87000,
-			completedDeals: 5,
-			activeDeals: 2,
-		},
-		{
-			agentId: "agent4",
-			agentName: "Sarah Davis",
-			agentImage: null,
-			totalCommission: 76000,
-			completedDeals: 4,
-			activeDeals: 3,
-		},
-	];
-	const isLoading = false;
-	const error = null;
+	// Real tRPC query - replaces mock data
+	const {
+		data: leaderboard,
+		isLoading,
+		error,
+	} = useQuery(trpc.dashboard.getTeamLeaderboard.queryOptions());
 
 	if (isLoading) {
 		return (

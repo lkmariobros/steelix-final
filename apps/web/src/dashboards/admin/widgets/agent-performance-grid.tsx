@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { trpc } from "@/utils/trpc";
+import { useQuery } from "@tanstack/react-query";
 import {
 	RiArrowDownLine,
 	RiArrowUpLine,
@@ -53,61 +54,34 @@ export function AgentPerformanceGrid({
 	const [sortField, setSortField] = useState<SortField>("transactions");
 	const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
 
-	// TEMPORARILY DISABLED - Mock data for testing
-	// const {
-	// 	data: performanceData,
-	// 	isLoading,
-	// 	error,
-	// 	refetch
-	// } = trpc.admin.getAgentPerformance.useQuery(
-	// 	{
-	// 		dateRange,
-	// 	},
-	// 	{
-	// 		refetchOnWindowFocus: false,
-	// 		staleTime: 30000, // 30 seconds
-	// 	}
-	// );
+	// Real tRPC query - replaces mock data
+	const {
+		data: rawPerformanceData,
+		isLoading,
+		error,
+		refetch,
+	} = useQuery(
+		trpc.admin.getAgentPerformance.queryOptions(
+			{
+				dateRange,
+			},
+			{
+				refetchOnWindowFocus: false,
+				staleTime: 30000, // 30 seconds
+			},
+		),
+	);
 
-	// Mock data for testing
-	const performanceData = [
-		{
-			agentId: "1",
-			agentName: "John Smith",
-			agentEmail: "john@example.com",
-			teamId: "team1",
-			totalTransactions: 24,
-			totalCommission: 480000,
-			avgCommission: 20000,
-			approvedCount: 22,
-			pendingCount: 2,
-		},
-		{
-			agentId: "2",
-			agentName: "Sarah Wilson",
-			agentEmail: "sarah@example.com",
-			teamId: "team1",
-			totalTransactions: 18,
-			totalCommission: 360000,
-			avgCommission: 20000,
-			approvedCount: 16,
-			pendingCount: 2,
-		},
-		{
-			agentId: "3",
-			agentName: "Mike Johnson",
-			agentEmail: "mike@example.com",
-			teamId: "team2",
-			totalTransactions: 15,
-			totalCommission: 225000,
-			avgCommission: 15000,
-			approvedCount: 14,
-			pendingCount: 1,
-		},
-	];
-	const isLoading = false;
-	const error = null;
-	const refetch = () => {};
+	// Type-safe data processing - handle string commission values from database
+	const performanceData = React.useMemo(() => {
+		if (!rawPerformanceData) return [];
+
+		return rawPerformanceData.map((agent) => ({
+			...agent,
+			totalCommission: agent.totalCommission ? Number(agent.totalCommission) : 0,
+			avgCommission: agent.avgCommission ? Number(agent.avgCommission) : 0,
+		}));
+	}, [rawPerformanceData]);
 
 	// Refetch when refreshKey changes
 	React.useEffect(() => {

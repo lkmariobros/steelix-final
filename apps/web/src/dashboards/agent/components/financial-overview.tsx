@@ -4,6 +4,7 @@ import { StatsGrid } from "@/components/stats-grid";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { trpc } from "@/utils/trpc";
+import { useQuery } from "@tanstack/react-query";
 import {
 	RiBarChartLine,
 	RiMoneyDollarCircleLine,
@@ -28,25 +29,17 @@ interface FinancialOverviewProps {
 }
 
 export function FinancialOverview({ dateRange }: FinancialOverviewProps) {
-	// Mock data for demonstration (replace with tRPC call when database is ready)
-	const financialData = {
-		overview: {
-			totalCommission: 125000,
-			completedDeals: 8,
-			pendingCommission: 45000,
-			averageDealValue: 350000,
-		},
-		monthlyTrend: [
-			{ month: "2024-01", commission: 15000, deals: 2 },
-			{ month: "2024-02", commission: 22000, deals: 3 },
-			{ month: "2024-03", commission: 18000, deals: 2 },
-			{ month: "2024-04", commission: 28000, deals: 4 },
-			{ month: "2024-05", commission: 32000, deals: 3 },
-			{ month: "2024-06", commission: 25000, deals: 3 },
-		],
-	};
-	const isLoading = false;
-	const error = null;
+	// Real tRPC query - replaces mock data
+	const {
+		data: financialData,
+		isLoading,
+		error,
+	} = useQuery(
+		trpc.dashboard.getFinancialOverview.queryOptions({
+			startDate: dateRange?.startDate,
+			endDate: dateRange?.endDate,
+		}),
+	);
 
 	if (isLoading) {
 		return (

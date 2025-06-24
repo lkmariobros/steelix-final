@@ -2,7 +2,6 @@
 
 import { AppSidebar } from "@/components/app-sidebar";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/avatar";
-import FeedbackDialog from "@/components/feedback-dialog";
 import {
 	SidebarInset,
 	SidebarProvider,
@@ -138,7 +137,6 @@ export default function AgentSettingsPage() {
 						</Breadcrumb>
 					</div>
 					<div className="ml-auto flex gap-3">
-						<FeedbackDialog />
 						<UserDropdown />
 					</div>
 				</header>

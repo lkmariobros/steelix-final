@@ -4,6 +4,7 @@ import { Badge } from "@/components/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { trpc } from "@/utils/trpc";
+import { useQuery } from "@tanstack/react-query";
 // Simple utility functions to avoid import issues
 const formatCurrency = (amount: number): string => {
 	return new Intl.NumberFormat("en-US", {
@@ -32,48 +33,26 @@ const statusLabels = {
 	completed: "Completed",
 } as const;
 
-const getStatusColor = (status: string): string => {
+const getStatusColor = (status: string | null): string => {
+	if (!status) return "bg-gray-100 text-gray-800";
 	return (
 		statusColors[status as keyof typeof statusColors] ||
 		"bg-gray-100 text-gray-800"
 	);
 };
 
-const getStatusLabel = (status: string): string => {
+const getStatusLabel = (status: string | null): string => {
+	if (!status) return "Unknown";
 	return statusLabels[status as keyof typeof statusLabels] || status;
 };
 
 export function SalesPipeline() {
-	// Mock data for demonstration (replace with tRPC call when database is ready)
-	const pipelineData = {
-		pipeline: [
-			{ status: "submitted", count: 3, totalValue: 850000 },
-			{ status: "under_review", count: 2, totalValue: 650000 },
-			{ status: "approved", count: 1, totalValue: 420000 },
-		],
-		activeTransactions: [
-			{
-				id: "1",
-				propertyAddress: "123 Main St, Downtown",
-				propertyPrice: 450000,
-				clientName: "John Smith",
-				status: "under_review",
-				transactionDate: new Date("2024-01-15"),
-				commissionAmount: "13500",
-			},
-			{
-				id: "2",
-				propertyAddress: "456 Oak Ave, Suburbs",
-				propertyPrice: 320000,
-				clientName: "Sarah Johnson",
-				status: "submitted",
-				transactionDate: new Date("2024-01-20"),
-				commissionAmount: "9600",
-			},
-		],
-	};
-	const isLoading = false;
-	const error = null;
+	// Real tRPC query - replaces mock data
+	const {
+		data: pipelineData,
+		isLoading,
+		error,
+	} = useQuery(trpc.dashboard.getSalesPipeline.queryOptions());
 
 	if (isLoading) {
 		return (
@@ -197,7 +176,7 @@ export function SalesPipeline() {
 												{getStatusLabel(transaction.status)}
 											</Badge>
 											<span className="text-muted-foreground text-xs">
-												{transaction.transactionDate.toLocaleDateString()}
+												{new Date(transaction.transactionDate).toLocaleDateString()}
 											</span>
 										</div>
 									</div>

@@ -9,9 +9,9 @@ import {
 	PopoverTrigger,
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
-import { RiCalendarLine, RiFilterLine, RiRefreshLine } from "@remixicon/react";
+import { RiCalendarLine, RiRefreshLine } from "@remixicon/react";
 import { format } from "date-fns";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { AgentPerformanceGrid } from "./widgets/agent-performance-grid";
 // Import admin dashboard widgets

@@ -4,6 +4,7 @@ import { StatsCard } from "@/components/stats-grid";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { trpc } from "@/utils/trpc";
+import { useQuery } from "@tanstack/react-query";
 import {
 	RiCheckboxCircleLine,
 	RiFileListLine,
@@ -27,39 +28,43 @@ export function DashboardSummary({
 	refreshKey,
 	className,
 }: DashboardSummaryProps) {
-	// TEMPORARILY DISABLED - tRPC admin routes not working yet
-	// const {
-	// 	data: summaryData,
-	// 	isLoading,
-	// 	error,
-	// 	refetch
-	// } = trpc.admin.getDashboardSummary.useQuery(
-	// 	dateRange || {},
-	// 	{
-	// 		refetchOnWindowFocus: false,
-	// 		staleTime: 30000, // 30 seconds
-	// 	}
-	// );
+	// Real tRPC query - replaces mock data
+	const {
+		data: rawSummaryData,
+		isLoading,
+		error,
+		refetch,
+	} = useQuery(
+		trpc.admin.getDashboardSummary.queryOptions(
+			dateRange || {},
+			{
+				refetchOnWindowFocus: false,
+				staleTime: 30000, // 30 seconds
+			},
+		),
+	);
 
-	// Mock data for testing
-	const summaryData = {
-		totalTransactions: 156,
-		pendingApprovals: 12,
-		approvedTransactions: 134,
-		totalCommissionValue: 2450000,
-		avgCommissionValue: 15705,
-	};
-	const isLoading = false;
-	const error = null;
-	const refetch = () => {};
+	// Type-safe data processing - handle string commission values from database
+	const summaryData = React.useMemo(() => {
+		if (!rawSummaryData) return null;
+
+		return {
+			...rawSummaryData,
+			totalCommissionValue: rawSummaryData.totalCommissionValue
+				? Number(rawSummaryData.totalCommissionValue)
+				: 0,
+			avgCommissionValue: rawSummaryData.avgCommissionValue
+				? Number(rawSummaryData.avgCommissionValue)
+				: 0,
+		};
+	}, [rawSummaryData]);
 
 	// Refetch when refreshKey changes
-	if (refreshKey !== undefined) {
-		// eslint-disable-next-line react-hooks/rules-of-hooks
-		React.useEffect(() => {
+	React.useEffect(() => {
+		if (refreshKey !== undefined) {
 			refetch();
-		}, [refreshKey, refetch]);
-	}
+		}
+	}, [refreshKey, refetch]);
 
 	// Loading state
 	if (isLoading) {
