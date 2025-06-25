@@ -34,25 +34,35 @@ app.use(
 
 app.get("/", (c) => {
 	console.log(`📥 Received request to / at ${new Date().toISOString()}`);
-	return c.text("OK - Server is working!");
+	console.log("📊 Request headers:", c.req.header());
+	console.log("🌐 Request URL:", c.req.url);
+	return c.text(`OK - Server is working! Time: ${new Date().toISOString()}`);
 });
 
 app.get("/health", (c) => {
+	console.log(`🏥 Health check requested at ${new Date().toISOString()}`);
 	return c.json({
 		status: "healthy",
 		timestamp: new Date().toISOString(),
 		port: process.env.PORT,
-		env: process.env.NODE_ENV
+		env: process.env.NODE_ENV,
 	});
 });
+
+// Railway might check these paths
+app.get("/healthz", (c) => c.text("OK"));
+app.get("/ping", (c) => c.text("pong"));
+app.get("/.well-known/health", (c) => c.json({ status: "ok" }));
 
 const port = process.env.PORT || 3000;
 
 console.log(`🚀 Server starting on port ${port}`);
-console.log(`📊 Environment check:`);
+console.log("📊 Environment check:");
 console.log(`   - NODE_ENV: ${process.env.NODE_ENV}`);
 console.log(`   - PORT: ${process.env.PORT}`);
-console.log(`   - DATABASE_URL: ${process.env.DATABASE_URL ? 'SET' : 'NOT SET'}`);
+console.log(
+	`   - DATABASE_URL: ${process.env.DATABASE_URL ? "SET" : "NOT SET"}`,
+);
 console.log(`   - BETTER_AUTH_URL: ${process.env.BETTER_AUTH_URL}`);
 
 // For Railway deployment, we need to use serve() to start the server
@@ -66,29 +76,29 @@ try {
 	});
 
 	console.log(`✅ Server successfully bound to 0.0.0.0:${port}`);
-	console.log(`🌐 Server should be accessible at https://steelix-final-production.up.railway.app`);
+	console.log(
+		"🌐 Server should be accessible at https://steelix-final-production.up.railway.app",
+	);
 
 	// Keep the process alive
-	process.on('SIGTERM', () => {
-		console.log('🛑 SIGTERM received, shutting down gracefully');
+	process.on("SIGTERM", () => {
+		console.log("🛑 SIGTERM received, shutting down gracefully");
 		server.close(() => {
-			console.log('✅ Server closed');
+			console.log("✅ Server closed");
 			process.exit(0);
 		});
 	});
 
-	process.on('SIGINT', () => {
-		console.log('🛑 SIGINT received, shutting down gracefully');
+	process.on("SIGINT", () => {
+		console.log("🛑 SIGINT received, shutting down gracefully");
 		server.close(() => {
-			console.log('✅ Server closed');
+			console.log("✅ Server closed");
 			process.exit(0);
 		});
 	});
-
 } catch (error) {
-	console.error(`❌ Failed to start server:`, error);
+	console.error("❌ Failed to start server:", error);
 	process.exit(1);
 }
 
 export default app;
-
