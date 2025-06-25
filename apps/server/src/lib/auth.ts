@@ -19,6 +19,7 @@ export const auth = betterAuth({
 	trustedOrigins: [
 		process.env.CORS_ORIGIN || "",
 		"https://steelix-final-web.vercel.app",
+		"https://steelix-final-web-*.vercel.app", // Allow any Vercel preview URLs
 		"http://localhost:3001",
 		"my-better-t-app://",
 	],
