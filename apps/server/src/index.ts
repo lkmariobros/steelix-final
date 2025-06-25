@@ -6,6 +6,7 @@ import { logger } from "hono/logger";
 import { auth } from "./lib/auth";
 import { createContext } from "./lib/context";
 import { appRouter } from "./routers/index";
+import { db } from "./db";
 
 const app = new Hono();
 
@@ -53,6 +54,37 @@ app.get("/health", (c) => {
 app.get("/healthz", (c) => c.text("OK"));
 app.get("/ping", (c) => c.text("pong"));
 app.get("/.well-known/health", (c) => c.json({ status: "ok" }));
+
+// Debug endpoint to check auth configuration
+app.get("/debug/auth-config", (c) => {
+	return c.json({
+		betterAuthUrl: process.env.BETTER_AUTH_URL,
+		corsOrigins: process.env.CORS_ORIGIN?.split(',') || [],
+		hasSecret: !!process.env.BETTER_AUTH_SECRET,
+		hasDatabaseUrl: !!process.env.DATABASE_URL,
+		nodeEnv: process.env.NODE_ENV,
+		timestamp: new Date().toISOString()
+	});
+});
+
+// Debug endpoint to test database connection
+app.get("/debug/db-test", async (c) => {
+	try {
+		// Simple query to test database connection
+		const result = await db.execute("SELECT 1 as test");
+		return c.json({
+			status: "success",
+			dbConnected: true,
+			testQuery: result
+		});
+	} catch (error) {
+		return c.json({
+			status: "error",
+			dbConnected: false,
+			error: error instanceof Error ? error.message : String(error)
+		}, 500);
+	}
+});
 
 const port = process.env.PORT || 3000;
 
