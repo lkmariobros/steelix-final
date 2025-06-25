@@ -36,4 +36,19 @@ app.get("/", (c) => {
 	return c.text("OK");
 });
 
+const port = process.env.PORT || 3000;
+
+console.log(`🚀 Server starting on port ${port}`);
+
+// For Railway deployment, we need to use serve() to start the server
+import { serve } from "@hono/node-server";
+
+serve({
+	fetch: app.fetch,
+	port: Number(port),
+});
+
+console.log(`✅ Server running on http://localhost:${port}`);
+
 export default app;
+

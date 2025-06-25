@@ -2,12 +2,15 @@
 	"name": "server",
 	"main": "src/index.ts",
 	"type": "module",
+	"engines": {
+		"node": ">=20.0.0"
+	},
 	"scripts": {
 		"build": "tsc && tsc-alias",
 		"check-types": "tsc --noEmit",
 		"compile": "bun build --compile --minify --sourcemap --bytecode ./src/index.ts --outfile server",
 		"dev": "bun run --hot src/index.ts",
-		"start": "bun run dist/src/index.js",
+		"start": "node dist/src/index.js",
 		"db:push": "drizzle-kit push",
 		"db:studio": "drizzle-kit studio",
 		"db:generate": "drizzle-kit generate",
@@ -19,6 +22,7 @@
 		"@trpc/server": "^11.0.0",
 		"@trpc/client": "^11.0.0",
 		"@hono/trpc-server": "^0.3.4",
+		"@hono/node-server": "^1.13.7",
 		"hono": "^4.7.6",
 		"drizzle-orm": "^0.38.4",
 		"pg": "^8.14.1",
