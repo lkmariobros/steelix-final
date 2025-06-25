@@ -38,7 +38,8 @@ export default function SignUpForm({
 				},
 				{
 					onSuccess: () => {
-						router.push("/dashboard");
+						// Force session refresh after successful sign up
+						window.location.href = "/dashboard";
 						toast.success("Sign up successful");
 					},
 					onError: (error) => {

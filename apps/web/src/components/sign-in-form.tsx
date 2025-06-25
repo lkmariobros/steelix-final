@@ -36,7 +36,8 @@ export default function SignInForm({
 				},
 				{
 					onSuccess: () => {
-						router.push("/dashboard");
+						// Force session refresh after successful login
+						window.location.href = "/dashboard";
 						toast.success("Sign in successful");
 					},
 					onError: (error) => {

@@ -35,7 +35,8 @@ export const auth = betterAuth({
 		cookieOptions: {
 			sameSite: "none", // Allow cross-origin cookies
 			secure: true, // Required for SameSite=None
-			httpOnly: true, // Security best practice
+			httpOnly: false, // Allow JavaScript access for cross-origin setup
+			domain: undefined, // Don't set domain to allow cross-origin
 		},
 	},
 	plugins: [expo()],
