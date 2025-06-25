@@ -1,7 +1,7 @@
 "use client";
 
-import type * as React from "react";
 import { usePathname } from "next/navigation";
+import type * as React from "react";
 
 import { SearchForm } from "@/components/search-form";
 import {
@@ -18,6 +18,7 @@ import {
 	SidebarRail,
 } from "@/components/sidebar";
 import { TeamSwitcher } from "@/components/team-switcher";
+import { authClient } from "@/lib/auth-client";
 import {
 	RiBarChartLine,
 	RiCheckboxCircleLine,
@@ -27,7 +28,6 @@ import {
 	RiSettings3Line,
 	RiTeamLine,
 } from "@remixicon/react";
-import { authClient } from "@/lib/auth-client";
 
 // This is sample data.
 const data = {
@@ -56,83 +56,85 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 	// Role-based navigation logic
 	// TODO: Replace with real role check from tRPC once working
 	const isAdmin = true; // For testing - will be replaced with actual role check
-	const isCurrentlyInAdminPortal = pathname.startsWith('/admin');
+	const isCurrentlyInAdminPortal = pathname.startsWith("/admin");
 
 	// Generate navigation based on current portal - NO portal switching in sidebar
-	const navigationItems = isCurrentlyInAdminPortal ? [
-		// Admin Portal Navigation
-		{
-			title: "Admin Portal",
-			url: "#",
-			items: [
+	const navigationItems = isCurrentlyInAdminPortal
+		? [
+				// Admin Portal Navigation
 				{
-					title: "Dashboard Overview",
-					url: "/admin",
-					icon: RiDashboardLine,
+					title: "Admin Portal",
+					url: "#",
+					items: [
+						{
+							title: "Dashboard Overview",
+							url: "/admin",
+							icon: RiDashboardLine,
+						},
+						{
+							title: "Commission Approvals",
+							url: "/admin/approvals",
+							icon: RiCheckboxCircleLine,
+						},
+						{
+							title: "Agent Management",
+							url: "/admin/agents",
+							icon: RiTeamLine,
+						},
+						{
+							title: "Reports & Analytics",
+							url: "/admin/reports",
+							icon: RiBarChartLine,
+						},
+					],
 				},
 				{
-					title: "Commission Approvals",
-					url: "/admin/approvals",
-					icon: RiCheckboxCircleLine,
+					title: "Configuration",
+					url: "#",
+					items: [
+						{
+							title: "Settings",
+							url: "/admin/settings",
+							icon: RiSettings3Line,
+						},
+					],
+				},
+			]
+		: [
+				// Agent Portal Navigation
+				{
+					title: "Agent Dashboard",
+					url: "#",
+					items: [
+						{
+							title: "Dashboard",
+							url: "/dashboard",
+							icon: RiDashboardLine,
+						},
+						{
+							title: "Pipeline",
+							url: "/dashboard/pipeline",
+							icon: RiBarChartLine,
+						},
+						{
+							title: "Transactions",
+							url: "/dashboard/transactions",
+							icon: RiFileTextLine,
+						},
+					],
 				},
 				{
-					title: "Agent Management",
-					url: "/admin/agents",
-					icon: RiTeamLine,
+					title: "Configuration",
+					url: "#",
+					items: [
+						{
+							title: "Settings",
+							url: "/dashboard/settings",
+							icon: RiSettings3Line,
+						},
+					],
 				},
-				{
-					title: "Reports & Analytics",
-					url: "/admin/reports",
-					icon: RiBarChartLine,
-				},
-			],
-		},
-		{
-			title: "Configuration",
-			url: "#",
-			items: [
-				{
-					title: "Settings",
-					url: "/admin/settings",
-					icon: RiSettings3Line,
-				},
-			],
-		},
-	] : [
-		// Agent Portal Navigation
-		{
-			title: "Agent Dashboard",
-			url: "#",
-			items: [
-				{
-					title: "Dashboard",
-					url: "/dashboard",
-					icon: RiDashboardLine,
-				},
-				{
-					title: "Pipeline",
-					url: "/dashboard/pipeline",
-					icon: RiBarChartLine,
-				},
-				{
-					title: "Transactions",
-					url: "/dashboard/transactions",
-					icon: RiFileTextLine,
-				},
-			],
-		},
-		{
-			title: "Configuration",
-			url: "#",
-			items: [
-				{
-					title: "Settings",
-					url: "/dashboard/settings",
-					icon: RiSettings3Line,
-				},
-			],
-		},
-	];
+			];
 
 	return (
 		<Sidebar {...props}>

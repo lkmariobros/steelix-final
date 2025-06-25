@@ -36,9 +36,9 @@ export default function UserDropdown() {
 	const userName = session.user.name || "User";
 	const userEmail = session.user.email || "";
 	const userInitials = userName
-		.split(' ')
-		.map(n => n[0])
-		.join('')
+		.split(" ")
+		.map((n) => n[0])
+		.join("")
 		.toUpperCase();
 
 	// Logout function

@@ -22,14 +22,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/utils/trpc";
+import { RiCheckLine, RiCloseLine, RiTimeLine } from "@remixicon/react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { toast } from "sonner";
-import {
-	RiCheckLine,
-	RiCloseLine,
-	RiTimeLine,
-} from "@remixicon/react";
 import React, { useState } from "react";
+import { toast } from "sonner";
 
 // Import types and utilities
 import type { CommissionApproval, DateRangeFilter } from "../admin-schema";
@@ -91,17 +87,24 @@ export function CommissionApprovalQueue({
 
 	// Real tRPC mutation - replaces mock mutation
 	const processApprovalMutation = useMutation({
-		mutationFn: async (input: { transactionId: string; action: "approve" | "reject"; reviewNotes?: string }) => {
-			const response = await fetch(`${process.env.NEXT_PUBLIC_SERVER_URL}/trpc/admin.processCommissionApproval`, {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
+		mutationFn: async (input: {
+			transactionId: string;
+			action: "approve" | "reject";
+			reviewNotes?: string;
+		}) => {
+			const response = await fetch(
+				`${process.env.NEXT_PUBLIC_SERVER_URL}/trpc/admin.processCommissionApproval`,
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+					},
+					credentials: "include",
+					body: JSON.stringify({ json: input }),
 				},
-				credentials: 'include',
-				body: JSON.stringify({ json: input }),
-			});
+			);
 			if (!response.ok) {
-				throw new Error('Failed to process approval');
+				throw new Error("Failed to process approval");
 			}
 			return response.json();
 		},
@@ -113,7 +116,9 @@ export function CommissionApprovalQueue({
 			closeDialog();
 		},
 		onError: (error: Error) => {
-			toast.error(`Failed to ${dialogState.action} transaction: ${error.message}`);
+			toast.error(
+				`Failed to ${dialogState.action} transaction: ${error.message}`,
+			);
 			setDialogState((prev) => ({ ...prev, isSubmitting: false }));
 		},
 	});
@@ -231,7 +236,11 @@ export function CommissionApprovalQueue({
 	// Type-safe transaction processing - handle null status values
 	const transactions = (queueData?.transactions || []).map((transaction) => ({
 		...transaction,
-		status: (transaction.status || "submitted") as "submitted" | "under_review" | "approved" | "rejected",
+		status: (transaction.status || "submitted") as
+			| "submitted"
+			| "under_review"
+			| "approved"
+			| "rejected",
 	}));
 
 	return (

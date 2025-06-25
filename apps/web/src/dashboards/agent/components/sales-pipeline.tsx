@@ -176,7 +176,9 @@ export function SalesPipeline() {
 												{getStatusLabel(transaction.status)}
 											</Badge>
 											<span className="text-muted-foreground text-xs">
-												{new Date(transaction.transactionDate).toLocaleDateString()}
+												{new Date(
+													transaction.transactionDate,
+												).toLocaleDateString()}
 											</span>
 										</div>
 									</div>

@@ -4,13 +4,13 @@ import { StatsCard } from "@/components/stats-grid";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { trpc } from "@/utils/trpc";
-import { useQuery } from "@tanstack/react-query";
 import {
 	RiCheckboxCircleLine,
 	RiFileListLine,
 	RiMoneyDollarCircleLine,
 	RiTimeLine,
 } from "@remixicon/react";
+import { useQuery } from "@tanstack/react-query";
 import React from "react";
 
 // Import types and utilities
@@ -35,13 +35,10 @@ export function DashboardSummary({
 		error,
 		refetch,
 	} = useQuery(
-		trpc.admin.getDashboardSummary.queryOptions(
-			dateRange || {},
-			{
-				refetchOnWindowFocus: false,
-				staleTime: 30000, // 30 seconds
-			},
-		),
+		trpc.admin.getDashboardSummary.queryOptions(dateRange || {}, {
+			refetchOnWindowFocus: false,
+			staleTime: 30000, // 30 seconds
+		}),
 	);
 
 	// Type-safe data processing - handle string commission values from database

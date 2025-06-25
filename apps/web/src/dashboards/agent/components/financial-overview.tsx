@@ -4,13 +4,13 @@ import { StatsGrid } from "@/components/stats-grid";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { trpc } from "@/utils/trpc";
-import { useQuery } from "@tanstack/react-query";
 import {
 	RiBarChartLine,
 	RiMoneyDollarCircleLine,
 	RiTimeLine,
 	RiTrophyLine,
 } from "@remixicon/react";
+import { useQuery } from "@tanstack/react-query";
 // Simple utility function to avoid import issues
 const formatCurrency = (amount: number): string => {
 	return new Intl.NumberFormat("en-US", {

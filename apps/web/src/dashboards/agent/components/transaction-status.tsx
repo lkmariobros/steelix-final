@@ -160,8 +160,10 @@ export function TransactionStatus() {
 						const completedStatus = statusData.find(
 							(s) => s.status === "completed",
 						);
-						const pendingStatuses = statusData.filter((s) =>
-							s.status && ["submitted", "under_review", "approved"].includes(s.status),
+						const pendingStatuses = statusData.filter(
+							(s) =>
+								s.status &&
+								["submitted", "under_review", "approved"].includes(s.status),
 						);
 						const pendingCount = pendingStatuses.reduce(
 							(sum, s) => sum + s.count,

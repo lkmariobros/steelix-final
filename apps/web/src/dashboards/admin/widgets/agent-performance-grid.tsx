@@ -14,13 +14,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { trpc } from "@/utils/trpc";
-import { useQuery } from "@tanstack/react-query";
 import {
 	RiArrowDownLine,
 	RiArrowUpLine,
 	RiBarChartLine,
 	RiTrophyLine,
 } from "@remixicon/react";
+import { useQuery } from "@tanstack/react-query";
 import React, { useState } from "react";
 
 // Import types and utilities
@@ -78,7 +78,9 @@ export function AgentPerformanceGrid({
 
 		return rawPerformanceData.map((agent) => ({
 			...agent,
-			totalCommission: agent.totalCommission ? Number(agent.totalCommission) : 0,
+			totalCommission: agent.totalCommission
+				? Number(agent.totalCommission)
+				: 0,
 			avgCommission: agent.avgCommission ? Number(agent.avgCommission) : 0,
 		}));
 	}, [rawPerformanceData]);

@@ -5,13 +5,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { trpc } from "@/utils/trpc";
-import { useQuery } from "@tanstack/react-query";
 import {
 	RiAlertLine,
 	RiArrowRightLine,
 	RiFireLine,
 	RiTimeLine,
 } from "@remixicon/react";
+import { useQuery } from "@tanstack/react-query";
 import React from "react";
 
 // Import types and utilities
@@ -126,7 +126,11 @@ export function UrgentTasksPanel({
 		type: String(task.type || "overdue_approval"),
 		title: String(task.title || "Overdue Commission Approval"),
 		description: String(task.description || "Transaction pending approval"),
-		priority: String(task.priority || "high") as "low" | "medium" | "high" | "critical",
+		priority: String(task.priority || "high") as
+			| "low"
+			| "medium"
+			| "high"
+			| "critical",
 	}));
 
 	return (

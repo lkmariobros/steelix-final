@@ -23,10 +23,10 @@ import { useEffect, useState } from "react";
 
 // Import dashboard widgets
 import { FinancialOverview } from "./components/financial-overview";
-import { SalesPipeline } from "./components/sales-pipeline";
-import { TransactionStatus } from "./components/transaction-status";
 import { RecentTransactions } from "./components/recent-transactions";
+import { SalesPipeline } from "./components/sales-pipeline";
 import { TeamLeaderboard } from "./components/team-leaderboard";
+import { TransactionStatus } from "./components/transaction-status";
 
 interface AgentDashboardProps {
 	className?: string;
