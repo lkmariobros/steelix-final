@@ -46,9 +46,10 @@ import { serve } from "@hono/node-server";
 serve({
 	fetch: app.fetch,
 	port: Number(port),
+	hostname: "0.0.0.0", // Bind to all interfaces for Railway
 });
 
-console.log(`✅ Server running on http://localhost:${port}`);
+console.log(`✅ Server running on http://0.0.0.0:${port}`);
 
 export default app;
 
