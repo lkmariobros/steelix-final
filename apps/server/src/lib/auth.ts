@@ -17,9 +17,10 @@ export const auth = betterAuth({
 		process.env.BETTER_AUTH_SECRET ||
 		"fallback-secret-key-change-in-production",
 	trustedOrigins: [
-		process.env.CORS_ORIGIN || "",
+		...(process.env.CORS_ORIGIN?.split(',') || []),
 		"https://steelix-final-web.vercel.app",
-		"https://steelix-final-web-*.vercel.app", // Allow any Vercel preview URLs
+		"https://steelix-final-web-git-master-lkmariobros-projects.vercel.app",
+		"https://steelix-final-mx4or73lk-lkmariobros-projects.vercel.app",
 		"http://localhost:3001",
 		"my-better-t-app://",
 	],
