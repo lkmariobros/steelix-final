@@ -30,6 +30,11 @@ export const auth = betterAuth({
 			enabled: true,
 			maxAge: 60 * 60 * 24 * 7, // 7 days
 		},
+		cookieOptions: {
+			sameSite: "none", // Allow cross-origin cookies
+			secure: true, // Required for SameSite=None
+			httpOnly: true, // Security best practice
+		},
 	},
 	plugins: [expo()],
 });
