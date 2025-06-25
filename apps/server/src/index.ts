@@ -86,6 +86,30 @@ app.get("/debug/db-test", async (c) => {
 	}
 });
 
+// Debug endpoint to test auth session
+app.get("/debug/session-test", async (c) => {
+	try {
+		const session = await auth.api.getSession({
+			headers: c.req.raw.headers,
+		});
+		return c.json({
+			hasSession: !!session,
+			session: session ? {
+				userId: session.user.id,
+				email: session.user.email,
+				name: session.user.name
+			} : null,
+			cookies: c.req.header('cookie') || 'No cookies',
+			headers: Object.fromEntries(c.req.raw.headers.entries())
+		});
+	} catch (error) {
+		return c.json({
+			error: error instanceof Error ? error.message : String(error),
+			hasSession: false
+		}, 500);
+	}
+});
+
 const port = process.env.PORT || 3000;
 
 console.log(`🚀 Server starting on port ${port}`);
