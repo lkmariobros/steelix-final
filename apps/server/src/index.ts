@@ -14,10 +14,28 @@ app.use(logger());
 app.use(
 	"/*",
 	cors({
-		origin: process.env.CORS_ORIGIN?.split(',') || [],
-		allowMethods: ["GET", "POST", "OPTIONS"],
-		allowHeaders: ["Content-Type", "Authorization", "Cookie"],
-		credentials: true,
+		origin: [
+			// Explicit origin allowlist for better security
+			"https://steelix-final-web.vercel.app",
+			"https://steelix-final-web-git-master-lkmariobros-projects.vercel.app",
+			"https://steelix-final-mx4or73lk-lkmariobros-projects.vercel.app",
+			...(process.env.CORS_ORIGIN?.split(',') || []),
+			// Development origins
+			"http://localhost:3001",
+			"http://localhost:3000",
+		],
+		allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+		allowHeaders: [
+			"Content-Type",
+			"Authorization",
+			"Cookie",
+			"Set-Cookie",
+			"X-Requested-With",
+			"Accept",
+			"Origin",
+		],
+		credentials: true, // CRITICAL: Enable credentials for cross-origin cookies
+		exposeHeaders: ["Set-Cookie"], // Allow frontend to see Set-Cookie headers
 	}),
 );
 

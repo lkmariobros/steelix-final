@@ -9,14 +9,15 @@ export const auth = betterAuth({
 		provider: "pg",
 		schema: schema,
 	}),
+	// ✅ CRITICAL FIX: baseURL should be the backend URL, not frontend
 	baseURL:
 		process.env.BETTER_AUTH_URL ||
-		process.env.CORS_ORIGIN?.split(',')[0] ||
-		"http://localhost:3000",
+		"https://steelix-final-production.up.railway.app",
 	secret:
 		process.env.BETTER_AUTH_SECRET ||
 		"fallback-secret-key-change-in-production",
 	trustedOrigins: [
+		// Frontend URLs that can make requests to this auth server
 		...(process.env.CORS_ORIGIN?.split(',') || []),
 		"https://steelix-final-web.vercel.app",
 		"https://steelix-final-web-git-master-lkmariobros-projects.vercel.app",
@@ -28,15 +29,40 @@ export const auth = betterAuth({
 		enabled: true,
 	},
 	session: {
+		expiresIn: 60 * 60 * 24 * 7, // 7 days
+		updateAge: 60 * 60 * 24, // 1 day
 		cookieCache: {
 			enabled: true,
 			maxAge: 60 * 60 * 24 * 7, // 7 days
 		},
-		cookieOptions: {
-			sameSite: "none", // Allow cross-origin cookies
-			secure: true, // Required for SameSite=None
-			httpOnly: false, // Allow JavaScript access for cross-origin setup
-			domain: undefined, // Don't set domain to allow cross-origin
+	},
+	// ✅ CRITICAL FIX: Proper cross-origin cookie configuration
+	advanced: {
+		crossSubDomainCookies: {
+			enabled: true,
+			// Don't set domain for cross-origin (different domains)
+			domain: undefined,
+		},
+		useSecureCookies: true, // Always use secure cookies in production
+		cookies: {
+			session_token: {
+				name: "better-auth.session_token",
+				attributes: {
+					sameSite: "none", // Required for cross-origin
+					secure: true, // Required for sameSite=none
+					httpOnly: true, // Security best practice
+					path: "/",
+				},
+			},
+			session_data: {
+				name: "better-auth.session_data",
+				attributes: {
+					sameSite: "none",
+					secure: true,
+					httpOnly: false, // Allow client-side access for session data
+					path: "/",
+				},
+			},
 		},
 	},
 	plugins: [expo()],

@@ -23,10 +23,12 @@ const trpcClient = createTRPCClient<AppRouter>({
 	links: [
 		httpBatchLink({
 			url: `${process.env.NEXT_PUBLIC_SERVER_URL}/trpc`,
+			// ✅ CRITICAL FIX: Remove manual cookie header handling
+			// Better Auth handles cookies automatically with credentials: "include"
 			fetch(url, options) {
 				return fetch(url, {
 					...options,
-					credentials: "include",
+					credentials: "include", // This is all we need for Better Auth cookies
 				});
 			},
 		}),
