@@ -87,7 +87,7 @@ async function testCORS() {
       
       console.log(`   Origin: ${origin}`);
       console.log(`   Status: ${response.status}`);
-      console.log(`   CORS Headers:`, corsHeaders);
+      console.log("   CORS Headers:", corsHeaders);
       console.log('');
     } catch (error) {
       console.log(`   ❌ CORS test failed for ${origin}: ${error.message}`);

@@ -3,6 +3,7 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { db } from "../db";
 import * as schema from "../db/schema/auth";
+import { count, eq } from "drizzle-orm";
 
 export const auth = betterAuth({
 	database: drizzleAdapter(db, {
@@ -36,20 +37,21 @@ export const auth = betterAuth({
 			maxAge: 60 * 60 * 24 * 7, // 7 days
 		},
 	},
-	// ✅ CRITICAL FIX: Proper cross-origin cookie configuration
+	// ✅ CRITICAL FIX: Proper cross-origin cookie configuration with environment-based security
 	advanced: {
 		crossSubDomainCookies: {
 			enabled: true,
 			// Don't set domain for cross-origin (different domains)
 			domain: undefined,
 		},
-		useSecureCookies: true, // Always use secure cookies in production
+		// Environment-dependent secure cookies: true in production, false in development
+		useSecureCookies: (process.env.NODE_ENV || 'development') === 'production',
 		cookies: {
 			session_token: {
 				name: "better-auth.session_token",
 				attributes: {
 					sameSite: "none", // Required for cross-origin
-					secure: true, // Required for sameSite=none
+					secure: (process.env.NODE_ENV || 'development') === 'production', // Environment-dependent
 					httpOnly: true, // Security best practice
 					path: "/",
 				},
@@ -58,9 +60,68 @@ export const auth = betterAuth({
 				name: "better-auth.session_data",
 				attributes: {
 					sameSite: "none",
-					secure: true,
-					httpOnly: false, // Allow client-side access for session data
+					secure: (process.env.NODE_ENV || 'development') === 'production', // Environment-dependent
+					// ✅ SECURITY IMPROVEMENT: Set httpOnly to true for XSS protection
+					// Analysis shows no client-side access required - Better Auth React handles session internally
+					httpOnly: true, // Enhanced security - no client-side cookie access needed
 					path: "/",
+				},
+			},
+		},
+	},
+	// ✅ BOOTSTRAP SOLUTION: Automatic admin role assignment for first user
+	databaseHooks: {
+		user: {
+			create: {
+				before: async (userData) => {
+					try {
+						// Check if any users exist in the database
+						const [existingUsersCount] = await db
+							.select({ count: count() })
+							.from(schema.user);
+
+						const isFirstUser = existingUsersCount.count === 0;
+
+						// Assign role based on whether this is the first user
+						const role = isFirstUser ? "admin" : "agent";
+
+						console.log(`🔐 User creation: ${userData.email} - Role: ${role} (First user: ${isFirstUser})`);
+
+						return {
+							data: {
+								...userData,
+								role: role,
+							},
+						};
+					} catch (error) {
+						console.error("❌ Error in user creation hook:", error);
+						// Fallback to default role if there's an error
+						return {
+							data: {
+								...userData,
+								role: "agent",
+							},
+						};
+					}
+				},
+				after: async (user) => {
+					// Log successful user creation
+					console.log(`✅ User created successfully: ${user.email}`);
+
+					// Check if this user has admin role by querying the database
+					try {
+						const createdUser = await db
+							.select({ role: schema.user.role })
+							.from(schema.user)
+							.where(eq(schema.user.id, user.id))
+							.limit(1);
+
+						if (createdUser[0]?.role === "admin") {
+							console.log("🎉 BOOTSTRAP COMPLETE: First admin user created! Admin dashboard access enabled.");
+						}
+					} catch (error) {
+						console.error("❌ Error checking user role after creation:", error);
+					}
 				},
 			},
 		},
