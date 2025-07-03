@@ -5,22 +5,19 @@ export const authClient = createAuthClient({
 	fetchOptions: {
 		credentials: "include", // Include cookies in cross-origin requests
 		onError: (context) => {
-			// Enhanced error handling for debugging
+			// ✅ FIXED: Corrected Better Auth ErrorContext properties
 			console.error("Better Auth Error:", {
-				url: context.url,
-				method: context.method,
-				status: context.response?.status,
-				statusText: context.response?.statusText,
+				request: context.request,
+				response: context.response,
 				error: context.error,
 			});
 		},
 		onSuccess: (context) => {
-			// Optional: Log successful auth operations for debugging
+			// ✅ FIXED: Corrected Better Auth SuccessContext properties
 			if (process.env.NODE_ENV === 'development') {
 				console.log("Better Auth Success:", {
-					url: context.url,
-					method: context.method,
-					status: context.response?.status,
+					request: context.request,
+					response: context.response,
 				});
 			}
 		},

@@ -29,22 +29,50 @@ export default function SignInForm({
 			password: "",
 		},
 		onSubmit: async ({ value }) => {
-			await authClient.signIn.email(
-				{
-					email: value.email,
-					password: value.password,
-				},
-				{
-					onSuccess: () => {
-						// Force session refresh after successful login
-						window.location.href = "/dashboard";
-						toast.success("Sign in successful");
+			try {
+				await authClient.signIn.email(
+					{
+						email: value.email,
+						password: value.password,
 					},
-					onError: (error) => {
-						toast.error(error.error.message);
+					{
+						onSuccess: async (context) => {
+							// ✅ FIXED: Show toast first, then handle routing
+							toast.success("Sign in successful! Redirecting...");
+
+							// Wait for session to be established
+							await new Promise(resolve => setTimeout(resolve, 500));
+
+							// ✅ FIXED: Role-based routing instead of hardcoded /dashboard
+							try {
+								// Check user role to determine redirect
+								const session = await authClient.getSession();
+								const userRole = session?.user?.role;
+
+								if (userRole === 'admin' || userRole === 'team_lead') {
+									router.push('/admin');
+								} else {
+									router.push('/agent-dashboard');
+								}
+							} catch (error) {
+								// Fallback to agent dashboard if role check fails
+								console.warn('Role check failed, defaulting to agent dashboard:', error);
+								router.push('/agent-dashboard');
+							}
+						},
+						onError: (error) => {
+							// ✅ IMPROVED: Better error handling
+							console.error('Sign in error:', error);
+							const errorMessage = error?.error?.message || 'Sign in failed. Please try again.';
+							toast.error(errorMessage);
+						},
 					},
-				},
-			);
+				);
+			} catch (error) {
+				// ✅ ADDED: Catch any unexpected errors
+				console.error('Unexpected sign in error:', error);
+				toast.error('An unexpected error occurred. Please try again.');
+			}
 		},
 		validators: {
 			onSubmit: z.object({

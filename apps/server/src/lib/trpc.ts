@@ -23,20 +23,30 @@ export const protectedProcedure = t.procedure.use(({ ctx, next }) => {
 	});
 });
 
-// Admin procedure with role validation
+// ✅ PERFORMANCE OPTIMIZED: Admin procedure with cached role validation
 export const adminProcedure = protectedProcedure.use(async ({ ctx, next }) => {
-	// Get user role from database since Better Auth session might not include it
-	const { db } = await import("../db");
-	const { user } = await import("../db/schema/auth");
-	const { eq } = await import("drizzle-orm");
+	// Check if role is already cached in session context
+	let userRole = (ctx.session.user as { role?: string })?.role;
 
-	const [userRecord] = await db
-		.select({ role: user.role })
-		.from(user)
-		.where(eq(user.id, ctx.session.user.id))
-		.limit(1);
+	// Only query database if role is not in session
+	if (!userRole) {
+		const { db } = await import("../db");
+		const { user } = await import("../db/schema/auth");
+		const { eq } = await import("drizzle-orm");
 
-	const userRole = userRecord?.role;
+		const [userRecord] = await db
+			.select({ role: user.role })
+			.from(user)
+			.where(eq(user.id, ctx.session.user.id))
+			.limit(1);
+
+		userRole = userRecord?.role;
+
+		// ✅ PERFORMANCE: Cache role in session for subsequent requests
+		if (userRole && ctx.session.user) {
+			(ctx.session.user as { role?: string }).role = userRole;
+		}
+	}
 
 	if (!userRole || !["admin", "team_lead"].includes(userRole)) {
 		throw new TRPCError({
