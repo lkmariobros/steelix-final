@@ -43,22 +43,9 @@ export default function SignInForm({
 							// Wait for session to be established
 							await new Promise(resolve => setTimeout(resolve, 500));
 
-							// ✅ FIXED: Role-based routing instead of hardcoded /dashboard
-							try {
-								// Check user role to determine redirect
-								const session = await authClient.getSession();
-								const userRole = session?.user?.role;
-
-								if (userRole === 'admin' || userRole === 'team_lead') {
-									router.push('/admin');
-								} else {
-									router.push('/agent-dashboard');
-								}
-							} catch (error) {
-								// Fallback to agent dashboard if role check fails
-								console.warn('Role check failed, defaulting to agent dashboard:', error);
-								router.push('/agent-dashboard');
-							}
+							// ✅ FIXED: Simplified routing - let route guards handle role-based redirects
+							// Redirect to dashboard and let the route protection handle role-based routing
+							router.push('/dashboard');
 						},
 						onError: (error) => {
 							// ✅ IMPROVED: Better error handling
