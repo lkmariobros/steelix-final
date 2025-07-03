@@ -21,18 +21,18 @@ import { authClient } from "@/lib/auth-client";
 import { trpc } from "@/utils/trpc";
 import { RiDashboardLine, RiShieldUserLine } from "@remixicon/react";
 import { useRouter } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
 
 export default function AdminDashboardPage() {
 	const router = useRouter();
 	const { data: session, isPending } = authClient.useSession();
 
 	// ✅ SECURITY FIX: Re-enabled proper role checking
-	const { data: roleData, isLoading: isRoleLoading } = trpc.admin.checkAdminRole.useQuery(
-		undefined,
-		{
+	const { data: roleData, isLoading: isRoleLoading } = useQuery(
+		trpc.admin.checkAdminRole.queryOptions(undefined, {
 			enabled: !!session, // Only check role if user is authenticated
 			retry: false,
-		}
+		})
 	);
 
 	// Show loading while checking authentication and role
