@@ -40,7 +40,7 @@ export const adminProcedure = protectedProcedure.use(async ({ ctx, next }) => {
 			.where(eq(user.id, ctx.session.user.id))
 			.limit(1);
 
-		userRole = userRecord?.role;
+		userRole = userRecord?.role || undefined;
 
 		// ✅ PERFORMANCE: Cache role in session for subsequent requests
 		if (userRole && ctx.session.user) {

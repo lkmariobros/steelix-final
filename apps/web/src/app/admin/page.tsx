@@ -18,7 +18,7 @@ import {
 import UserDropdown from "@/components/user-dropdown";
 import { AdminDashboard } from "@/dashboards/admin";
 import { authClient } from "@/lib/auth-client";
-import { trpc } from "@/lib/trpc";
+import { trpc } from "@/utils/trpc";
 import { RiDashboardLine, RiShieldUserLine } from "@remixicon/react";
 import { useRouter } from "next/navigation";
 
