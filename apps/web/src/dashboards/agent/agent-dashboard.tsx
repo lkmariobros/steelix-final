@@ -20,6 +20,7 @@ import {
 	RiSettings3Line,
 } from "@remixicon/react";
 import { useEffect, useState } from "react";
+import { useTransactionModalActions } from "@/contexts/transaction-modal-context";
 
 // Import dashboard widgets
 import { FinancialOverview } from "./components/financial-overview";
@@ -33,6 +34,7 @@ interface AgentDashboardProps {
 }
 
 export function AgentDashboard({ className }: AgentDashboardProps) {
+	const { openCreateModal } = useTransactionModalActions();
 	const [dateRange, setDateRange] = useState<{
 		startDate?: Date;
 		endDate?: Date;
@@ -45,6 +47,11 @@ export function AgentDashboard({ className }: AgentDashboardProps) {
 	useEffect(() => {
 		setCurrentTime(new Date().toLocaleTimeString());
 	}, []);
+
+	// Handle opening transaction modal
+	const handleNewTransaction = () => {
+		openCreateModal();
+	};
 
 	// Handle time filter changes
 	const handleTimeFilterChange = (value: string) => {
@@ -190,7 +197,9 @@ export function AgentDashboard({ className }: AgentDashboardProps) {
 						<Button variant="outline" size="sm">
 							Export Report
 						</Button>
-						<Button size="sm">New Transaction</Button>
+						<Button size="sm" onClick={handleNewTransaction}>
+							New Transaction
+						</Button>
 					</div>
 				</div>
 			</div>

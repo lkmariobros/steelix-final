@@ -1,6 +1,8 @@
 import { protectedProcedure, publicProcedure, router } from "../lib/trpc";
 import { adminRouter } from "./admin";
+import { agentTiersRouter } from "./agent-tiers";
 import { dashboardRouter } from "./dashboard";
+import { documentsRouter } from "./documents";
 import { transactionsRouter } from "./transactions";
 
 export const appRouter = router({
@@ -16,6 +18,8 @@ export const appRouter = router({
 	transactions: transactionsRouter,
 	dashboard: dashboardRouter,
 	admin: adminRouter,
+	agentTiers: agentTiersRouter,
+	documents: documentsRouter,
 });
 
 export type AppRouter = typeof appRouter;

@@ -3,7 +3,7 @@
 	"version": "0.1.0",
 	"private": true,
 	"scripts": {
-		"dev": "next dev --turbopack --port=3001",
+		"dev": "next dev --turbopack --port=3000",
 		"build": "next build",
 		"start": "next start",
 		"lint": "next lint",
@@ -53,11 +53,13 @@
 	},
 	"devDependencies": {
 		"@tailwindcss/postcss": "^4",
+		"@tanstack/react-query-devtools": "^5.80.5",
 		"@types/node": "^20",
 		"@types/react": "^19",
 		"@types/react-dom": "^19",
+		"@typescript-eslint/eslint-plugin": "^8.36.0",
+		"@typescript-eslint/parser": "^8.36.0",
 		"tailwindcss": "^4",
-		"typescript": "^5",
-		"@tanstack/react-query-devtools": "^5.80.5"
+		"typescript": "^5"
 	}
 }

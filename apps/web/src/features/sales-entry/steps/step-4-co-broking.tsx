@@ -42,6 +42,7 @@ export function StepCoBroking({
 }: StepCoBrokingProps) {
 	const form = useForm<CoBrokingData>({
 		resolver: zodResolver(coBrokingSchema),
+		mode: "onChange", // Validate on change to provide immediate feedback
 		defaultValues: {
 			isCoBroking: data?.isCoBroking || false,
 			coBrokingData: data?.coBrokingData || {
@@ -306,7 +307,10 @@ export function StepCoBroking({
 									<ArrowLeft className="h-4 w-4" />
 									Back to Client
 								</Button>
-								<Button type="submit" className="flex items-center gap-2">
+								<Button
+									type="submit"
+									className="flex items-center gap-2"
+								>
 									Continue to Commission
 									<ArrowRight className="h-4 w-4" />
 								</Button>

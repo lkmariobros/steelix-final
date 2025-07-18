@@ -23,7 +23,9 @@ export const auth = betterAuth({
 		"https://steelix-final-web.vercel.app",
 		"https://steelix-final-web-git-master-lkmariobros-projects.vercel.app",
 		"https://steelix-final-mx4or73lk-lkmariobros-projects.vercel.app",
+		"http://localhost:3000",
 		"http://localhost:3001",
+		"http://localhost:3002",
 		"my-better-t-app://",
 	],
 	emailAndPassword: {
@@ -50,7 +52,7 @@ export const auth = betterAuth({
 			session_token: {
 				name: "better-auth.session_token",
 				attributes: {
-					sameSite: "none", // Required for cross-origin
+					sameSite: (process.env.NODE_ENV || 'development') === 'production' ? "none" : "lax", // Fix for development
 					secure: (process.env.NODE_ENV || 'development') === 'production', // Environment-dependent
 					httpOnly: true, // Security best practice
 					path: "/",
@@ -59,7 +61,7 @@ export const auth = betterAuth({
 			session_data: {
 				name: "better-auth.session_data",
 				attributes: {
-					sameSite: "none",
+					sameSite: (process.env.NODE_ENV || 'development') === 'production' ? "none" : "lax", // Fix for development
 					secure: (process.env.NODE_ENV || 'development') === 'production', // Environment-dependent
 					// ✅ SECURITY IMPROVEMENT: Set httpOnly to true for XSS protection
 					// Analysis shows no client-side access required - Better Auth React handles session internally

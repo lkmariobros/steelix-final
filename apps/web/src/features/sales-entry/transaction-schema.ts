@@ -1,17 +1,29 @@
 import { z } from "zod";
 
-// Step 1: Initiation Schema
+// Step 1: Initiation Schema with Primary Market → Sale validation
 export const initiationSchema = z.object({
 	marketType: z.enum(["primary", "secondary"], {
 		required_error: "Please select a market type",
 	}),
-	transactionType: z.enum(["sale", "lease", "rental"], {
+	transactionType: z.enum(["sale", "lease"], {
 		required_error: "Please select a transaction type",
 	}),
 	transactionDate: z.date({
 		required_error: "Please select a transaction date",
 	}),
-});
+}).refine(
+	(data) => {
+		// Primary market transactions must be sales
+		if (data.marketType === "primary") {
+			return data.transactionType === "sale";
+		}
+		return true;
+	},
+	{
+		message: "Primary market transactions must be sales",
+		path: ["transactionType"], // Target the error to the transaction type field
+	}
+);
 
 // Step 2: Property Schema
 export const propertySchema = z.object({
@@ -27,13 +39,14 @@ export const propertySchema = z.object({
 // Step 3: Client Schema
 export const clientSchema = z.object({
 	name: z.string().min(1, "Client name is required"),
-	email: z.string().email("Please enter a valid email address"),
+	email: z.string().email("Please enter a valid email address").optional().or(z.literal("")),
 	phone: z.string().min(1, "Phone number is required"),
 	type: z.enum(["buyer", "seller", "tenant", "landlord"], {
 		required_error: "Please select client type",
 	}),
 	source: z.string().min(1, "Client source is required"),
 	notes: z.string().optional(),
+	isDualPartyDeal: z.boolean().default(false).optional(),
 });
 
 // Step 4: Co-Broking Schema
@@ -41,43 +54,57 @@ const coBrokingBaseSchema = z.object({
 	isCoBroking: z.boolean(),
 	coBrokingData: z
 		.object({
-			agentName: z.string().min(1, "Co-broking agent name is required"),
-			agencyName: z.string().min(1, "Co-broking agency name is required"),
+			agentName: z.string().optional(),
+			agencyName: z.string().optional(),
 			commissionSplit: z
 				.number()
 				.min(0)
-				.max(100, "Commission split must be between 0-100%"),
-			contactInfo: z.string().min(1, "Contact information is required"),
+				.max(100, "Commission split must be between 0-100%")
+				.optional(),
+			contactInfo: z.string().optional(),
 		})
 		.optional(),
 });
 
 export const coBrokingSchema = coBrokingBaseSchema.refine(
 	(data) => {
-		// If co-broking is enabled, require the co-broking data
-		if (data.isCoBroking) {
-			return (
-				data.coBrokingData?.agentName &&
-				data.coBrokingData.agencyName &&
-				data.coBrokingData.contactInfo &&
-				data.coBrokingData.commissionSplit >= 0
-			);
+		// Co-broking is completely optional - always allow progression
+		// Only validate if co-broking is enabled AND user has entered agent name
+		if (data.isCoBroking && data.coBrokingData?.agentName) {
+			// If agent name is provided, it should not be empty or just whitespace
+			return data.coBrokingData.agentName.trim().length > 0;
 		}
+		// Always allow progression in all other cases:
+		// - Co-broking disabled
+		// - Co-broking enabled but no agent name entered
+		// - Co-broking enabled with valid agent name
 		return true;
 	},
 	{
-		message: "Co-broking details are required when co-broking is enabled",
-		path: ["coBrokingData"],
+		message: "Agent name cannot be empty if provided",
+		path: ["coBrokingData", "agentName"],
 	},
 );
 
-// Step 5: Commission Schema
+// Step 5: Enhanced Commission Schema with agent tier support
 export const commissionSchema = z.object({
 	commissionType: z.enum(["percentage", "fixed"], {
 		required_error: "Please select commission type",
 	}),
 	commissionValue: z.number().min(0, "Commission value must be positive"),
 	commissionAmount: z.number().min(0, "Commission amount must be positive"),
+	// Enhanced fields for agent tier system
+	representationType: z.enum(["single_side", "dual_agency"]).default("single_side").optional(),
+	agentTier: z.enum(["advisor", "sales_leader", "team_leader", "group_leader", "supreme_leader"]).optional(),
+	companyCommissionSplit: z.number().min(0).max(100).optional(),
+	// Commission breakdown for transparency
+	breakdown: z.object({
+		totalCommission: z.number(),
+		agentCommissionShare: z.number(),
+		coBrokerShare: z.number().optional(),
+		companyShare: z.number(),
+		agentEarnings: z.number(),
+	}).optional(),
 });
 
 // Step 6: Documents Schema
@@ -90,16 +117,26 @@ export const documentsSchema = z.object({
 				type: z.string(),
 				url: z.string(),
 				uploadedAt: z.string(),
+				category: z.enum(['contract', 'identification', 'financial', 'miscellaneous']).optional(),
 			}),
 		)
 		.optional(),
 	notes: z.string().optional(),
+	transactionId: z.string().optional(), // For linking to transaction
 });
 
-// Complete Transaction Schema (all steps combined)
+// Complete Transaction Schema (all steps combined) with Primary Market → Sale validation
 export const completeTransactionSchema = z.object({
 	// Step 1: Initiation
-	...initiationSchema.shape,
+	marketType: z.enum(["primary", "secondary"], {
+		required_error: "Please select a market type",
+	}),
+	transactionType: z.enum(["sale", "lease"], {
+		required_error: "Please select a transaction type",
+	}),
+	transactionDate: z.date({
+		required_error: "Please select a transaction date",
+	}),
 
 	// Step 2: Property
 	propertyData: propertySchema,
@@ -115,7 +152,19 @@ export const completeTransactionSchema = z.object({
 
 	// Step 6: Documents
 	...documentsSchema.shape,
-});
+}).refine(
+	(data) => {
+		// Primary market transactions must be sales
+		if (data.marketType === "primary") {
+			return data.transactionType === "sale";
+		}
+		return true;
+	},
+	{
+		message: "Primary market transactions must be sales",
+		path: ["transactionType"],
+	}
+);
 
 // Individual step schemas for validation
 export const stepSchemas = {
@@ -158,7 +207,6 @@ export const marketTypeOptions = [
 export const transactionTypeOptions = [
 	{ value: "sale", label: "Sale" },
 	{ value: "lease", label: "Lease" },
-	{ value: "rental", label: "Rental" },
 ] as const;
 
 export const clientTypeOptions = [
@@ -171,6 +219,19 @@ export const clientTypeOptions = [
 export const commissionTypeOptions = [
 	{ value: "percentage", label: "Percentage" },
 	{ value: "fixed", label: "Fixed Amount" },
+] as const;
+
+export const representationTypeOptions = [
+	{
+		value: "single_side",
+		label: "Single Side (Co-broking)",
+		description: "You represent one party, split commission with co-broker"
+	},
+	{
+		value: "dual_agency",
+		label: "Dual Agency",
+		description: "You represent both buyer and seller, receive full commission"
+	},
 ] as const;
 
 export const propertyTypeOptions = [
@@ -243,4 +304,50 @@ export function calculateCommission(
 		return (propertyPrice * commissionValue) / 100;
 	}
 	return commissionValue;
+}
+
+// Enhanced commission calculation with agent tier support
+export function calculateEnhancedCommission(
+	propertyPrice: number,
+	commissionType: "percentage" | "fixed",
+	commissionValue: number,
+	representationType: "single_side" | "dual_agency",
+	agentTier: string = "advisor",
+	companyCommissionSplit: number = 60
+) {
+	// Level 1: Calculate total commission
+	const totalCommission = calculateCommission(propertyPrice, commissionType, commissionValue);
+
+	// Level 2: Apply representation type split
+	let agentCommissionShare: number;
+	let coBrokerShare: number | undefined;
+
+	if (representationType === "dual_agency") {
+		// Dual agency: agent gets full commission
+		agentCommissionShare = totalCommission;
+	} else {
+		// Single side (co-broking): split 50/50
+		agentCommissionShare = totalCommission * 0.5;
+		coBrokerShare = totalCommission * 0.5;
+	}
+
+	// Level 3: Apply company-agent split based on tier
+	const agentSharePercentage = companyCommissionSplit / 100;
+	const companyShare = agentCommissionShare * (1 - agentSharePercentage);
+	const agentEarnings = agentCommissionShare * agentSharePercentage;
+
+	return {
+		totalCommission,
+		agentCommissionShare,
+		coBrokerShare,
+		companyShare,
+		agentEarnings,
+		breakdown: {
+			totalCommission,
+			agentCommissionShare,
+			coBrokerShare,
+			companyShare,
+			agentEarnings,
+		}
+	};
 }

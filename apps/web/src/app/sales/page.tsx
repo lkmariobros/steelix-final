@@ -10,13 +10,13 @@ import {
 	CardTitle,
 } from "@/components/ui/card";
 import { CheckCircle, Clock, Eye, FileText, Plus, XCircle } from "lucide-react";
-import { useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
-import { TransactionForm } from "@/features/sales-entry/transaction-form";
+import { useTransactionModal } from "@/contexts/transaction-modal-context";
+import { useClientSide } from "@/hooks/use-client-side";
 // import { trpc } from "@/utils/trpc"; // Temporarily disabled for build
-
-type ViewMode = "list" | "create" | "edit" | "view";
 
 interface Transaction {
 	id: string;
@@ -42,10 +42,19 @@ interface Transaction {
 }
 
 export default function SalesPage() {
-	const [viewMode, setViewMode] = useState<ViewMode>("list");
-	const [selectedTransactionId, setSelectedTransactionId] = useState<
-		string | undefined
-	>();
+	const searchParams = useSearchParams();
+	const { openCreateModal, openEditModal, openViewModal } = useTransactionModal();
+	const isClient = useClientSide();
+
+	// Check for action parameter and automatically trigger create mode (client-side only)
+	useEffect(() => {
+		if (!isClient) return;
+
+		const action = searchParams.get("action");
+		if (action === "create") {
+			openCreateModal();
+		}
+	}, [searchParams, isClient]); // ✅ Removed openCreateModal to prevent infinite loop
 
 	// tRPC queries - temporarily mocked for build compatibility
 	// const { data: transactionsData, isLoading, refetch } = trpc.transactions.list.useQuery({
@@ -64,31 +73,22 @@ export default function SalesPage() {
 
 	const transactions = transactionsData?.transactions || [];
 
-	// Handle view mode changes
+	// Handle view mode changes - now using global modal
 	const handleCreateNew = () => {
-		setSelectedTransactionId(undefined);
-		setViewMode("create");
+		openCreateModal();
 	};
 
 	const handleEditTransaction = (id: string) => {
-		setSelectedTransactionId(id);
-		setViewMode("edit");
+		openEditModal(id);
 	};
 
 	const handleViewTransaction = (id: string) => {
-		setSelectedTransactionId(id);
-		setViewMode("view");
+		openViewModal(id);
 	};
 
-	const handleBackToList = () => {
-		setViewMode("list");
-		setSelectedTransactionId(undefined);
+	// Refresh data when needed (modal handles its own closing)
+	const refreshTransactions = () => {
 		refetch(); // Refresh the list
-	};
-
-	const handleTransactionSubmitted = () => {
-		toast.success("Transaction submitted successfully!");
-		handleBackToList();
 	};
 
 	// Get status badge variant
@@ -150,22 +150,27 @@ export default function SalesPage() {
 		});
 	};
 
-	// Render transaction form
-	if (viewMode === "create" || viewMode === "edit") {
+
+
+	// Show loading state during hydration to prevent mismatch
+	if (!isClient) {
 		return (
-			<div className="container mx-auto py-6">
-				<TransactionForm
-					transactionId={selectedTransactionId}
-					onSubmit={handleTransactionSubmitted}
-					onCancel={handleBackToList}
-				/>
+			<div className="container mx-auto space-y-6 py-6" suppressHydrationWarning>
+				<div className="flex items-center justify-between">
+					<div>
+						<h1 className="font-bold text-3xl">Sales Transactions</h1>
+						<p className="text-muted-foreground">
+							Loading...
+						</p>
+					</div>
+				</div>
 			</div>
 		);
 	}
 
 	// Render transaction list
 	return (
-		<div className="container mx-auto space-y-6 py-6">
+		<div className="container mx-auto space-y-6 py-6" suppressHydrationWarning>
 			{/* Header */}
 			<div className="flex items-center justify-between">
 				<div>
@@ -352,6 +357,7 @@ export default function SalesPage() {
 					)}
 				</CardContent>
 			</Card>
+
 		</div>
 	);
 }

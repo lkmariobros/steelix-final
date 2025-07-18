@@ -12,9 +12,11 @@ import {
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { CheckCircle, Circle, Save } from "lucide-react";
-import { useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import { CheckCircle, Circle, Loader2, Save } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
+import { useClientSide } from "@/hooks/use-client-side";
 
 import { type FormStep, stepConfig } from "./transaction-schema";
 import {
@@ -35,14 +37,18 @@ import { StepReview } from "./steps/step-7-review";
 
 interface TransactionFormProps {
 	transactionId?: string;
+	mode?: "create" | "edit" | "resume";
 	onSubmit?: () => void;
 	onCancel?: () => void;
+	onUnsavedChanges?: (hasChanges: boolean) => void;
 }
 
 export function TransactionForm({
 	transactionId,
+	mode = "create",
 	onSubmit,
 	onCancel,
+	onUnsavedChanges,
 }: TransactionFormProps) {
 	const {
 		currentStep,
@@ -56,9 +62,10 @@ export function TransactionForm({
 		resetForm,
 		clearAutoSave,
 		setIsLoading,
-	} = useTransactionFormState(transactionId);
+	} = useTransactionFormState(transactionId, mode);
 
 	const [isSaving, setIsSaving] = useState(false);
+	const isClient = useClientSide();
 
 	// tRPC mutations - temporarily mocked for build compatibility
 	// const createTransaction = trpc.transactions.create.useMutation();
@@ -82,13 +89,18 @@ export function TransactionForm({
 	const completedSteps = getCompletedSteps(formData);
 	const progress = calculateProgress(currentStep);
 
+	// Notify parent component about unsaved changes
+	useEffect(() => {
+		onUnsavedChanges?.(hasUnsavedChanges);
+	}, [hasUnsavedChanges, onUnsavedChanges]);
+
 	// Handle step data updates
-	const handleStepUpdate = (step: FormStep, data: Record<string, unknown>) => {
+	const handleStepUpdate = useCallback((step: FormStep, data: Record<string, unknown>) => {
 		updateStepData(step, data);
-	};
+	}, [updateStepData]);
 
 	// Handle save draft
-	const handleSaveDraft = async () => {
+	const handleSaveDraft = useCallback(async () => {
 		setIsSaving(true);
 		try {
 			if (transactionId) {
@@ -108,10 +120,10 @@ export function TransactionForm({
 		} finally {
 			setIsSaving(false);
 		}
-	};
+	}, [transactionId, formData, updateTransaction, createTransaction, clearAutoSave]);
 
 	// Handle form submission
-	const handleSubmit = async () => {
+	const handleSubmit = useCallback(async () => {
 		setIsLoading(true);
 		try {
 			let finalTransactionId = transactionId;
@@ -140,10 +152,10 @@ export function TransactionForm({
 		} finally {
 			setIsLoading(false);
 		}
-	};
+	}, [transactionId, formData, updateTransaction, createTransaction, submitTransaction, clearAutoSave, onSubmit]);
 
 	// Handle cancel
-	const handleCancel = () => {
+	const handleCancel = useCallback(() => {
 		if (hasUnsavedChanges) {
 			if (
 				confirm("You have unsaved changes. Are you sure you want to cancel?")
@@ -154,7 +166,7 @@ export function TransactionForm({
 		} else {
 			onCancel?.();
 		}
-	};
+	}, [hasUnsavedChanges, resetForm, onCancel]);
 
 	// Render step content
 	const renderStepContent = () => {
@@ -180,6 +192,8 @@ export function TransactionForm({
 				return (
 					<StepClient
 						data={formData.clientData}
+						marketType={formData.marketType}
+						transactionType={formData.transactionType}
 						onUpdate={(data) => handleStepUpdate(3, data)}
 						onNext={goToNextStep}
 						onPrevious={goToPreviousStep}
@@ -204,6 +218,10 @@ export function TransactionForm({
 							commissionType: formData.commissionType ?? "percentage",
 							commissionValue: formData.commissionValue ?? 0,
 							commissionAmount: formData.commissionAmount ?? 0,
+							representationType: formData.representationType ?? "single_side",
+							agentTier: formData.agentTier,
+							companyCommissionSplit: formData.companyCommissionSplit,
+							breakdown: formData.breakdown,
 						}}
 						propertyPrice={formData.propertyData?.price || 0}
 						onUpdate={(data) => handleStepUpdate(5, data)}
@@ -257,7 +275,11 @@ export function TransactionForm({
 							disabled={isSaving}
 							className="flex items-center gap-2"
 						>
-							<Save className="h-4 w-4" />
+							{isSaving ? (
+								<Loader2 className="h-4 w-4 animate-spin" />
+							) : (
+								<Save className="h-4 w-4" />
+							)}
 							{isSaving ? "Saving..." : "Save Draft"}
 						</Button>
 						{onCancel && (
@@ -316,7 +338,24 @@ export function TransactionForm({
 						<Separator className="my-6" />
 
 						<TabsContent value={currentStep.toString()} className="mt-6">
-							{renderStepContent()}
+							{isClient ? (
+								<AnimatePresence mode="wait">
+									<motion.div
+										key={currentStep}
+										initial={{ opacity: 0, x: 20 }}
+										animate={{ opacity: 1, x: 0 }}
+										exit={{ opacity: 0, x: -20 }}
+										transition={{
+											duration: 0.3,
+											ease: [0.16, 1, 0.3, 1]
+										}}
+									>
+										{renderStepContent()}
+									</motion.div>
+								</AnimatePresence>
+							) : (
+								<div>{renderStepContent()}</div>
+							)}
 						</TabsContent>
 					</Tabs>
 				</CardContent>

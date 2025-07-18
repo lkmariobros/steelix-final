@@ -23,6 +23,7 @@ app.use(
 			// Development origins
 			"http://localhost:3001",
 			"http://localhost:3000",
+			"http://localhost:3002",
 		],
 		allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
 		allowHeaders: [
@@ -139,40 +140,74 @@ console.log(
 );
 console.log(`   - BETTER_AUTH_URL: ${process.env.BETTER_AUTH_URL}`);
 
-// For Railway deployment, we need to use serve() to start the server
-import { serve } from "@hono/node-server";
+// For Bun runtime, we export the app directly and let Bun handle serving
+// For Railway deployment, we'll use a different approach
+if (process.env.NODE_ENV === "production" || process.env.RAILWAY_ENVIRONMENT) {
+	// Use @hono/node-server for Railway
+	import("@hono/node-server").then(({ serve }) => {
+		try {
+			const server = serve({
+				fetch: app.fetch,
+				port: Number(port),
+				hostname: "0.0.0.0", // Bind to all interfaces for Railway
+			});
 
-try {
-	const server = serve({
-		fetch: app.fetch,
-		port: Number(port),
-		hostname: "0.0.0.0", // Bind to all interfaces for Railway
+			console.log(`✅ Server successfully bound to 0.0.0.0:${port}`);
+			console.log(
+				"🌐 Server should be accessible at https://steelix-final-production.up.railway.app",
+			);
+
+			// Keep the process alive
+			process.on("SIGTERM", () => {
+				console.log("🛑 SIGTERM received, shutting down gracefully");
+				server.close(() => {
+					console.log("✅ Server closed");
+					process.exit(0);
+				});
+			});
+
+			process.on("SIGINT", () => {
+				console.log("🛑 SIGINT received, shutting down gracefully");
+				server.close(() => {
+					console.log("✅ Server closed");
+					process.exit(0);
+				});
+			});
+		} catch (error) {
+			console.error("❌ Failed to start server:", error);
+			process.exit(1);
+		}
 	});
+} else {
+	// For development with Bun, actually start the server
+	try {
+		const server = Bun.serve({
+			fetch: app.fetch,
+			port: Number(port),
+			hostname: "localhost",
+		});
 
-	console.log(`✅ Server successfully bound to 0.0.0.0:${port}`);
-	console.log(
-		"🌐 Server should be accessible at https://steelix-final-production.up.railway.app",
-	);
+		console.log(`✅ Development server started successfully on port ${port}`);
+		console.log(`🌐 Server accessible at http://localhost:${port}`);
+		console.log("🔥 Hot reload enabled");
 
-	// Keep the process alive
-	process.on("SIGTERM", () => {
-		console.log("🛑 SIGTERM received, shutting down gracefully");
-		server.close(() => {
-			console.log("✅ Server closed");
+		// Handle graceful shutdown
+		process.on("SIGTERM", () => {
+			console.log("🛑 SIGTERM received, shutting down gracefully");
+			server.stop();
 			process.exit(0);
 		});
-	});
 
-	process.on("SIGINT", () => {
-		console.log("🛑 SIGINT received, shutting down gracefully");
-		server.close(() => {
-			console.log("✅ Server closed");
+		process.on("SIGINT", () => {
+			console.log("🛑 SIGINT received, shutting down gracefully");
+			server.stop();
 			process.exit(0);
 		});
-	});
-} catch (error) {
-	console.error("❌ Failed to start server:", error);
-	process.exit(1);
+	} catch (error) {
+		console.error("❌ Failed to start development server:", error);
+		process.exit(1);
+	}
 }
 
+// Export the app for compatibility
 export default app;
