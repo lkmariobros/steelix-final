@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/card";
 import { CheckCircle, Clock, Eye, FileText, Plus, XCircle } from "lucide-react";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { toast } from "sonner";
 
 import { useTransactionModal } from "@/contexts/transaction-modal-context";
@@ -41,9 +41,10 @@ interface Transaction {
 	updatedAt: string;
 }
 
-export default function SalesPage() {
+// Component that handles search params - must be wrapped in Suspense
+function SearchParamsHandler() {
 	const searchParams = useSearchParams();
-	const { openCreateModal, openEditModal, openViewModal } = useTransactionModal();
+	const { openCreateModal } = useTransactionModal();
 	const isClient = useClientSide();
 
 	// Check for action parameter and automatically trigger create mode (client-side only)
@@ -54,7 +55,14 @@ export default function SalesPage() {
 		if (action === "create") {
 			openCreateModal();
 		}
-	}, [searchParams, isClient]); // ✅ Removed openCreateModal to prevent infinite loop
+	}, [searchParams, isClient, openCreateModal]);
+
+	return null; // This component only handles side effects
+}
+
+function SalesPageContent() {
+	const { openCreateModal, openEditModal, openViewModal } = useTransactionModal();
+	const isClient = useClientSide();
 
 	// tRPC queries - temporarily mocked for build compatibility
 	// const { data: transactionsData, isLoading, refetch } = trpc.transactions.list.useQuery({
@@ -359,5 +367,17 @@ export default function SalesPage() {
 			</Card>
 
 		</div>
+	);
+}
+
+// Main component with Suspense boundary for useSearchParams
+export default function SalesPage() {
+	return (
+		<>
+			<Suspense fallback={null}>
+				<SearchParamsHandler />
+			</Suspense>
+			<SalesPageContent />
+		</>
 	);
 }
