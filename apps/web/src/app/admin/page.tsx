@@ -33,7 +33,7 @@ export default function AdminDashboardPage() {
 			enabled: !!session, // Only check role if user is authenticated
 			retry: false,
 		})
-	);
+	) as { data: { hasAdminAccess: boolean; role: string } | undefined; isLoading: boolean };
 
 	// Show loading while checking authentication and role
 	if (isPending || isRoleLoading) {
