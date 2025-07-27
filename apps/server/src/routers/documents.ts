@@ -22,6 +22,11 @@ export const documentsRouter = router({
       const userId = ctx.session.user.id;
       const { transactionId, fileName, fileType, fileSize, documentCategory, base64Data } = input;
 
+      // Check if Supabase is available
+      if (!supabaseAdmin) {
+        throw new Error('Document upload is currently unavailable. Supabase configuration is missing.');
+      }
+
       try {
         // Validate file type and size
         const allowedTypes = [
@@ -127,6 +132,11 @@ export const documentsRouter = router({
     .input(z.object({ documentId: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
+
+      // Check if Supabase is available
+      if (!supabaseAdmin) {
+        throw new Error('Document deletion is currently unavailable. Supabase configuration is missing.');
+      }
 
       // Get document record
       const document = await db.select()
