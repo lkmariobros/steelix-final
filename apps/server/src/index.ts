@@ -15,15 +15,17 @@ app.use(
 	"/*",
 	cors({
 		origin: [
-			// Explicit origin allowlist for better security
+			// Allow all localhost origins for development
+			"http://localhost:3000",
+			"http://localhost:3001",
+			"http://localhost:3002",
+			// Allow all Vercel domains (wildcard pattern)
 			"https://steelix-final-web.vercel.app",
 			"https://steelix-final-web-git-master-lkmariobros-projects.vercel.app",
 			"https://steelix-final-mx4or73lk-lkmariobros-projects.vercel.app",
+			// Add branch-specific URLs
+			"https://steelix-final-web-git-admin-typescript-errors-solved-lkmariobros-projects.vercel.app",
 			...(process.env.CORS_ORIGIN?.split(',') || []),
-			// Development origins
-			"http://localhost:3001",
-			"http://localhost:3000",
-			"http://localhost:3002",
 		],
 		allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
 		allowHeaders: [
