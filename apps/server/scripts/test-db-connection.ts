@@ -46,14 +46,14 @@ async function testDatabaseConnection() {
 			WHERE table_name = 'user' 
 			AND column_name = 'agent_tier'
 		`);
-		console.log("🏷️  Agent tier column exists:", agentTierCheck.length > 0);
+		console.log("🏷️  Agent tier column exists:", agentTierCheck.rows.length > 0);
 		
 		// Count existing users
 		try {
 			const userCount = await db.execute(sql`SELECT COUNT(*) as count FROM "user"`);
 			console.log("👥 Total users in database:", userCount.rows?.[0]?.count || 0);
 		} catch (error) {
-			console.log("👥 Could not count users:", error.message);
+			console.log("👥 Could not count users:", error instanceof Error ? error.message : String(error));
 		}
 		
 		console.log("🎉 Database test completed successfully!");
