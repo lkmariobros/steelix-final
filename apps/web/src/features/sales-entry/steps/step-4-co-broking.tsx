@@ -259,9 +259,9 @@ export function StepCoBroking({
 															Commission Split:
 														</span>
 														<span className="font-medium">
-															{watchedValues.coBrokingData.commissionSplit}% /{" "}
+															{watchedValues.coBrokingData.commissionSplit || 0}% /{" "}
 															{100 -
-																watchedValues.coBrokingData.commissionSplit}
+																(watchedValues.coBrokingData.commissionSplit || 0)}
 															%
 														</span>
 													</div>

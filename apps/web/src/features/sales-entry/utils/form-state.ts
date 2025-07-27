@@ -96,7 +96,6 @@ export function useTransactionFormState(transactionId?: string, mode?: "create" 
 						transactionType: data.transactionType as
 							| "sale"
 							| "lease"
-							| "rental"
 							| undefined,
 						transactionDate: data.transactionDate as Date | undefined,
 					});
