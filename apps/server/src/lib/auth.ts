@@ -5,7 +5,7 @@ import { db } from "../db";
 import * as schema from "../db/schema/auth";
 import { count, eq } from "drizzle-orm";
 
-export const auth = betterAuth({
+export const auth: ReturnType<typeof betterAuth> = betterAuth({
 	database: drizzleAdapter(db, {
 		provider: "pg",
 		schema: schema,
