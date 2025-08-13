@@ -1,0 +1,14 @@
+# Run lint-staged for formatting and linting
+lint-staged
+
+# Run TypeScript type checking
+echo "🔍 Checking TypeScript types..."
+bun run check-types
+
+# If type check fails, prevent commit
+if [ $? -ne 0 ]; then
+  echo "❌ TypeScript type check failed. Please fix the errors before committing."
+  exit 1
+fi
+
+echo "✅ All checks passed!"
