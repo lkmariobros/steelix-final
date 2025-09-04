@@ -204,9 +204,9 @@ export function formatCurrency(amount: number | string | null): string {
 }
 
 export function formatPercentage(value: number | string | null | undefined): string {
-	const n = typeof value === "string" ? parseFloat(value) : value ?? 0
-	if (!Number.isFinite(n)) return "0.0%"
-	return `${n.toFixed(1)}%`
+	const n = typeof value === "string" ? parseFloat(value) : value ?? 0;
+	if (!Number.isFinite(n)) return "0.0%";
+	return `${n.toFixed(1)}%`;
 }
 
 export function formatDate(date: Date | string | null): string {
