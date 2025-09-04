@@ -52,10 +52,9 @@ export function calculateDetailedCommission(
 
 	const result: CommissionCalculation = {
 		baseAmount: propertyPrice,
-		commissionRate:
-			commissionType === "percentage"
-				? commissionValue
-				: (commissionValue / propertyPrice) * 100,
+		commissionRate: commissionType === "percentage"
+			? commissionValue
+			: (propertyPrice > 0 ? (commissionValue / propertyPrice) * 100 : 0),
 		commissionAmount,
 		netAmount: propertyPrice - commissionAmount,
 	};
