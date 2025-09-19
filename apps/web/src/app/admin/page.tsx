@@ -69,7 +69,7 @@ export default function AdminDashboardPage() {
 					</p>
 					<button
 						type="button"
-						onClick={() => router.push('/agent-dashboard')}
+						onClick={() => router.push('/dashboard')}
 						className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
 					>
 						Go to Agent Dashboard
