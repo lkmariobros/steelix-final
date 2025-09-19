@@ -38,7 +38,7 @@ export const adminRouter = router({
 			.limit(1);
 
 		const userRole = userRecord?.role;
-		const isAdmin = userRole === "admin" || userRole === "team_lead";
+		const isAdmin = userRole === "admin";
 
 		return {
 			hasAdminAccess: isAdmin,
