@@ -66,7 +66,7 @@ const baseTransactionInput = z.object({
 	notes: z.string().optional(),
 });
 
-// Input schemas with Primary Market → Sale validation
+// Input schemas with Primary Market → Sale validation and Co-broking validation
 const createTransactionInput = baseTransactionInput.refine(
 	(data: any) => {
 		// Primary market transactions must be sales
@@ -78,6 +78,24 @@ const createTransactionInput = baseTransactionInput.refine(
 	{
 		message: "Primary market transactions must be sales",
 		path: ["transactionType"],
+	}
+).refine(
+	(data: any) => {
+		// If co-broking is enabled, validate required fields
+		if (data.isCoBroking && data.coBrokingData) {
+			const { agentName, agencyName, contactInfo } = data.coBrokingData;
+			return (
+				agentName && agentName.trim().length > 0 &&
+				agencyName && agencyName.trim().length > 0 &&
+				contactInfo && contactInfo.trim().length > 0
+			);
+		}
+		// If co-broking is disabled, it's valid
+		return true;
+	},
+	{
+		message: "Co-broking fields are required when co-broking is enabled",
+		path: ["coBrokingData"],
 	}
 );
 
@@ -94,6 +112,24 @@ const updateTransactionInput = baseTransactionInput.partial().extend({
 	{
 		message: "Primary market transactions must be sales",
 		path: ["transactionType"],
+	}
+).refine(
+	(data: any) => {
+		// If co-broking is enabled, validate required fields
+		if (data.isCoBroking && data.coBrokingData) {
+			const { agentName, agencyName, contactInfo } = data.coBrokingData;
+			return (
+				agentName && agentName.trim().length > 0 &&
+				agencyName && agencyName.trim().length > 0 &&
+				contactInfo && contactInfo.trim().length > 0
+			);
+		}
+		// If co-broking is disabled, it's valid
+		return true;
+	},
+	{
+		message: "Co-broking fields are required when co-broking is enabled",
+		path: ["coBrokingData"],
 	}
 );
 

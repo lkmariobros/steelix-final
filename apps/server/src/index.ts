@@ -42,7 +42,20 @@ app.use(
 	}),
 );
 
-app.on(["POST", "GET"], "/api/auth/**", (c) => auth.handler(c.req.raw));
+app.all("/api/auth/*", async (c) => {
+	console.log(`🔐 Auth request: ${c.req.method} ${c.req.url}`);
+	console.log(`🔐 Auth path: ${c.req.path}`);
+	console.log(`🔐 Auth headers:`, Object.fromEntries(c.req.raw.headers.entries()));
+
+	try {
+		const result = await auth.handler(c.req.raw);
+		console.log(`🔐 Auth handler result:`, result ? "Response received" : "No response");
+		return result;
+	} catch (error) {
+		console.error("❌ Auth handler error:", error);
+		return c.json({ error: "Auth handler failed", details: error.message }, 500);
+	}
+});
 
 app.use(
 	"/trpc/*",

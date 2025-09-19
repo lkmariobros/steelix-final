@@ -10,7 +10,7 @@ import {
 	RiTimeLine,
 	RiTrophyLine,
 } from "@remixicon/react";
-import { useQuery } from "@tanstack/react-query";
+
 // Simple utility function to avoid import issues
 const formatCurrency = (amount: number): string => {
 	return new Intl.NumberFormat("en-US", {
@@ -29,17 +29,15 @@ interface FinancialOverviewProps {
 }
 
 export function FinancialOverview({ dateRange }: FinancialOverviewProps) {
-	// Real tRPC query - replaces mock data
+	// ✅ CORRECT tRPC query pattern
 	const {
 		data: financialData,
 		isLoading,
 		error,
-	} = useQuery(
-		trpc.dashboard.getFinancialOverview.queryOptions({
-			startDate: dateRange?.startDate,
-			endDate: dateRange?.endDate,
-		}),
-	);
+	} = trpc.dashboard.getFinancialOverview.useQuery({
+		startDate: dateRange?.startDate,
+		endDate: dateRange?.endDate,
+	});
 
 	if (isLoading) {
 		return (

@@ -54,37 +54,71 @@ const coBrokingBaseSchema = z.object({
 	isCoBroking: z.boolean(),
 	coBrokingData: z
 		.object({
-			agentName: z.string().optional(),
-			agencyName: z.string().optional(),
+			agentName: z.string().min(1, "Agent name is required").optional(),
+			agencyName: z.string().min(1, "Agency name is required").optional(),
 			commissionSplit: z
 				.number()
 				.min(0)
 				.max(100, "Commission split must be between 0-100%")
-				.optional(),
-			contactInfo: z.string().optional(),
+				.default(50),
+			contactInfo: z.string().min(1, "Contact info is required").optional(),
 		})
 		.optional(),
 });
 
-export const coBrokingSchema = coBrokingBaseSchema.refine(
-	(data) => {
-		// Co-broking is completely optional - always allow progression
-		// Only validate if co-broking is enabled AND user has entered agent name
-		if (data.isCoBroking && data.coBrokingData?.agentName) {
-			// If agent name is provided, it should not be empty or just whitespace
-			return data.coBrokingData.agentName.trim().length > 0;
-		}
-		// Always allow progression in all other cases:
-		// - Co-broking disabled
-		// - Co-broking enabled but no agent name entered
-		// - Co-broking enabled with valid agent name
-		return true;
-	},
-	{
-		message: "Agent name cannot be empty if provided",
-		path: ["coBrokingData", "agentName"],
-	},
-);
+// Create a more flexible co-broking schema that can accept dual agency context
+export const createCoBrokingSchema = (isDualPartyDeal?: boolean) => {
+	return coBrokingBaseSchema.refine(
+		(data) => {
+			// If this is a dual agency deal, co-broking should be disabled
+			if (isDualPartyDeal && data.isCoBroking) {
+				return false;
+			}
+
+			// If co-broking is enabled and not dual agency, validate all required fields
+			if (data.isCoBroking && !isDualPartyDeal && data.coBrokingData) {
+				const { agentName, agencyName, contactInfo } = data.coBrokingData;
+
+				// Check if any field is provided but empty
+				if (agentName !== undefined && agentName.trim().length === 0) {
+					return false;
+				}
+				if (agencyName !== undefined && agencyName.trim().length === 0) {
+					return false;
+				}
+				if (contactInfo !== undefined && contactInfo.trim().length === 0) {
+					return false;
+				}
+
+				// For step validation, require all fields if co-broking is enabled
+				if (agentName && agencyName && contactInfo) {
+					return (
+						agentName.trim().length > 0 &&
+						agencyName.trim().length > 0 &&
+						contactInfo.trim().length > 0
+					);
+				}
+			}
+
+			// If co-broking is disabled or dual agency, it's always valid
+			if (!data.isCoBroking || isDualPartyDeal) {
+				return true;
+			}
+
+			// If co-broking is enabled but no data provided, it's invalid
+			return false;
+		},
+		{
+			message: isDualPartyDeal
+				? "Co-broking is not applicable for dual agency transactions"
+				: "Please complete all co-broking fields: Agent Name, Agency Name, and Contact Info are required when co-broking is enabled",
+			path: isDualPartyDeal ? ["isCoBroking"] : ["coBrokingData"],
+		},
+	);
+};
+
+// Default schema for backward compatibility
+export const coBrokingSchema = createCoBrokingSchema();
 
 // Step 5: Enhanced Commission Schema with agent tier support
 export const commissionSchema = z.object({

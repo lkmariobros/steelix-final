@@ -17,6 +17,9 @@ import { CheckCircle, Circle, Loader2, Save } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useClientSide } from "@/hooks/use-client-side";
+import { trpc } from "@/utils/trpc";
+import { useQueryClient } from "@tanstack/react-query";
+import { invalidateTransactionQueries } from "@/lib/query-invalidation";
 
 import { type FormStep, stepConfig } from "./transaction-schema";
 import {
@@ -24,7 +27,6 @@ import {
 	getCompletedSteps,
 	useTransactionFormState,
 } from "./utils/form-state";
-// import { trpc } from "@/utils/trpc"; // Temporarily disabled for build
 
 // Import step components (we'll create these next)
 import { StepInitiation } from "./steps/step-1-initiation";
@@ -50,6 +52,8 @@ export function TransactionForm({
 	onCancel,
 	onUnsavedChanges,
 }: TransactionFormProps) {
+	const queryClient = useQueryClient();
+
 	const {
 		currentStep,
 		formData,
@@ -67,24 +71,40 @@ export function TransactionForm({
 	const [isSaving, setIsSaving] = useState(false);
 	const isClient = useClientSide();
 
-	// tRPC mutations - temporarily mocked for build compatibility
-	// const createTransaction = trpc.transactions.create.useMutation();
-	// const updateTransaction = trpc.transactions.update.useMutation();
-	// const submitTransaction = trpc.transactions.submit.useMutation();
+	// ✅ REAL tRPC mutations for comprehensive transaction data flow
+	const createTransaction = trpc.transactions.create.useMutation({
+		onSuccess: (data) => {
+			console.log("Transaction created successfully:", data.id);
+			invalidateTransactionQueries(queryClient);
+		},
+		onError: (error) => {
+			console.error("Create transaction error:", error);
+			toast.error("Failed to create transaction");
+		},
+	});
 
-	// Mock mutations for build compatibility
-	const createTransaction = {
-		mutateAsync: async (data: Record<string, unknown>) => ({
-			id: "mock-id",
-			...data,
-		}),
-	};
-	const updateTransaction = {
-		mutateAsync: async (data: Record<string, unknown>) => ({ ...data }),
-	};
-	const submitTransaction = {
-		mutateAsync: async (data: Record<string, unknown>) => ({ ...data }),
-	};
+	const updateTransaction = trpc.transactions.update.useMutation({
+		onSuccess: (data) => {
+			console.log("Transaction updated successfully:", data.id);
+			invalidateTransactionQueries(queryClient);
+		},
+		onError: (error) => {
+			console.error("Update transaction error:", error);
+			toast.error("Failed to update transaction");
+		},
+	});
+
+	const submitTransaction = trpc.transactions.submit.useMutation({
+		onSuccess: (data) => {
+			console.log("Transaction submitted successfully:", data.id);
+			// Comprehensive invalidation for submission (affects both dashboards)
+			invalidateTransactionQueries(queryClient);
+		},
+		onError: (error) => {
+			console.error("Submit transaction error:", error);
+			toast.error("Failed to submit transaction");
+		},
+	});
 
 	const completedSteps = getCompletedSteps(formData);
 	const progress = calculateProgress(currentStep);
@@ -103,24 +123,51 @@ export function TransactionForm({
 	const handleSaveDraft = useCallback(async () => {
 		setIsSaving(true);
 		try {
+			// For drafts, we can be more lenient with co-broking validation
+			const draftData = { ...formData };
+			if (!draftData.isCoBroking) {
+				draftData.coBrokingData = undefined;
+			}
+
 			if (transactionId) {
 				await updateTransaction.mutateAsync({
 					id: transactionId,
-					...formData,
+					...draftData,
 				});
+				toast.success("Draft updated successfully");
 			} else {
-				await createTransaction.mutateAsync(formData);
-				// In a real app, you might want to update the URL with the new transaction ID
+				const newTransaction = await createTransaction.mutateAsync(draftData);
 				toast.success("Draft saved successfully");
+				// In a real app, you might want to update the URL with the new transaction ID
+				console.log("New transaction created:", newTransaction.id);
 			}
 			clearAutoSave();
 		} catch (error) {
-			toast.error("Failed to save draft");
 			console.error("Save draft error:", error);
+			// Error handling is now done in mutation onError callbacks
 		} finally {
 			setIsSaving(false);
 		}
 	}, [transactionId, formData, updateTransaction, createTransaction, clearAutoSave]);
+
+	// Clean form data for submission
+	const prepareFormDataForSubmission = useCallback((data: typeof formData) => {
+		const cleanedData = { ...data };
+
+		// Handle co-broking data properly
+		if (!cleanedData.isCoBroking) {
+			// If co-broking is disabled, remove coBrokingData entirely
+			cleanedData.coBrokingData = undefined;
+		} else if (cleanedData.coBrokingData) {
+			// If co-broking is enabled, validate required fields
+			const { agentName, agencyName, contactInfo } = cleanedData.coBrokingData;
+			if (!agentName?.trim() || !agencyName?.trim() || !contactInfo?.trim()) {
+				throw new Error("Please complete all co-broking fields: Agent Name, Agency Name, and Contact Info are required.");
+			}
+		}
+
+		return cleanedData;
+	}, []);
 
 	// Handle form submission
 	const handleSubmit = useCallback(async () => {
@@ -128,31 +175,40 @@ export function TransactionForm({
 		try {
 			let finalTransactionId = transactionId;
 
+			// Validate form data before submission
+			if (!formData.marketType || !formData.transactionType || !formData.transactionDate) {
+				toast.error("Please complete all required fields");
+				return;
+			}
+
+			// Prepare clean form data
+			const cleanedFormData = prepareFormDataForSubmission(formData);
+
 			// Create or update the transaction first
 			if (transactionId) {
 				await updateTransaction.mutateAsync({
 					id: transactionId,
-					...formData,
+					...cleanedFormData,
 				});
 			} else {
-				const newTransaction = await createTransaction.mutateAsync(formData);
+				const newTransaction = await createTransaction.mutateAsync(cleanedFormData);
 				finalTransactionId = newTransaction.id;
 			}
 
 			// Submit for review
 			if (finalTransactionId) {
 				await submitTransaction.mutateAsync({ id: finalTransactionId });
-				toast.success("Transaction submitted for review");
+				toast.success("Transaction submitted for review successfully!");
 				clearAutoSave();
 				onSubmit?.();
 			}
 		} catch (error) {
-			toast.error("Failed to submit transaction");
 			console.error("Submit error:", error);
+			// Error handling is now done in mutation onError callbacks
 		} finally {
 			setIsLoading(false);
 		}
-	}, [transactionId, formData, updateTransaction, createTransaction, submitTransaction, clearAutoSave, onSubmit]);
+	}, [transactionId, formData, updateTransaction, createTransaction, submitTransaction, clearAutoSave, onSubmit, setIsLoading, prepareFormDataForSubmission]);
 
 	// Handle cancel
 	const handleCancel = useCallback(() => {
@@ -206,6 +262,7 @@ export function TransactionForm({
 							isCoBroking: formData.isCoBroking ?? false,
 							coBrokingData: formData.coBrokingData,
 						}}
+						isDualPartyDeal={formData.clientData?.isDualPartyDeal ?? false}
 						onUpdate={(data) => handleStepUpdate(4, data)}
 						onNext={goToNextStep}
 						onPrevious={goToPreviousStep}

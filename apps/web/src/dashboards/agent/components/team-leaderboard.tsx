@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { trpc } from "@/utils/trpc";
 import { RiAwardLine, RiMedalLine, RiTrophyLine } from "@remixicon/react";
-import { useQuery } from "@tanstack/react-query";
+
 // Simple utility function to avoid import issues
 const formatCurrency = (amount: number): string => {
 	return new Intl.NumberFormat("en-US", {
@@ -17,12 +17,12 @@ const formatCurrency = (amount: number): string => {
 };
 
 export function TeamLeaderboard() {
-	// Real tRPC query - replaces mock data
+	// ✅ CORRECT tRPC query pattern
 	const {
 		data: leaderboard,
 		isLoading,
 		error,
-	} = useQuery(trpc.dashboard.getTeamLeaderboard.queryOptions());
+	} = trpc.dashboard.getTeamLeaderboard.useQuery();
 
 	if (isLoading) {
 		return (

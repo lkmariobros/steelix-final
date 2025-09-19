@@ -5,7 +5,7 @@ import { Badge } from "@/components/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { trpc } from "@/utils/trpc";
-import { useQuery } from "@tanstack/react-query";
+
 import { useEffect, useState } from "react";
 // Simple utility functions to avoid import issues
 const formatCurrency = (amount: number): string => {
@@ -159,16 +159,14 @@ interface RecentTransactionsProps {
 }
 
 export function RecentTransactions({ limit = 10 }: RecentTransactionsProps) {
-	// Real tRPC query - replaces mock data
+	// ✅ CORRECT tRPC query pattern
 	const {
 		data: transactions,
 		isLoading,
 		error,
-	} = useQuery(
-		trpc.dashboard.getRecentTransactions.queryOptions({
-			limit,
-		}),
-	);
+	} = trpc.dashboard.getRecentTransactions.useQuery({
+		limit,
+	});
 
 	if (isLoading) {
 		return (

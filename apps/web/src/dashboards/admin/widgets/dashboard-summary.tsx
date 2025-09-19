@@ -10,7 +10,7 @@ import {
 	RiMoneyDollarCircleLine,
 	RiTimeLine,
 } from "@remixicon/react";
-import { useQuery } from "@tanstack/react-query";
+
 import React from "react";
 
 // Import types and utilities
@@ -28,18 +28,16 @@ export function DashboardSummary({
 	refreshKey,
 	className,
 }: DashboardSummaryProps) {
-	// Real tRPC query - replaces mock data
+	// ✅ CORRECT tRPC query pattern
 	const {
 		data: rawSummaryData,
 		isLoading,
 		error,
 		refetch,
-	} = useQuery(
-		trpc.admin.getDashboardSummary.queryOptions(dateRange || {}, {
-			refetchOnWindowFocus: false,
-			staleTime: 30000, // 30 seconds
-		}),
-	);
+	} = trpc.admin.getDashboardSummary.useQuery(dateRange || {}, {
+		refetchOnWindowFocus: false,
+		staleTime: 30000, // 30 seconds
+	});
 
 	// Type-safe data processing - handle string commission values from database
 	const summaryData = React.useMemo(() => {

@@ -5,15 +5,15 @@ import { db } from "../db";
 import * as schema from "../db/schema/auth";
 import { count, eq } from "drizzle-orm";
 
+console.log("🔐 Initializing Better Auth...");
+
 export const auth: ReturnType<typeof betterAuth> = betterAuth({
 	database: drizzleAdapter(db, {
 		provider: "pg",
 		schema: schema,
 	}),
 	// ✅ CRITICAL FIX: baseURL should be the backend URL, not frontend
-	baseURL:
-		process.env.BETTER_AUTH_URL ||
-		"https://steelix-final-production.up.railway.app",
+	baseURL: process.env.BETTER_AUTH_URL || "http://localhost:8080",
 	secret:
 		process.env.BETTER_AUTH_SECRET ||
 		"fallback-secret-key-change-in-production",

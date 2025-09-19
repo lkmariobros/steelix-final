@@ -203,8 +203,21 @@ export function formatCurrency(amount: number | string | null): string {
 	}).format(numAmount);
 }
 
-export function formatPercentage(value: number): string {
-	return `${value.toFixed(1)}%`;
+export function formatPercentage(value: number | string | null | undefined): string {
+	// Handle null, undefined, or invalid values
+	if (value === null || value === undefined) {
+		return "0.0%";
+	}
+
+	// Convert to number if it's a string
+	const numValue = typeof value === "string" ? parseFloat(value) : value;
+
+	// Check if the conversion resulted in a valid number
+	if (isNaN(numValue)) {
+		return "0.0%";
+	}
+
+	return `${numValue.toFixed(1)}%`;
 }
 
 export function formatDate(date: Date | string | null): string {

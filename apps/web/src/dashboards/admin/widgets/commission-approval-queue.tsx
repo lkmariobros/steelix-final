@@ -23,9 +23,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/utils/trpc";
 import { RiCheckLine, RiCloseLine, RiTimeLine } from "@remixicon/react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import React, { useState } from "react";
 import { toast } from "sonner";
+import { invalidateAdminQueries, optimisticUpdateTransaction } from "@/lib/query-invalidation";
 
 // Import types and utilities
 import type { CommissionApproval, DateRangeFilter } from "../admin-schema";
@@ -54,6 +55,7 @@ export function CommissionApprovalQueue({
 	refreshKey,
 	className,
 }: CommissionApprovalQueueProps) {
+	const queryClient = useQueryClient();
 	const [page, setPage] = useState(0);
 	const [dialogState, setDialogState] = useState<ApprovalDialogState>({
 		isOpen: false,
@@ -65,60 +67,51 @@ export function CommissionApprovalQueue({
 
 	const pageSize = 10;
 
-	// Real tRPC query - replaces mock data
+	// ✅ CORRECT tRPC query pattern - matches other dashboard components
 	const {
 		data: queueData,
 		isLoading,
 		error,
 		refetch,
-	} = useQuery(
-		trpc.admin.getCommissionApprovalQueue.queryOptions(
-			{
-				limit: pageSize,
-				offset: page * pageSize,
-				status: "submitted", // Only show submitted transactions
-			},
-			{
-				refetchOnWindowFocus: false,
-				staleTime: 30000, // 30 seconds
-			},
-		),
+	} = trpc.admin.getCommissionApprovalQueue.useQuery(
+		{
+			limit: pageSize,
+			offset: page * pageSize,
+			status: "submitted", // Only show submitted transactions
+		},
+		{
+			refetchOnWindowFocus: false,
+			staleTime: 30000, // 30 seconds
+		},
 	);
 
-	// Real tRPC mutation - replaces mock mutation
-	const processApprovalMutation = useMutation({
-		mutationFn: async (input: {
-			transactionId: string;
-			action: "approve" | "reject";
-			reviewNotes?: string;
-		}) => {
-			const response = await fetch(
-				`${process.env.NEXT_PUBLIC_SERVER_URL}/trpc/admin.processCommissionApproval`,
-				{
-					method: "POST",
-					headers: {
-						"Content-Type": "application/json",
-					},
-					credentials: "include",
-					body: JSON.stringify({ json: input }),
-				},
-			);
-			if (!response.ok) {
-				throw new Error("Failed to process approval");
-			}
-			return response.json();
+	// ✅ REAL tRPC mutation with comprehensive query invalidation
+	const processApprovalMutation = trpc.admin.processCommissionApproval.useMutation({
+		onMutate: async (variables) => {
+			// Optimistic update for immediate UI feedback
+			const statusUpdate = variables.action === "approve" ? "approved" : "rejected";
+			optimisticUpdateTransaction(queryClient, variables.transactionId, {
+				status: statusUpdate,
+				reviewNotes: variables.reviewNotes,
+			});
 		},
-		onSuccess: () => {
-			toast.success(
-				`Transaction ${dialogState.action === "approve" ? "approved" : "rejected"} successfully`,
-			);
-			refetch(); // Refresh the queue
+		onSuccess: (data, variables) => {
+			const actionText = variables.action === "approve" ? "approved" : "rejected";
+			toast.success(`Transaction ${actionText} successfully`);
+
+			// Comprehensive query invalidation for real-time updates
+			invalidateAdminQueries(queryClient);
+
 			closeDialog();
 		},
-		onError: (error: Error) => {
-			toast.error(
-				`Failed to ${dialogState.action} transaction: ${error.message}`,
-			);
+		onError: (error, variables) => {
+			console.error("Commission approval error:", error);
+			const actionText = variables.action === "approve" ? "approve" : "reject";
+			toast.error(`Failed to ${actionText} transaction`);
+
+			// Revert optimistic update on error
+			invalidateAdminQueries(queryClient);
+
 			setDialogState((prev) => ({ ...prev, isSubmitting: false }));
 		},
 	});
