@@ -8,7 +8,7 @@ import { documentsRouter } from "./documents";
 import { reportsRouter } from "./reports";
 import { transactionsRouter } from "./transactions";
 
-export const appRouter: any = router({
+export const appRouter = router({
 	healthCheck: publicProcedure.query(() => {
 		return "OK";
 	}),

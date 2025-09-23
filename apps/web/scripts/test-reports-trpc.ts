@@ -71,10 +71,9 @@ async function testServerHealth() {
       const data = await response.json();
       console.log('✅ Server healthy:', data);
       return true;
-    } else {
-      console.error('❌ Server health check failed:', response.status);
-      return false;
     }
+    console.error('❌ Server health check failed:', response.status);
+    return false;
   } catch (error) {
     console.error('❌ Server not accessible:', error);
     return false;
