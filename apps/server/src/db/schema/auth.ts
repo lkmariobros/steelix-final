@@ -1,5 +1,7 @@
 import {
 	boolean,
+	decimal,
+	index,
 	integer,
 	pgEnum,
 	pgTable,
@@ -209,6 +211,79 @@ export type AgentTier = z.infer<typeof agentTierSchema>;
 export type AgentTierHistory = z.infer<typeof agentTierHistorySchema>;
 export type CommissionAuditLog = z.infer<typeof commissionAuditLogSchema>;
 export type UserWithTier = z.infer<typeof userWithTierSchema>;
+
+// Agent status enum for management
+export const agentStatusEnum = pgEnum("agent_status", [
+	"active",
+	"inactive",
+	"suspended",
+	"pending_approval",
+	"terminated",
+]);
+
+// Agent activity tracking
+export const agentActivities = pgTable("agent_activities", {
+	id: uuid("id").primaryKey().defaultRandom(),
+	agentId: text("agent_id")
+		.notNull()
+		.references(() => user.id, { onDelete: "cascade" }),
+
+	// Activity details
+	activityType: text("activity_type").notNull(), // 'login', 'transaction_created', 'client_contact', etc.
+	description: text("description"),
+	metadata: text("metadata"), // JSON string for additional data
+
+	// Context
+	ipAddress: text("ip_address"),
+	userAgent: text("user_agent"),
+	sessionId: text("session_id"),
+
+	timestamp: timestamp("timestamp").defaultNow().notNull(),
+}, (table) => ({
+	agentIdIdx: index("idx_agent_activities_agent_id").on(table.agentId),
+	activityTypeIdx: index("idx_agent_activities_activity_type").on(table.activityType),
+	timestampIdx: index("idx_agent_activities_timestamp").on(table.timestamp),
+}));
+
+// Agent performance goals
+export const agentGoals = pgTable("agent_goals", {
+	id: uuid("id").primaryKey().defaultRandom(),
+	agentId: text("agent_id")
+		.notNull()
+		.references(() => user.id, { onDelete: "cascade" }),
+
+	// Goal details
+	title: text("title").notNull(),
+	description: text("description"),
+	goalType: text("goal_type").notNull(), // 'sales', 'commission', 'clients', 'custom'
+
+	// Target and progress - USING TEXT INSTEAD OF DECIMAL TO FIX IMPORT ISSUE
+	targetValue: text("target_value").notNull(),
+	currentValue: text("current_value").default("0").notNull(),
+	unit: text("unit").notNull(), // 'transactions', 'dollars', 'percentage', etc.
+
+	// Timeline
+	startDate: timestamp("start_date").notNull(),
+	endDate: timestamp("end_date").notNull(),
+
+	// Status
+	isActive: boolean("is_active").default(true).notNull(),
+	isAchieved: boolean("is_achieved").default(false).notNull(),
+	achievedAt: timestamp("achieved_at"),
+
+	// Metadata
+	createdBy: text("created_by")
+		.notNull()
+		.references(() => user.id),
+
+	createdAt: timestamp("created_at").defaultNow().notNull(),
+	updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => ({
+	agentIdIdx: index("idx_agent_goals_agent_id").on(table.agentId),
+	goalTypeIdx: index("idx_agent_goals_goal_type").on(table.goalType),
+	isActiveIdx: index("idx_agent_goals_is_active").on(table.isActive),
+	endDateIdx: index("idx_agent_goals_end_date").on(table.endDate),
+}));
 
 // Agent tier configuration with commission splits and requirements
 export const AGENT_TIER_CONFIG = {

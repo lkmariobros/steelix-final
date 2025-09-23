@@ -43,13 +43,23 @@ import {
 	RiShieldUserLine,
 } from "@remixicon/react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 
 export default function AdminReportsPage() {
 	const router = useRouter();
 	const { data: session, isPending } = authClient.useSession();
 	const [reportType, setReportType] = useState<string>("performance");
 	const [timeRange, setTimeRange] = useState<string>("30d");
+
+	// Memoize date calculations to prevent infinite query loops
+	const dateRange = useMemo(() => {
+		const endDate = new Date();
+		const startDate = timeRange === '7d' ? new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) :
+						  timeRange === '30d' ? new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) :
+						  timeRange === '90d' ? new Date(Date.now() - 90 * 24 * 60 * 60 * 1000) :
+						  new Date(Date.now() - 365 * 24 * 60 * 60 * 1000);
+		return { startDate, endDate };
+	}, [timeRange]);
 
 	// Admin role checking
 	const { data: roleData, isLoading: isRoleLoading } =
@@ -60,6 +70,30 @@ export default function AdminReportsPage() {
 			data: { hasAdminAccess: boolean; role: string } | undefined;
 			isLoading: boolean;
 		};
+
+	// Get dashboard statistics
+	const { data: dashboardStats, isLoading: isLoadingStats } = trpc.reports.getDashboardStats.useQuery({
+		startDate: dateRange.startDate,
+		endDate: dateRange.endDate,
+	}, {
+		enabled: !!session && !!roleData?.hasAdminAccess,
+		staleTime: 5 * 60 * 1000, // 5 minutes
+		refetchOnWindowFocus: false,
+	});
+
+	// Get performance analytics
+	const { data: performanceAnalytics, isLoading: isLoadingPerformance } = trpc.reports.getPerformanceAnalytics.useQuery({
+		periodType: 'monthly',
+		startDate: dateRange.startDate,
+		endDate: dateRange.endDate,
+	}, {
+		enabled: !!session && !!roleData?.hasAdminAccess,
+		staleTime: 5 * 60 * 1000, // 5 minutes
+		refetchOnWindowFocus: false,
+	});
+
+	// Get utils for invalidation after mutations
+	const utils = trpc.useUtils();
 
 	// Show loading while checking authentication and role
 	if (isPending || isRoleLoading) {
@@ -108,8 +142,11 @@ export default function AdminReportsPage() {
 	}
 
 	// Handle refresh
-	const handleRefresh = () => {
-		window.location.reload();
+	const handleRefresh = async () => {
+		await Promise.all([
+			utils.reports.getDashboardStats.invalidate(),
+			utils.reports.getPerformanceAnalytics.invalidate(),
+		]);
 	};
 
 	return (
@@ -204,10 +241,21 @@ export default function AdminReportsPage() {
 								<RiBarChartLine className="h-4 w-4 text-muted-foreground" />
 							</CardHeader>
 							<CardContent>
-								<div className="font-bold text-2xl">$1,234,567</div>
-								<p className="text-muted-foreground text-xs">
-									+12.5% from last period
-								</p>
+								{isLoadingStats ? (
+									<div className="space-y-2">
+										<div className="h-8 w-24 bg-muted animate-pulse rounded" />
+										<div className="h-3 w-32 bg-muted animate-pulse rounded" />
+									</div>
+								) : (
+									<>
+										<div className="font-bold text-2xl">
+											${(dashboardStats?.transactions?.totalValue || 0).toLocaleString()}
+										</div>
+										<p className="text-muted-foreground text-xs">
+											Total transaction value
+										</p>
+									</>
+								)}
 							</CardContent>
 						</Card>
 						<Card>
@@ -218,10 +266,21 @@ export default function AdminReportsPage() {
 								<RiFileTextLine className="h-4 w-4 text-muted-foreground" />
 							</CardHeader>
 							<CardContent>
-								<div className="font-bold text-2xl">156</div>
-								<p className="text-muted-foreground text-xs">
-									+8 from last month
-								</p>
+								{isLoadingStats ? (
+									<div className="space-y-2">
+										<div className="h-8 w-16 bg-muted animate-pulse rounded" />
+										<div className="h-3 w-24 bg-muted animate-pulse rounded" />
+									</div>
+								) : (
+									<>
+										<div className="font-bold text-2xl">
+											{dashboardStats?.transactions?.totalCount || 0}
+										</div>
+										<p className="text-muted-foreground text-xs">
+											Total transactions
+										</p>
+									</>
+								)}
 							</CardContent>
 						</Card>
 						<Card>
@@ -232,24 +291,46 @@ export default function AdminReportsPage() {
 								<RiBarChartLine className="h-4 w-4 text-muted-foreground" />
 							</CardHeader>
 							<CardContent>
-								<div className="font-bold text-2xl">$7,915</div>
-								<p className="text-muted-foreground text-xs">
-									+3.2% improvement
-								</p>
+								{isLoadingStats ? (
+									<div className="space-y-2">
+										<div className="h-8 w-20 bg-muted animate-pulse rounded" />
+										<div className="h-3 w-24 bg-muted animate-pulse rounded" />
+									</div>
+								) : (
+									<>
+										<div className="font-bold text-2xl">
+											${(dashboardStats?.transactions?.averageValue || 0).toLocaleString()}
+										</div>
+										<p className="text-muted-foreground text-xs">
+											Average per transaction
+										</p>
+									</>
+								)}
 							</CardContent>
 						</Card>
 						<Card>
 							<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
 								<CardTitle className="font-medium text-sm">
-									Conversion Rate
+									Active Agents
 								</CardTitle>
 								<RiBarChartLine className="h-4 w-4 text-muted-foreground" />
 							</CardHeader>
 							<CardContent>
-								<div className="font-bold text-2xl">23.4%</div>
-								<p className="text-muted-foreground text-xs">
-									+1.2% from last month
-								</p>
+								{isLoadingStats ? (
+									<div className="space-y-2">
+										<div className="h-8 w-16 bg-muted animate-pulse rounded" />
+										<div className="h-3 w-24 bg-muted animate-pulse rounded" />
+									</div>
+								) : (
+									<>
+										<div className="font-bold text-2xl">
+											{dashboardStats?.agents?.totalAgents || 0}
+										</div>
+										<p className="text-muted-foreground text-xs">
+											Active agents
+										</p>
+									</>
+								)}
 							</CardContent>
 						</Card>
 					</div>
@@ -263,33 +344,108 @@ export default function AdminReportsPage() {
 							</CardDescription>
 						</CardHeader>
 						<CardContent>
-							<div className="py-8 text-center">
-								<RiBarChartLine
-									size={48}
-									className="mx-auto mb-4 text-muted-foreground"
-								/>
-								<h3 className="mb-2 font-semibold text-lg">
-									Advanced Analytics & Reporting
-								</h3>
-								<p className="mb-4 text-muted-foreground">
-									Detailed performance metrics, financial reports, agent
-									analytics, and business intelligence dashboards
-								</p>
-								<div className="flex justify-center gap-2">
-									<Button variant="outline">
-										<RiCalendarLine className="mr-2 h-4 w-4" />
-										Schedule Reports
-									</Button>
-									<Button variant="outline">
-										<RiDownloadLine className="mr-2 h-4 w-4" />
-										Export Data
-									</Button>
-									<Button>
-										<RiBarChartLine className="mr-2 h-4 w-4" />
-										Generate Report
-									</Button>
+							{isLoadingPerformance ? (
+								<div className="space-y-6">
+									<div className="space-y-2">
+										<div className="h-4 w-32 bg-muted animate-pulse rounded" />
+										<div className="h-32 w-full bg-muted animate-pulse rounded" />
+									</div>
+									<div className="space-y-2">
+										<div className="h-4 w-40 bg-muted animate-pulse rounded" />
+										<div className="h-24 w-full bg-muted animate-pulse rounded" />
+									</div>
 								</div>
-							</div>
+							) : performanceAnalytics && performanceAnalytics.length > 0 ? (
+								<div className="space-y-6">
+									<div>
+										<h4 className="font-medium mb-3">Performance Overview</h4>
+										<div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+											{performanceAnalytics.slice(0, 6).map((metric, index) => (
+												<div key={index} className="p-4 border rounded-lg">
+													<div className="flex items-center justify-between mb-2">
+														<span className="text-sm font-medium">
+															Agent Performance
+														</span>
+														<span className="text-xs text-muted-foreground">
+															{metric.periodStart ? new Date(metric.periodStart).toLocaleDateString() : 'N/A'}
+														</span>
+													</div>
+													<div className="space-y-1">
+														<div className="text-lg font-semibold">
+															${Number(metric.totalCommissionEarned || 0).toLocaleString()}
+														</div>
+														<div className="text-sm text-muted-foreground">
+															{metric.transactionCount || 0} transactions
+														</div>
+													</div>
+												</div>
+											))}
+										</div>
+									</div>
+
+									<div>
+										<h4 className="font-medium mb-3">Top Performers</h4>
+										<div className="space-y-2">
+											{dashboardStats?.topPerformers?.slice(0, 5).map((performer, index) => (
+												<div key={index} className="flex items-center justify-between p-3 border rounded-lg">
+													<div className="flex items-center gap-3">
+														<div className="h-8 w-8 bg-primary/10 rounded-full flex items-center justify-center">
+															<span className="text-sm font-medium text-primary">
+																{index + 1}
+															</span>
+														</div>
+														<div>
+															<div className="font-medium">{performer.name}</div>
+															<div className="text-sm text-muted-foreground">
+																{performer.transactionCount} transactions
+															</div>
+														</div>
+													</div>
+													<div className="text-right">
+														<div className="font-semibold">
+															${Number(performer.totalCommission || 0).toLocaleString()}
+														</div>
+														<div className="text-sm text-muted-foreground">
+															Commission earned
+														</div>
+													</div>
+												</div>
+											)) || (
+												<p className="text-muted-foreground text-center py-4">
+													No performance data available
+												</p>
+											)}
+										</div>
+									</div>
+								</div>
+							) : (
+								<div className="py-8 text-center">
+									<RiBarChartLine
+										size={48}
+										className="mx-auto mb-4 text-muted-foreground"
+									/>
+									<h3 className="mb-2 font-semibold text-lg">
+										No Analytics Data
+									</h3>
+									<p className="mb-4 text-muted-foreground">
+										No analytics data available for the selected time period. Try adjusting your filters.
+									</p>
+									<div className="flex justify-center gap-2">
+										<Button variant="outline" onClick={handleRefresh}>
+											<RiRefreshLine className="mr-2 h-4 w-4" />
+											Refresh Data
+										</Button>
+										<Button variant="outline">
+											<RiDownloadLine className="mr-2 h-4 w-4" />
+											Export Data
+										</Button>
+										<Button>
+											<RiBarChartLine className="mr-2 h-4 w-4" />
+											Generate Report
+										</Button>
+									</div>
+								</div>
+							)}
 						</CardContent>
 					</Card>
 				</div>

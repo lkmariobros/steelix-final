@@ -59,6 +59,29 @@ export default function AdminApprovalsPage() {
 			isLoading: boolean;
 		};
 
+	// Fetch approvals data
+	const {
+		data: approvalsData,
+		isLoading: isLoadingApprovals,
+		refetch: refetchApprovals
+	} = trpc.approvals.list.useQuery({
+		limit: 20,
+		offset: 0,
+		status: statusFilter === "all" ? undefined : statusFilter as any,
+		sortBy: "submittedAt",
+		sortOrder: "desc",
+	}, {
+		enabled: !!session && !!roleData?.hasAdminAccess,
+	});
+
+	// Get approval statistics
+	const { data: approvalStats, isLoading: isLoadingStats } = trpc.approvals.getStats.useQuery({}, {
+		enabled: !!session && !!roleData?.hasAdminAccess,
+	});
+
+	// Get utils for invalidation after mutations
+	const utils = trpc.useUtils();
+
 	// Show loading while checking authentication and role
 	if (isPending || isRoleLoading) {
 		return (
@@ -106,8 +129,11 @@ export default function AdminApprovalsPage() {
 	}
 
 	// Handle refresh
-	const handleRefresh = () => {
-		window.location.reload();
+	const handleRefresh = async () => {
+		await Promise.all([
+			refetchApprovals(),
+			utils.approvals.getStats.invalidate(),
+		]);
 	};
 
 	return (
@@ -189,10 +215,21 @@ export default function AdminApprovalsPage() {
 								<RiCheckboxCircleLine className="h-4 w-4 text-muted-foreground" />
 							</CardHeader>
 							<CardContent>
-								<div className="font-bold text-2xl">12</div>
-								<p className="text-muted-foreground text-xs">
-									Awaiting your review
-								</p>
+								{isLoadingStats ? (
+									<div className="space-y-2">
+										<div className="h-8 w-16 bg-muted animate-pulse rounded" />
+										<div className="h-3 w-24 bg-muted animate-pulse rounded" />
+									</div>
+								) : (
+									<>
+										<div className="font-bold text-2xl">
+											{approvalStats?.pendingRequests || 0}
+										</div>
+										<p className="text-muted-foreground text-xs">
+											Awaiting your review
+										</p>
+									</>
+								)}
 							</CardContent>
 						</Card>
 						<Card>
@@ -203,10 +240,21 @@ export default function AdminApprovalsPage() {
 								<RiCheckLine className="h-4 w-4 text-muted-foreground" />
 							</CardHeader>
 							<CardContent>
-								<div className="font-bold text-2xl">8</div>
-								<p className="text-muted-foreground text-xs">
-									+3 from yesterday
-								</p>
+								{isLoadingStats ? (
+									<div className="space-y-2">
+										<div className="h-8 w-16 bg-muted animate-pulse rounded" />
+										<div className="h-3 w-24 bg-muted animate-pulse rounded" />
+									</div>
+								) : (
+									<>
+										<div className="font-bold text-2xl">
+											{approvalStats?.approvedRequests || 0}
+										</div>
+										<p className="text-muted-foreground text-xs">
+											Total approved
+										</p>
+									</>
+								)}
 							</CardContent>
 						</Card>
 						<Card>
@@ -217,22 +265,44 @@ export default function AdminApprovalsPage() {
 								<RiCheckboxCircleLine className="h-4 w-4 text-muted-foreground" />
 							</CardHeader>
 							<CardContent>
-								<div className="font-bold text-2xl">$234,567</div>
-								<p className="text-muted-foreground text-xs">
-									Pending approval
-								</p>
+								{isLoadingStats ? (
+									<div className="space-y-2">
+										<div className="h-8 w-20 bg-muted animate-pulse rounded" />
+										<div className="h-3 w-24 bg-muted animate-pulse rounded" />
+									</div>
+								) : (
+									<>
+										<div className="font-bold text-2xl">
+											${(approvalStats?.totalRequestedAmount || 0).toLocaleString()}
+										</div>
+										<p className="text-muted-foreground text-xs">
+											Pending approval
+										</p>
+									</>
+								)}
 							</CardContent>
 						</Card>
 						<Card>
 							<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
 								<CardTitle className="font-medium text-sm">
-									Average Time
+									Avg Request
 								</CardTitle>
 								<RiCheckboxCircleLine className="h-4 w-4 text-muted-foreground" />
 							</CardHeader>
 							<CardContent>
-								<div className="font-bold text-2xl">2.4 days</div>
-								<p className="text-muted-foreground text-xs">To approval</p>
+								{isLoadingStats ? (
+									<div className="space-y-2">
+										<div className="h-8 w-20 bg-muted animate-pulse rounded" />
+										<div className="h-3 w-24 bg-muted animate-pulse rounded" />
+									</div>
+								) : (
+									<>
+										<div className="font-bold text-2xl">
+											${(approvalStats?.averageRequestedAmount || 0).toLocaleString()}
+										</div>
+										<p className="text-muted-foreground text-xs">Per request</p>
+									</>
+								)}
 							</CardContent>
 						</Card>
 					</div>
@@ -246,33 +316,88 @@ export default function AdminApprovalsPage() {
 							</CardDescription>
 						</CardHeader>
 						<CardContent>
-							<div className="py-8 text-center">
-								<RiCheckboxCircleLine
-									size={48}
-									className="mx-auto mb-4 text-muted-foreground"
-								/>
-								<h3 className="mb-2 font-semibold text-lg">
-									Commission Approval System
-								</h3>
-								<p className="mb-4 text-muted-foreground">
-									Review and approve agent commission requests, transaction
-									submissions, and deal approvals
-								</p>
-								<div className="flex justify-center gap-2">
-									<Button variant="outline">
-										<RiCheckLine className="mr-2 h-4 w-4" />
-										Bulk Approve
-									</Button>
-									<Button variant="outline">
-										<RiCloseLine className="mr-2 h-4 w-4" />
-										Bulk Reject
-									</Button>
-									<Button>
+							{isLoadingApprovals ? (
+								<div className="space-y-4">
+									{Array.from({ length: 3 }).map((_, i) => (
+										<div key={i} className="flex items-center justify-between p-4 border rounded-lg">
+											<div className="space-y-2">
+												<div className="h-4 w-32 bg-muted animate-pulse rounded" />
+												<div className="h-3 w-48 bg-muted animate-pulse rounded" />
+											</div>
+											<div className="flex gap-2">
+												<div className="h-8 w-20 bg-muted animate-pulse rounded" />
+												<div className="h-8 w-20 bg-muted animate-pulse rounded" />
+											</div>
+										</div>
+									))}
+								</div>
+							) : approvalsData?.approvals && approvalsData.approvals.length > 0 ? (
+								<div className="space-y-4">
+									{approvalsData.approvals.map((approval) => (
+										<div key={approval.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors">
+											<div className="space-y-1">
+												<div className="flex items-center gap-2">
+													<span className="font-medium">
+														{approval.agent?.name || 'Unknown Agent'}
+													</span>
+													<span className={`px-2 py-1 text-xs rounded-full ${
+														approval.priority === 'high' ? 'bg-red-100 text-red-800' :
+														approval.priority === 'medium' ? 'bg-yellow-100 text-yellow-800' :
+														'bg-green-100 text-green-800'
+													}`}>
+														{approval.priority}
+													</span>
+												</div>
+												<p className="text-sm text-muted-foreground">
+													${Number(approval.requestedAmount).toLocaleString()} requested
+													{approval.submittedAt && ` • ${new Date(approval.submittedAt).toLocaleDateString()}`}
+												</p>
+												{approval.description && (
+													<p className="text-sm text-muted-foreground max-w-md truncate">
+														{approval.description}
+													</p>
+												)}
+											</div>
+											<div className="flex gap-2">
+												<Button size="sm" variant="outline" className="text-green-600 hover:text-green-700">
+													<RiCheckLine className="mr-1 h-4 w-4" />
+													Approve
+												</Button>
+												<Button size="sm" variant="outline" className="text-red-600 hover:text-red-700">
+													<RiCloseLine className="mr-1 h-4 w-4" />
+													Reject
+												</Button>
+											</div>
+										</div>
+									))}
+									{approvalsData.hasMore && (
+										<div className="text-center pt-4">
+											<Button variant="outline" onClick={() => {
+												// TODO: Implement pagination
+											}}>
+												Load More
+											</Button>
+										</div>
+									)}
+								</div>
+							) : (
+								<div className="py-8 text-center">
+									<RiCheckboxCircleLine
+										size={48}
+										className="mx-auto mb-4 text-muted-foreground"
+									/>
+									<h3 className="mb-2 font-semibold text-lg">
+										No Pending Approvals
+									</h3>
+									<p className="mb-4 text-muted-foreground">
+										All commission requests have been processed. New requests will appear here.
+									</p>
+									<Button variant="outline" onClick={handleRefresh}>
 										<RiRefreshLine className="mr-2 h-4 w-4" />
 										Refresh Queue
 									</Button>
 								</div>
-							</div>
+							)}
 						</CardContent>
 					</Card>
 				</div>

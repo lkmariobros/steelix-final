@@ -21,4 +21,17 @@ export const queryClient = new QueryClient({
 
 export const trpc = createTRPCReact<AppRouter>();
 
+export const trpcClient = trpc.createClient({
+	links: [
+		httpBatchLink({
+			url: process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:8080/trpc',
+			headers() {
+				return {
+					'Content-Type': 'application/json',
+				};
+			},
+		}),
+	],
+});
+
 

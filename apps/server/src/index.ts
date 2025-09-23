@@ -53,7 +53,7 @@ app.all("/api/auth/*", async (c) => {
 		return result;
 	} catch (error) {
 		console.error("❌ Auth handler error:", error);
-		return c.json({ error: "Auth handler failed", details: error.message }, 500);
+		return c.json({ error: "Auth handler failed", details: error instanceof Error ? error.message : String(error) }, 500);
 	}
 });
 
