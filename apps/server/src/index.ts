@@ -49,12 +49,29 @@ app.all("/api/auth/*", async (c) => {
 	console.log("🔐 Auth headers:", Object.fromEntries(c.req.raw.headers.entries()));
 
 	try {
-		const result = await auth.handler(c.req.raw);
+		// Create a new Request object with the correct URL structure
+		const url = new URL(c.req.url);
+		const authPath = url.pathname.replace('/api/auth', '');
+		console.log(`🔐 Extracted auth path: ${authPath}`);
+
+		// Create request for Better Auth handler
+		const authRequest = new Request(url.toString(), {
+			method: c.req.method,
+			headers: c.req.raw.headers,
+			body: c.req.method !== 'GET' && c.req.method !== 'HEAD' ? c.req.raw.body : undefined,
+		});
+
+		const result = await auth.handler(authRequest);
 		console.log("🔐 Auth handler result:", result ? "Response received" : "No response");
 
 		if (!result) {
 			console.log("⚠️ Auth handler returned null/undefined - creating 404 response");
-			return c.json({ error: "Auth endpoint not found", path: c.req.path }, 404);
+			return c.json({
+				error: "Auth endpoint not found",
+				path: c.req.path,
+				authPath: authPath,
+				availableEndpoints: ['/session', '/sign-in', '/sign-up', '/sign-out']
+			}, 404);
 		}
 
 		return result;
@@ -116,6 +133,8 @@ app.get("/debug/auth-config", (c) => {
 		hasSecret: !!process.env.BETTER_AUTH_SECRET,
 		hasDatabaseUrl: !!process.env.DATABASE_URL,
 		nodeEnv: process.env.NODE_ENV,
+		authInitialized: !!auth,
+		authHandlerExists: typeof auth.handler === 'function',
 		timestamp: new Date().toISOString()
 	});
 });
@@ -144,6 +163,44 @@ app.get("/debug/auth-session", async (c) => {
 		console.error("❌ Debug auth session error:", error);
 		return c.json({
 			error: "Failed to get session",
+			details: error instanceof Error ? error.message : String(error),
+			timestamp: new Date().toISOString()
+		}, 500);
+	}
+});
+
+// Manual test endpoint for auth session endpoint
+app.get("/debug/test-auth-session", async (c) => {
+	try {
+		console.log("🧪 Manual test: Creating auth session request");
+
+		// Create a manual request to the auth session endpoint
+		const sessionUrl = `${process.env.BETTER_AUTH_URL || 'http://localhost:8080'}/api/auth/session`;
+		console.log("🧪 Session URL:", sessionUrl);
+
+		const response = await fetch(sessionUrl, {
+			method: 'GET',
+			headers: {
+				'Content-Type': 'application/json',
+				'Cookie': c.req.header('Cookie') || '',
+			}
+		});
+
+		console.log("🧪 Session response status:", response.status);
+		const responseText = await response.text();
+		console.log("🧪 Session response body:", responseText);
+
+		return c.json({
+			sessionUrl,
+			status: response.status,
+			headers: Object.fromEntries(response.headers.entries()),
+			body: responseText,
+			timestamp: new Date().toISOString()
+		});
+	} catch (error) {
+		console.error("❌ Manual auth session test error:", error);
+		return c.json({
+			error: "Failed to test auth session",
 			details: error instanceof Error ? error.message : String(error),
 			timestamp: new Date().toISOString()
 		}, 500);
