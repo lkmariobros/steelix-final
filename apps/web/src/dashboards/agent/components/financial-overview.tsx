@@ -29,7 +29,7 @@ interface FinancialOverviewProps {
 }
 
 export function FinancialOverview({ dateRange }: FinancialOverviewProps) {
-	// ✅ CORRECT tRPC query pattern
+	// ✅ CORRECT tRPC query pattern with debugging
 	const {
 		data: financialData,
 		isLoading,
@@ -37,6 +37,15 @@ export function FinancialOverview({ dateRange }: FinancialOverviewProps) {
 	} = trpc.dashboard.getFinancialOverview.useQuery({
 		startDate: dateRange?.startDate,
 		endDate: dateRange?.endDate,
+	}, {
+		onSuccess: (data) => {
+			console.log('🔍 Financial Overview Data:', data);
+		},
+		onError: (error) => {
+			console.error('❌ Financial Overview Error:', error);
+		},
+		retry: 1,
+		staleTime: 30000, // 30 seconds
 	});
 
 	if (isLoading) {
@@ -78,8 +87,26 @@ export function FinancialOverview({ dateRange }: FinancialOverviewProps) {
 		);
 	}
 
-	if (!financialData) {
-		return null;
+	// Handle empty data case (204 response)
+	if (!financialData || !financialData.overview) {
+		console.warn('⚠️ No financial data received - showing empty state');
+		return (
+			<Card>
+				<CardHeader>
+					<CardTitle>Financial Overview</CardTitle>
+				</CardHeader>
+				<CardContent>
+					<div className="text-center py-8">
+						<p className="text-muted-foreground text-sm mb-4">
+							No transaction data found for the selected period.
+						</p>
+						<p className="text-muted-foreground text-xs">
+							Start by creating your first transaction to see financial insights here.
+						</p>
+					</div>
+				</CardContent>
+			</Card>
+		);
 	}
 
 	const { overview } = financialData;

@@ -42,6 +42,7 @@ app.use(
 	}),
 );
 
+// Better Auth handler - handle all auth routes
 app.all("/api/auth/*", async (c) => {
 	console.log(`🔐 Auth request: ${c.req.method} ${c.req.url}`);
 	console.log(`🔐 Auth path: ${c.req.path}`);
@@ -50,9 +51,27 @@ app.all("/api/auth/*", async (c) => {
 	try {
 		const result = await auth.handler(c.req.raw);
 		console.log("🔐 Auth handler result:", result ? "Response received" : "No response");
+
+		if (!result) {
+			console.log("⚠️ Auth handler returned null/undefined - creating 404 response");
+			return c.json({ error: "Auth endpoint not found", path: c.req.path }, 404);
+		}
+
 		return result;
 	} catch (error) {
 		console.error("❌ Auth handler error:", error);
+		return c.json({ error: "Auth handler failed", details: error instanceof Error ? error.message : String(error) }, 500);
+	}
+});
+
+// Fallback auth handler for root auth paths (in case Better Auth expects different routing)
+app.all("/auth/*", async (c) => {
+	console.log(`🔐 Fallback auth request: ${c.req.method} ${c.req.url}`);
+	try {
+		const result = await auth.handler(c.req.raw);
+		return result || c.json({ error: "Auth endpoint not found" }, 404);
+	} catch (error) {
+		console.error("❌ Fallback auth handler error:", error);
 		return c.json({ error: "Auth handler failed", details: error instanceof Error ? error.message : String(error) }, 500);
 	}
 });
@@ -99,6 +118,36 @@ app.get("/debug/auth-config", (c) => {
 		nodeEnv: process.env.NODE_ENV,
 		timestamp: new Date().toISOString()
 	});
+});
+
+// Debug endpoint to test auth session directly
+app.get("/debug/auth-session", async (c) => {
+	try {
+		console.log("🔍 Debug: Testing auth session directly");
+		console.log("🔍 Request headers:", Object.fromEntries(c.req.raw.headers.entries()));
+
+		// Try to get session using Better Auth
+		const session = await auth.api.getSession({
+			headers: c.req.raw.headers
+		});
+
+		return c.json({
+			hasSession: !!session,
+			session: session ? {
+				userId: session.user?.id,
+				userEmail: session.user?.email,
+				sessionId: session.session?.id
+			} : null,
+			timestamp: new Date().toISOString()
+		});
+	} catch (error) {
+		console.error("❌ Debug auth session error:", error);
+		return c.json({
+			error: "Failed to get session",
+			details: error instanceof Error ? error.message : String(error),
+			timestamp: new Date().toISOString()
+		}, 500);
+	}
 });
 
 // Debug endpoint to test database connection
