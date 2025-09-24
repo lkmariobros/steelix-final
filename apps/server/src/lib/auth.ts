@@ -7,7 +7,10 @@ import { count, eq } from "drizzle-orm";
 
 console.log("🔐 Initializing Better Auth...");
 
-export const auth: ReturnType<typeof betterAuth> = betterAuth({
+let auth: ReturnType<typeof betterAuth>;
+
+try {
+	auth = betterAuth({
 	database: drizzleAdapter(db, {
 		provider: "pg",
 		schema: schema,
@@ -130,3 +133,27 @@ export const auth: ReturnType<typeof betterAuth> = betterAuth({
 	},
 	plugins: [expo()],
 });
+
+	console.log("✅ Better Auth initialized successfully");
+	console.log("🔧 Auth object type:", typeof auth);
+	console.log("🔧 Auth handler type:", typeof auth.handler);
+} catch (error) {
+	console.error("❌ CRITICAL: Better Auth initialization failed:", error);
+	console.error("❌ Error details:", error instanceof Error ? error.message : String(error));
+	console.error("❌ Stack trace:", error instanceof Error ? error.stack : 'No stack trace');
+
+	// Create a fallback auth object to prevent server crashes
+	auth = {
+		handler: async () => {
+			return new Response(JSON.stringify({ error: "Auth not initialized" }), {
+				status: 500,
+				headers: { 'Content-Type': 'application/json' }
+			});
+		},
+		api: {
+			getSession: async () => null
+		}
+	} as any;
+}
+
+export { auth };

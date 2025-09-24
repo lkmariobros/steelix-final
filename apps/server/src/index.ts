@@ -127,6 +127,10 @@ app.get("/.well-known/health", (c) => c.json({ status: "ok" }));
 
 // Debug endpoint to check auth configuration
 app.get("/debug/auth-config", (c) => {
+	console.log("🔍 Debug: Checking auth configuration");
+	console.log("🔍 Auth object:", auth);
+	console.log("🔍 Auth handler:", auth?.handler);
+
 	return c.json({
 		betterAuthUrl: process.env.BETTER_AUTH_URL,
 		corsOrigins: process.env.CORS_ORIGIN?.split(',') || [],
@@ -134,7 +138,9 @@ app.get("/debug/auth-config", (c) => {
 		hasDatabaseUrl: !!process.env.DATABASE_URL,
 		nodeEnv: process.env.NODE_ENV,
 		authInitialized: !!auth,
-		authHandlerExists: typeof auth.handler === 'function',
+		authHandlerExists: typeof auth?.handler === 'function',
+		authObjectType: typeof auth,
+		authHandlerType: typeof auth?.handler,
 		timestamp: new Date().toISOString()
 	});
 });
