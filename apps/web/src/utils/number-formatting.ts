@@ -17,7 +17,7 @@ export function safeToFixed(value: unknown, decimals = 1): string {
 	const numValue = typeof value === "string" ? parseFloat(value) : Number(value);
 
 	// Check if the conversion resulted in a valid number
-	if (isNaN(numValue) || typeof numValue !== 'number') {
+	if (Number.isNaN(numValue) || typeof numValue !== 'number') {
 		return "0".padEnd(decimals + 2, ".0");
 	}
 
@@ -77,7 +77,7 @@ export function safeToNumber(value: unknown, fallback = 0): number {
 
 	const numValue = typeof value === "string" ? parseFloat(value) : Number(value);
 
-	if (isNaN(numValue) || typeof numValue !== 'number') {
+	if (Number.isNaN(numValue) || typeof numValue !== 'number') {
 		return fallback;
 	}
 

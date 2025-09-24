@@ -211,11 +211,11 @@ export function formatPercentage(value: number | string | null | undefined): str
 	const numValue = typeof value === "string" ? parseFloat(value) : value;
 
 	// Check if the conversion resulted in a valid number
-	if (isNaN(numValue) || typeof numValue !== 'number') {
+	if (Number.isNaN(numValue) || typeof numValue !== 'number') {
 		return "0.0%";
 	}
 
-	return `${numValue.toFixed(1)}%`;
+	return `${Number.isNaN(numValue) ? 0 : numValue.toFixed(1)}%`;
 }
 
 export function formatDate(date: Date): string {

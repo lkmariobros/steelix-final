@@ -16,6 +16,7 @@ import React from "react";
 // Import types and utilities
 import type { DateRangeFilter } from "../admin-schema";
 import { formatCurrency } from "../admin-schema";
+import { safeToFixed } from "@/utils/number-formatting";
 
 interface DashboardSummaryProps {
 	dateRange?: DateRangeFilter;
@@ -121,11 +122,11 @@ export function DashboardSummary({
 
 	// Calculate derived metrics with safe number conversion
 	const approvalRate = summaryData.totalTransactions > 0
-		? Number(((summaryData.approvedTransactions / summaryData.totalTransactions) * 100).toFixed(1))
+		? Number(((summaryData.approvedTransactions / summaryData.totalTransactions) * 100))
 		: 0;
 
 	const pendingRate = summaryData.totalTransactions > 0
-		? Number(((summaryData.pendingApprovals / summaryData.totalTransactions) * 100).toFixed(1))
+		? Number(((summaryData.pendingApprovals / summaryData.totalTransactions) * 100))
 		: 0;
 
 	// Determine trends (simplified - in real app you'd compare with previous period)
@@ -165,7 +166,7 @@ export function DashboardSummary({
 						title="Pending Approvals"
 						value={summaryData.pendingApprovals.toString()}
 						change={{
-							value: `${typeof pendingRate === 'number' ? pendingRate.toFixed(1) : '0.0'}% of total`,
+							value: `${safeToFixed(pendingRate, 1)}% of total`,
 							trend: pendingApprovalsTrend as "up" | "down",
 						}}
 						icon={
@@ -181,7 +182,7 @@ export function DashboardSummary({
 						title="Approved Transactions"
 						value={summaryData.approvedTransactions.toString()}
 						change={{
-							value: `${typeof approvalRate === 'number' ? approvalRate.toFixed(1) : '0.0'}% approval rate`,
+							value: `${safeToFixed(approvalRate, 1)}% approval rate`,
 							trend: approvedTransactionsTrend as "up" | "down",
 						}}
 						icon={

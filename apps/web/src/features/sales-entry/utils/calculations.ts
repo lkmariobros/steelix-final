@@ -100,7 +100,7 @@ export function formatPercentage(value: number | string | null | undefined, deci
 	const numValue = typeof value === "string" ? parseFloat(value) : value;
 
 	// Check if the conversion resulted in a valid number
-	if (isNaN(numValue) || typeof numValue !== 'number') {
+	if (Number.isNaN(numValue) || typeof numValue !== 'number') {
 		return "0.0%";
 	}
 
