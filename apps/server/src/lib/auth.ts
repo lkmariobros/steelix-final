@@ -1,4 +1,4 @@
-import { expo } from "@better-auth/expo";
+// import { expo } from "@better-auth/expo"; // Temporarily disabled for production debugging
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { db } from "../db";
@@ -6,10 +6,17 @@ import * as schema from "../db/schema/auth";
 import { count, eq } from "drizzle-orm";
 
 console.log("🔐 Initializing Better Auth...");
+console.log("🔧 Environment variables check:");
+console.log(`   - BETTER_AUTH_URL: ${process.env.BETTER_AUTH_URL}`);
+console.log(`   - BETTER_AUTH_SECRET: ${process.env.BETTER_AUTH_SECRET ? 'SET' : 'NOT SET'}`);
+console.log(`   - DATABASE_URL: ${process.env.DATABASE_URL ? 'SET' : 'NOT SET'}`);
+console.log(`   - NODE_ENV: ${process.env.NODE_ENV}`);
+console.log(`   - CORS_ORIGIN: ${process.env.CORS_ORIGIN}`);
 
 let auth: ReturnType<typeof betterAuth>;
 
 try {
+	console.log("🔧 Creating Better Auth instance...");
 	auth = betterAuth({
 	database: drizzleAdapter(db, {
 		provider: "pg",
@@ -131,7 +138,8 @@ try {
 			},
 		},
 	},
-	plugins: [expo()],
+	// Temporarily remove expo plugin for production debugging
+	// plugins: [expo()],
 });
 
 	console.log("✅ Better Auth initialized successfully");
