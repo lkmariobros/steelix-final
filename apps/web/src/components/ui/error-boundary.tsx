@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { RiAlertTriangleLine, RiRefreshLine } from "@remixicon/react";
+import { RiErrorWarningLine, RiRefreshLine } from "@remixicon/react";
 import { Button } from "./button";
 
 interface ErrorBoundaryState {
@@ -55,7 +55,7 @@ export function DefaultErrorFallback({ error, resetError }: ErrorFallbackProps) 
 	return (
 		<div className="flex h-screen items-center justify-center">
 			<div className="text-center max-w-md">
-				<RiAlertTriangleLine size={48} className="mx-auto text-destructive mb-4" />
+				<RiErrorWarningLine size={48} className="mx-auto text-destructive mb-4" />
 				<h1 className="text-2xl font-semibold mb-2">Something went wrong</h1>
 				<p className="text-muted-foreground mb-4">
 					An unexpected error occurred. Please try refreshing the page.

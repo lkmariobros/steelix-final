@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef } from "react";
+import type { KeyboardEvent } from "react";
 
 interface UseKeyboardNavigationOptions {
 	onEnter?: () => void;
@@ -26,7 +27,7 @@ export function useKeyboardNavigation(options: UseKeyboardNavigationOptions = {}
 	} = options;
 
 	const handleKeyDown = useCallback(
-		(event: KeyboardEvent) => {
+		(event: KeyboardEvent<HTMLElement>) => {
 			let handled = false;
 
 			switch (event.key) {
@@ -125,7 +126,7 @@ export function useFocusManagement() {
 		}
 	}, []);
 
-	const trapFocus = useCallback((event: KeyboardEvent) => {
+	const trapFocus = useCallback((event: globalThis.KeyboardEvent) => {
 		if (event.key !== "Tab" || !containerRef.current) return;
 
 		const focusableElements = containerRef.current.querySelectorAll(

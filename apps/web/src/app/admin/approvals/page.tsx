@@ -334,27 +334,27 @@ export default function AdminApprovalsPage() {
 							) : approvalsData?.approvals && approvalsData.approvals.length > 0 ? (
 								<div className="space-y-4">
 									{approvalsData.approvals.map((approval) => (
-										<div key={approval.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors">
+										<div key={approval.approval.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors">
 											<div className="space-y-1">
 												<div className="flex items-center gap-2">
 													<span className="font-medium">
 														{approval.agent?.name || 'Unknown Agent'}
 													</span>
 													<span className={`px-2 py-1 text-xs rounded-full ${
-														approval.priority === 'high' ? 'bg-red-100 text-red-800' :
-														approval.priority === 'medium' ? 'bg-yellow-100 text-yellow-800' :
+														approval.approval.priority === 'urgent' ? 'bg-red-100 text-red-800' :
+														approval.approval.priority === 'normal' ? 'bg-yellow-100 text-yellow-800' :
 														'bg-green-100 text-green-800'
 													}`}>
-														{approval.priority}
+														{approval.approval.priority}
 													</span>
 												</div>
 												<p className="text-sm text-muted-foreground">
-													${Number(approval.requestedAmount).toLocaleString()} requested
-													{approval.submittedAt && ` • ${new Date(approval.submittedAt).toLocaleDateString()}`}
+													${Number(approval.approval.requestedAmount).toLocaleString()} requested
+													{approval.approval.submittedAt && ` • ${new Date(approval.approval.submittedAt).toLocaleDateString()}`}
 												</p>
-												{approval.description && (
+												{approval.approval.metadata?.submissionNotes && (
 													<p className="text-sm text-muted-foreground max-w-md truncate">
-														{approval.description}
+														{approval.approval.metadata.submissionNotes}
 													</p>
 												)}
 											</div>

@@ -90,8 +90,21 @@ export function formatCurrency(amount: number, currency = "USD"): string {
 /**
  * Format percentage for display
  */
-export function formatPercentage(value: number, decimals = 1): string {
-	return `${value.toFixed(decimals)}%`;
+export function formatPercentage(value: number | string | null | undefined, decimals = 1): string {
+	// Handle null, undefined, or invalid values
+	if (value === null || value === undefined) {
+		return "0.0%";
+	}
+
+	// Convert to number if it's a string
+	const numValue = typeof value === "string" ? parseFloat(value) : value;
+
+	// Check if the conversion resulted in a valid number
+	if (isNaN(numValue) || typeof numValue !== 'number') {
+		return "0.0%";
+	}
+
+	return `${numValue.toFixed(decimals)}%`;
 }
 
 /**

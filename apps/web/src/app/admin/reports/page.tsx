@@ -249,7 +249,7 @@ export default function AdminReportsPage() {
 								) : (
 									<>
 										<div className="font-bold text-2xl">
-											${(dashboardStats?.transactions?.totalValue || 0).toLocaleString()}
+											${(dashboardStats?.transactions?.totalCommission || 0).toLocaleString()}
 										</div>
 										<p className="text-muted-foreground text-xs">
 											Total transaction value
@@ -274,7 +274,7 @@ export default function AdminReportsPage() {
 								) : (
 									<>
 										<div className="font-bold text-2xl">
-											{dashboardStats?.transactions?.totalCount || 0}
+											{dashboardStats?.transactions?.totalTransactions || 0}
 										</div>
 										<p className="text-muted-foreground text-xs">
 											Total transactions
@@ -299,7 +299,7 @@ export default function AdminReportsPage() {
 								) : (
 									<>
 										<div className="font-bold text-2xl">
-											${(dashboardStats?.transactions?.averageValue || 0).toLocaleString()}
+											${(dashboardStats?.transactions?.averageCommission || 0).toLocaleString()}
 										</div>
 										<p className="text-muted-foreground text-xs">
 											Average per transaction
@@ -355,12 +355,12 @@ export default function AdminReportsPage() {
 										<div className="h-24 w-full bg-muted animate-pulse rounded" />
 									</div>
 								</div>
-							) : performanceAnalytics && performanceAnalytics.length > 0 ? (
+							) : performanceAnalytics && performanceAnalytics.periods && performanceAnalytics.periods.length > 0 ? (
 								<div className="space-y-6">
 									<div>
 										<h4 className="font-medium mb-3">Performance Overview</h4>
 										<div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-											{performanceAnalytics.slice(0, 6).map((metric, index) => (
+											{performanceAnalytics.periods.slice(0, 6).map((metric, index) => (
 												<div key={index} className="p-4 border rounded-lg">
 													<div className="flex items-center justify-between mb-2">
 														<span className="text-sm font-medium">
@@ -395,9 +395,9 @@ export default function AdminReportsPage() {
 															</span>
 														</div>
 														<div>
-															<div className="font-medium">{performer.name}</div>
+															<div className="font-medium">{performer.agentName}</div>
 															<div className="text-sm text-muted-foreground">
-																{performer.transactionCount} transactions
+																{performer.totalTransactions} transactions
 															</div>
 														</div>
 													</div>

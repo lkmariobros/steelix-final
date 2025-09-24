@@ -76,7 +76,7 @@ export default function AdminAgentsPage() {
 	});
 
 	// Get agent statistics
-	const { data: agentStats, isLoading: isLoadingStats } = trpc.agents.getStats.useQuery({}, {
+	const { data: agentStats, isLoading: isLoadingStats } = trpc.agents.getStats.useQuery(undefined, {
 		enabled: !!session && !!roleData?.hasAdminAccess,
 	});
 
@@ -340,30 +340,30 @@ export default function AdminAgentsPage() {
 							) : agentsData?.agents && agentsData.agents.length > 0 ? (
 								<div className="space-y-4">
 									{agentsData.agents.map((agent) => (
-										<div key={agent.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors">
+										<div key={agent.agent.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors">
 											<div className="flex items-center gap-3">
 												<div className="h-10 w-10 bg-primary/10 rounded-full flex items-center justify-center">
 													<RiUserLine className="h-5 w-5 text-primary" />
 												</div>
 												<div className="space-y-1">
 													<div className="flex items-center gap-2">
-														<span className="font-medium">{agent.name}</span>
+														<span className="font-medium">{agent.agent.name}</span>
 														<span className={`px-2 py-1 text-xs rounded-full ${
-															agent.role === 'admin' ? 'bg-red-100 text-red-800' :
-															agent.role === 'team_lead' ? 'bg-blue-100 text-blue-800' :
+															agent.agent.role === 'admin' ? 'bg-red-100 text-red-800' :
+															agent.agent.role === 'team_lead' ? 'bg-blue-100 text-blue-800' :
 															'bg-green-100 text-green-800'
 														}`}>
-															{agent.role}
+															{agent.agent.role}
 														</span>
-														{agent.agentTier && (
+														{agent.agent.agentTier && (
 															<span className="px-2 py-1 text-xs rounded-full bg-purple-100 text-purple-800">
-																{agent.agentTier.replace('_', ' ')}
+																{agent.agent.agentTier.replace('_', ' ')}
 															</span>
 														)}
 													</div>
 													<p className="text-sm text-muted-foreground">
-														{agent.email}
-														{agent.createdAt && ` • Joined ${new Date(agent.createdAt).toLocaleDateString()}`}
+														{agent.agent.email}
+														{agent.agent.createdAt && ` • Joined ${new Date(agent.agent.createdAt).toLocaleDateString()}`}
 													</p>
 												</div>
 											</div>

@@ -119,16 +119,14 @@ export function DashboardSummary({
 		);
 	}
 
-	// Calculate derived metrics
-	const approvalRate =
-		summaryData.totalTransactions > 0
-			? (summaryData.approvedTransactions / summaryData.totalTransactions) * 100
-			: 0;
+	// Calculate derived metrics with safe number conversion
+	const approvalRate = summaryData.totalTransactions > 0
+		? Number(((summaryData.approvedTransactions / summaryData.totalTransactions) * 100).toFixed(1))
+		: 0;
 
-	const pendingRate =
-		summaryData.totalTransactions > 0
-			? (summaryData.pendingApprovals / summaryData.totalTransactions) * 100
-			: 0;
+	const pendingRate = summaryData.totalTransactions > 0
+		? Number(((summaryData.pendingApprovals / summaryData.totalTransactions) * 100).toFixed(1))
+		: 0;
 
 	// Determine trends (simplified - in real app you'd compare with previous period)
 	const totalTransactionsTrend =
@@ -167,7 +165,7 @@ export function DashboardSummary({
 						title="Pending Approvals"
 						value={summaryData.pendingApprovals.toString()}
 						change={{
-							value: `${pendingRate.toFixed(1)}% of total`,
+							value: `${typeof pendingRate === 'number' ? pendingRate.toFixed(1) : '0.0'}% of total`,
 							trend: pendingApprovalsTrend as "up" | "down",
 						}}
 						icon={
@@ -183,7 +181,7 @@ export function DashboardSummary({
 						title="Approved Transactions"
 						value={summaryData.approvedTransactions.toString()}
 						change={{
-							value: `${approvalRate.toFixed(1)}% approval rate`,
+							value: `${typeof approvalRate === 'number' ? approvalRate.toFixed(1) : '0.0'}% approval rate`,
 							trend: approvedTransactionsTrend as "up" | "down",
 						}}
 						icon={
@@ -227,7 +225,7 @@ export function DashboardSummary({
 											: "text-red-600 dark:text-red-400"
 								}`}
 							>
-								{approvalRate.toFixed(1)}%
+								{typeof approvalRate === 'number' ? approvalRate.toFixed(1) : '0.0'}%
 							</span>
 						</div>
 						<div className="mt-2 h-2 rounded-full bg-muted">
@@ -258,7 +256,7 @@ export function DashboardSummary({
 											: "text-red-600 dark:text-red-400"
 								}`}
 							>
-								{pendingRate.toFixed(1)}%
+								{typeof pendingRate === 'number' ? pendingRate.toFixed(1) : '0.0'}%
 							</span>
 						</div>
 						<div className="mt-2 h-2 rounded-full bg-muted">

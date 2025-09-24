@@ -78,16 +78,6 @@ export default function TransactionsPage() {
 		status: statusFilter === "all" ? undefined : statusFilter as any,
 	}, {
 		enabled: !!session,
-		onSuccess: (data) => {
-			console.log('Transactions data received:', data);
-			if (data?.transactions?.length > 0) {
-				console.log('First transaction:', data.transactions[0]);
-				console.log('First transaction createdAt:', data.transactions[0].createdAt, typeof data.transactions[0].createdAt);
-			}
-		},
-		onError: (error) => {
-			console.error('Transactions query error:', error);
-		}
 	});
 
 	// Authentication check
@@ -289,7 +279,7 @@ export default function TransactionsPage() {
 											<RiLoader4Line className="h-6 w-6 animate-spin" />
 										) : (
 											transactionsData?.transactions.filter(t =>
-												['draft', 'submitted', 'under_review'].includes(t.status)
+												t.status && ['draft', 'submitted', 'under_review'].includes(t.status)
 											).length || 0
 										)}
 									</div>
@@ -431,7 +421,7 @@ export default function TransactionsPage() {
 															</div>
 														</TableCell>
 														<TableCell>
-															{getStatusBadge(transaction.status)}
+															{getStatusBadge(transaction.status || 'draft')}
 														</TableCell>
 														<TableCell>
 															{formatDate(transaction.createdAt)}

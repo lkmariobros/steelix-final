@@ -16,7 +16,7 @@ const formatPercentage = (value: number | string | null | undefined): string => 
 	const numValue = typeof value === "string" ? parseFloat(value) : value;
 
 	// Check if the conversion resulted in a valid number
-	if (isNaN(numValue)) {
+	if (isNaN(numValue) || typeof numValue !== 'number') {
 		return "0.0%";
 	}
 
