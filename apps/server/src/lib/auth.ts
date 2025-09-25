@@ -3,7 +3,7 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { db } from "../db";
 import * as schema from "../db/schema/auth";
-// import { count, eq } from "drizzle-orm"; // Temporarily disabled with database hooks
+import { count, eq } from "drizzle-orm";
 
 console.log("🔐 Initializing Better Auth...");
 console.log("🔧 Environment variables check:");
@@ -81,63 +81,63 @@ try {
 			},
 		},
 	},
-	// ✅ TEMPORARILY DISABLED: Database hooks to debug 500 error
-	// databaseHooks: {
-	// 	user: {
-	// 		create: {
-	// 			before: async (userData) => {
-	// 				try {
-	// 					// Check if any users exist in the database
-	// 					const [existingUsersCount] = await db
-	// 						.select({ count: count() })
-	// 						.from(schema.user);
+	// ✅ BOOTSTRAP SOLUTION: Automatic admin role assignment for first user
+	databaseHooks: {
+		user: {
+			create: {
+				before: async (userData) => {
+					try {
+						// Check if any users exist in the database
+						const [existingUsersCount] = await db
+							.select({ count: count() })
+							.from(schema.user);
 
-	// 					const isFirstUser = existingUsersCount.count === 0;
+						const isFirstUser = existingUsersCount.count === 0;
 
-	// 					// Assign role based on whether this is the first user
-	// 					const role = isFirstUser ? "admin" : "agent";
+						// Assign role based on whether this is the first user
+						const role = isFirstUser ? "admin" : "agent";
 
-	// 					console.log(`🔐 User creation: ${userData.email} - Role: ${role} (First user: ${isFirstUser})`);
+						console.log(`🔐 User creation: ${userData.email} - Role: ${role} (First user: ${isFirstUser})`);
 
-	// 					return {
-	// 						data: {
-	// 							...userData,
-	// 							role: role,
-	// 						},
-	// 					};
-	// 				} catch (error) {
-	// 					console.error("❌ Error in user creation hook:", error);
-	// 					// Fallback to default role if there's an error
-	// 					return {
-	// 						data: {
-	// 							...userData,
-	// 							role: "agent",
-	// 						},
-	// 					};
-	// 				}
-	// 			},
-	// 			after: async (user) => {
-	// 				// Log successful user creation
-	// 				console.log(`✅ User created successfully: ${user.email}`);
+						return {
+							data: {
+								...userData,
+								role: role,
+							},
+						};
+					} catch (error) {
+						console.error("❌ Error in user creation hook:", error);
+						// Fallback to default role if there's an error
+						return {
+							data: {
+								...userData,
+								role: "agent",
+							},
+						};
+					}
+				},
+				after: async (user) => {
+					// Log successful user creation
+					console.log(`✅ User created successfully: ${user.email}`);
 
-	// 				// Check if this user has admin role by querying the database
-	// 				try {
-	// 					const createdUser = await db
-	// 						.select({ role: schema.user.role })
-	// 						.from(schema.user)
-	// 						.where(eq(schema.user.id, user.id))
-	// 						.limit(1);
+					// Check if this user has admin role by querying the database
+					try {
+						const createdUser = await db
+							.select({ role: schema.user.role })
+							.from(schema.user)
+							.where(eq(schema.user.id, user.id))
+							.limit(1);
 
-	// 					if (createdUser[0]?.role === "admin") {
-	// 						console.log("🎉 BOOTSTRAP COMPLETE: First admin user created! Admin dashboard access enabled.");
-	// 					}
-	// 				} catch (error) {
-	// 					console.error("❌ Error checking user role after creation:", error);
-	// 				}
-	// 			},
-	// 		},
-	// 	},
-	// },
+						if (createdUser[0]?.role === "admin") {
+							console.log("🎉 BOOTSTRAP COMPLETE: First admin user created! Admin dashboard access enabled.");
+						}
+					} catch (error) {
+						console.error("❌ Error checking user role after creation:", error);
+					}
+				},
+			},
+		},
+	},
 	// Temporarily remove expo plugin for production debugging
 	// plugins: [expo()],
 });
@@ -150,10 +150,27 @@ try {
 	console.error("❌ Error details:", error instanceof Error ? error.message : String(error));
 	console.error("❌ Stack trace:", error instanceof Error ? error.stack : 'No stack trace');
 
+	// Log more detailed error information
+	if (error instanceof Error) {
+		console.error("❌ Error name:", error.name);
+		console.error("❌ Error cause:", error.cause);
+	}
+
+	// Log environment state for debugging
+	console.error("❌ Environment debug:");
+	console.error("   - NODE_ENV:", process.env.NODE_ENV);
+	console.error("   - BETTER_AUTH_SECRET length:", process.env.BETTER_AUTH_SECRET?.length || 0);
+	console.error("   - DATABASE_URL exists:", !!process.env.DATABASE_URL);
+	console.error("   - BETTER_AUTH_URL:", process.env.BETTER_AUTH_URL);
+
 	// Create a fallback auth object to prevent server crashes
 	auth = {
 		handler: async () => {
-			return new Response(JSON.stringify({ error: "Auth not initialized" }), {
+			return new Response(JSON.stringify({
+				error: "Auth not initialized",
+				details: error instanceof Error ? error.message : String(error),
+				timestamp: new Date().toISOString()
+			}), {
 				status: 500,
 				headers: { 'Content-Type': 'application/json' }
 			});
