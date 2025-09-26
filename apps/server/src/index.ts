@@ -232,6 +232,35 @@ app.get("/debug/db-test", async (c) => {
 	}
 });
 
+// Debug endpoint to delete corrupted Elson account
+app.delete("/debug/delete-elson", async (c) => {
+	try {
+		const { sql } = await import("drizzle-orm");
+
+		console.log("🗑️ Deleting corrupted Elson account...");
+
+		// Delete in correct order to maintain referential integrity
+		await db.execute(sql`DELETE FROM "session" WHERE user_id IN (SELECT id FROM "user" WHERE email = 'elson@devots.com.my')`);
+		await db.execute(sql`DELETE FROM "account" WHERE user_id IN (SELECT id FROM "user" WHERE email = 'elson@devots.com.my')`);
+		await db.execute(sql`DELETE FROM "verification" WHERE identifier = 'elson@devots.com.my'`);
+		await db.execute(sql`DELETE FROM "user" WHERE email = 'elson@devots.com.my'`);
+
+		console.log("✅ Deleted corrupted Elson account");
+
+		return c.json({
+			status: "success",
+			message: "Corrupted Elson account deleted. Now use sign-up to recreate it properly."
+		});
+
+	} catch (error) {
+		console.error("❌ Error deleting Elson account:", error);
+		return c.json({
+			status: "error",
+			error: error instanceof Error ? error.message : String(error)
+		}, 500);
+	}
+});
+
 // Debug endpoint to fix Elson's account
 app.post("/debug/fix-elson", async (c) => {
 	try {
