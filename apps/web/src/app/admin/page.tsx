@@ -21,19 +21,20 @@ import { authClient } from "@/lib/auth-client";
 import { trpc } from "@/utils/trpc";
 import { RiDashboardLine, RiShieldUserLine } from "@remixicon/react";
 import { useRouter } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
+
 
 export default function AdminDashboardPage() {
 	const router = useRouter();
 	const { data: session, isPending } = authClient.useSession();
 
-	// ✅ SECURITY FIX: Re-enabled proper role checking
-	const { data: roleData, isLoading: isRoleLoading } = useQuery(
-		trpc.admin.checkAdminRole.queryOptions(undefined, {
+	// ✅ CORRECT tRPC query pattern with proper role checking
+	const { data: roleData, isLoading: isRoleLoading } = trpc.admin.checkAdminRole.useQuery(
+		undefined,
+		{
 			enabled: !!session, // Only check role if user is authenticated
 			retry: false,
-		})
-	);
+		}
+	) as { data: { hasAdminAccess: boolean; role: string } | undefined; isLoading: boolean };
 
 	// Show loading while checking authentication and role
 	if (isPending || isRoleLoading) {
@@ -68,7 +69,7 @@ export default function AdminDashboardPage() {
 					</p>
 					<button
 						type="button"
-						onClick={() => router.push('/agent-dashboard')}
+						onClick={() => router.push('/dashboard')}
 						className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
 					>
 						Go to Agent Dashboard

@@ -12,10 +12,13 @@
 		},
 		"outDir": "./dist",
 		"types": ["bun"],
-		"composite": true,
+		"declaration": false,
+		"declarationMap": false,
 		"jsx": "react-jsx",
 		"jsxImportSource": "hono/jsx"
 	},
+	"include": ["src/**/*"],
+	"exclude": ["scripts/**/*", "node_modules", "dist"],
 	"tsc-alias": {
 		"resolveFullPaths": true
 	}

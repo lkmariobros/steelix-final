@@ -4,10 +4,23 @@ import { Badge } from "@/components/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { trpc } from "@/utils/trpc";
-import { useQuery } from "@tanstack/react-query";
+
 // Simple utility functions to avoid import issues
-const formatPercentage = (value: number): string => {
-	return `${value.toFixed(1)}%`;
+const formatPercentage = (value: number | string | null | undefined): string => {
+	// Handle null, undefined, or invalid values
+	if (value === null || value === undefined) {
+		return "0.0%";
+	}
+
+	// Convert to number if it's a string
+	const numValue = typeof value === "string" ? parseFloat(value) : value;
+
+	// Check if the conversion resulted in a valid number
+	if (Number.isNaN(numValue) || typeof numValue !== 'number') {
+		return "0.0%";
+	}
+
+	return `${Number.isNaN(numValue) ? 0 : numValue.toFixed(1)}%`;
 };
 
 const statusColors = {
@@ -42,12 +55,12 @@ const getStatusLabel = (status: string | null): string => {
 };
 
 export function TransactionStatus() {
-	// Real tRPC query - replaces mock data
+	// ✅ CORRECT tRPC query pattern
 	const {
 		data: statusData,
 		isLoading,
 		error,
-	} = useQuery(trpc.dashboard.getTransactionStatus.queryOptions());
+	} = trpc.dashboard.getTransactionStatus.useQuery();
 
 	if (isLoading) {
 		return (

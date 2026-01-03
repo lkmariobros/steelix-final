@@ -25,10 +25,11 @@ import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 
-import { type CoBrokingData, coBrokingSchema } from "../transaction-schema";
+import { type CoBrokingData, createCoBrokingSchema } from "../transaction-schema";
 
 interface StepCoBrokingProps {
 	data?: CoBrokingData;
+	isDualPartyDeal?: boolean; // Pass dual agency info from client step
 	onUpdate: (data: CoBrokingData) => void;
 	onNext: () => void;
 	onPrevious: () => void;
@@ -36,14 +37,16 @@ interface StepCoBrokingProps {
 
 export function StepCoBroking({
 	data,
+	isDualPartyDeal,
 	onUpdate,
 	onNext,
 	onPrevious,
 }: StepCoBrokingProps) {
 	const form = useForm<CoBrokingData>({
-		resolver: zodResolver(coBrokingSchema),
+		resolver: zodResolver(createCoBrokingSchema(isDualPartyDeal)),
+		mode: "onChange", // Validate on change to provide immediate feedback
 		defaultValues: {
-			isCoBroking: data?.isCoBroking || false,
+			isCoBroking: isDualPartyDeal ? false : (data?.isCoBroking || false), // Force false for dual agency
 			coBrokingData: data?.coBrokingData || {
 				agentName: "",
 				agencyName: "",
@@ -54,6 +57,43 @@ export function StepCoBroking({
 	});
 
 	const handleSubmit = (formData: CoBrokingData) => {
+		// If this is a dual agency deal, co-broking doesn't make sense
+		if (isDualPartyDeal && formData.isCoBroking) {
+			form.setError("isCoBroking", {
+				type: "logical",
+				message: "Co-broking is not applicable when you represent both parties (dual agency)"
+			});
+			return;
+		}
+
+		// Validate co-broking data if co-broking is enabled
+		if (formData.isCoBroking && !isDualPartyDeal) {
+			const { agentName, agencyName, contactInfo } = formData.coBrokingData || {};
+
+			if (!agentName?.trim() || !agencyName?.trim() || !contactInfo?.trim()) {
+				// Set form errors for missing fields
+				if (!agentName?.trim()) {
+					form.setError("coBrokingData.agentName", {
+						type: "required",
+						message: "Agent name is required for co-broking transactions"
+					});
+				}
+				if (!agencyName?.trim()) {
+					form.setError("coBrokingData.agencyName", {
+						type: "required",
+						message: "Agency name is required for co-broking transactions"
+					});
+				}
+				if (!contactInfo?.trim()) {
+					form.setError("coBrokingData.contactInfo", {
+						type: "required",
+						message: "Contact info is required for co-broking transactions"
+					});
+				}
+				return; // Don't proceed to next step
+			}
+		}
+
 		onUpdate(formData);
 		onNext();
 	};
@@ -66,6 +106,9 @@ export function StepCoBroking({
 
 	const watchedValues = form.watch();
 	const isCoBroking = watchedValues.isCoBroking;
+
+	// For dual agency, the form should be considered valid even if co-broking fields are empty
+	const isFormValidForProgression = isDualPartyDeal || form.formState.isValid;
 
 	return (
 		<div className="space-y-6">
@@ -83,27 +126,56 @@ export function StepCoBroking({
 							onSubmit={form.handleSubmit(handleSubmit)}
 							className="space-y-6"
 						>
+							{/* Dual Agency Warning */}
+							{isDualPartyDeal && (
+								<Card className="border-blue-200 bg-blue-50">
+									<CardContent className="pt-6">
+										<div className="flex items-start gap-3">
+											<div className="rounded-full bg-blue-100 p-1">
+												<Users className="h-4 w-4 text-blue-600" />
+											</div>
+											<div className="space-y-1">
+												<p className="text-sm font-medium text-blue-800">
+													Dual Agency Transaction
+												</p>
+												<p className="text-sm text-blue-700">
+													You indicated that you represent both parties in this transaction.
+													Co-broking is not applicable since you will receive the full commission.
+												</p>
+											</div>
+										</div>
+									</CardContent>
+								</Card>
+							)}
+
 							{/* Co-Broking Toggle */}
 							<FormField
 								control={form.control}
 								name="isCoBroking"
 								render={({ field }) => (
-									<FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+									<FormItem className={`flex flex-row items-center justify-between rounded-lg border p-4 ${
+										isDualPartyDeal ? 'opacity-50 pointer-events-none' : ''
+									}`}>
 										<div className="space-y-0.5">
 											<FormLabel className="text-base">
 												Co-Broking Transaction
 											</FormLabel>
 											<FormDescription>
-												Is this transaction being co-brokered with another
-												agent?
+												{isDualPartyDeal
+													? "Not applicable for dual agency transactions"
+													: "Is this transaction being co-brokered with another agent?"
+												}
 											</FormDescription>
 										</div>
 										<FormControl>
 											<Switch
-												checked={field.value}
+												checked={isDualPartyDeal ? false : field.value}
+												disabled={isDualPartyDeal}
 												onCheckedChange={(checked) => {
-													field.onChange(checked);
-													handleFormChange();
+													if (!isDualPartyDeal) {
+														field.onChange(checked);
+														handleFormChange();
+													}
 												}}
 											/>
 										</FormControl>
@@ -111,8 +183,8 @@ export function StepCoBroking({
 								)}
 							/>
 
-							{/* Co-Broking Details (only show if enabled) */}
-							{isCoBroking && (
+							{/* Co-Broking Details (only show if enabled and not dual agency) */}
+							{isCoBroking && !isDualPartyDeal && (
 								<>
 									<Separator />
 
@@ -258,9 +330,9 @@ export function StepCoBroking({
 															Commission Split:
 														</span>
 														<span className="font-medium">
-															{watchedValues.coBrokingData.commissionSplit}% /{" "}
+															{watchedValues.coBrokingData.commissionSplit || 0}% /{" "}
 															{100 -
-																watchedValues.coBrokingData.commissionSplit}
+																(watchedValues.coBrokingData.commissionSplit || 0)}
 															%
 														</span>
 													</div>
@@ -286,10 +358,21 @@ export function StepCoBroking({
 									<CardContent className="pt-6">
 										<div className="text-center text-muted-foreground">
 											<Users className="mx-auto mb-2 h-12 w-12 opacity-50" />
-											<p>This transaction does not involve co-broking.</p>
-											<p className="text-sm">
-												You will receive the full commission.
-											</p>
+											{isDualPartyDeal ? (
+												<>
+													<p>This is a dual agency transaction.</p>
+													<p className="text-sm">
+														You represent both parties and will receive the full commission.
+													</p>
+												</>
+											) : (
+												<>
+													<p>This transaction does not involve co-broking.</p>
+													<p className="text-sm">
+														You will receive the full commission.
+													</p>
+												</>
+											)}
 										</div>
 									</CardContent>
 								</Card>
@@ -306,10 +389,30 @@ export function StepCoBroking({
 									<ArrowLeft className="h-4 w-4" />
 									Back to Client
 								</Button>
-								<Button type="submit" className="flex items-center gap-2">
-									Continue to Commission
-									<ArrowRight className="h-4 w-4" />
-								</Button>
+								{isDualPartyDeal ? (
+									// For dual agency, bypass form validation and proceed directly
+									<Button
+										type="button"
+										onClick={() => {
+											const currentValues = form.getValues();
+											handleSubmit(currentValues);
+										}}
+										className="flex items-center gap-2"
+									>
+										Continue to Commission
+										<ArrowRight className="h-4 w-4" />
+									</Button>
+								) : (
+									// For regular transactions, use form validation
+									<Button
+										type="submit"
+										disabled={!isFormValidForProgression}
+										className="flex items-center gap-2"
+									>
+										Continue to Commission
+										<ArrowRight className="h-4 w-4" />
+									</Button>
+								)}
 							</div>
 						</form>
 					</Form>

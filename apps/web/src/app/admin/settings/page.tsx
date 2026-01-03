@@ -37,13 +37,15 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import UserDropdown from "@/components/user-dropdown";
 import { authClient } from "@/lib/auth-client";
+import { trpc } from "@/utils/trpc";
+import { LoadingScreen } from "@/components/ui/loading-spinner";
+import { AccessDenied } from "@/components/ui/access-denied";
 import {
 	RiDashboardLine,
 	RiGlobalLine,
 	RiNotificationLine,
 	RiSecurePaymentLine,
 	RiSettings3Line,
-	RiShieldUserLine,
 	RiTeamLine,
 	RiUserSettingsLine,
 } from "@remixicon/react";
@@ -53,6 +55,15 @@ import { useState } from "react";
 export default function AdminSettingsPage() {
 	const router = useRouter();
 	const { data: session, isPending } = authClient.useSession();
+
+	// Admin role checking
+	const { data: roleData, isLoading: isRoleLoading } = trpc.admin.checkAdminRole.useQuery(
+		undefined,
+		{
+			enabled: !!session,
+			retry: false
+		}
+	);
 
 	// Settings state
 	const [systemSettings, setSystemSettings] = useState({
@@ -79,16 +90,9 @@ export default function AdminSettingsPage() {
 		ipWhitelist: "",
 	});
 
-	// Show loading while checking authentication
-	if (isPending) {
-		return (
-			<div className="flex h-screen items-center justify-center">
-				<div className="text-center">
-					<div className="mx-auto h-8 w-8 animate-spin rounded-full border-primary border-b-2" />
-					<p className="mt-2 text-muted-foreground text-sm">Loading...</p>
-				</div>
-			</div>
-		);
+	// Show loading while checking authentication and role
+	if (isPending || isRoleLoading) {
+		return <LoadingScreen text="Checking permissions..." />;
 	}
 
 	// Redirect if not authenticated
@@ -97,26 +101,18 @@ export default function AdminSettingsPage() {
 		return null;
 	}
 
-	// TEMPORARILY ALLOW ACCESS FOR TESTING - TODO: Re-enable role check
-	// if (!roleData || !roleData.hasAdminAccess) {
-	// 	return (
-	// 		<div className="flex h-screen items-center justify-center">
-	// 			<div className="text-center">
-	// 				<RiShieldUserLine size={48} className="mx-auto text-muted-foreground mb-4" />
-	// 				<h1 className="text-2xl font-semibold mb-2">Access Denied</h1>
-	// 				<p className="text-muted-foreground mb-4">
-	// 					You don&apos;t have permission to access admin settings.
-	// 				</p>
-	// 				<button
-	// 					onClick={() => router.push('/dashboard')}
-	// 					className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
-	// 				>
-	// 					Go to Agent Dashboard
-	// 				</button>
-	// 			</div>
-	// 		</div>
-	// 	);
-	// }
+	// Access denied if not admin
+	if (!roleData || !roleData.hasAdminAccess) {
+		return (
+			<AccessDenied
+				title="Access Denied"
+				message="You don't have permission to access admin settings."
+				userRole={roleData?.role || 'Unknown'}
+				redirectPath="/dashboard"
+				redirectLabel="Go to Agent Dashboard"
+			/>
+		);
+	}
 
 	return (
 		<SidebarProvider>

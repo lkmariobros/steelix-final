@@ -9,11 +9,12 @@ import {
 	transactions,
 } from "../db/schema/transactions";
 import { protectedProcedure, router } from "../lib/trpc";
+import { calculateEnhancedCommission, logCommissionAudit } from "../lib/agent-tier-utils";
 
-// Input schemas for specific operations
-const createTransactionInput = z.object({
+// Base transaction input schema (without validation)
+const baseTransactionInput = z.object({
 	marketType: z.enum(["primary", "secondary"]),
-	transactionType: z.enum(["sale", "lease", "rental"]),
+	transactionType: z.enum(["sale", "lease"]),
 	transactionDate: z.coerce.date(),
 	propertyData: z
 		.object({
@@ -65,9 +66,72 @@ const createTransactionInput = z.object({
 	notes: z.string().optional(),
 });
 
-const updateTransactionInput = createTransactionInput.partial().extend({
+// Input schemas with Primary Market → Sale validation and Co-broking validation
+const createTransactionInput = baseTransactionInput.refine(
+	(data: any) => {
+		// Primary market transactions must be sales
+		if (data.marketType === "primary") {
+			return data.transactionType === "sale";
+		}
+		return true;
+	},
+	{
+		message: "Primary market transactions must be sales",
+		path: ["transactionType"],
+	}
+).refine(
+	(data: any) => {
+		// If co-broking is enabled, validate required fields
+		if (data.isCoBroking && data.coBrokingData) {
+			const { agentName, agencyName, contactInfo } = data.coBrokingData;
+			return (
+				agentName && agentName.trim().length > 0 &&
+				agencyName && agencyName.trim().length > 0 &&
+				contactInfo && contactInfo.trim().length > 0
+			);
+		}
+		// If co-broking is disabled, it's valid
+		return true;
+	},
+	{
+		message: "Co-broking fields are required when co-broking is enabled",
+		path: ["coBrokingData"],
+	}
+);
+
+const updateTransactionInput = baseTransactionInput.partial().extend({
 	id: z.string().uuid(),
-});
+}).refine(
+	(data: any) => {
+		// Primary market transactions must be sales (only validate if both fields are present)
+		if (data.marketType === "primary" && data.transactionType) {
+			return data.transactionType === "sale";
+		}
+		return true;
+	},
+	{
+		message: "Primary market transactions must be sales",
+		path: ["transactionType"],
+	}
+).refine(
+	(data: any) => {
+		// If co-broking is enabled, validate required fields
+		if (data.isCoBroking && data.coBrokingData) {
+			const { agentName, agencyName, contactInfo } = data.coBrokingData;
+			return (
+				agentName && agentName.trim().length > 0 &&
+				agencyName && agencyName.trim().length > 0 &&
+				contactInfo && contactInfo.trim().length > 0
+			);
+		}
+		// If co-broking is disabled, it's valid
+		return true;
+	},
+	{
+		message: "Co-broking fields are required when co-broking is enabled",
+		path: ["coBrokingData"],
+	}
+);
 
 const transactionIdInput = z.object({
 	id: z.string().uuid(),
@@ -99,6 +163,14 @@ const listTransactionsInput = z.object({
 			"completed",
 		])
 		.optional(),
+});
+
+// Enhanced commission calculation input
+const enhancedCommissionInput = z.object({
+	propertyPrice: z.number().positive("Property price must be positive"),
+	commissionType: z.enum(["percentage", "fixed"]),
+	commissionValue: z.number().positive("Commission value must be positive"),
+	representationType: z.enum(["single_side", "dual_agency"]),
 });
 
 export const transactionsRouter = router({
@@ -311,5 +383,111 @@ export const transactionsRouter = router({
 			await db.delete(transactions).where(eq(transactions.id, input.id));
 
 			return { success: true };
+		}),
+
+	// Calculate enhanced commission with agent tier
+	calculateEnhancedCommission: protectedProcedure
+		.input(enhancedCommissionInput)
+		.query(async ({ ctx, input }) => {
+			// Get user's tier information from enhanced session
+			const userSession = ctx.session.user as any;
+			const agentTier = (userSession.agentTier || 'advisor') as any;
+			const companyCommissionSplit = userSession.companyCommissionSplit || 60;
+
+			// Calculate commission rate
+			let commissionRate: number;
+			if (input.commissionType === 'percentage') {
+				commissionRate = input.commissionValue;
+			} else {
+				// Convert fixed amount to percentage
+				commissionRate = (input.commissionValue / input.propertyPrice) * 100;
+			}
+
+			const breakdown = calculateEnhancedCommission(
+				input.propertyPrice,
+				commissionRate,
+				input.representationType,
+				agentTier,
+				companyCommissionSplit
+			);
+
+			return {
+				...breakdown,
+				commissionType: input.commissionType,
+				commissionValue: input.commissionValue,
+				agentInfo: {
+					tier: agentTier,
+					commissionSplit: companyCommissionSplit,
+				},
+			};
+		}),
+
+	// Create transaction with enhanced commission calculation
+	createWithEnhancedCommission: protectedProcedure
+		.input(baseTransactionInput.extend({
+			representationType: z.enum(["single_side", "dual_agency"]).default("single_side"),
+		}).refine(
+			(data: any) => {
+				// Primary market transactions must be sales
+				if (data.marketType === "primary") {
+					return data.transactionType === "sale";
+				}
+				return true;
+			},
+			{
+				message: "Primary market transactions must be sales",
+				path: ["transactionType"],
+			}
+		))
+		.mutation(async ({ ctx, input }) => {
+			// Get user's tier information
+			const userSession = ctx.session.user as any;
+			const agentTier = (userSession.agentTier || 'advisor') as any;
+			const companyCommissionSplit = userSession.companyCommissionSplit || 60;
+
+			// Calculate enhanced commission
+			let commissionRate: number;
+			if (input.commissionType === 'percentage') {
+				commissionRate = input.commissionValue;
+			} else {
+				commissionRate = (input.commissionValue / (input.propertyData?.price || 1)) * 100;
+			}
+
+			const commissionBreakdown = calculateEnhancedCommission(
+				input.propertyData?.price || 0,
+				commissionRate,
+				input.representationType,
+				agentTier,
+				companyCommissionSplit
+			);
+
+			const newTransaction = {
+				...input,
+				agentId: ctx.session.user.id,
+				status: "draft" as const,
+				// Convert numbers to strings for decimal fields
+				commissionValue: input.commissionValue.toString(),
+				commissionAmount: commissionBreakdown.totalCommission.toString(),
+			};
+
+			const [transaction] = await db
+				.insert(transactions)
+				.values(newTransaction)
+				.returning();
+
+			// Log commission calculation for audit
+			await logCommissionAudit(
+				transaction.id,
+				ctx.session.user.id,
+				null, // No old values for new transaction
+				commissionBreakdown,
+				ctx.session.user.id,
+				"Transaction created with enhanced commission calculation"
+			);
+
+			return {
+				transaction,
+				commissionBreakdown,
+			};
 		}),
 });

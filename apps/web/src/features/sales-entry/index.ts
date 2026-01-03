@@ -1,5 +1,6 @@
 // Main components
 export { TransactionForm } from "./transaction-form";
+export { TransactionFormModal } from "./transaction-form-modal";
 
 // Step components
 export { StepInitiation } from "./steps/step-1-initiation";

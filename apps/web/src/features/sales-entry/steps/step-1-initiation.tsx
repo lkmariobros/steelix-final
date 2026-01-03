@@ -3,6 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { format } from "date-fns";
 import { ArrowRight, CalendarIcon } from "lucide-react";
+import { useCallback, useEffect } from "react";
 import { useForm } from "react-hook-form";
 
 import { Button } from "@/components/ui/button";
@@ -65,20 +66,41 @@ export function StepInitiation({
 		},
 	});
 
-	const handleSubmit = (formData: InitiationData) => {
-		onUpdate(formData);
-		onNext();
-	};
-
-	const watchedValues = form.watch();
-
-	// Auto-save on form changes
-	const handleFormChange = () => {
+	// Auto-save on form changes (moved before useEffect to fix ReferenceError)
+	const handleFormChange = useCallback(() => {
 		const values = form.getValues();
 		if (form.formState.isValid) {
 			onUpdate(values);
 		}
-	};
+	}, [form, onUpdate]);
+
+	const handleSubmit = useCallback((formData: InitiationData) => {
+		onUpdate(formData);
+		onNext();
+	}, [onUpdate, onNext]);
+
+	// Auto-selection: Primary Market → Sale
+	useEffect(() => {
+		const subscription = form.watch((value, { name }) => {
+			if (name === "marketType" && value.marketType === "primary") {
+				// Auto-select "sale" when primary market is chosen
+				form.setValue("transactionType", "sale", {
+					shouldValidate: true,
+					shouldDirty: true,
+					shouldTouch: true,
+				});
+
+				// Trigger form change to update parent state
+				handleFormChange();
+			}
+		});
+
+		return () => subscription.unsubscribe();
+	}, [form, handleFormChange]);
+
+	// Watch form values for summary display and auto-selection logic
+	const watchedValues = form.watch();
+	const isAutoSelected = watchedValues.marketType === "primary" && watchedValues.transactionType === "sale";
 
 	return (
 		<div className="space-y-6">
@@ -138,16 +160,27 @@ export function StepInitiation({
 									name="transactionType"
 									render={({ field }) => (
 										<FormItem>
-											<FormLabel>Transaction Type</FormLabel>
+											<FormLabel>
+												Transaction Type
+												{isAutoSelected && (
+													<span className="ml-2 text-xs text-blue-600 font-medium">
+														(Auto-selected for Primary Market)
+													</span>
+												)}
+											</FormLabel>
 											<Select
 												onValueChange={(value) => {
 													field.onChange(value);
 													handleFormChange();
 												}}
 												defaultValue={field.value}
+												disabled={watchedValues.marketType === "primary"}
 											>
 												<FormControl>
-													<SelectTrigger>
+													<SelectTrigger className={cn(
+														watchedValues.marketType === "primary" &&
+														"bg-blue-50 border-blue-200"
+													)}>
 														<SelectValue placeholder="Select transaction type" />
 													</SelectTrigger>
 												</FormControl>
@@ -160,7 +193,10 @@ export function StepInitiation({
 												</SelectContent>
 											</Select>
 											<FormDescription>
-												Specify the type of transaction you&apos;re processing
+												{watchedValues.marketType === "primary"
+													? "Primary market transactions must be sales"
+													: "Specify the type of transaction you're processing"
+												}
 											</FormDescription>
 											<FormMessage />
 										</FormItem>

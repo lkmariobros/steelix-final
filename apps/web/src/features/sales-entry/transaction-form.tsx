@@ -12,9 +12,14 @@ import {
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { CheckCircle, Circle, Save } from "lucide-react";
-import { useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import { CheckCircle, Circle, Loader2, Save } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
+import { useClientSide } from "@/hooks/use-client-side";
+import { trpc } from "@/utils/trpc";
+import { useQueryClient } from "@tanstack/react-query";
+import { invalidateTransactionQueries } from "@/lib/query-invalidation";
 
 import { type FormStep, stepConfig } from "./transaction-schema";
 import {
@@ -22,7 +27,6 @@ import {
 	getCompletedSteps,
 	useTransactionFormState,
 } from "./utils/form-state";
-// import { trpc } from "@/utils/trpc"; // Temporarily disabled for build
 
 // Import step components (we'll create these next)
 import { StepInitiation } from "./steps/step-1-initiation";
@@ -35,15 +39,21 @@ import { StepReview } from "./steps/step-7-review";
 
 interface TransactionFormProps {
 	transactionId?: string;
+	mode?: "create" | "edit" | "resume";
 	onSubmit?: () => void;
 	onCancel?: () => void;
+	onUnsavedChanges?: (hasChanges: boolean) => void;
 }
 
 export function TransactionForm({
 	transactionId,
+	mode = "create",
 	onSubmit,
 	onCancel,
+	onUnsavedChanges,
 }: TransactionFormProps) {
+	const queryClient = useQueryClient();
+
 	const {
 		currentStep,
 		formData,
@@ -56,94 +66,152 @@ export function TransactionForm({
 		resetForm,
 		clearAutoSave,
 		setIsLoading,
-	} = useTransactionFormState(transactionId);
+	} = useTransactionFormState(transactionId, mode);
 
 	const [isSaving, setIsSaving] = useState(false);
+	const isClient = useClientSide();
 
-	// tRPC mutations - temporarily mocked for build compatibility
-	// const createTransaction = trpc.transactions.create.useMutation();
-	// const updateTransaction = trpc.transactions.update.useMutation();
-	// const submitTransaction = trpc.transactions.submit.useMutation();
+	// ✅ REAL tRPC mutations for comprehensive transaction data flow
+	const createTransaction = trpc.transactions.create.useMutation({
+		onSuccess: (data) => {
+			console.log("Transaction created successfully:", data.id);
+			invalidateTransactionQueries(queryClient);
+		},
+		onError: (error) => {
+			console.error("Create transaction error:", error);
+			toast.error("Failed to create transaction");
+		},
+	});
 
-	// Mock mutations for build compatibility
-	const createTransaction = {
-		mutateAsync: async (data: Record<string, unknown>) => ({
-			id: "mock-id",
-			...data,
-		}),
-	};
-	const updateTransaction = {
-		mutateAsync: async (data: Record<string, unknown>) => ({ ...data }),
-	};
-	const submitTransaction = {
-		mutateAsync: async (data: Record<string, unknown>) => ({ ...data }),
-	};
+	const updateTransaction = trpc.transactions.update.useMutation({
+		onSuccess: (data) => {
+			console.log("Transaction updated successfully:", data.id);
+			invalidateTransactionQueries(queryClient);
+		},
+		onError: (error) => {
+			console.error("Update transaction error:", error);
+			toast.error("Failed to update transaction");
+		},
+	});
+
+	const submitTransaction = trpc.transactions.submit.useMutation({
+		onSuccess: (data) => {
+			console.log("Transaction submitted successfully:", data.id);
+			// Comprehensive invalidation for submission (affects both dashboards)
+			invalidateTransactionQueries(queryClient);
+		},
+		onError: (error) => {
+			console.error("Submit transaction error:", error);
+			toast.error("Failed to submit transaction");
+		},
+	});
 
 	const completedSteps = getCompletedSteps(formData);
 	const progress = calculateProgress(currentStep);
 
+	// Notify parent component about unsaved changes
+	useEffect(() => {
+		onUnsavedChanges?.(hasUnsavedChanges);
+	}, [hasUnsavedChanges, onUnsavedChanges]);
+
 	// Handle step data updates
-	const handleStepUpdate = (step: FormStep, data: Record<string, unknown>) => {
+	const handleStepUpdate = useCallback((step: FormStep, data: Record<string, unknown>) => {
 		updateStepData(step, data);
-	};
+	}, [updateStepData]);
 
 	// Handle save draft
-	const handleSaveDraft = async () => {
+	const handleSaveDraft = useCallback(async () => {
 		setIsSaving(true);
 		try {
+			// For drafts, we can be more lenient with co-broking validation
+			const draftData = { ...formData };
+			if (!draftData.isCoBroking) {
+				draftData.coBrokingData = undefined;
+			}
+
 			if (transactionId) {
 				await updateTransaction.mutateAsync({
 					id: transactionId,
-					...formData,
+					...draftData,
 				});
+				toast.success("Draft updated successfully");
 			} else {
-				await createTransaction.mutateAsync(formData);
-				// In a real app, you might want to update the URL with the new transaction ID
+				const newTransaction = await createTransaction.mutateAsync(draftData);
 				toast.success("Draft saved successfully");
+				// In a real app, you might want to update the URL with the new transaction ID
+				console.log("New transaction created:", newTransaction.id);
 			}
 			clearAutoSave();
 		} catch (error) {
-			toast.error("Failed to save draft");
 			console.error("Save draft error:", error);
+			// Error handling is now done in mutation onError callbacks
 		} finally {
 			setIsSaving(false);
 		}
-	};
+	}, [transactionId, formData, updateTransaction, createTransaction, clearAutoSave]);
+
+	// Clean form data for submission
+	const prepareFormDataForSubmission = useCallback((data: typeof formData) => {
+		const cleanedData = { ...data };
+
+		// Handle co-broking data properly
+		if (!cleanedData.isCoBroking) {
+			// If co-broking is disabled, remove coBrokingData entirely
+			cleanedData.coBrokingData = undefined;
+		} else if (cleanedData.coBrokingData) {
+			// If co-broking is enabled, validate required fields
+			const { agentName, agencyName, contactInfo } = cleanedData.coBrokingData;
+			if (!agentName?.trim() || !agencyName?.trim() || !contactInfo?.trim()) {
+				throw new Error("Please complete all co-broking fields: Agent Name, Agency Name, and Contact Info are required.");
+			}
+		}
+
+		return cleanedData;
+	}, []);
 
 	// Handle form submission
-	const handleSubmit = async () => {
+	const handleSubmit = useCallback(async () => {
 		setIsLoading(true);
 		try {
 			let finalTransactionId = transactionId;
+
+			// Validate form data before submission
+			if (!formData.marketType || !formData.transactionType || !formData.transactionDate) {
+				toast.error("Please complete all required fields");
+				return;
+			}
+
+			// Prepare clean form data
+			const cleanedFormData = prepareFormDataForSubmission(formData);
 
 			// Create or update the transaction first
 			if (transactionId) {
 				await updateTransaction.mutateAsync({
 					id: transactionId,
-					...formData,
+					...cleanedFormData,
 				});
 			} else {
-				const newTransaction = await createTransaction.mutateAsync(formData);
+				const newTransaction = await createTransaction.mutateAsync(cleanedFormData);
 				finalTransactionId = newTransaction.id;
 			}
 
 			// Submit for review
 			if (finalTransactionId) {
 				await submitTransaction.mutateAsync({ id: finalTransactionId });
-				toast.success("Transaction submitted for review");
+				toast.success("Transaction submitted for review successfully!");
 				clearAutoSave();
 				onSubmit?.();
 			}
 		} catch (error) {
-			toast.error("Failed to submit transaction");
 			console.error("Submit error:", error);
+			// Error handling is now done in mutation onError callbacks
 		} finally {
 			setIsLoading(false);
 		}
-	};
+	}, [transactionId, formData, updateTransaction, createTransaction, submitTransaction, clearAutoSave, onSubmit, setIsLoading, prepareFormDataForSubmission]);
 
 	// Handle cancel
-	const handleCancel = () => {
+	const handleCancel = useCallback(() => {
 		if (hasUnsavedChanges) {
 			if (
 				confirm("You have unsaved changes. Are you sure you want to cancel?")
@@ -154,7 +222,7 @@ export function TransactionForm({
 		} else {
 			onCancel?.();
 		}
-	};
+	}, [hasUnsavedChanges, resetForm, onCancel]);
 
 	// Render step content
 	const renderStepContent = () => {
@@ -180,6 +248,8 @@ export function TransactionForm({
 				return (
 					<StepClient
 						data={formData.clientData}
+						marketType={formData.marketType}
+						transactionType={formData.transactionType}
 						onUpdate={(data) => handleStepUpdate(3, data)}
 						onNext={goToNextStep}
 						onPrevious={goToPreviousStep}
@@ -192,6 +262,7 @@ export function TransactionForm({
 							isCoBroking: formData.isCoBroking ?? false,
 							coBrokingData: formData.coBrokingData,
 						}}
+						isDualPartyDeal={formData.clientData?.isDualPartyDeal ?? false}
 						onUpdate={(data) => handleStepUpdate(4, data)}
 						onNext={goToNextStep}
 						onPrevious={goToPreviousStep}
@@ -204,6 +275,10 @@ export function TransactionForm({
 							commissionType: formData.commissionType ?? "percentage",
 							commissionValue: formData.commissionValue ?? 0,
 							commissionAmount: formData.commissionAmount ?? 0,
+							representationType: formData.representationType ?? "single_side",
+							agentTier: formData.agentTier,
+							companyCommissionSplit: formData.companyCommissionSplit,
+							breakdown: formData.breakdown,
 						}}
 						propertyPrice={formData.propertyData?.price || 0}
 						onUpdate={(data) => handleStepUpdate(5, data)}
@@ -257,7 +332,11 @@ export function TransactionForm({
 							disabled={isSaving}
 							className="flex items-center gap-2"
 						>
-							<Save className="h-4 w-4" />
+							{isSaving ? (
+								<Loader2 className="h-4 w-4 animate-spin" />
+							) : (
+								<Save className="h-4 w-4" />
+							)}
 							{isSaving ? "Saving..." : "Save Draft"}
 						</Button>
 						{onCancel && (
@@ -316,7 +395,24 @@ export function TransactionForm({
 						<Separator className="my-6" />
 
 						<TabsContent value={currentStep.toString()} className="mt-6">
-							{renderStepContent()}
+							{isClient ? (
+								<AnimatePresence mode="wait">
+									<motion.div
+										key={currentStep}
+										initial={{ opacity: 0, x: 20 }}
+										animate={{ opacity: 1, x: 0 }}
+										exit={{ opacity: 0, x: -20 }}
+										transition={{
+											duration: 0.3,
+											ease: [0.16, 1, 0.3, 1]
+										}}
+									>
+										{renderStepContent()}
+									</motion.div>
+								</AnimatePresence>
+							) : (
+								<div>{renderStepContent()}</div>
+							)}
 						</TabsContent>
 					</Tabs>
 				</CardContent>

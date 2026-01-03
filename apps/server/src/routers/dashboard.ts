@@ -127,16 +127,22 @@ export const dashboardRouter = router({
 	getTransactionStatus: protectedProcedure.query(async ({ ctx }) => {
 		const userId = ctx.session.user.id;
 
-		const statusData = await db
+		const rawStatusData = await db
 			.select({
 				status: transactions.status,
 				count: sql<number>`COUNT(*)`,
-				percentage: sql<number>`ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER(), 2)`,
+				percentage: sql<string>`ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER(), 2)`,
 			})
 			.from(transactions)
 			.where(eq(transactions.agentId, userId))
 			.groupBy(transactions.status)
 			.orderBy(sql`COUNT(*) DESC`);
+
+		// Convert percentage strings to numbers for type safety
+		const statusData = rawStatusData.map(item => ({
+			...item,
+			percentage: Number(item.percentage) || 0,
+		}));
 
 		return statusData;
 	}),

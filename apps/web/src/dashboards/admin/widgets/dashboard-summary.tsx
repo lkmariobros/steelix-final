@@ -10,12 +10,13 @@ import {
 	RiMoneyDollarCircleLine,
 	RiTimeLine,
 } from "@remixicon/react";
-import { useQuery } from "@tanstack/react-query";
+
 import React from "react";
 
 // Import types and utilities
 import type { DateRangeFilter } from "../admin-schema";
 import { formatCurrency } from "../admin-schema";
+import { safeToFixed } from "@/utils/number-formatting";
 
 interface DashboardSummaryProps {
 	dateRange?: DateRangeFilter;
@@ -28,18 +29,16 @@ export function DashboardSummary({
 	refreshKey,
 	className,
 }: DashboardSummaryProps) {
-	// Real tRPC query - replaces mock data
+	// ✅ CORRECT tRPC query pattern
 	const {
 		data: rawSummaryData,
 		isLoading,
 		error,
 		refetch,
-	} = useQuery(
-		trpc.admin.getDashboardSummary.queryOptions(dateRange || {}, {
-			refetchOnWindowFocus: false,
-			staleTime: 30000, // 30 seconds
-		}),
-	);
+	} = trpc.admin.getDashboardSummary.useQuery(dateRange || {}, {
+		refetchOnWindowFocus: false,
+		staleTime: 30000, // 30 seconds
+	});
 
 	// Type-safe data processing - handle string commission values from database
 	const summaryData = React.useMemo(() => {
@@ -121,16 +120,14 @@ export function DashboardSummary({
 		);
 	}
 
-	// Calculate derived metrics
-	const approvalRate =
-		summaryData.totalTransactions > 0
-			? (summaryData.approvedTransactions / summaryData.totalTransactions) * 100
-			: 0;
+	// Calculate derived metrics with safe number conversion
+	const approvalRate = summaryData.totalTransactions > 0
+		? Number(((summaryData.approvedTransactions / summaryData.totalTransactions) * 100))
+		: 0;
 
-	const pendingRate =
-		summaryData.totalTransactions > 0
-			? (summaryData.pendingApprovals / summaryData.totalTransactions) * 100
-			: 0;
+	const pendingRate = summaryData.totalTransactions > 0
+		? Number(((summaryData.pendingApprovals / summaryData.totalTransactions) * 100))
+		: 0;
 
 	// Determine trends (simplified - in real app you'd compare with previous period)
 	const totalTransactionsTrend =
@@ -169,7 +166,7 @@ export function DashboardSummary({
 						title="Pending Approvals"
 						value={summaryData.pendingApprovals.toString()}
 						change={{
-							value: `${pendingRate.toFixed(1)}% of total`,
+							value: `${safeToFixed(pendingRate, 1)}% of total`,
 							trend: pendingApprovalsTrend as "up" | "down",
 						}}
 						icon={
@@ -185,7 +182,7 @@ export function DashboardSummary({
 						title="Approved Transactions"
 						value={summaryData.approvedTransactions.toString()}
 						change={{
-							value: `${approvalRate.toFixed(1)}% approval rate`,
+							value: `${safeToFixed(approvalRate, 1)}% approval rate`,
 							trend: approvedTransactionsTrend as "up" | "down",
 						}}
 						icon={
@@ -229,7 +226,7 @@ export function DashboardSummary({
 											: "text-red-600 dark:text-red-400"
 								}`}
 							>
-								{approvalRate.toFixed(1)}%
+								{typeof approvalRate === 'number' ? approvalRate.toFixed(1) : '0.0'}%
 							</span>
 						</div>
 						<div className="mt-2 h-2 rounded-full bg-muted">
@@ -260,7 +257,7 @@ export function DashboardSummary({
 											: "text-red-600 dark:text-red-400"
 								}`}
 							>
-								{pendingRate.toFixed(1)}%
+								{typeof pendingRate === 'number' ? pendingRate.toFixed(1) : '0.0'}%
 							</span>
 						</div>
 						<div className="mt-2 h-2 rounded-full bg-muted">

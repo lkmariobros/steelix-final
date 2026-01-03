@@ -28,6 +28,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 
 import { type DocumentsData, documentsSchema } from "../transaction-schema";
+import { useDocumentUpload, type DocumentCategory, type DocumentFile } from "@/hooks/use-document-upload";
+import { DocumentCategorySelector } from "@/components/document-category-selector";
+import { UploadProgress } from "@/components/upload-progress";
 
 interface StepDocumentsProps {
 	data?: DocumentsData;
@@ -36,29 +39,31 @@ interface StepDocumentsProps {
 	onPrevious: () => void;
 }
 
-interface DocumentFile {
-	id: string;
-	name: string;
-	type: string;
-	url: string;
-	uploadedAt: string;
-}
-
 export function StepDocuments({
 	data,
 	onUpdate,
 	onNext,
 	onPrevious,
 }: StepDocumentsProps) {
-	const [uploadedFiles, setUploadedFiles] = useState<DocumentFile[]>(
-		data?.documents || [],
-	);
-	const [isUploading, setIsUploading] = useState(false);
+	const [selectedCategory, setSelectedCategory] = useState<DocumentCategory>('contract');
+	const [showCategorySelector, setShowCategorySelector] = useState(false);
+	const [pendingFiles, setPendingFiles] = useState<FileList | null>(null);
+
+	// Use the document upload hook
+	const {
+		uploadFile,
+		deleteFile,
+		documents,
+		isUploading,
+		uploadProgress,
+		uploadError,
+		isLoadingDocuments
+	} = useDocumentUpload(data?.transactionId);
 
 	const form = useForm<DocumentsData>({
 		resolver: zodResolver(documentsSchema),
 		defaultValues: {
-			documents: data?.documents || [],
+			documents: documents || [],
 			notes: data?.notes || "",
 		},
 	});
@@ -66,7 +71,7 @@ export function StepDocuments({
 	const handleSubmit = (formData: DocumentsData) => {
 		const updatedData = {
 			...formData,
-			documents: uploadedFiles,
+			documents: documents,
 		};
 		onUpdate(updatedData);
 		onNext();
@@ -77,61 +82,74 @@ export function StepDocuments({
 		const values = form.getValues();
 		const updatedData = {
 			...values,
-			documents: uploadedFiles,
+			documents: documents,
 		};
 		onUpdate(updatedData);
 	};
 
-	// Handle file upload (mock implementation)
-	const handleFileUpload = async (
-		event: React.ChangeEvent<HTMLInputElement>,
-	) => {
+	// Handle file selection - show category selector first
+	const handleFileSelection = (event: React.ChangeEvent<HTMLInputElement>) => {
 		const files = event.target.files;
-		if (!files) return;
+		if (!files || files.length === 0) return;
 
-		setIsUploading(true);
+		setPendingFiles(files);
+		setShowCategorySelector(true);
+		// Reset the input
+		event.target.value = "";
+	};
+
+	// Handle category selection and upload
+	const handleCategorySelect = async (category: DocumentCategory) => {
+		if (!pendingFiles) return;
+
+		setShowCategorySelector(false);
+		setSelectedCategory(category);
+
+		const fileCount = pendingFiles.length; // Store count before clearing
+		const filesArray = Array.from(pendingFiles);
+
+		// Clear pending files immediately to prevent UI issues
+		setPendingFiles(null);
+
+		let successCount = 0;
+		let errorCount = 0;
 
 		try {
-			// Mock file upload - in a real app, you'd upload to your storage service
-			const newFiles: DocumentFile[] = [];
-
-			for (const file of Array.from(files)) {
-				// Simulate upload delay
-				await new Promise((resolve) => setTimeout(resolve, 500));
-
-				const mockFile: DocumentFile = {
-					id: Math.random().toString(36).substring(2, 11),
-					name: file.name,
-					type: file.type,
-					url: `mock://uploaded/${file.name}`, // In real app, this would be the actual URL
-					uploadedAt: new Date().toISOString(),
-				};
-
-				newFiles.push(mockFile);
+			// Upload files sequentially to avoid overwhelming the server
+			for (const file of filesArray) {
+				try {
+					await uploadFile(file, category);
+					successCount++;
+				} catch (fileError) {
+					console.error(`Failed to upload ${file.name}:`, fileError);
+					errorCount++;
+				}
 			}
 
-			setUploadedFiles((prev) => [...prev, ...newFiles]);
-			form.setValue("documents", [...uploadedFiles, ...newFiles]);
-			handleFormChange();
+			// Show appropriate success/error messages
+			if (successCount > 0) {
+				toast.success(`${successCount} file(s) uploaded successfully`);
+			}
+			if (errorCount > 0) {
+				toast.error(`${errorCount} file(s) failed to upload`);
+			}
 
-			toast.success(`${newFiles.length} file(s) uploaded successfully`);
+			handleFormChange();
 		} catch (error) {
-			toast.error("Failed to upload files");
 			console.error("Upload error:", error);
-		} finally {
-			setIsUploading(false);
-			// Reset the input
-			event.target.value = "";
+			toast.error(`Failed to upload ${fileCount} file(s)`);
 		}
 	};
 
 	// Remove uploaded file
-	const removeFile = (fileId: string) => {
-		const updatedFiles = uploadedFiles.filter((file) => file.id !== fileId);
-		setUploadedFiles(updatedFiles);
-		form.setValue("documents", updatedFiles);
-		handleFormChange();
-		toast.success("File removed");
+	const removeFile = async (fileId: string) => {
+		try {
+			await deleteFile(fileId);
+			handleFormChange();
+		} catch (error) {
+			console.error("Delete error:", error);
+			// Error is already handled in the hook
+		}
 	};
 
 	// Get file type icon
@@ -179,7 +197,7 @@ export function StepDocuments({
 												Drag and drop files here, or click to browse
 											</p>
 											<p className="text-muted-foreground text-xs">
-												Supported formats: PDF, DOC, DOCX, JPG, PNG (Max 10MB
+												Supported formats: PDF, DOC, DOCX, JPG, PNG (Max 50MB
 												each)
 											</p>
 										</div>
@@ -193,8 +211,8 @@ export function StepDocuments({
 												<input
 													type="file"
 													multiple
-													accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-													onChange={handleFileUpload}
+													accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.txt"
+													onChange={handleFileSelection}
 													className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
 													disabled={isUploading}
 												/>
@@ -204,14 +222,42 @@ export function StepDocuments({
 									</div>
 								</div>
 
+								{/* Upload Progress */}
+								{Object.entries(uploadProgress).map(([fileId, progress]) => (
+									<UploadProgress
+										key={fileId}
+										progress={progress}
+										fileName={`Uploading file...`}
+									/>
+								))}
+
+								{/* Category Selector Modal */}
+								{showCategorySelector && (
+									<div className="space-y-4 p-4 border rounded-lg bg-background">
+										<DocumentCategorySelector
+											onSelect={handleCategorySelect}
+											selectedCategory={selectedCategory}
+										/>
+										<Button
+											variant="outline"
+											onClick={() => {
+												setShowCategorySelector(false);
+												setPendingFiles(null);
+											}}
+										>
+											Cancel
+										</Button>
+									</div>
+								)}
+
 								{/* Uploaded Files List */}
-								{uploadedFiles.length > 0 && (
+								{documents.length > 0 && (
 									<div className="space-y-2">
 										<h4 className="font-medium">
-											Uploaded Documents ({uploadedFiles.length})
+											Uploaded Documents ({documents.length})
 										</h4>
 										<div className="space-y-2">
-											{uploadedFiles.map((file) => (
+											{documents.map((file) => (
 												<div
 													key={file.id}
 													className="flex items-center justify-between rounded-lg border bg-muted/50 p-3"
@@ -277,7 +323,7 @@ export function StepDocuments({
 							/>
 
 							{/* Document Summary */}
-							{(uploadedFiles.length > 0 || form.watch("notes")) && (
+							{(documents.length > 0 || form.watch("notes")) && (
 								<Card className="bg-muted/50">
 									<CardHeader>
 										<CardTitle className="text-lg">
@@ -288,8 +334,8 @@ export function StepDocuments({
 										<div className="flex justify-between">
 											<span className="text-muted-foreground">Documents:</span>
 											<span className="font-medium">
-												{uploadedFiles.length} file
-												{uploadedFiles.length !== 1 ? "s" : ""} uploaded
+												{documents.length} file
+												{documents.length !== 1 ? "s" : ""} uploaded
 											</span>
 										</div>
 										{form.watch("notes") && (

@@ -42,17 +42,17 @@ export const initialFormData: Partial<CompleteTransactionData> = {
 	notes: "",
 };
 
-// Form state hook
-export function useTransactionFormState(transactionId?: string) {
+// Form state hook with mode awareness
+export function useTransactionFormState(transactionId?: string, mode?: "create" | "edit" | "resume") {
 	const [currentStep, setCurrentStep] = useState<FormStep>(1);
 	const [formData, setFormData] =
 		useState<Partial<CompleteTransactionData>>(initialFormData);
 	const [isLoading, setIsLoading] = useState(false);
 	const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
-	// Load saved form data from localStorage on mount
+	// Load saved form data from localStorage on mount (only when not creating new)
 	useEffect(() => {
-		if (!transactionId) {
+		if (!transactionId && mode !== "create") {
 			const savedData = localStorage.getItem(FORM_STORAGE_KEY);
 			if (savedData) {
 				try {
@@ -63,7 +63,7 @@ export function useTransactionFormState(transactionId?: string) {
 				}
 			}
 		}
-	}, [transactionId]);
+	}, [transactionId, mode]);
 
 	// Auto-save to localStorage when form data changes
 	useEffect(() => {
@@ -96,7 +96,6 @@ export function useTransactionFormState(transactionId?: string) {
 						transactionType: data.transactionType as
 							| "sale"
 							| "lease"
-							| "rental"
 							| undefined,
 						transactionDate: data.transactionDate as Date | undefined,
 					});
@@ -209,10 +208,9 @@ export function getCompletedSteps(
 		completed.push(2);
 	}
 
-	// Step 3: Client
+	// Step 3: Client (email now optional)
 	if (
 		formData.clientData?.name &&
-		formData.clientData?.email &&
 		formData.clientData?.phone &&
 		formData.clientData?.type
 	) {

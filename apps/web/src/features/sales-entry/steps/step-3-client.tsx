@@ -2,6 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ArrowLeft, ArrowRight, Mail, Phone, User } from "lucide-react";
+import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 
 import { Button } from "@/components/ui/button";
@@ -29,6 +30,7 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 
 import {
@@ -40,6 +42,8 @@ import {
 
 interface StepClientProps {
 	data?: ClientData;
+	marketType?: "primary" | "secondary";
+	transactionType?: "sale" | "lease";
 	onUpdate: (data: ClientData) => void;
 	onNext: () => void;
 	onPrevious: () => void;
@@ -47,6 +51,8 @@ interface StepClientProps {
 
 export function StepClient({
 	data,
+	marketType,
+	transactionType,
 	onUpdate,
 	onNext,
 	onPrevious,
@@ -60,15 +66,11 @@ export function StepClient({
 			type: data?.type || undefined,
 			source: data?.source || "",
 			notes: data?.notes || "",
+			isDualPartyDeal: data?.isDualPartyDeal || false,
 		},
 	});
 
-	const handleSubmit = (formData: ClientData) => {
-		onUpdate(formData);
-		onNext();
-	};
-
-	// Auto-save on form changes
+	// Auto-save on form changes (moved before useEffect to fix ReferenceError)
 	const handleFormChange = () => {
 		const values = form.getValues();
 		if (form.formState.isValid) {
@@ -76,7 +78,54 @@ export function StepClient({
 		}
 	};
 
+	const handleSubmit = (formData: ClientData) => {
+		onUpdate(formData);
+		onNext();
+	};
+
+	// Auto-classification logic based on market type and transaction type
+	useEffect(() => {
+		if (marketType && transactionType) {
+			let suggestedType: "buyer" | "seller" | "tenant" | "landlord" | undefined;
+
+			if (transactionType === "sale") {
+				// For sales, suggest buyer (most common scenario)
+				suggestedType = "buyer";
+			} else if (transactionType === "lease") {
+				// For leases, suggest tenant (most common scenario)
+				suggestedType = "tenant";
+			}
+
+			if (suggestedType) {
+				// Only auto-suggest if no type is currently selected or if it's different from suggestion
+				const currentType = form.getValues("type");
+
+				if (!currentType || currentType !== suggestedType) {
+					// Auto-suggest but don't force - user can still override
+					form.setValue("type", suggestedType, {
+						shouldValidate: true,
+						shouldDirty: true,
+						shouldTouch: true,
+					});
+
+					// Trigger form change to update parent state
+					handleFormChange();
+				}
+			}
+		}
+	}, [marketType, transactionType, form, handleFormChange]);
+
 	const watchedValues = form.watch();
+
+	// Check if current client type matches auto-classification suggestion
+	const getAutoSuggestedType = () => {
+		if (!marketType || !transactionType) return null;
+		if (transactionType === "sale") return "buyer";
+		if (transactionType === "lease") return "tenant";
+		return null;
+	};
+
+	const isAutoSuggested = watchedValues.type === getAutoSuggestedType();
 
 	return (
 		<div className="space-y-6">
@@ -204,7 +253,13 @@ export function StepClient({
 													</SelectContent>
 												</Select>
 												<FormDescription>
-													Specify the client&apos;s role in this transaction
+													{isAutoSuggested && marketType && transactionType ? (
+														<span className="text-blue-600 font-medium">
+															✨ Auto-suggested based on {transactionType} transaction
+														</span>
+													) : (
+														"Specify the client's role in this transaction"
+													)}
 												</FormDescription>
 												<FormMessage />
 											</FormItem>
@@ -250,6 +305,56 @@ export function StepClient({
 									/>
 								</div>
 							</div>
+
+							{/* Dual-Party Deal Toggle */}
+							<FormField
+								control={form.control}
+								name="isDualPartyDeal"
+								render={({ field }) => (
+									<FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+										<div className="space-y-0.5">
+											<FormLabel className="text-base">
+												Dual-Party Deal
+											</FormLabel>
+											<FormDescription>
+												Are you representing both parties in this transaction?
+											</FormDescription>
+										</div>
+										<FormControl>
+											<Switch
+												checked={field.value}
+												onCheckedChange={(checked) => {
+													field.onChange(checked);
+													handleFormChange();
+												}}
+											/>
+										</FormControl>
+									</FormItem>
+								)}
+							/>
+
+							{/* Legal Disclosure for Dual-Party Deals */}
+							{form.watch("isDualPartyDeal") && (
+								<Card className="border-amber-200 bg-amber-50">
+									<CardContent className="pt-6">
+										<div className="flex items-start gap-3">
+											<div className="rounded-full bg-amber-100 p-1">
+												<User className="h-4 w-4 text-amber-600" />
+											</div>
+											<div className="space-y-1">
+												<p className="text-sm font-medium text-amber-800">
+													Legal Disclosure Required
+												</p>
+												<p className="text-sm text-amber-700">
+													When representing both parties, you must provide proper disclosure
+													and obtain written consent from all parties involved. Ensure compliance
+													with local real estate regulations and ethical guidelines.
+												</p>
+											</div>
+										</div>
+									</CardContent>
+								</Card>
+							)}
 
 							{/* Additional Notes */}
 							<FormField

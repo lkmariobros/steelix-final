@@ -11,7 +11,7 @@ import {
 	RiFireLine,
 	RiTimeLine,
 } from "@remixicon/react";
-import { useQuery } from "@tanstack/react-query";
+
 import React from "react";
 
 // Import types and utilities
@@ -27,18 +27,16 @@ export function UrgentTasksPanel({
 	refreshKey,
 	className,
 }: UrgentTasksPanelProps) {
-	// Real tRPC query - replaces mock data
+	// ✅ CORRECT tRPC query pattern
 	const {
 		data: urgentTasks,
 		isLoading,
 		error,
 		refetch,
-	} = useQuery(
-		trpc.admin.getUrgentTasks.queryOptions(undefined, {
-			refetchOnWindowFocus: false,
-			staleTime: 30000, // 30 seconds
-		}),
-	);
+	} = trpc.admin.getUrgentTasks.useQuery(undefined, {
+		refetchOnWindowFocus: false,
+		staleTime: 30000, // 30 seconds
+	});
 
 	// Refetch when refreshKey changes
 	React.useEffect(() => {

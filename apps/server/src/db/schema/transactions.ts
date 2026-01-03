@@ -1,6 +1,8 @@
 import {
+	bigint,
 	boolean,
 	decimal,
+	index,
 	jsonb,
 	pgEnum,
 	pgTable,
@@ -34,6 +36,14 @@ export const transactionStatusEnum = pgEnum("transaction_status", [
 	"approved",
 	"rejected",
 	"completed",
+]);
+
+// Document category enum for file uploads
+export const documentCategoryEnum = pgEnum("document_category", [
+	"contract",
+	"identification",
+	"financial",
+	"miscellaneous",
 ]);
 
 // Main transactions table
@@ -110,6 +120,30 @@ export const transactions = pgTable("transactions", {
 	createdAt: timestamp("created_at").defaultNow().notNull(),
 	updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
+
+// Transaction documents table for file metadata
+export const transactionDocuments = pgTable("transaction_documents", {
+	id: uuid("id").primaryKey().defaultRandom(),
+	transactionId: uuid("transaction_id").notNull().references(() => transactions.id, { onDelete: "cascade" }),
+	userId: text("user_id").notNull(), // References auth.users(id)
+	fileName: text("file_name").notNull(),
+	fileType: text("file_type").notNull(),
+	fileSize: bigint("file_size", { mode: "number" }).notNull(),
+	storagePath: text("storage_path").notNull(),
+	publicUrl: text("public_url"),
+	documentCategory: documentCategoryEnum("document_category").notNull(),
+	uploadedAt: timestamp("uploaded_at").defaultNow().notNull(),
+	updatedAt: timestamp("updated_at").defaultNow().notNull(),
+	metadata: jsonb("metadata").$type<{
+		originalName?: string;
+		uploadedFrom?: string;
+		[key: string]: any;
+	}>().default({}),
+}, (table) => ({
+	transactionIdIdx: index("idx_transaction_documents_transaction_id").on(table.transactionId),
+	userIdIdx: index("idx_transaction_documents_user_id").on(table.userId),
+	categoryIdx: index("idx_transaction_documents_category").on(table.documentCategory),
+}));
 
 // Zod schemas for validation
 export const insertTransactionSchema = z.object({
@@ -244,9 +278,40 @@ export const selectTransactionSchema = z.object({
 	updatedAt: z.date(),
 });
 
+// Document schemas
+export const insertDocumentSchema = z.object({
+	transactionId: z.string().uuid(),
+	userId: z.string(),
+	fileName: z.string().min(1).max(255),
+	fileType: z.string(),
+	fileSize: z.number().max(50 * 1024 * 1024), // 50MB limit
+	storagePath: z.string(),
+	publicUrl: z.string().optional(),
+	documentCategory: z.enum(["contract", "identification", "financial", "miscellaneous"]),
+	metadata: z.record(z.any()).optional(),
+});
+
+export const selectDocumentSchema = z.object({
+	id: z.string(),
+	transactionId: z.string(),
+	userId: z.string(),
+	fileName: z.string(),
+	fileType: z.string(),
+	fileSize: z.number(),
+	storagePath: z.string(),
+	publicUrl: z.string().nullable(),
+	documentCategory: z.enum(["contract", "identification", "financial", "miscellaneous"]),
+	uploadedAt: z.date(),
+	updatedAt: z.date(),
+	metadata: z.record(z.any()).nullable(),
+});
+
 // Type exports
 export type Transaction = z.infer<typeof selectTransactionSchema>;
 export type NewTransaction = z.infer<typeof insertTransactionSchema>;
+export type TransactionDocument = z.infer<typeof selectDocumentSchema>;
+export type NewTransactionDocument = z.infer<typeof insertDocumentSchema>;
+export type DocumentCategory = TransactionDocument["documentCategory"];
 export type TransactionStatus = Transaction["status"];
 export type MarketType = Transaction["marketType"];
 export type TransactionType = Transaction["transactionType"];

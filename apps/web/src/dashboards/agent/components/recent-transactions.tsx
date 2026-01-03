@@ -5,7 +5,7 @@ import { Badge } from "@/components/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { trpc } from "@/utils/trpc";
-import { useQuery } from "@tanstack/react-query";
+
 import { useEffect, useState } from "react";
 // Simple utility functions to avoid import issues
 const formatCurrency = (amount: number): string => {
@@ -22,28 +22,37 @@ const useRelativeTime = (date: Date): string => {
 	const [relativeTime, setRelativeTime] = useState<string>("");
 
 	useEffect(() => {
-		const now = new Date();
-		const diffInHours = Math.floor(
-			(now.getTime() - date.getTime()) / (1000 * 60 * 60),
-		);
+		const calculateRelativeTime = () => {
+			const now = new Date();
+			const diffInHours = Math.floor(
+				(now.getTime() - date.getTime()) / (1000 * 60 * 60),
+			);
 
-		if (diffInHours < 1) {
-			setRelativeTime("Just now");
-		} else if (diffInHours < 24) {
-			setRelativeTime(`${diffInHours}h ago`);
-		} else if (diffInHours < 168) {
-			// 7 days
-			const days = Math.floor(diffInHours / 24);
-			setRelativeTime(`${days}d ago`);
-		} else {
-			setRelativeTime(
-				date.toLocaleDateString("en-US", {
+			if (diffInHours < 1) {
+				return "Just now";
+			} else if (diffInHours < 24) {
+				return `${diffInHours}h ago`;
+			} else if (diffInHours < 168) {
+				// 7 days
+				const days = Math.floor(diffInHours / 24);
+				return `${days}d ago`;
+			} else {
+				return date.toLocaleDateString("en-US", {
 					month: "short",
 					day: "numeric",
 					year: "numeric",
-				}),
-			);
-		}
+				});
+			}
+		};
+
+		setRelativeTime(calculateRelativeTime());
+
+		// Only update every hour to prevent excessive re-renders
+		const interval = setInterval(() => {
+			setRelativeTime(calculateRelativeTime());
+		}, 60 * 60 * 1000); // Update every hour
+
+		return () => clearInterval(interval);
 	}, [date]);
 
 	return relativeTime || "Loading...";
@@ -150,16 +159,14 @@ interface RecentTransactionsProps {
 }
 
 export function RecentTransactions({ limit = 10 }: RecentTransactionsProps) {
-	// Real tRPC query - replaces mock data
+	// ✅ CORRECT tRPC query pattern
 	const {
 		data: transactions,
 		isLoading,
 		error,
-	} = useQuery(
-		trpc.dashboard.getRecentTransactions.queryOptions({
-			limit,
-		}),
-	);
+	} = trpc.dashboard.getRecentTransactions.useQuery({
+		limit,
+	});
 
 	if (isLoading) {
 		return (

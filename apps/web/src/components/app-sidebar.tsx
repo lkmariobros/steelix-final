@@ -18,7 +18,6 @@ import {
 	SidebarRail,
 } from "@/components/sidebar";
 import { TeamSwitcher } from "@/components/team-switcher";
-import { authClient } from "@/lib/auth-client";
 import {
 	RiBarChartLine,
 	RiCheckboxCircleLine,
@@ -29,36 +28,18 @@ import {
 	RiTeamLine,
 } from "@remixicon/react";
 
-// This is sample data.
+// Clean data structure - no mock teams
 const data = {
-	teams: [
-		{
-			name: "InnovaCraft",
-			logo: "https://raw.githubusercontent.com/origin-space/origin-images/refs/heads/main/exp1/logo-01_kp2j8x.png",
-		},
-		{
-			name: "Acme Corp.",
-			logo: "https://raw.githubusercontent.com/origin-space/origin-images/refs/heads/main/exp1/logo-01_kp2j8x.png",
-		},
-		{
-			name: "Evil Corp.",
-			logo: "https://raw.githubusercontent.com/origin-space/origin-images/refs/heads/main/exp1/logo-01_kp2j8x.png",
-		},
-	],
-	// Default navigation - will be overridden in component
-	navMain: [],
+	teams: [],
 };
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
-	// const { data: session } = authClient.useSession(); // Temporarily disabled
 	const pathname = usePathname();
 
-	// Role-based navigation logic
-	// TODO: Replace with real role check from tRPC once working
-	const isAdmin = true; // For testing - will be replaced with actual role check
+	// Path-based navigation logic - no role checking in sidebar
 	const isCurrentlyInAdminPortal = pathname.startsWith("/admin");
 
-	// Generate navigation based on current portal - NO portal switching in sidebar
+	// Generate navigation based on current portal path only
 	const navigationItems = isCurrentlyInAdminPortal
 		? [
 				// Admin Portal Navigation

@@ -16,7 +16,10 @@
 		"db:generate": "turbo -F server db:generate",
 		"db:migrate": "turbo -F server db:migrate"
 	},
-	"dependencies": {},
+	"dependencies": {
+		"@noble/hashes": "^2.0.1",
+		"framer-motion": "^12.23.3"
+	},
 	"devDependencies": {
 		"turbo": "^2.5.4",
 		"@biomejs/biome": "1.9.4",

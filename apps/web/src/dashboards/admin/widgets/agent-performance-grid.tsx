@@ -20,7 +20,7 @@ import {
 	RiBarChartLine,
 	RiTrophyLine,
 } from "@remixicon/react";
-import { useQuery } from "@tanstack/react-query";
+
 import React, { useState } from "react";
 
 // Import types and utilities
@@ -54,22 +54,20 @@ export function AgentPerformanceGrid({
 	const [sortField, setSortField] = useState<SortField>("transactions");
 	const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
 
-	// Real tRPC query - replaces mock data
+	// ✅ CORRECT tRPC query pattern
 	const {
 		data: rawPerformanceData,
 		isLoading,
 		error,
 		refetch,
-	} = useQuery(
-		trpc.admin.getAgentPerformance.queryOptions(
-			{
-				dateRange,
-			},
-			{
-				refetchOnWindowFocus: false,
-				staleTime: 30000, // 30 seconds
-			},
-		),
+	} = trpc.admin.getAgentPerformance.useQuery(
+		{
+			dateRange,
+		},
+		{
+			refetchOnWindowFocus: false,
+			staleTime: 30000, // 30 seconds
+		},
 	);
 
 	// Type-safe data processing - handle string commission values from database

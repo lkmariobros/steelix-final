@@ -1,6 +1,6 @@
 import { QueryCache, QueryClient } from "@tanstack/react-query";
-import { createTRPCClient, httpBatchLink } from "@trpc/client";
-import { createTRPCOptionsProxy } from "@trpc/tanstack-react-query";
+import { httpBatchLink } from "@trpc/client";
+import { createTRPCReact } from "@trpc/react-query";
 import { toast } from "sonner";
 import type { AppRouter } from "../../../server/src/routers";
 
@@ -19,23 +19,19 @@ export const queryClient = new QueryClient({
 	}),
 });
 
-const trpcClient = createTRPCClient<AppRouter>({
+export const trpc = createTRPCReact<AppRouter>();
+
+export const trpcClient = trpc.createClient({
 	links: [
 		httpBatchLink({
-			url: `${process.env.NEXT_PUBLIC_SERVER_URL}/trpc`,
-			// ✅ CRITICAL FIX: Remove manual cookie header handling
-			// Better Auth handles cookies automatically with credentials: "include"
-			fetch(url, options) {
-				return fetch(url, {
-					...options,
-					credentials: "include", // This is all we need for Better Auth cookies
-				});
+			url: process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:8080/trpc',
+			headers() {
+				return {
+					'Content-Type': 'application/json',
+				};
 			},
 		}),
 	],
 });
 
-export const trpc = createTRPCOptionsProxy<AppRouter>({
-	client: trpcClient,
-	queryClient,
-});
+
