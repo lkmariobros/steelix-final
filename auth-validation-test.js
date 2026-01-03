@@ -12,10 +12,10 @@
  * - Cross-origin authentication is working correctly
  */
 
-const SERVER_URL = 'https://steelix-final-production.up.railway.app';
-const FRONTEND_ORIGIN = 'https://steelix-final-web.vercel.app';
+const SERVER_URL = "https://steelix-final-production.up.railway.app";
+const FRONTEND_ORIGIN = "https://steelix-final-web.vercel.app";
 
-console.log('🔍 BETTER AUTH PRODUCTION VALIDATION\n');
+console.log("🔍 BETTER AUTH PRODUCTION VALIDATION\n");
 console.log(`Server: ${SERVER_URL}`);
 console.log(`Frontend Origin: ${FRONTEND_ORIGIN}\n`);
 
@@ -25,16 +25,16 @@ async function validateAuth() {
     corsPreflightWorking: false,
     sessionEndpointWorking: false,
     signInEndpointAccessible: false,
-    overallStatus: 'UNKNOWN'
+    overallStatus: "UNKNOWN"
   };
 
   // Test 1: Server Health Check
-  console.log('1️⃣ Testing Server Health...');
+  console.log("1️⃣ Testing Server Health...");
   try {
     const response = await fetch(`${SERVER_URL}/ping`);
     if (response.ok) {
       testResults.serverHealth = true;
-      console.log('   ✅ Server is healthy');
+      console.log("   ✅ Server is healthy");
     } else {
       console.log(`   ⚠️ Server responded with status: ${response.status}`);
     }

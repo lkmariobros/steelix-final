@@ -17,6 +17,7 @@
 		"db:migrate": "turbo -F server db:migrate"
 	},
 	"dependencies": {
+		"@noble/hashes": "^2.0.1",
 		"framer-motion": "^12.23.3"
 	},
 	"devDependencies": {

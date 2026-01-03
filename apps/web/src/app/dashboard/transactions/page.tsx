@@ -45,6 +45,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import UserDropdown from "@/components/user-dropdown";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { useTransactionModalActions } from "@/contexts/transaction-modal-context";
 import {
 	RiAddLine,
 	RiDashboardLine,
@@ -63,6 +64,7 @@ import {
 export default function TransactionsPage() {
 	const router = useRouter();
 	const { data: session, isPending } = authClient.useSession();
+	const { openCreateModal } = useTransactionModalActions();
 	const [statusFilter, setStatusFilter] = useState<string>("all");
 	const [currentPage, setCurrentPage] = useState(0);
 	const pageSize = 10;
@@ -473,7 +475,7 @@ export default function TransactionsPage() {
 									<RiDownloadLine className="mr-2 h-4 w-4" />
 									Export Report
 								</Button>
-								<Button size="sm">
+								<Button size="sm" onClick={openCreateModal}>
 									<RiAddLine className="mr-2 h-4 w-4" />
 									New Transaction
 								</Button>

@@ -53,6 +53,9 @@ export function EnhancedModal({
 	const modalRef = useRef<HTMLDivElement>(null);
 	const isClient = useClientSide();
 
+	// Debug: Log modal state
+	console.log("[EnhancedModal] isOpen:", isOpen, "isClient:", isClient, "title:", title);
+
 	// Handle close with confirmation if there are unsaved changes
 	const handleClose = useCallback(async () => {
 		if (hasUnsavedChanges && onConfirmClose) {
