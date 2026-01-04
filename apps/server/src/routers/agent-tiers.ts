@@ -68,9 +68,15 @@ export const agentTiersRouter = router({
 			const companyCommissionSplit = userSession.companyCommissionSplit || AGENT_TIER_CONFIG[agentTier].commissionSplit;
 
 			// Get upline info for leadership bonus calculation
-			let uplineInfo = null;
+			let uplineData: { uplineTier: AgentTier; leadershipBonusRate: number } | null = null;
 			if (input.includeLeadershipBonus) {
-				uplineInfo = await getUplineInfo(ctx.session.user.id);
+				const uplineInfo = await getUplineInfo(ctx.session.user.id);
+				if (uplineInfo && uplineInfo.uplineTier) {
+					uplineData = {
+						uplineTier: uplineInfo.uplineTier,
+						leadershipBonusRate: uplineInfo.leadershipBonusRate,
+					};
+				}
 			}
 
 			return calculateEnhancedCommission(
@@ -80,7 +86,7 @@ export const agentTiersRouter = router({
 				agentTier,
 				companyCommissionSplit,
 				input.coBrokerSplitPercentage,
-				uplineInfo
+				uplineData
 			);
 		}),
 
@@ -93,9 +99,15 @@ export const agentTiersRouter = router({
 			const agentInfo = await getAgentTierInfo(input.agentId);
 
 			// Get upline info for leadership bonus calculation
-			let uplineInfo = null;
+			let uplineData: { uplineTier: AgentTier; leadershipBonusRate: number } | null = null;
 			if (input.includeLeadershipBonus) {
-				uplineInfo = await getUplineInfo(input.agentId);
+				const uplineInfo = await getUplineInfo(input.agentId);
+				if (uplineInfo && uplineInfo.uplineTier) {
+					uplineData = {
+						uplineTier: uplineInfo.uplineTier,
+						leadershipBonusRate: uplineInfo.leadershipBonusRate,
+					};
+				}
 			}
 
 			return calculateEnhancedCommission(
@@ -105,7 +117,7 @@ export const agentTiersRouter = router({
 				(agentInfo.agentTier || 'advisor') as AgentTier,
 				agentInfo.companyCommissionSplit || AGENT_TIER_CONFIG[(agentInfo.agentTier || 'advisor') as AgentTier].commissionSplit,
 				input.coBrokerSplitPercentage,
-				uplineInfo
+				uplineData
 			);
 		}),
 
@@ -177,9 +189,16 @@ export const agentTiersRouter = router({
 			}
 
 			// Get upline info for leadership bonus
-			let uplineInfo = null;
+			let uplineInfo: Awaited<ReturnType<typeof getUplineInfo>> = null;
+			let uplineData: { uplineTier: AgentTier; leadershipBonusRate: number } | null = null;
 			if (input.includeLeadershipBonus) {
 				uplineInfo = await getUplineInfo(ctx.session.user.id);
+				if (uplineInfo && uplineInfo.uplineTier) {
+					uplineData = {
+						uplineTier: uplineInfo.uplineTier,
+						leadershipBonusRate: uplineInfo.leadershipBonusRate,
+					};
+				}
 			}
 
 			const breakdown = calculateEnhancedCommission(
@@ -189,7 +208,7 @@ export const agentTiersRouter = router({
 				agentTier,
 				companyCommissionSplit,
 				input.coBrokerSplitPercentage,
-				uplineInfo
+				uplineData
 			);
 
 			return {
