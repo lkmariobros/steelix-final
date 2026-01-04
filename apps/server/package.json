@@ -34,10 +34,10 @@
 		"zod": "^3.25.16"
 	},
 	"devDependencies": {
-		"tsc-alias": "^1.8.11",
-		"typescript": "^5.8.2",
 		"@types/bun": "^1.2.6",
-		"drizzle-kit": "^0.30.5",
-		"@types/pg": "^8.11.11"
+		"@types/pg": "^8.11.11",
+		"drizzle-kit": "^0.31.8",
+		"tsc-alias": "^1.8.11",
+		"typescript": "^5.8.2"
 	}
 }
