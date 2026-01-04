@@ -25,77 +25,87 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { Switch } from "@/components/ui/switch";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
 import UserDropdown from "@/components/user-dropdown";
 import { authClient } from "@/lib/auth-client";
+import { trpc } from "@/utils/trpc";
 import {
 	RiDashboardLine,
-	RiNotificationLine,
-	RiPaletteLine,
-	RiSecurePaymentLine,
 	RiSettings3Line,
 	RiUploadLine,
-	RiUserLine,
+	RiCheckLine,
+	RiLoader4Line,
 } from "@remixicon/react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { toast } from "sonner";
 
 export default function AgentSettingsPage() {
 	const router = useRouter();
 	const { data: session, isPending } = authClient.useSession();
 
-	// Settings state
-	const [profileSettings, setProfileSettings] = useState({
-		firstName: "John",
-		lastName: "Smith",
-		email: "john.smith@example.com",
-		phone: "+1 (555) 123-4567",
-		bio: "Experienced real estate agent specializing in residential properties.",
-		avatar: "",
+	// Fetch profile data from backend
+	const { data: profileData, isLoading: isProfileLoading } = trpc.agents.getMyProfile.useQuery(
+		undefined,
+		{ enabled: !!session }
+	);
+
+	// Get utils for cache invalidation
+	const utils = trpc.useUtils();
+
+	// Profile update mutation
+	const updateProfileMutation = trpc.agents.updateMyProfile.useMutation({
+		onSuccess: () => {
+			toast.success("Profile updated successfully");
+			// Invalidate profile cache to refetch updated data
+			utils.agents.getMyProfile.invalidate();
+			setHasChanges(false);
+		},
+		onError: (error) => {
+			toast.error(error.message || "Failed to update profile");
+		},
 	});
 
-	const [notificationSettings, setNotificationSettings] = useState({
-		emailNotifications: true,
-		smsNotifications: true,
-		pushNotifications: true,
-		newLeads: true,
-		commissionUpdates: true,
-		weeklyReports: false,
-		marketingEmails: false,
-	});
+	// Local state for form - initialized from profile data
+	const [name, setName] = useState("");
+	const [hasChanges, setHasChanges] = useState(false);
 
-	const [preferenceSettings, setPreferenceSettings] = useState({
-		theme: "system",
-		language: "en",
-		timezone: "America/New_York",
-		dateFormat: "MM/DD/YYYY",
-		currency: "USD",
-	});
+	// Sync profile data to local state when loaded
+	useEffect(() => {
+		if (profileData?.agent) {
+			setName(profileData.agent.name || "");
+		}
+	}, [profileData]);
 
-	const [privacySettings, setPrivacySettings] = useState({
-		profileVisibility: "team",
-		showEmail: false,
-		showPhone: true,
-		allowDirectMessages: true,
-	});
+	// Track changes
+	useEffect(() => {
+		if (profileData?.agent) {
+			setHasChanges(name !== profileData.agent.name);
+		}
+	}, [name, profileData]);
+
+	// Handle save
+	const handleSave = () => {
+		if (!hasChanges) return;
+		updateProfileMutation.mutate({ name });
+	};
+
+	// Handle cancel - reset to original values
+	const handleCancel = () => {
+		if (profileData?.agent) {
+			setName(profileData.agent.name || "");
+		}
+		setHasChanges(false);
+	};
 
 	// Show loading while checking authentication
-	if (isPending) {
+	if (isPending || isProfileLoading) {
 		return (
 			<div className="flex h-screen items-center justify-center">
 				<div className="text-center">
-					<div className="mx-auto h-8 w-8 animate-spin rounded-full border-primary border-b-2" />
-					<p className="mt-2 text-muted-foreground text-sm">Loading...</p>
+					<RiLoader4Line className="mx-auto h-8 w-8 animate-spin text-primary" />
+					<p className="mt-2 text-muted-foreground text-sm">Loading profile...</p>
 				</div>
 			</div>
 		);
@@ -106,6 +116,15 @@ export default function AgentSettingsPage() {
 		router.push("/login");
 		return null;
 	}
+
+	// Get initials for avatar fallback
+	const getInitials = (fullName: string) => {
+		const parts = fullName.split(" ");
+		if (parts.length >= 2) {
+			return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
+		}
+		return fullName.substring(0, 2).toUpperCase();
+	};
 
 	return (
 		<SidebarProvider>
@@ -141,482 +160,135 @@ export default function AgentSettingsPage() {
 					</div>
 				</header>
 				<div className="flex flex-1 flex-col gap-4 py-4 lg:gap-6 lg:py-6">
-					<div className="mx-auto w-full max-w-4xl">
+					<div className="mx-auto w-full max-w-2xl">
 						<div className="mb-6 flex items-center gap-4">
 							<div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10">
 								<RiSettings3Line className="h-6 w-6 text-primary" />
 							</div>
 							<div>
-								<h1 className="font-bold text-3xl">Settings</h1>
+								<h1 className="font-bold text-3xl">Profile Settings</h1>
 								<p className="text-muted-foreground">
-									Manage your account settings and preferences
+									Manage your account information
 								</p>
 							</div>
 						</div>
 
-						<Tabs defaultValue="profile" className="space-y-6">
-							<TabsList className="grid w-full grid-cols-4">
-								<TabsTrigger
-									value="profile"
-									className="flex items-center gap-2"
-								>
-									<RiUserLine size={16} />
-									Profile
-								</TabsTrigger>
-								<TabsTrigger
-									value="notifications"
-									className="flex items-center gap-2"
-								>
-									<RiNotificationLine size={16} />
-									Notifications
-								</TabsTrigger>
-								<TabsTrigger
-									value="preferences"
-									className="flex items-center gap-2"
-								>
-									<RiPaletteLine size={16} />
-									Preferences
-								</TabsTrigger>
-								<TabsTrigger
-									value="privacy"
-									className="flex items-center gap-2"
-								>
-									<RiSecurePaymentLine size={16} />
-									Privacy
-								</TabsTrigger>
-							</TabsList>
+						{/* Profile Information Card */}
+						<Card>
+							<CardHeader>
+								<CardTitle>Profile Information</CardTitle>
+								<CardDescription>
+									Update your personal information and profile details
+								</CardDescription>
+							</CardHeader>
+							<CardContent className="space-y-6">
+								{/* Avatar Section */}
+								<div className="flex items-center gap-6">
+									<Avatar className="h-20 w-20">
+										<AvatarImage src={profileData?.agent?.image || ""} />
+										<AvatarFallback className="text-lg">
+											{name ? getInitials(name) : "??"}
+										</AvatarFallback>
+									</Avatar>
+									<div className="space-y-2">
+										<Button
+											variant="outline"
+											className="flex items-center gap-2"
+											disabled
+										>
+											<RiUploadLine size={16} />
+											Upload Photo
+										</Button>
+										<p className="text-muted-foreground text-xs">
+											Photo upload coming soon
+										</p>
+									</div>
+								</div>
 
-							<TabsContent value="profile" className="space-y-6">
-								<Card>
-									<CardHeader>
-										<CardTitle>Profile Information</CardTitle>
-										<CardDescription>
-											Update your personal information and profile details
-										</CardDescription>
-									</CardHeader>
-									<CardContent className="space-y-6">
-										<div className="flex items-center gap-6">
-											<Avatar className="h-20 w-20">
-												<AvatarImage src={profileSettings.avatar} />
-												<AvatarFallback className="text-lg">
-													{profileSettings.firstName[0]}
-													{profileSettings.lastName[0]}
-												</AvatarFallback>
-											</Avatar>
-											<div className="space-y-2">
-												<Button
-													variant="outline"
-													className="flex items-center gap-2"
-												>
-													<RiUploadLine size={16} />
-													Upload Photo
-												</Button>
-												<p className="text-muted-foreground text-sm">
-													JPG, PNG or GIF. Max size 2MB.
-												</p>
-											</div>
-										</div>
-										<div className="grid grid-cols-2 gap-4">
-											<div className="space-y-2">
-												<Label htmlFor="firstName">First Name</Label>
-												<Input
-													id="firstName"
-													value={profileSettings.firstName}
-													onChange={(e) =>
-														setProfileSettings((prev) => ({
-															...prev,
-															firstName: e.target.value,
-														}))
-													}
-												/>
-											</div>
-											<div className="space-y-2">
-												<Label htmlFor="lastName">Last Name</Label>
-												<Input
-													id="lastName"
-													value={profileSettings.lastName}
-													onChange={(e) =>
-														setProfileSettings((prev) => ({
-															...prev,
-															lastName: e.target.value,
-														}))
-													}
-												/>
-											</div>
-										</div>
-										<div className="grid grid-cols-2 gap-4">
-											<div className="space-y-2">
-												<Label htmlFor="email">Email</Label>
-												<Input
-													id="email"
-													type="email"
-													value={profileSettings.email}
-													onChange={(e) =>
-														setProfileSettings((prev) => ({
-															...prev,
-															email: e.target.value,
-														}))
-													}
-												/>
-											</div>
-											<div className="space-y-2">
-												<Label htmlFor="phone">Phone</Label>
-												<Input
-													id="phone"
-													value={profileSettings.phone}
-													onChange={(e) =>
-														setProfileSettings((prev) => ({
-															...prev,
-															phone: e.target.value,
-														}))
-													}
-												/>
-											</div>
-										</div>
-										<div className="space-y-2">
-											<Label htmlFor="bio">Bio</Label>
-											<Textarea
-												id="bio"
-												placeholder="Tell us about yourself..."
-												value={profileSettings.bio}
-												onChange={(e) =>
-													setProfileSettings((prev) => ({
-														...prev,
-														bio: e.target.value,
-													}))
-												}
-											/>
-										</div>
-									</CardContent>
-								</Card>
-							</TabsContent>
+								{/* Name Field */}
+								<div className="space-y-2">
+									<Label htmlFor="name">Full Name</Label>
+									<Input
+										id="name"
+										value={name}
+										onChange={(e) => setName(e.target.value)}
+										placeholder="Enter your full name"
+									/>
+								</div>
 
-							<TabsContent value="notifications" className="space-y-6">
-								<Card>
-									<CardHeader>
-										<CardTitle>Notification Preferences</CardTitle>
-										<CardDescription>
-											Choose how you want to be notified about important updates
-										</CardDescription>
-									</CardHeader>
-									<CardContent className="space-y-4">
-										<div className="space-y-4">
-											<div className="flex items-center justify-between">
-												<div className="space-y-0.5">
-													<Label>Email Notifications</Label>
-													<p className="text-muted-foreground text-sm">
-														Receive notifications via email
-													</p>
-												</div>
-												<Switch
-													checked={notificationSettings.emailNotifications}
-													onCheckedChange={(checked) =>
-														setNotificationSettings((prev) => ({
-															...prev,
-															emailNotifications: checked,
-														}))
-													}
-												/>
-											</div>
-											<div className="flex items-center justify-between">
-												<div className="space-y-0.5">
-													<Label>SMS Notifications</Label>
-													<p className="text-muted-foreground text-sm">
-														Receive urgent notifications via SMS
-													</p>
-												</div>
-												<Switch
-													checked={notificationSettings.smsNotifications}
-													onCheckedChange={(checked) =>
-														setNotificationSettings((prev) => ({
-															...prev,
-															smsNotifications: checked,
-														}))
-													}
-												/>
-											</div>
-											<div className="flex items-center justify-between">
-												<div className="space-y-0.5">
-													<Label>New Leads</Label>
-													<p className="text-muted-foreground text-sm">
-														Get notified when you receive new leads
-													</p>
-												</div>
-												<Switch
-													checked={notificationSettings.newLeads}
-													onCheckedChange={(checked) =>
-														setNotificationSettings((prev) => ({
-															...prev,
-															newLeads: checked,
-														}))
-													}
-												/>
-											</div>
-											<div className="flex items-center justify-between">
-												<div className="space-y-0.5">
-													<Label>Commission Updates</Label>
-													<p className="text-muted-foreground text-sm">
-														Get notified about commission status changes
-													</p>
-												</div>
-												<Switch
-													checked={notificationSettings.commissionUpdates}
-													onCheckedChange={(checked) =>
-														setNotificationSettings((prev) => ({
-															...prev,
-															commissionUpdates: checked,
-														}))
-													}
-												/>
-											</div>
-											<div className="flex items-center justify-between">
-												<div className="space-y-0.5">
-													<Label>Weekly Reports</Label>
-													<p className="text-muted-foreground text-sm">
-														Receive weekly performance summaries
-													</p>
-												</div>
-												<Switch
-													checked={notificationSettings.weeklyReports}
-													onCheckedChange={(checked) =>
-														setNotificationSettings((prev) => ({
-															...prev,
-															weeklyReports: checked,
-														}))
-													}
-												/>
-											</div>
-											<div className="flex items-center justify-between">
-												<div className="space-y-0.5">
-													<Label>Marketing Emails</Label>
-													<p className="text-muted-foreground text-sm">
-														Receive marketing and promotional emails
-													</p>
-												</div>
-												<Switch
-													checked={notificationSettings.marketingEmails}
-													onCheckedChange={(checked) =>
-														setNotificationSettings((prev) => ({
-															...prev,
-															marketingEmails: checked,
-														}))
-													}
-												/>
-											</div>
-										</div>
-									</CardContent>
-								</Card>
-							</TabsContent>
+								{/* Email Field - Read Only */}
+								<div className="space-y-2">
+									<Label htmlFor="email">Email</Label>
+									<Input
+										id="email"
+										type="email"
+										value={profileData?.agent?.email || ""}
+										disabled
+										className="bg-muted"
+									/>
+									<p className="text-muted-foreground text-xs">
+										Email cannot be changed. Contact support if needed.
+									</p>
+								</div>
 
-							<TabsContent value="preferences" className="space-y-6">
-								<Card>
-									<CardHeader>
-										<CardTitle>Display Preferences</CardTitle>
-										<CardDescription>
-											Customize your dashboard appearance and behavior
-										</CardDescription>
-									</CardHeader>
-									<CardContent className="space-y-4">
-										<div className="grid grid-cols-2 gap-4">
-											<div className="space-y-2">
-												<Label htmlFor="theme">Theme</Label>
-												<Select
-													value={preferenceSettings.theme}
-													onValueChange={(value) =>
-														setPreferenceSettings((prev) => ({
-															...prev,
-															theme: value,
-														}))
-													}
-												>
-													<SelectTrigger>
-														<SelectValue />
-													</SelectTrigger>
-													<SelectContent>
-														<SelectItem value="light">Light</SelectItem>
-														<SelectItem value="dark">Dark</SelectItem>
-														<SelectItem value="system">System</SelectItem>
-													</SelectContent>
-												</Select>
-											</div>
-											<div className="space-y-2">
-												<Label htmlFor="language">Language</Label>
-												<Select
-													value={preferenceSettings.language}
-													onValueChange={(value) =>
-														setPreferenceSettings((prev) => ({
-															...prev,
-															language: value,
-														}))
-													}
-												>
-													<SelectTrigger>
-														<SelectValue />
-													</SelectTrigger>
-													<SelectContent>
-														<SelectItem value="en">English</SelectItem>
-														<SelectItem value="es">Spanish</SelectItem>
-														<SelectItem value="fr">French</SelectItem>
-													</SelectContent>
-												</Select>
-											</div>
+								{/* Account Info Section */}
+								<div className="rounded-lg border bg-muted/50 p-4">
+									<h4 className="mb-3 font-medium text-sm">Account Information</h4>
+									<div className="grid grid-cols-2 gap-4 text-sm">
+										<div>
+											<p className="text-muted-foreground">Role</p>
+											<Badge variant="outline" className="mt-1">
+												{profileData?.agent?.role || "Agent"}
+											</Badge>
 										</div>
-										<div className="grid grid-cols-2 gap-4">
-											<div className="space-y-2">
-												<Label htmlFor="timezone">Timezone</Label>
-												<Select
-													value={preferenceSettings.timezone}
-													onValueChange={(value) =>
-														setPreferenceSettings((prev) => ({
-															...prev,
-															timezone: value,
-														}))
-													}
-												>
-													<SelectTrigger>
-														<SelectValue />
-													</SelectTrigger>
-													<SelectContent>
-														<SelectItem value="America/New_York">
-															Eastern Time
-														</SelectItem>
-														<SelectItem value="America/Chicago">
-															Central Time
-														</SelectItem>
-														<SelectItem value="America/Denver">
-															Mountain Time
-														</SelectItem>
-														<SelectItem value="America/Los_Angeles">
-															Pacific Time
-														</SelectItem>
-													</SelectContent>
-												</Select>
-											</div>
-											<div className="space-y-2">
-												<Label htmlFor="dateFormat">Date Format</Label>
-												<Select
-													value={preferenceSettings.dateFormat}
-													onValueChange={(value) =>
-														setPreferenceSettings((prev) => ({
-															...prev,
-															dateFormat: value,
-														}))
-													}
-												>
-													<SelectTrigger>
-														<SelectValue />
-													</SelectTrigger>
-													<SelectContent>
-														<SelectItem value="MM/DD/YYYY">
-															MM/DD/YYYY
-														</SelectItem>
-														<SelectItem value="DD/MM/YYYY">
-															DD/MM/YYYY
-														</SelectItem>
-														<SelectItem value="YYYY-MM-DD">
-															YYYY-MM-DD
-														</SelectItem>
-													</SelectContent>
-												</Select>
-											</div>
+										<div>
+											<p className="text-muted-foreground">Tier</p>
+											<Badge variant="secondary" className="mt-1">
+												{profileData?.agent?.agentTier?.replace("_", " ") || "Advisor"}
+											</Badge>
 										</div>
-									</CardContent>
-								</Card>
-							</TabsContent>
+										{profileData?.team && (
+											<div>
+												<p className="text-muted-foreground">Team</p>
+												<p className="mt-1 font-medium">{profileData.team.name}</p>
+											</div>
+										)}
+										{profileData?.agency && (
+											<div>
+												<p className="text-muted-foreground">Agency</p>
+												<p className="mt-1 font-medium">{profileData.agency.name}</p>
+											</div>
+										)}
+									</div>
+								</div>
+							</CardContent>
+						</Card>
 
-							<TabsContent value="privacy" className="space-y-6">
-								<Card>
-									<CardHeader>
-										<CardTitle>Privacy Settings</CardTitle>
-										<CardDescription>
-											Control your privacy and data sharing preferences
-										</CardDescription>
-									</CardHeader>
-									<CardContent className="space-y-4">
-										<div className="space-y-4">
-											<div className="space-y-2">
-												<Label htmlFor="profileVisibility">
-													Profile Visibility
-												</Label>
-												<Select
-													value={privacySettings.profileVisibility}
-													onValueChange={(value) =>
-														setPrivacySettings((prev) => ({
-															...prev,
-															profileVisibility: value,
-														}))
-													}
-												>
-													<SelectTrigger>
-														<SelectValue />
-													</SelectTrigger>
-													<SelectContent>
-														<SelectItem value="public">Public</SelectItem>
-														<SelectItem value="team">Team Only</SelectItem>
-														<SelectItem value="private">Private</SelectItem>
-													</SelectContent>
-												</Select>
-											</div>
-											<div className="flex items-center justify-between">
-												<div className="space-y-0.5">
-													<Label>Show Email Address</Label>
-													<p className="text-muted-foreground text-sm">
-														Display your email in your public profile
-													</p>
-												</div>
-												<Switch
-													checked={privacySettings.showEmail}
-													onCheckedChange={(checked) =>
-														setPrivacySettings((prev) => ({
-															...prev,
-															showEmail: checked,
-														}))
-													}
-												/>
-											</div>
-											<div className="flex items-center justify-between">
-												<div className="space-y-0.5">
-													<Label>Show Phone Number</Label>
-													<p className="text-muted-foreground text-sm">
-														Display your phone number in your public profile
-													</p>
-												</div>
-												<Switch
-													checked={privacySettings.showPhone}
-													onCheckedChange={(checked) =>
-														setPrivacySettings((prev) => ({
-															...prev,
-															showPhone: checked,
-														}))
-													}
-												/>
-											</div>
-											<div className="flex items-center justify-between">
-												<div className="space-y-0.5">
-													<Label>Allow Direct Messages</Label>
-													<p className="text-muted-foreground text-sm">
-														Allow other team members to send you direct messages
-													</p>
-												</div>
-												<Switch
-													checked={privacySettings.allowDirectMessages}
-													onCheckedChange={(checked) =>
-														setPrivacySettings((prev) => ({
-															...prev,
-															allowDirectMessages: checked,
-														}))
-													}
-												/>
-											</div>
-										</div>
-									</CardContent>
-								</Card>
-							</TabsContent>
-						</Tabs>
-
+						{/* Action Buttons */}
 						<div className="mt-6 flex justify-end gap-4">
-							<Button variant="outline">Cancel</Button>
-							<Button>Save Changes</Button>
+							<Button
+								variant="outline"
+								onClick={handleCancel}
+								disabled={!hasChanges || updateProfileMutation.isPending}
+							>
+								Cancel
+							</Button>
+							<Button
+								onClick={handleSave}
+								disabled={!hasChanges || updateProfileMutation.isPending}
+							>
+								{updateProfileMutation.isPending ? (
+									<>
+										<RiLoader4Line className="mr-2 h-4 w-4 animate-spin" />
+										Saving...
+									</>
+								) : (
+									<>
+										<RiCheckLine className="mr-2 h-4 w-4" />
+										Save Changes
+									</>
+								)}
+							</Button>
 						</div>
 					</div>
 				</div>

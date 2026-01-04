@@ -6,12 +6,37 @@ import type {
 	DocumentsData,
 	FormStep,
 	PropertyData,
+	RepresentationType,
 } from "../transaction-schema";
 
-// Local storage key for auto-save
+// Local storage keys for auto-save (Issue #4 fix)
 const FORM_STORAGE_KEY = "transaction-form-draft";
+const FORM_STEP_KEY = "transaction-form-step";
 
-// Initial form data
+// Interface for serialized form data (handles Date serialization - Issue #4)
+interface SerializedFormData extends Omit<Partial<CompleteTransactionData>, 'transactionDate'> {
+	transactionDate?: string; // ISO string for localStorage
+}
+
+// Serialize form data for localStorage (Issue #4 fix)
+function serializeFormData(data: Partial<CompleteTransactionData>): string {
+	const serialized: SerializedFormData = {
+		...data,
+		transactionDate: data.transactionDate?.toISOString(),
+	};
+	return JSON.stringify(serialized);
+}
+
+// Deserialize form data from localStorage (Issue #4 fix)
+function deserializeFormData(jsonString: string): Partial<CompleteTransactionData> {
+	const parsed: SerializedFormData = JSON.parse(jsonString);
+	return {
+		...parsed,
+		transactionDate: parsed.transactionDate ? new Date(parsed.transactionDate) : undefined,
+	};
+}
+
+// Initial form data with unified representation type (Issue #1 fix)
 export const initialFormData: Partial<CompleteTransactionData> = {
 	marketType: undefined,
 	transactionType: undefined,
@@ -29,11 +54,13 @@ export const initialFormData: Partial<CompleteTransactionData> = {
 		name: "",
 		email: "",
 		phone: "",
-		type: "buyer" as const,
+		type: undefined as "buyer" | "seller" | "tenant" | "landlord" | undefined,
 		source: "",
 		notes: "",
 	},
-	isCoBroking: false,
+	// Simplified representation type - 2 options: direct or co_broking
+	representationType: "direct" as RepresentationType,
+	isCoBroking: false, // Derived from representationType for backward compatibility
 	coBrokingData: undefined,
 	commissionType: "percentage" as const,
 	commissionValue: 0,
@@ -42,40 +69,84 @@ export const initialFormData: Partial<CompleteTransactionData> = {
 	notes: "",
 };
 
-// Form state hook with mode awareness
+// Form state hook with mode awareness (Issue #4 fix - step and date persistence)
 export function useTransactionFormState(transactionId?: string, mode?: "create" | "edit" | "resume") {
 	const [currentStep, setCurrentStep] = useState<FormStep>(1);
 	const [formData, setFormData] =
 		useState<Partial<CompleteTransactionData>>(initialFormData);
 	const [isLoading, setIsLoading] = useState(false);
 	const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+	const [showRecoveryDialog, setShowRecoveryDialog] = useState(false);
+	const [recoveredData, setRecoveredData] = useState<{
+		data: Partial<CompleteTransactionData>;
+		step: FormStep;
+	} | null>(null);
 
-	// Load saved form data from localStorage on mount (only when not creating new)
+	// Load saved form data from localStorage on mount (Issue #4 fix)
 	useEffect(() => {
 		if (!transactionId && mode !== "create") {
 			const savedData = localStorage.getItem(FORM_STORAGE_KEY);
+			const savedStep = localStorage.getItem(FORM_STEP_KEY);
+
 			if (savedData) {
 				try {
-					const parsedData = JSON.parse(savedData);
-					setFormData(parsedData);
+					const parsedData = deserializeFormData(savedData);
+					const parsedStep = savedStep ? (parseInt(savedStep, 10) as FormStep) : 1;
+
+					// Check if there's meaningful data to recover
+					const hasData = parsedData.marketType ||
+						parsedData.propertyData?.address ||
+						parsedData.clientData?.name;
+
+					if (hasData) {
+						// Store recovered data for user decision
+						setRecoveredData({ data: parsedData, step: parsedStep });
+						setShowRecoveryDialog(true);
+					}
 				} catch (error) {
-					console.error("Failed to parse saved form data:", error);
+					if (process.env.NODE_ENV === 'development') {
+						console.error("Failed to parse saved form data:", error);
+					}
+					// Clear corrupted data
+					localStorage.removeItem(FORM_STORAGE_KEY);
+					localStorage.removeItem(FORM_STEP_KEY);
 				}
 			}
 		}
 	}, [transactionId, mode]);
 
-	// Auto-save to localStorage when form data changes
+	// Auto-save to localStorage when form data changes (Issue #4 fix)
 	useEffect(() => {
 		if (!transactionId && hasUnsavedChanges) {
 			const timeoutId = setTimeout(() => {
-				localStorage.setItem(FORM_STORAGE_KEY, JSON.stringify(formData));
+				localStorage.setItem(FORM_STORAGE_KEY, serializeFormData(formData));
+				localStorage.setItem(FORM_STEP_KEY, currentStep.toString());
 				setHasUnsavedChanges(false);
 			}, 1000); // Debounce auto-save by 1 second
 
 			return () => clearTimeout(timeoutId);
 		}
-	}, [formData, hasUnsavedChanges, transactionId]);
+	}, [formData, hasUnsavedChanges, transactionId, currentStep]);
+
+	// Accept recovered data (Issue #4 fix)
+	const acceptRecoveredData = useCallback(() => {
+		if (recoveredData) {
+			setFormData(recoveredData.data);
+			setCurrentStep(recoveredData.step);
+			setShowRecoveryDialog(false);
+			setRecoveredData(null);
+		}
+	}, [recoveredData]);
+
+	// Decline recovered data and start fresh (Issue #4 fix)
+	const declineRecoveredData = useCallback(() => {
+		localStorage.removeItem(FORM_STORAGE_KEY);
+		localStorage.removeItem(FORM_STEP_KEY);
+		setShowRecoveryDialog(false);
+		setRecoveredData(null);
+		setFormData(initialFormData);
+		setCurrentStep(1);
+	}, []);
 
 	// Update form data
 	const updateFormData = useCallback(
@@ -86,7 +157,7 @@ export function useTransactionFormState(transactionId?: string, mode?: "create" 
 		[],
 	);
 
-	// Update specific step data
+	// Update specific step data (Issue #1 fix - unified representation type handling)
 	const updateStepData = useCallback(
 		(step: FormStep, data: Record<string, unknown>) => {
 			switch (step) {
@@ -106,12 +177,19 @@ export function useTransactionFormState(transactionId?: string, mode?: "create" 
 				case 3:
 					updateFormData({ clientData: data as ClientData });
 					break;
-				case 4:
+				case 4: {
+					// Issue #1 fix: Handle unified representation type
+					const representationType = data.representationType as RepresentationType | undefined;
+					// Derive isCoBroking from representationType for backward compatibility
+					const isCoBroking = representationType === "co_broking";
+
 					updateFormData({
-						isCoBroking: data.isCoBroking as boolean,
+						representationType: representationType || "direct",
+						isCoBroking,
 						coBrokingData: data.coBrokingData as CoBrokingData["coBrokingData"],
 					});
 					break;
+				}
 				case 5:
 					updateFormData({
 						commissionType: data.commissionType as
@@ -146,17 +224,19 @@ export function useTransactionFormState(transactionId?: string, mode?: "create" 
 		setCurrentStep((prev) => Math.max(prev - 1, 1) as FormStep);
 	}, []);
 
-	// Reset form
+	// Reset form (Issue #4 fix - clear step storage too)
 	const resetForm = useCallback(() => {
 		setFormData(initialFormData);
 		setCurrentStep(1);
 		setHasUnsavedChanges(false);
 		localStorage.removeItem(FORM_STORAGE_KEY);
+		localStorage.removeItem(FORM_STEP_KEY);
 	}, []);
 
-	// Clear auto-saved data
+	// Clear auto-saved data (Issue #4 fix - clear step storage too)
 	const clearAutoSave = useCallback(() => {
 		localStorage.removeItem(FORM_STORAGE_KEY);
+		localStorage.removeItem(FORM_STEP_KEY);
 		setHasUnsavedChanges(false);
 	}, []);
 
@@ -166,6 +246,9 @@ export function useTransactionFormState(transactionId?: string, mode?: "create" 
 		formData,
 		isLoading,
 		hasUnsavedChanges,
+		// Issue #4: Recovery dialog state
+		showRecoveryDialog,
+		recoveredData,
 
 		// Actions
 		updateFormData,
@@ -176,6 +259,9 @@ export function useTransactionFormState(transactionId?: string, mode?: "create" 
 		resetForm,
 		clearAutoSave,
 		setIsLoading,
+		// Issue #4: Recovery actions
+		acceptRecoveredData,
+		declineRecoveredData,
 	};
 }
 

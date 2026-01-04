@@ -9,6 +9,7 @@ import {
 	text,
 	timestamp,
 	uuid,
+	jsonb,
 } from "drizzle-orm/pg-core";
 
 // Agent tier enum for commission calculations
@@ -57,12 +58,18 @@ export const user = pgTable("user", {
 	permissions: text("permissions"), // JSON string for role permissions
 	// Agent tier system for commission calculations
 	agentTier: agentTierEnum("agent_tier").default("advisor"),
-	companyCommissionSplit: integer("company_commission_split").default(60), // Percentage (60 = 60%)
+	companyCommissionSplit: integer("company_commission_split").default(70), // Percentage (70 = 70% for Advisor under New Leadership Plan)
 	tierEffectiveDate: timestamp("tier_effective_date").defaultNow(),
 	tierPromotedBy: text("tier_promoted_by"), // Self-reference for who promoted - will add FK constraint separately
+	// Recruitment/upline tracking for Leadership Bonus (1-level direct upline only)
+	recruitedBy: text("recruited_by"), // User ID of direct upline who recruited this agent
+	recruitedAt: timestamp("recruited_at"), // Date when agent was recruited
 	createdAt: timestamp("created_at").notNull(),
 	updatedAt: timestamp("updated_at").notNull(),
-});
+}, (table) => ({
+	recruitedByIdx: index("idx_user_recruited_by").on(table.recruitedBy),
+	agentTierIdx: index("idx_user_agent_tier").on(table.agentTier),
+}));
 
 // Agent tier history for audit trail and compliance
 export const agentTierHistory = pgTable("agent_tier_history", {
@@ -142,6 +149,81 @@ export const commissionAuditLog = pgTable("commission_audit_log", {
 	timestamp: timestamp("timestamp").defaultNow().notNull(),
 });
 
+// Tier commission configuration table - allows admin to modify tier settings
+export const tierCommissionConfig = pgTable("tier_commission_config", {
+	id: uuid("id").primaryKey().defaultRandom(),
+	tier: agentTierEnum("tier").notNull().unique(),
+	commissionSplit: integer("commission_split").notNull(), // Agent's percentage (e.g., 70 = 70%)
+	leadershipBonusRate: integer("leadership_bonus_rate").notNull().default(0), // Percentage from company's share
+	requirements: jsonb("requirements").$type<{
+		monthlySales: number;
+		teamMembers: number;
+	}>().notNull(),
+	displayName: text("display_name").notNull(),
+	description: text("description"),
+	isActive: boolean("is_active").default(true).notNull(),
+	effectiveFrom: timestamp("effective_from").defaultNow().notNull(),
+	effectiveTo: timestamp("effective_to"), // Null means currently active
+	createdBy: text("created_by").references(() => user.id),
+	updatedBy: text("updated_by").references(() => user.id),
+	createdAt: timestamp("created_at").defaultNow().notNull(),
+	updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => ({
+	tierIdx: index("idx_tier_commission_config_tier").on(table.tier),
+	isActiveIdx: index("idx_tier_commission_config_is_active").on(table.isActive),
+}));
+
+// Leadership bonus payments table - tracks bonus payments to uplines
+export const leadershipBonusPayments = pgTable("leadership_bonus_payments", {
+	id: uuid("id").primaryKey().defaultRandom(),
+	transactionId: uuid("transaction_id").notNull(), // References transactions table
+	// The agent who made the sale (downline)
+	downlineAgentId: text("downline_agent_id")
+		.notNull()
+		.references(() => user.id, { onDelete: "cascade" }),
+	// The agent receiving the leadership bonus (direct upline)
+	uplineAgentId: text("upline_agent_id")
+		.notNull()
+		.references(() => user.id, { onDelete: "cascade" }),
+	// Upline's tier at time of payment
+	uplineTier: agentTierEnum("upline_tier").notNull(),
+	// Commission details
+	originalCommissionAmount: decimal("original_commission_amount", { precision: 15, scale: 2 }).notNull(),
+	companyShareAmount: decimal("company_share_amount", { precision: 15, scale: 2 }).notNull(),
+	leadershipBonusRate: integer("leadership_bonus_rate").notNull(), // Percentage applied
+	leadershipBonusAmount: decimal("leadership_bonus_amount", { precision: 15, scale: 2 }).notNull(),
+	// Status
+	status: text("status").default("pending").notNull(), // pending, paid, cancelled
+	paidAt: timestamp("paid_at"),
+	// Audit
+	createdAt: timestamp("created_at").defaultNow().notNull(),
+	updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => ({
+	transactionIdIdx: index("idx_leadership_bonus_transaction_id").on(table.transactionId),
+	downlineAgentIdIdx: index("idx_leadership_bonus_downline_agent_id").on(table.downlineAgentId),
+	uplineAgentIdIdx: index("idx_leadership_bonus_upline_agent_id").on(table.uplineAgentId),
+	statusIdx: index("idx_leadership_bonus_status").on(table.status),
+}));
+
+// Tier configuration change audit log
+export const tierConfigChangeLog = pgTable("tier_config_change_log", {
+	id: uuid("id").primaryKey().defaultRandom(),
+	configId: uuid("config_id").references(() => tierCommissionConfig.id),
+	tier: agentTierEnum("tier").notNull(),
+	changeType: text("change_type").notNull(), // 'create', 'update', 'deactivate'
+	oldValues: jsonb("old_values"),
+	newValues: jsonb("new_values"),
+	changedBy: text("changed_by")
+		.notNull()
+		.references(() => user.id),
+	changeReason: text("change_reason"),
+	timestamp: timestamp("timestamp").defaultNow().notNull(),
+}, (table) => ({
+	configIdIdx: index("idx_tier_config_change_log_config_id").on(table.configId),
+	tierIdx: index("idx_tier_config_change_log_tier").on(table.tier),
+	timestampIdx: index("idx_tier_config_change_log_timestamp").on(table.timestamp),
+}));
+
 export const verification = pgTable("verification", {
 	id: text("id").primaryKey(),
 	identifier: text("identifier").notNull(),
@@ -187,6 +269,44 @@ export const commissionAuditLogSchema = z.object({
 	timestamp: z.date(),
 });
 
+// Tier commission config schema
+export const tierCommissionConfigSchema = z.object({
+	id: z.string(),
+	tier: agentTierSchema,
+	commissionSplit: z.number(),
+	leadershipBonusRate: z.number(),
+	requirements: z.object({
+		monthlySales: z.number(),
+		teamMembers: z.number(),
+	}),
+	displayName: z.string(),
+	description: z.string().nullable(),
+	isActive: z.boolean(),
+	effectiveFrom: z.date(),
+	effectiveTo: z.date().nullable(),
+	createdBy: z.string().nullable(),
+	updatedBy: z.string().nullable(),
+	createdAt: z.date(),
+	updatedAt: z.date(),
+});
+
+// Leadership bonus payment schema
+export const leadershipBonusPaymentSchema = z.object({
+	id: z.string(),
+	transactionId: z.string(),
+	downlineAgentId: z.string(),
+	uplineAgentId: z.string(),
+	uplineTier: agentTierSchema,
+	originalCommissionAmount: z.string(), // Decimal comes as string
+	companyShareAmount: z.string(),
+	leadershipBonusRate: z.number(),
+	leadershipBonusAmount: z.string(),
+	status: z.enum(["pending", "paid", "cancelled"]),
+	paidAt: z.date().nullable(),
+	createdAt: z.date(),
+	updatedAt: z.date(),
+});
+
 // Enhanced user schema with agent tier fields
 export const userWithTierSchema = z.object({
 	id: z.string(),
@@ -202,6 +322,8 @@ export const userWithTierSchema = z.object({
 	companyCommissionSplit: z.number(),
 	tierEffectiveDate: z.date().nullable(),
 	tierPromotedBy: z.string().nullable(),
+	recruitedBy: z.string().nullable(),
+	recruitedAt: z.date().nullable(),
 	createdAt: z.date(),
 	updatedAt: z.date(),
 });
@@ -210,6 +332,8 @@ export const userWithTierSchema = z.object({
 export type AgentTier = z.infer<typeof agentTierSchema>;
 export type AgentTierHistory = z.infer<typeof agentTierHistorySchema>;
 export type CommissionAuditLog = z.infer<typeof commissionAuditLogSchema>;
+export type TierCommissionConfig = z.infer<typeof tierCommissionConfigSchema>;
+export type LeadershipBonusPayment = z.infer<typeof leadershipBonusPaymentSchema>;
 export type UserWithTier = z.infer<typeof userWithTierSchema>;
 
 // Agent status enum for management
@@ -285,10 +409,17 @@ export const agentGoals = pgTable("agent_goals", {
 	endDateIdx: index("idx_agent_goals_end_date").on(table.endDate),
 }));
 
-// Agent tier configuration with commission splits and requirements
+// Agent tier configuration with commission splits, leadership bonus, and requirements
+// New Leadership Plan commission structure:
+// - Advisor: 70% commission, no leadership bonus (entry level)
+// - Sales Leader: 80% commission + 7% leadership bonus from downline
+// - Team Leader: 83% commission + 5% leadership bonus from downline
+// - Group Leader: 85% commission + 8% leadership bonus from downline
+// - Supreme Leader: 85% commission + 6% leadership bonus from downline
 export const AGENT_TIER_CONFIG = {
 	advisor: {
-		commissionSplit: 60,
+		commissionSplit: 70,
+		leadershipBonusRate: 0, // No leadership bonus for entry level
 		requirements: {
 			monthlySales: 0,
 			teamMembers: 0,
@@ -297,7 +428,8 @@ export const AGENT_TIER_CONFIG = {
 		description: "Entry level agent",
 	},
 	sales_leader: {
-		commissionSplit: 70,
+		commissionSplit: 80,
+		leadershipBonusRate: 7, // 7% leadership bonus from company's share
 		requirements: {
 			monthlySales: 2,
 			teamMembers: 0,
@@ -306,7 +438,8 @@ export const AGENT_TIER_CONFIG = {
 		description: "2+ monthly sales",
 	},
 	team_leader: {
-		commissionSplit: 75,
+		commissionSplit: 83,
+		leadershipBonusRate: 5, // 5% leadership bonus from company's share
 		requirements: {
 			monthlySales: 3,
 			teamMembers: 3,
@@ -315,7 +448,8 @@ export const AGENT_TIER_CONFIG = {
 		description: "3+ sales, 3+ team members",
 	},
 	group_leader: {
-		commissionSplit: 80,
+		commissionSplit: 85,
+		leadershipBonusRate: 8, // 8% leadership bonus from company's share
 		requirements: {
 			monthlySales: 5,
 			teamMembers: 5,
@@ -325,6 +459,7 @@ export const AGENT_TIER_CONFIG = {
 	},
 	supreme_leader: {
 		commissionSplit: 85,
+		leadershipBonusRate: 6, // 6% leadership bonus from company's share
 		requirements: {
 			monthlySales: 8,
 			teamMembers: 10,

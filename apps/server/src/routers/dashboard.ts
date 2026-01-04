@@ -14,8 +14,8 @@ const dashboardPreferencesInput = z.object({
 });
 
 const dateRangeInput = z.object({
-	startDate: z.date().optional(),
-	endDate: z.date().optional(),
+	startDate: z.coerce.date().optional(),
+	endDate: z.coerce.date().optional(),
 });
 
 export const dashboardRouter = router({
@@ -37,23 +37,23 @@ export const dashboardRouter = router({
 				dateConditions.push(sql`${transactions.transactionDate} <= ${endDate}`);
 			}
 
-			// Get commission data
-			const commissionData = await db
+			// Get commission data (PostgreSQL returns strings for aggregates)
+			const rawCommissionData = await db
 				.select({
-					totalCommission: sql<number>`SUM(CAST(${transactions.commissionAmount} AS DECIMAL))`,
-					completedDeals: sql<number>`COUNT(CASE WHEN ${transactions.status} = 'completed' THEN 1 END)`,
-					pendingCommission: sql<number>`SUM(CASE WHEN ${transactions.status} IN ('approved', 'under_review') THEN CAST(${transactions.commissionAmount} AS DECIMAL) ELSE 0 END)`,
-					averageDealValue: sql<number>`AVG(CASE WHEN ${transactions.propertyData}->>'price' IS NOT NULL THEN CAST(${transactions.propertyData}->>'price' AS DECIMAL) END)`,
+					totalCommission: sql<string>`COALESCE(SUM(${transactions.commissionAmount}), 0)`,
+					completedDeals: sql<string>`COUNT(CASE WHEN ${transactions.status} = 'completed' THEN 1 END)`,
+					pendingCommission: sql<string>`COALESCE(SUM(CASE WHEN ${transactions.status} IN ('approved', 'under_review') THEN ${transactions.commissionAmount} ELSE 0 END), 0)`,
+					averageDealValue: sql<string>`COALESCE(AVG(CASE WHEN ${transactions.propertyData}->>'price' IS NOT NULL THEN CAST(${transactions.propertyData}->>'price' AS DECIMAL) END), 0)`,
 				})
 				.from(transactions)
 				.where(and(eq(transactions.agentId, userId), ...dateConditions));
 
 			// Get monthly trend data
-			const monthlyTrend = await db
+			const rawMonthlyTrend = await db
 				.select({
 					month: sql<string>`TO_CHAR(${transactions.transactionDate}, 'YYYY-MM')`,
-					commission: sql<number>`SUM(CAST(${transactions.commissionAmount} AS DECIMAL))`,
-					deals: sql<number>`COUNT(*)`,
+					commission: sql<string>`COALESCE(SUM(${transactions.commissionAmount}), 0)`,
+					deals: sql<string>`COUNT(*)`,
 				})
 				.from(transactions)
 				.where(
@@ -65,13 +65,27 @@ export const dashboardRouter = router({
 				.groupBy(sql`TO_CHAR(${transactions.transactionDate}, 'YYYY-MM')`)
 				.orderBy(sql`TO_CHAR(${transactions.transactionDate}, 'YYYY-MM')`);
 
+			// Convert string values to numbers
+			const overview = rawCommissionData[0] ? {
+				totalCommission: Number(rawCommissionData[0].totalCommission) || 0,
+				completedDeals: Number(rawCommissionData[0].completedDeals) || 0,
+				pendingCommission: Number(rawCommissionData[0].pendingCommission) || 0,
+				averageDealValue: Number(rawCommissionData[0].averageDealValue) || 0,
+			} : {
+				totalCommission: 0,
+				completedDeals: 0,
+				pendingCommission: 0,
+				averageDealValue: 0,
+			};
+
+			const monthlyTrend = rawMonthlyTrend.map(item => ({
+				month: item.month,
+				commission: Number(item.commission) || 0,
+				deals: Number(item.deals) || 0,
+			}));
+
 			return {
-				overview: commissionData[0] || {
-					totalCommission: 0,
-					completedDeals: 0,
-					pendingCommission: 0,
-					averageDealValue: 0,
-				},
+				overview,
 				monthlyTrend,
 			};
 		}),
@@ -81,11 +95,12 @@ export const dashboardRouter = router({
 		const userId = ctx.session.user.id;
 
 		// Get pipeline status breakdown
-		const pipelineData = await db
+		// Note: Use commission_amount for total value, not property price
+		const rawPipelineData = await db
 			.select({
 				status: transactions.status,
-				count: sql<number>`COUNT(*)`,
-				totalValue: sql<number>`SUM(CASE WHEN ${transactions.propertyData}->>'price' IS NOT NULL THEN CAST(${transactions.propertyData}->>'price' AS DECIMAL) ELSE 0 END)`,
+				count: sql<string>`COUNT(*)`,
+				totalValue: sql<string>`COALESCE(SUM(${transactions.commissionAmount}), 0)`,
 			})
 			.from(transactions)
 			.where(
@@ -95,6 +110,13 @@ export const dashboardRouter = router({
 				),
 			)
 			.groupBy(transactions.status);
+
+		// Convert string values to numbers (PostgreSQL returns strings for aggregates)
+		const pipelineData = rawPipelineData.map(item => ({
+			status: item.status,
+			count: Number(item.count) || 0,
+			totalValue: Number(item.totalValue) || 0,
+		}));
 
 		// Get active transactions
 		const activeTransactions = await db
@@ -130,7 +152,7 @@ export const dashboardRouter = router({
 		const rawStatusData = await db
 			.select({
 				status: transactions.status,
-				count: sql<number>`COUNT(*)`,
+				count: sql<string>`COUNT(*)`,
 				percentage: sql<string>`ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER(), 2)`,
 			})
 			.from(transactions)
@@ -138,9 +160,10 @@ export const dashboardRouter = router({
 			.groupBy(transactions.status)
 			.orderBy(sql`COUNT(*) DESC`);
 
-		// Convert percentage strings to numbers for type safety
+		// Convert string values to numbers (PostgreSQL returns strings for aggregates)
 		const statusData = rawStatusData.map(item => ({
-			...item,
+			status: item.status,
+			count: Number(item.count) || 0,
 			percentage: Number(item.percentage) || 0,
 		}));
 
@@ -286,24 +309,34 @@ export const dashboardRouter = router({
 			return [];
 		}
 
-		// Get team member performance
-		const leaderboard = await db
+		// Get team member performance (PostgreSQL returns strings for aggregates)
+		const rawLeaderboard = await db
 			.select({
 				agentId: user.id,
 				agentName: user.name,
 				agentImage: user.image,
-				totalCommission: sql<number>`COALESCE(SUM(CAST(${transactions.commissionAmount} AS DECIMAL)), 0)`,
-				completedDeals: sql<number>`COUNT(CASE WHEN ${transactions.status} = 'completed' THEN 1 END)`,
-				activeDeals: sql<number>`COUNT(CASE WHEN ${transactions.status} NOT IN ('completed', 'rejected') THEN 1 END)`,
+				totalCommission: sql<string>`COALESCE(SUM(${transactions.commissionAmount}), 0)`,
+				completedDeals: sql<string>`COUNT(CASE WHEN ${transactions.status} = 'completed' THEN 1 END)`,
+				activeDeals: sql<string>`COUNT(CASE WHEN ${transactions.status} NOT IN ('completed', 'rejected') THEN 1 END)`,
 			})
 			.from(user)
 			.leftJoin(transactions, eq(user.id, transactions.agentId))
 			.where(eq(user.teamId, userInfo[0].teamId))
 			.groupBy(user.id, user.name, user.image)
 			.orderBy(
-				sql`COALESCE(SUM(CAST(${transactions.commissionAmount} AS DECIMAL)), 0) DESC`,
+				sql`COALESCE(SUM(${transactions.commissionAmount}), 0) DESC`,
 			)
 			.limit(10);
+
+		// Convert string values to numbers
+		const leaderboard = rawLeaderboard.map(item => ({
+			agentId: item.agentId,
+			agentName: item.agentName,
+			agentImage: item.agentImage,
+			totalCommission: Number(item.totalCommission) || 0,
+			completedDeals: Number(item.completedDeals) || 0,
+			activeDeals: Number(item.activeDeals) || 0,
+		}));
 
 		return leaderboard;
 	}),

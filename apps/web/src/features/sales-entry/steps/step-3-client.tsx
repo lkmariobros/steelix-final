@@ -30,7 +30,6 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 
 import {
@@ -39,6 +38,8 @@ import {
 	clientSourceOptions,
 	clientTypeOptions,
 } from "../transaction-schema";
+// Issue #9 Fix: Import required label components
+import { RequiredLabel, RequiredFieldsNote } from "@/components/required-label";
 
 interface StepClientProps {
 	data?: ClientData;
@@ -66,7 +67,6 @@ export function StepClient({
 			type: data?.type || undefined,
 			source: data?.source || "",
 			notes: data?.notes || "",
-			isDualPartyDeal: data?.isDualPartyDeal || false,
 		},
 	});
 
@@ -127,6 +127,19 @@ export function StepClient({
 
 	const isAutoSuggested = watchedValues.type === getAutoSuggestedType();
 
+	// Filter client type options based on transaction type
+	const getFilteredClientTypes = () => {
+		if (transactionType === "sale") {
+			return clientTypeOptions.filter(opt => opt.value === "buyer" || opt.value === "seller");
+		}
+		if (transactionType === "lease") {
+			return clientTypeOptions.filter(opt => opt.value === "tenant" || opt.value === "landlord");
+		}
+		return clientTypeOptions;
+	};
+
+	const filteredClientTypes = getFilteredClientTypes();
+
 	return (
 		<div className="space-y-6">
 			<Card>
@@ -142,6 +155,9 @@ export function StepClient({
 							onSubmit={form.handleSubmit(handleSubmit)}
 							className="space-y-6"
 						>
+							{/* Issue #9 Fix: Required fields note */}
+							<RequiredFieldsNote />
+
 							{/* Basic Client Information */}
 							<div className="space-y-4">
 								<h3 className="font-medium text-lg">Contact Details</h3>
@@ -152,7 +168,7 @@ export function StepClient({
 									name="name"
 									render={({ field }) => (
 										<FormItem>
-											<FormLabel>Full Name</FormLabel>
+											<FormLabel><RequiredLabel>Full Name</RequiredLabel></FormLabel>
 											<FormControl>
 												<Input
 													placeholder="Enter client&apos;s full name"
@@ -175,7 +191,7 @@ export function StepClient({
 										name="email"
 										render={({ field }) => (
 											<FormItem>
-												<FormLabel>Email Address</FormLabel>
+												<FormLabel><RequiredLabel>Email Address</RequiredLabel></FormLabel>
 												<FormControl>
 													<Input
 														type="email"
@@ -198,7 +214,7 @@ export function StepClient({
 										name="phone"
 										render={({ field }) => (
 											<FormItem>
-												<FormLabel>Phone Number</FormLabel>
+												<FormLabel><RequiredLabel>Phone Number</RequiredLabel></FormLabel>
 												<FormControl>
 													<Input
 														type="tel"
@@ -242,7 +258,7 @@ export function StepClient({
 														</SelectTrigger>
 													</FormControl>
 													<SelectContent>
-														{clientTypeOptions.map((option) => (
+														{filteredClientTypes.map((option) => (
 															<SelectItem
 																key={option.value}
 																value={option.value}
@@ -305,56 +321,6 @@ export function StepClient({
 									/>
 								</div>
 							</div>
-
-							{/* Dual-Party Deal Toggle */}
-							<FormField
-								control={form.control}
-								name="isDualPartyDeal"
-								render={({ field }) => (
-									<FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-										<div className="space-y-0.5">
-											<FormLabel className="text-base">
-												Dual-Party Deal
-											</FormLabel>
-											<FormDescription>
-												Are you representing both parties in this transaction?
-											</FormDescription>
-										</div>
-										<FormControl>
-											<Switch
-												checked={field.value}
-												onCheckedChange={(checked) => {
-													field.onChange(checked);
-													handleFormChange();
-												}}
-											/>
-										</FormControl>
-									</FormItem>
-								)}
-							/>
-
-							{/* Legal Disclosure for Dual-Party Deals */}
-							{form.watch("isDualPartyDeal") && (
-								<Card className="border-amber-200 bg-amber-50">
-									<CardContent className="pt-6">
-										<div className="flex items-start gap-3">
-											<div className="rounded-full bg-amber-100 p-1">
-												<User className="h-4 w-4 text-amber-600" />
-											</div>
-											<div className="space-y-1">
-												<p className="text-sm font-medium text-amber-800">
-													Legal Disclosure Required
-												</p>
-												<p className="text-sm text-amber-700">
-													When representing both parties, you must provide proper disclosure
-													and obtain written consent from all parties involved. Ensure compliance
-													with local real estate regulations and ethical guidelines.
-												</p>
-											</div>
-										</div>
-									</CardContent>
-								</Card>
-							)}
 
 							{/* Additional Notes */}
 							<FormField

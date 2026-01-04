@@ -93,11 +93,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 							icon: RiDashboardLine,
 						},
 						{
-							title: "Pipeline",
-							url: "/dashboard/pipeline",
-							icon: RiBarChartLine,
-						},
-						{
 							title: "Transactions",
 							url: "/dashboard/transactions",
 							icon: RiFileTextLine,

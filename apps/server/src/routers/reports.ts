@@ -466,6 +466,223 @@ export const reportsRouter = router({
 			};
 		}),
 
+	// Get co-broking reports (admin only)
+	getCoBrokingReports: adminProcedure
+		.input(z.object({
+			startDate: z.coerce.date().optional(),
+			endDate: z.coerce.date().optional(),
+			agencyName: z.string().optional(),
+			limit: z.number().min(1).max(100).default(50),
+			offset: z.number().min(0).default(0),
+		}))
+		.query(async ({ input }) => {
+			const conditions = [
+				eq(transactions.isCoBroking, true),
+			];
+
+			if (input.startDate) {
+				conditions.push(gte(transactions.createdAt, input.startDate));
+			}
+			if (input.endDate) {
+				conditions.push(lte(transactions.createdAt, input.endDate));
+			}
+
+			// Get co-broking transactions with agent info
+			const coBrokingTransactions = await db
+				.select({
+					id: transactions.id,
+					agentId: transactions.agentId,
+					agentName: user.name,
+					agentEmail: user.email,
+					propertyData: transactions.propertyData,
+					clientData: transactions.clientData,
+					coBrokingData: transactions.coBrokingData,
+					commissionAmount: transactions.commissionAmount,
+					transactionType: transactions.transactionType,
+					marketType: transactions.marketType,
+					status: transactions.status,
+					transactionDate: transactions.transactionDate,
+					createdAt: transactions.createdAt,
+				})
+				.from(transactions)
+				.leftJoin(user, eq(transactions.agentId, user.id))
+				.where(and(...conditions))
+				.orderBy(desc(transactions.createdAt))
+				.limit(input.limit)
+				.offset(input.offset);
+
+			// Filter by agency name if provided (post-query filter since it's in JSONB)
+			const filteredTransactions = input.agencyName
+				? coBrokingTransactions.filter(t =>
+					t.coBrokingData?.agencyName?.toLowerCase().includes(input.agencyName!.toLowerCase())
+				)
+				: coBrokingTransactions;
+
+			// Get total count
+			const [{ count: totalCount }] = await db
+				.select({ count: sql<number>`count(*)` })
+				.from(transactions)
+				.where(and(...conditions));
+
+			// Aggregate by partner agency
+			const agencyAggregation = filteredTransactions.reduce((acc, t) => {
+				const agencyName = t.coBrokingData?.agencyName || 'Unknown Agency';
+				if (!acc[agencyName]) {
+					acc[agencyName] = {
+						agencyName,
+						totalDeals: 0,
+						totalCommission: 0,
+						averageSplit: 0,
+						agents: new Set<string>(),
+						transactions: [],
+					};
+				}
+				acc[agencyName].totalDeals += 1;
+				acc[agencyName].totalCommission += parseFloat(t.commissionAmount || '0');
+				acc[agencyName].averageSplit += t.coBrokingData?.commissionSplit || 0;
+				acc[agencyName].agents.add(t.coBrokingData?.agentName || 'Unknown');
+				acc[agencyName].transactions.push(t);
+				return acc;
+			}, {} as Record<string, any>);
+
+			// Calculate averages and convert Sets to arrays
+			const partnerAgencies = Object.values(agencyAggregation).map((agency: any) => ({
+				...agency,
+				averageSplit: agency.averageSplit / agency.totalDeals,
+				agents: Array.from(agency.agents),
+				agentCount: agency.agents.size,
+			}));
+
+			// Summary stats
+			const summary = {
+				totalCoBrokingDeals: filteredTransactions.length,
+				totalCoBrokingCommission: filteredTransactions.reduce((sum, t) => sum + parseFloat(t.commissionAmount || '0'), 0),
+				uniquePartnerAgencies: partnerAgencies.length,
+				averageCommissionSplit: filteredTransactions.reduce((sum, t) => sum + (t.coBrokingData?.commissionSplit || 0), 0) / filteredTransactions.length || 0,
+			};
+
+			return {
+				transactions: filteredTransactions,
+				partnerAgencies: partnerAgencies.sort((a, b) => b.totalDeals - a.totalDeals),
+				summary,
+				totalCount,
+				hasMore: input.offset + input.limit < totalCount,
+			};
+		}),
+
+	// Get client data with transaction history (admin only)
+	getClientData: adminProcedure
+		.input(z.object({
+			startDate: z.coerce.date().optional(),
+			endDate: z.coerce.date().optional(),
+			clientType: z.enum(['buyer', 'seller', 'tenant', 'landlord']).optional(),
+			searchQuery: z.string().optional(),
+			limit: z.number().min(1).max(100).default(50),
+			offset: z.number().min(0).default(0),
+		}))
+		.query(async ({ input }) => {
+			const conditions = [];
+
+			if (input.startDate) {
+				conditions.push(gte(transactions.createdAt, input.startDate));
+			}
+			if (input.endDate) {
+				conditions.push(lte(transactions.createdAt, input.endDate));
+			}
+
+			// Get transactions with client data
+			const transactionsWithClients = await db
+				.select({
+					id: transactions.id,
+					agentId: transactions.agentId,
+					agentName: user.name,
+					clientData: transactions.clientData,
+					propertyData: transactions.propertyData,
+					commissionAmount: transactions.commissionAmount,
+					transactionType: transactions.transactionType,
+					marketType: transactions.marketType,
+					status: transactions.status,
+					transactionDate: transactions.transactionDate,
+					createdAt: transactions.createdAt,
+				})
+				.from(transactions)
+				.leftJoin(user, eq(transactions.agentId, user.id))
+				.where(conditions.length > 0 ? and(...conditions) : undefined)
+				.orderBy(desc(transactions.createdAt));
+
+			// Filter by client type and search query
+			let filteredTransactions = transactionsWithClients.filter(t => t.clientData !== null);
+
+			if (input.clientType) {
+				filteredTransactions = filteredTransactions.filter(t =>
+					t.clientData?.type === input.clientType
+				);
+			}
+
+			if (input.searchQuery) {
+				const query = input.searchQuery.toLowerCase();
+				filteredTransactions = filteredTransactions.filter(t =>
+					t.clientData?.name?.toLowerCase().includes(query) ||
+					t.clientData?.email?.toLowerCase().includes(query) ||
+					t.clientData?.phone?.includes(query)
+				);
+			}
+
+			// Group by client (using email as unique identifier)
+			const clientMap = filteredTransactions.reduce((acc, t) => {
+				const clientEmail = t.clientData?.email || 'unknown';
+				if (!acc[clientEmail]) {
+					acc[clientEmail] = {
+						client: t.clientData,
+						transactions: [],
+						totalValue: 0,
+						firstTransaction: t.createdAt,
+						lastTransaction: t.createdAt,
+					};
+				}
+				acc[clientEmail].transactions.push({
+					id: t.id,
+					agentName: t.agentName,
+					propertyAddress: t.propertyData?.address,
+					propertyPrice: t.propertyData?.price,
+					commissionAmount: t.commissionAmount,
+					transactionType: t.transactionType,
+					status: t.status,
+					transactionDate: t.transactionDate,
+				});
+				acc[clientEmail].totalValue += parseFloat(t.commissionAmount || '0');
+				if (t.createdAt < acc[clientEmail].firstTransaction) {
+					acc[clientEmail].firstTransaction = t.createdAt;
+				}
+				if (t.createdAt > acc[clientEmail].lastTransaction) {
+					acc[clientEmail].lastTransaction = t.createdAt;
+				}
+				return acc;
+			}, {} as Record<string, any>);
+
+			const clients = Object.values(clientMap)
+				.sort((a, b) => b.totalValue - a.totalValue)
+				.slice(input.offset, input.offset + input.limit);
+
+			// Summary by client type
+			const clientTypeSummary = filteredTransactions.reduce((acc, t) => {
+				const type = t.clientData?.type || 'unknown';
+				if (!acc[type]) {
+					acc[type] = { count: 0, totalValue: 0 };
+				}
+				acc[type].count += 1;
+				acc[type].totalValue += parseFloat(t.commissionAmount || '0');
+				return acc;
+			}, {} as Record<string, { count: number; totalValue: number }>);
+
+			return {
+				clients,
+				totalClients: Object.keys(clientMap).length,
+				clientTypeSummary,
+				hasMore: input.offset + input.limit < Object.keys(clientMap).length,
+			};
+		}),
+
 	// Delete report (admin only)
 	delete: adminProcedure
 		.input(reportIdInput)

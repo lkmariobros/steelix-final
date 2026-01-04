@@ -33,7 +33,7 @@ import type { CommissionApproval, DateRangeFilter } from "../admin-schema";
 import {
 	formatCurrency,
 	formatDateTime,
-	getDaysAgo,
+	getRelativeTime,
 	getStatusColor,
 } from "../admin-schema";
 
@@ -306,7 +306,7 @@ export function CommissionApprovalQueue({
 															{formatDateTime(transaction.submittedAt)}
 														</div>
 														<div className="text-muted-foreground text-xs">
-															{getDaysAgo(transaction.submittedAt)} days ago
+															{getRelativeTime(transaction.submittedAt)}
 														</div>
 													</div>
 												</TableCell>

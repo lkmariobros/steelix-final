@@ -25,9 +25,9 @@ import { useTransactionModalActions } from "@/contexts/transaction-modal-context
 // Import dashboard widgets
 import { FinancialOverview } from "./components/financial-overview";
 import { RecentTransactions } from "./components/recent-transactions";
-import { SalesPipeline } from "./components/sales-pipeline";
 import { TeamLeaderboard } from "./components/team-leaderboard";
-import { TransactionStatus } from "./components/transaction-status";
+import { TransactionOverview } from "./components/transaction-overview";
+import { LeadershipBonusWidget } from "./components/leadership-bonus-widget";
 
 interface AgentDashboardProps {
 	className?: string;
@@ -141,14 +141,16 @@ export function AgentDashboard({ className }: AgentDashboardProps) {
 									to: dateRange.endDate,
 								}}
 								onSelect={(range) => {
+									// Update the date range state
+									setDateRange({
+										startDate: range?.from,
+										endDate: range?.to,
+									});
+									// Only close the popover when both dates are selected
 									if (range?.from && range?.to) {
-										setDateRange({
-											startDate: range.from,
-											endDate: range.to,
-										});
 										setTimeFilter("custom");
+										setIsCalendarOpen(false);
 									}
-									setIsCalendarOpen(false);
 								}}
 								numberOfMonths={2}
 							/>
@@ -174,16 +176,20 @@ export function AgentDashboard({ className }: AgentDashboardProps) {
 					<FinancialOverview dateRange={dateRange} />
 				</div>
 
-				{/* Second Row - Sales Pipeline and Transaction Status */}
-				<div className="grid gap-6 md:grid-cols-2">
-					<SalesPipeline />
-					<TransactionStatus />
+				{/* Transaction Overview - Full Width (consolidated pipeline + status) */}
+				<div className="col-span-full">
+					<TransactionOverview />
 				</div>
 
 				{/* Third Row - Recent Transactions and Team Leaderboard */}
 				<div className="grid gap-6 md:grid-cols-2">
 					<RecentTransactions limit={8} />
 					<TeamLeaderboard />
+				</div>
+
+				{/* Fourth Row - Leadership Bonus Widget */}
+				<div className="col-span-full">
+					<LeadershipBonusWidget />
 				</div>
 			</div>
 

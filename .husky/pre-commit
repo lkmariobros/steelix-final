@@ -11,4 +11,21 @@ if [ $? -ne 0 ]; then
   exit 1
 fi
 
+# Check for console.log statements in staged files (excluding test files)
+echo "🔍 Checking for console.log statements..."
+CONSOLE_LOGS=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(ts|tsx|js|jsx)$' | grep -v '\.test\.' | grep -v '\.spec\.' | xargs grep -l 'console\.log' 2>/dev/null || true)
+if [ -n "$CONSOLE_LOGS" ]; then
+  echo "⚠️  Warning: console.log found in the following files:"
+  echo "$CONSOLE_LOGS"
+  echo "Consider removing console.log statements before committing to production."
+fi
+
+# Check for TODO comments in staged files
+echo "🔍 Checking for TODO comments..."
+TODOS=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(ts|tsx|js|jsx)$' | xargs grep -l 'TODO\|FIXME\|HACK' 2>/dev/null || true)
+if [ -n "$TODOS" ]; then
+  echo "⚠️  Warning: TODO/FIXME/HACK comments found in:"
+  echo "$TODOS"
+fi
+
 echo "✅ All checks passed!"

@@ -16,7 +16,7 @@ import React from "react";
 
 // Import types and utilities
 import type { UrgentTask } from "../admin-schema";
-import { formatDateTime, getDaysAgo, getPriorityColor } from "../admin-schema";
+import { formatDateTime, getRelativeTime, getPriorityColor } from "../admin-schema";
 
 interface UrgentTasksPanelProps {
 	refreshKey?: number;
@@ -196,7 +196,7 @@ export function UrgentTasksPanel({
 													<span>•</span>
 												</>
 											)}
-											<span>{getDaysAgo(task.createdAt)} days ago</span>
+											<span>{getRelativeTime(task.createdAt)}</span>
 										</div>
 
 										<Button

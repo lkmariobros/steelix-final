@@ -47,7 +47,8 @@ export function StepDocuments({
 }: StepDocumentsProps) {
 	const [selectedCategory, setSelectedCategory] = useState<DocumentCategory>('contract');
 	const [showCategorySelector, setShowCategorySelector] = useState(false);
-	const [pendingFiles, setPendingFiles] = useState<FileList | null>(null);
+	// Store as File[] instead of FileList to avoid the live object issue
+	const [pendingFiles, setPendingFiles] = useState<File[] | null>(null);
 
 	// Use the document upload hook
 	const {
@@ -59,6 +60,9 @@ export function StepDocuments({
 		uploadError,
 		isLoadingDocuments
 	} = useDocumentUpload(data?.transactionId);
+
+	// Debug logging
+	console.log('[StepDocuments] Render - isUploading:', isUploading, 'uploadProgress:', uploadProgress, 'documents:', documents.length);
 
 	const form = useForm<DocumentsData>({
 		resolver: zodResolver(documentsSchema),
@@ -92,21 +96,51 @@ export function StepDocuments({
 		const files = event.target.files;
 		if (!files || files.length === 0) return;
 
-		setPendingFiles(files);
+		// Convert FileList to Array BEFORE resetting input (FileList is a live object!)
+		const filesArray = Array.from(files);
+		setPendingFiles(filesArray);
 		setShowCategorySelector(true);
-		// Reset the input
+		// Reset the input after converting to array
 		event.target.value = "";
+	};
+
+	// Handle drag and drop
+	const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
+		event.preventDefault();
+		event.stopPropagation();
+
+		if (isUploading) return;
+
+		const files = event.dataTransfer.files;
+		if (!files || files.length === 0) return;
+
+		// Convert FileList to Array (FileList is a live object!)
+		const filesArray = Array.from(files);
+		setPendingFiles(filesArray);
+		setShowCategorySelector(true);
+	};
+
+	const handleDragOver = (event: React.DragEvent<HTMLDivElement>) => {
+		event.preventDefault();
+		event.stopPropagation();
 	};
 
 	// Handle category selection and upload
 	const handleCategorySelect = async (category: DocumentCategory) => {
-		if (!pendingFiles) return;
+		console.log('[StepDocuments] handleCategorySelect called with:', category);
+		console.log('[StepDocuments] pendingFiles:', pendingFiles);
+
+		if (!pendingFiles || pendingFiles.length === 0) {
+			console.log('[StepDocuments] No pending files, returning');
+			return;
+		}
 
 		setShowCategorySelector(false);
 		setSelectedCategory(category);
 
-		const fileCount = pendingFiles.length; // Store count before clearing
-		const filesArray = Array.from(pendingFiles);
+		// pendingFiles is already File[] - no need to convert
+		const filesArray = pendingFiles;
+		console.log('[StepDocuments] Files to upload:', filesArray.map(f => f.name));
 
 		// Clear pending files immediately to prevent UI issues
 		setPendingFiles(null);
@@ -117,9 +151,11 @@ export function StepDocuments({
 		try {
 			// Upload files sequentially to avoid overwhelming the server
 			for (const file of filesArray) {
+				console.log('[StepDocuments] Uploading file:', file.name);
 				try {
 					await uploadFile(file, category);
 					successCount++;
+					console.log('[StepDocuments] File uploaded successfully:', file.name);
 				} catch (fileError) {
 					console.error(`Failed to upload ${file.name}:`, fileError);
 					errorCount++;
@@ -134,10 +170,11 @@ export function StepDocuments({
 				toast.error(`${errorCount} file(s) failed to upload`);
 			}
 
+			console.log('[StepDocuments] All uploads complete. Documents:', documents);
 			handleFormChange();
 		} catch (error) {
 			console.error("Upload error:", error);
-			toast.error(`Failed to upload ${fileCount} file(s)`);
+			toast.error("Failed to upload files");
 		}
 	};
 
@@ -186,7 +223,11 @@ export function StepDocuments({
 								<h3 className="font-medium text-lg">Document Upload</h3>
 
 								{/* Upload Area */}
-								<div className="rounded-lg border-2 border-muted-foreground/25 border-dashed p-6">
+								<div
+									className="rounded-lg border-2 border-muted-foreground/25 border-dashed p-6 transition-colors hover:border-muted-foreground/50 hover:bg-muted/25"
+									onDrop={handleDrop}
+									onDragOver={handleDragOver}
+								>
 									<div className="text-center">
 										<Upload className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
 										<div className="space-y-2">
@@ -223,13 +264,20 @@ export function StepDocuments({
 								</div>
 
 								{/* Upload Progress */}
-								{Object.entries(uploadProgress).map(([fileId, progress]) => (
+								{Object.entries(uploadProgress).map(([fileId, entry]) => (
 									<UploadProgress
 										key={fileId}
-										progress={progress}
-										fileName={`Uploading file...`}
+										progress={entry.progress}
+										fileName={entry.fileName}
 									/>
 								))}
+
+								{/* Show uploading indicator when no progress entries but isUploading is true */}
+								{isUploading && Object.keys(uploadProgress).length === 0 && (
+									<div className="p-3 border rounded-lg bg-muted/50 text-sm text-muted-foreground">
+										Preparing files for upload...
+									</div>
+								)}
 
 								{/* Category Selector Modal */}
 								{showCategorySelector && (

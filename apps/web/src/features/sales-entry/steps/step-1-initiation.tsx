@@ -2,12 +2,11 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { format } from "date-fns";
-import { ArrowRight, CalendarIcon } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { useCallback, useEffect } from "react";
 import { useForm } from "react-hook-form";
 
 import { Button } from "@/components/ui/button";
-import { Calendar } from "@/components/ui/calendar";
 import {
 	Card,
 	CardContent,
@@ -25,11 +24,6 @@ import {
 	FormMessage,
 } from "@/components/ui/form";
 import {
-	Popover,
-	PopoverContent,
-	PopoverTrigger,
-} from "@/components/ui/popover";
-import {
 	Select,
 	SelectContent,
 	SelectItem,
@@ -37,6 +31,10 @@ import {
 	SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+// Issue #8 Fix: Import accessible date picker
+import { AccessibleDatePicker } from "@/components/accessible-date-picker";
+// Issue #9 Fix: Import required label components
+import { RequiredLabel, RequiredFieldsNote } from "@/components/required-label";
 
 import {
 	type CompleteTransactionData,
@@ -117,6 +115,9 @@ export function StepInitiation({
 							onSubmit={form.handleSubmit(handleSubmit)}
 							className="space-y-6"
 						>
+							{/* Issue #9 Fix: Required fields note */}
+							<RequiredFieldsNote />
+
 							<div className="grid grid-cols-1 gap-6 md:grid-cols-2">
 								{/* Market Type */}
 								<FormField
@@ -124,7 +125,7 @@ export function StepInitiation({
 									name="marketType"
 									render={({ field }) => (
 										<FormItem>
-											<FormLabel>Market Type</FormLabel>
+											<FormLabel><RequiredLabel>Market Type</RequiredLabel></FormLabel>
 											<Select
 												onValueChange={(value) => {
 													field.onChange(value);
@@ -161,7 +162,7 @@ export function StepInitiation({
 									render={({ field }) => (
 										<FormItem>
 											<FormLabel>
-												Transaction Type
+												<RequiredLabel>Transaction Type</RequiredLabel>
 												{isAutoSelected && (
 													<span className="ml-2 text-xs text-blue-600 font-medium">
 														(Auto-selected for Primary Market)
@@ -204,50 +205,33 @@ export function StepInitiation({
 								/>
 							</div>
 
-							{/* Transaction Date */}
+							{/* Issue #8 Fix: Accessible Transaction Date with manual input */}
 							<FormField
 								control={form.control}
 								name="transactionDate"
 								render={({ field }) => (
 									<FormItem className="flex flex-col">
-										<FormLabel>Transaction Date</FormLabel>
-										<Popover>
-											<PopoverTrigger asChild>
-												<FormControl>
-													<Button
-														variant="outline"
-														className={cn(
-															"w-full pl-3 text-left font-normal",
-															!field.value && "text-muted-foreground",
-														)}
-													>
-														{field.value ? (
-															format(field.value, "PPP")
-														) : (
-															<span>Pick a date</span>
-														)}
-														<CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-													</Button>
-												</FormControl>
-											</PopoverTrigger>
-											<PopoverContent className="w-auto p-0" align="start">
-												<Calendar
-													mode="single"
-													selected={field.value}
-													onSelect={(date) => {
-														field.onChange(date);
-														handleFormChange();
-													}}
-													disabled={(date) =>
-														date > new Date() || date < new Date("1900-01-01")
-													}
-													initialFocus
-												/>
-											</PopoverContent>
-										</Popover>
-										<FormDescription>
-											Select the date when the transaction occurred or will
-											occur
+										<FormLabel id="transaction-date-label">
+											<RequiredLabel>Transaction Date</RequiredLabel>
+										</FormLabel>
+										<FormControl>
+											<AccessibleDatePicker
+												value={field.value}
+												onChange={(date) => {
+													field.onChange(date);
+													handleFormChange();
+												}}
+												disabled={(date) =>
+													date > new Date() || date < new Date("1900-01-01")
+												}
+												placeholder="MM/DD/YYYY"
+												aria-label="Transaction date"
+												aria-describedby="transaction-date-description"
+											/>
+										</FormControl>
+										<FormDescription id="transaction-date-description">
+											Enter the date manually (MM/DD/YYYY) or use the calendar button.
+											Date must be today or earlier.
 										</FormDescription>
 										<FormMessage />
 									</FormItem>

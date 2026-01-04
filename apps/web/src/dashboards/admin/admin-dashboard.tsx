@@ -39,51 +39,65 @@ export function AdminDashboard({ className }: AdminDashboardProps) {
 	) => {
 		if (!range) {
 			setDateRange({});
-			setIsCalendarOpen(false);
 			return;
 		}
 		setDateRange({
 			startDate: range.from,
 			endDate: range.to,
 		});
-		setIsCalendarOpen(false);
+		// Only close the popover when both dates are selected
+		if (range.from && range.to) {
+			setTimeFilter("custom");
+			setIsCalendarOpen(false);
+		}
 	};
 
-	// Handle time filter change - SIMPLIFIED to avoid hydration mismatch
+	// Handle time filter change - uses dynamic date calculation
 	const handleTimeFilterChange = (filter: string) => {
 		setTimeFilter(filter);
 
-		// Use static date ranges to avoid server/client mismatch
-		const staticRanges = {
-			today: {
-				startDate: new Date("2024-01-15T00:00:00Z"),
-				endDate: new Date("2024-01-15T23:59:59Z"),
-			},
-			week: {
-				startDate: new Date("2024-01-08T00:00:00Z"),
-				endDate: new Date("2024-01-15T23:59:59Z"),
-			},
-			month: {
-				startDate: new Date("2024-01-01T00:00:00Z"),
-				endDate: new Date("2024-01-31T23:59:59Z"),
-			},
-			quarter: {
-				startDate: new Date("2024-01-01T00:00:00Z"),
-				endDate: new Date("2024-03-31T23:59:59Z"),
-			},
-			year: {
-				startDate: new Date("2024-01-01T00:00:00Z"),
-				endDate: new Date("2024-12-31T23:59:59Z"),
-			},
-			all: {
-				startDate: undefined,
-				endDate: undefined,
-			},
+		// Calculate date ranges dynamically based on current date
+		const now = new Date();
+		const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+		const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+
+		const getDateRange = (filterKey: string): { startDate?: Date; endDate?: Date } => {
+			switch (filterKey) {
+				case "today":
+					return {
+						startDate: startOfToday,
+						endDate: endOfToday,
+					};
+				case "week":
+					return {
+						startDate: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000),
+						endDate: endOfToday,
+					};
+				case "month":
+					return {
+						startDate: new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000),
+						endDate: endOfToday,
+					};
+				case "quarter":
+					return {
+						startDate: new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000),
+						endDate: endOfToday,
+					};
+				case "year":
+					return {
+						startDate: new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000),
+						endDate: endOfToday,
+					};
+				case "all":
+				default:
+					return {
+						startDate: undefined,
+						endDate: undefined,
+					};
+			}
 		};
 
-		const range =
-			staticRanges[filter as keyof typeof staticRanges] || staticRanges.month;
-		setDateRange(range);
+		setDateRange(getDateRange(filter));
 	};
 
 	// Handle manual refresh

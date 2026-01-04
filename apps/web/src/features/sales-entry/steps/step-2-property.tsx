@@ -37,6 +37,10 @@ import {
 	propertySchema,
 	propertyTypeOptions,
 } from "../transaction-schema";
+// Issue #9 Fix: Import required label components
+import { RequiredLabel, RequiredFieldsNote } from "@/components/required-label";
+// Issue #10 Fix: Import currency input component
+import { CurrencyInput } from "@/components/currency-input";
 
 interface StepPropertyProps {
 	data?: PropertyData;
@@ -94,13 +98,16 @@ export function StepProperty({
 							onSubmit={form.handleSubmit(handleSubmit)}
 							className="space-y-6"
 						>
+							{/* Issue #9 Fix: Required fields note */}
+							<RequiredFieldsNote />
+
 							{/* Property Search/Address */}
 							<FormField
 								control={form.control}
 								name="address"
 								render={({ field }) => (
 									<FormItem>
-										<FormLabel>Property Address</FormLabel>
+										<FormLabel><RequiredLabel>Property Address</RequiredLabel></FormLabel>
 										<div className="flex gap-2">
 											<FormControl>
 												<Input
@@ -132,7 +139,7 @@ export function StepProperty({
 									name="propertyType"
 									render={({ field }) => (
 										<FormItem>
-											<FormLabel>Property Type</FormLabel>
+											<FormLabel><RequiredLabel>Property Type</RequiredLabel></FormLabel>
 											<Select
 												onValueChange={(value) => {
 													field.onChange(value);
@@ -158,26 +165,26 @@ export function StepProperty({
 									)}
 								/>
 
-								{/* Property Price */}
+								{/* Issue #10 Fix: Property Price with currency formatting */}
 								<FormField
 									control={form.control}
 									name="price"
 									render={({ field }) => (
 										<FormItem>
-											<FormLabel>Property Price</FormLabel>
+											<FormLabel><RequiredLabel>Property Price</RequiredLabel></FormLabel>
 											<FormControl>
-												<Input
-													type="number"
-													placeholder="0"
-													{...field}
-													onChange={(e) => {
-														field.onChange(Number(e.target.value));
+												<CurrencyInput
+													value={field.value}
+													onChange={(value) => {
+														field.onChange(value);
 														handleFormChange();
 													}}
+													placeholder="Enter price"
+													aria-label="Property price"
 												/>
 											</FormControl>
 											<FormDescription>
-												Enter the transaction price in your local currency
+												Enter the transaction price (e.g., 500000 for $500,000)
 											</FormDescription>
 											<FormMessage />
 										</FormItem>

@@ -526,4 +526,27 @@ export const agentsRouter = router({
 				recentPerformance,
 			};
 		}),
+
+	// Update my profile (for any authenticated user)
+	updateMyProfile: protectedProcedure
+		.input(z.object({
+			name: z.string().min(1).optional(),
+			image: z.string().url().optional().nullable(),
+		}))
+		.mutation(async ({ ctx, input }) => {
+			const [updatedUser] = await db
+				.update(user)
+				.set({
+					...input,
+					updatedAt: new Date(),
+				})
+				.where(eq(user.id, ctx.session.user.id))
+				.returning();
+
+			if (!updatedUser) {
+				throw new Error("Failed to update profile");
+			}
+
+			return updatedUser;
+		}),
 });

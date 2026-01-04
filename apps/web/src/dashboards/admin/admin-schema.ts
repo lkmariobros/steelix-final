@@ -255,22 +255,50 @@ export function formatDateTime(date: Date | string | null): string {
 export function getDaysAgo(date: Date | string | null): number {
 	if (!date) return 0;
 
-	// For mock data, return static values to avoid hydration mismatch
-	if (typeof date === "string") {
-		// Static calculation for mock dates
-		if (date.includes("2024-01-07")) return 8;
-		if (date.includes("2024-01-06")) return 9;
-		return 7; // Default for other mock dates
-	}
-
 	try {
-		const dateObj = date;
+		const dateObj = typeof date === "string" ? new Date(date) : date;
+		if (isNaN(dateObj.getTime())) return 0;
+
 		const now = new Date();
 		const diffTime = Math.abs(now.getTime() - dateObj.getTime());
-		const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+		const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
 		return diffDays;
 	} catch {
 		return 0;
+	}
+}
+
+export function getRelativeTime(date: Date | string | null): string {
+	if (!date) return "Unknown";
+
+	try {
+		const dateObj = typeof date === "string" ? new Date(date) : date;
+		if (isNaN(dateObj.getTime())) return "Invalid date";
+
+		const now = new Date();
+		const diffMs = now.getTime() - dateObj.getTime();
+		const diffSeconds = Math.floor(diffMs / 1000);
+		const diffMinutes = Math.floor(diffSeconds / 60);
+		const diffHours = Math.floor(diffMinutes / 60);
+		const diffDays = Math.floor(diffHours / 24);
+		const diffWeeks = Math.floor(diffDays / 7);
+		const diffMonths = Math.floor(diffDays / 30);
+
+		if (diffSeconds < 60) {
+			return "Just now";
+		} else if (diffMinutes < 60) {
+			return diffMinutes === 1 ? "1 minute ago" : `${diffMinutes} minutes ago`;
+		} else if (diffHours < 24) {
+			return diffHours === 1 ? "1 hour ago" : `${diffHours} hours ago`;
+		} else if (diffDays < 7) {
+			return diffDays === 1 ? "1 day ago" : `${diffDays} days ago`;
+		} else if (diffWeeks < 4) {
+			return diffWeeks === 1 ? "1 week ago" : `${diffWeeks} weeks ago`;
+		} else {
+			return diffMonths === 1 ? "1 month ago" : `${diffMonths} months ago`;
+		}
+	} catch {
+		return "Unknown";
 	}
 }
 

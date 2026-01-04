@@ -12,11 +12,9 @@ import {
 	DropdownMenuContent,
 	DropdownMenuItem,
 	DropdownMenuLabel,
-	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-	RiAddLine,
 	RiExpandUpDownLine,
 	RiShieldUserLine,
 	RiUserLine,
@@ -59,7 +57,7 @@ export function TeamSwitcher({ teams = [] }: TeamSwitcherProps) {
 
 	// Default team for display (using fixed company name as per requirements)
 	const displayTeam = teams[0] || {
-		name: "InnovaCraft",
+		name: "SteelixTech",
 		logo: "https://raw.githubusercontent.com/origin-space/origin-images/refs/heads/main/exp1/logo-01_kp2j8x.png"
 	};
 
@@ -207,38 +205,6 @@ export function TeamSwitcher({ teams = [] }: TeamSwitcherProps) {
 										)}
 									</DropdownMenuItem>
 								)}
-								<DropdownMenuSeparator />
-							</>
-						)}
-
-						{/* Add Team Section - Only show when not loading and user is authenticated */}
-						{!isLoading && session && (
-							<>
-								<DropdownMenuLabel className="text-muted-foreground/60 text-xs uppercase">
-									Team Management
-								</DropdownMenuLabel>
-								<DropdownMenuItem
-									className="gap-2 p-2 focus:bg-sidebar-accent focus:text-sidebar-accent-foreground"
-									role="menuitem"
-									aria-label="Add new team"
-									tabIndex={0}
-									onClick={() => {
-										// TODO: Implement add team functionality
-										console.log('Add team clicked');
-										setIsOpen(false);
-									}}
-									onKeyDown={(e) => {
-										if (e.key === 'Enter' || e.key === ' ') {
-											e.preventDefault();
-											// TODO: Implement add team functionality
-											console.log('Add team clicked');
-											setIsOpen(false);
-										}
-									}}
-								>
-									<RiAddLine className="opacity-60" size={16} aria-hidden="true" />
-									<div className="font-medium">Add team</div>
-								</DropdownMenuItem>
 							</>
 						)}
 

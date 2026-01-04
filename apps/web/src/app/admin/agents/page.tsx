@@ -45,10 +45,51 @@ import {
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+// Agent Tier Management Components
+import {
+	TierBadge,
+	AgentManagementDialog,
+	AgentViewModal,
+	TierDashboardWidget,
+} from "@/components/agent-tier";
+import type { AgentTier } from "@/lib/agent-tier-config";
+
+// Type for agent data from the API
+interface AgentData {
+	id: string;
+	name: string | null;
+	email: string;
+	role: string | null;
+	agentTier: string | null;
+	companyCommissionSplit: number | null;
+	createdAt: string | null;
+}
+
 export default function AdminAgentsPage() {
 	const router = useRouter();
 	const { data: session, isPending } = authClient.useSession();
 	const [statusFilter, setStatusFilter] = useState<string>("active");
+
+	// State for dialogs
+	const [selectedAgent, setSelectedAgent] = useState<AgentData | null>(null);
+	const [isManageDialogOpen, setIsManageDialogOpen] = useState(false);
+	const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+
+	// Handlers for agent actions
+	const handleManageAgent = (agent: AgentData) => {
+		setSelectedAgent(agent);
+		setIsManageDialogOpen(true);
+	};
+
+	const handleViewAgent = (agent: AgentData) => {
+		setSelectedAgent(agent);
+		setIsViewModalOpen(true);
+	};
+
+	const handleManageFromView = () => {
+		setIsViewModalOpen(false);
+		setIsManageDialogOpen(true);
+	};
 
 	// Admin role checking
 	const { data: roleData, isLoading: isRoleLoading } =
@@ -309,8 +350,12 @@ export default function AdminAgentsPage() {
 						</Card>
 					</div>
 
-					{/* Agent Management Interface */}
-					<Card>
+					{/* Tier Distribution Dashboard */}
+					<div className="grid gap-4 lg:grid-cols-3">
+						<TierDashboardWidget className="lg:col-span-1" />
+
+						{/* Agent Management Interface */}
+						<Card className="lg:col-span-2">
 						<CardHeader>
 							<CardTitle>Agent Directory</CardTitle>
 							<CardDescription>
@@ -339,40 +384,50 @@ export default function AdminAgentsPage() {
 								</div>
 							) : agentsData?.agents && agentsData.agents.length > 0 ? (
 								<div className="space-y-4">
-									{agentsData.agents.map((agent) => (
-										<div key={agent.agent.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors">
+									{agentsData.agents.map((agentItem) => (
+										<div key={agentItem.agent.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors">
 											<div className="flex items-center gap-3">
 												<div className="h-10 w-10 bg-primary/10 rounded-full flex items-center justify-center">
 													<RiUserLine className="h-5 w-5 text-primary" />
 												</div>
 												<div className="space-y-1">
 													<div className="flex items-center gap-2">
-														<span className="font-medium">{agent.agent.name}</span>
+														<span className="font-medium">{agentItem.agent.name}</span>
 														<span className={`px-2 py-1 text-xs rounded-full ${
-															agent.agent.role === 'admin' ? 'bg-red-100 text-red-800' :
-															agent.agent.role === 'team_lead' ? 'bg-blue-100 text-blue-800' :
+															agentItem.agent.role === 'admin' ? 'bg-red-100 text-red-800' :
+															agentItem.agent.role === 'team_lead' ? 'bg-blue-100 text-blue-800' :
 															'bg-green-100 text-green-800'
 														}`}>
-															{agent.agent.role}
+															{agentItem.agent.role}
 														</span>
-														{agent.agent.agentTier && (
-															<span className="px-2 py-1 text-xs rounded-full bg-purple-100 text-purple-800">
-																{agent.agent.agentTier.replace('_', ' ')}
-															</span>
+														{agentItem.agent.agentTier && (
+															<TierBadge
+																tier={agentItem.agent.agentTier as AgentTier}
+																size="sm"
+																showIcon={true}
+															/>
 														)}
 													</div>
 													<p className="text-sm text-muted-foreground">
-														{agent.agent.email}
-														{agent.agent.createdAt && ` • Joined ${new Date(agent.agent.createdAt).toLocaleDateString()}`}
+														{agentItem.agent.email}
+														{agentItem.agent.createdAt && ` • Joined ${new Date(agentItem.agent.createdAt).toLocaleDateString()}`}
 													</p>
 												</div>
 											</div>
 											<div className="flex gap-2">
-												<Button size="sm" variant="outline">
+												<Button
+													size="sm"
+													variant="outline"
+													onClick={() => handleManageAgent(agentItem.agent as AgentData)}
+												>
 													<RiSettings3Line className="mr-1 h-4 w-4" />
 													Manage
 												</Button>
-												<Button size="sm" variant="outline">
+												<Button
+													size="sm"
+													variant="outline"
+													onClick={() => handleViewAgent(agentItem.agent as AgentData)}
+												>
 													<RiUserLine className="mr-1 h-4 w-4" />
 													View
 												</Button>
@@ -416,7 +471,38 @@ export default function AdminAgentsPage() {
 						</CardContent>
 					</Card>
 				</div>
+				</div>
 			</SidebarInset>
+
+			{/* Agent Management Dialog */}
+			{selectedAgent && (
+				<AgentManagementDialog
+					open={isManageDialogOpen}
+					onOpenChange={setIsManageDialogOpen}
+					agent={{
+						id: selectedAgent.id,
+						name: selectedAgent.name || 'Unknown',
+						email: selectedAgent.email,
+						agentTier: (selectedAgent.agentTier as AgentTier) || null,
+						role: selectedAgent.role,
+						companyCommissionSplit: selectedAgent.companyCommissionSplit,
+					}}
+					onSuccess={() => {
+						refetchAgents();
+						utils.agents.getStats.invalidate();
+					}}
+				/>
+			)}
+
+			{/* Agent View Modal */}
+			{selectedAgent && (
+				<AgentViewModal
+					open={isViewModalOpen}
+					onOpenChange={setIsViewModalOpen}
+					agentId={selectedAgent.id}
+					onManage={handleManageFromView}
+				/>
+			)}
 		</SidebarProvider>
 	);
 }

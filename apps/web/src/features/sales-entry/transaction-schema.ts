@@ -1,5 +1,11 @@
 import { z } from "zod";
 
+// Simplified Representation Type - 2 options only
+// "direct" = Direct Representation (you represent your own client exclusively)
+// "co_broking" = Co-Broking (working with another agent, splitting commission)
+export const representationTypeEnum = z.enum(["direct", "co_broking"]);
+export type RepresentationType = z.infer<typeof representationTypeEnum>;
+
 // Step 1: Initiation Schema with Primary Market → Sale validation
 export const initiationSchema = z.object({
 	marketType: z.enum(["primary", "secondary"], {
@@ -37,6 +43,7 @@ export const propertySchema = z.object({
 });
 
 // Step 3: Client Schema
+// Note: isDualPartyDeal has been moved to unified representationType in Step 4
 export const clientSchema = z.object({
 	name: z.string().min(1, "Client name is required"),
 	email: z.string().email("Please enter a valid email address").optional().or(z.literal("")),
@@ -46,98 +53,91 @@ export const clientSchema = z.object({
 	}),
 	source: z.string().min(1, "Client source is required"),
 	notes: z.string().optional(),
-	isDualPartyDeal: z.boolean().default(false).optional(),
 });
 
-// Step 4: Co-Broking Schema
+// Step 4: Representation & Co-Broking Schema
+// Simplified to 2 options: direct representation or co-broking
 const coBrokingBaseSchema = z.object({
-	isCoBroking: z.boolean(),
+	// Simplified representation type - single source of truth
+	representationType: representationTypeEnum.default("direct"),
+	// Legacy field for backward compatibility (derived from representationType)
+	isCoBroking: z.boolean().optional(),
 	coBrokingData: z
 		.object({
-			agentName: z.string().min(1, "Agent name is required").optional(),
-			agencyName: z.string().min(1, "Agency name is required").optional(),
+			// All fields are optional at base level - validation is done via refine based on representationType
+			agentName: z.string().optional().default(""),
+			agencyName: z.string().optional().default(""),
 			commissionSplit: z
 				.number()
 				.min(0)
 				.max(100, "Commission split must be between 0-100%")
 				.default(50),
-			contactInfo: z.string().min(1, "Contact info is required").optional(),
+			// Separate email and phone fields for clarity (Issue #11)
+			agentEmail: z.string().email("Please enter a valid email").optional().or(z.literal("")),
+			agentPhone: z.string().optional().default(""),
+			// Legacy field for backward compatibility
+			contactInfo: z.string().optional(),
 		})
 		.optional(),
 });
 
-// Create a more flexible co-broking schema that can accept dual agency context
-export const createCoBrokingSchema = (isDualPartyDeal?: boolean) => {
-	return coBrokingBaseSchema.refine(
-		(data) => {
-			// If this is a dual agency deal, co-broking should be disabled
-			if (isDualPartyDeal && data.isCoBroking) {
-				return false;
+// Create a more flexible co-broking schema that validates based on representation type
+export const createCoBrokingSchema = () => {
+	return coBrokingBaseSchema.superRefine((data, ctx) => {
+		// If co-broking is selected, validate required fields
+		if (data.representationType === "co_broking") {
+			const { agentName, agencyName, agentPhone } = data.coBrokingData || {};
+
+			if (!agentName?.trim()) {
+				ctx.addIssue({
+					code: z.ZodIssueCode.custom,
+					message: "Agent name is required for co-broking transactions",
+					path: ["coBrokingData", "agentName"],
+				});
 			}
-
-			// If co-broking is enabled and not dual agency, validate all required fields
-			if (data.isCoBroking && !isDualPartyDeal && data.coBrokingData) {
-				const { agentName, agencyName, contactInfo } = data.coBrokingData;
-
-				// Check if any field is provided but empty
-				if (agentName !== undefined && agentName.trim().length === 0) {
-					return false;
-				}
-				if (agencyName !== undefined && agencyName.trim().length === 0) {
-					return false;
-				}
-				if (contactInfo !== undefined && contactInfo.trim().length === 0) {
-					return false;
-				}
-
-				// For step validation, require all fields if co-broking is enabled
-				if (agentName && agencyName && contactInfo) {
-					return (
-						agentName.trim().length > 0 &&
-						agencyName.trim().length > 0 &&
-						contactInfo.trim().length > 0
-					);
-				}
+			if (!agencyName?.trim()) {
+				ctx.addIssue({
+					code: z.ZodIssueCode.custom,
+					message: "Agency name is required for co-broking transactions",
+					path: ["coBrokingData", "agencyName"],
+				});
 			}
-
-			// If co-broking is disabled or dual agency, it's always valid
-			if (!data.isCoBroking || isDualPartyDeal) {
-				return true;
+			if (!agentPhone?.trim()) {
+				ctx.addIssue({
+					code: z.ZodIssueCode.custom,
+					message: "Phone number is required for co-broking transactions",
+					path: ["coBrokingData", "agentPhone"],
+				});
 			}
-
-			// If co-broking is enabled but no data provided, it's invalid
-			return false;
-		},
-		{
-			message: isDualPartyDeal
-				? "Co-broking is not applicable for dual agency transactions"
-				: "Please complete all co-broking fields: Agent Name, Agency Name, and Contact Info are required when co-broking is enabled",
-			path: isDualPartyDeal ? ["isCoBroking"] : ["coBrokingData"],
-		},
-	);
+		}
+		// Direct representation doesn't require co-broking data - always valid
+	});
 };
 
 // Default schema for backward compatibility
 export const coBrokingSchema = createCoBrokingSchema();
 
 // Step 5: Enhanced Commission Schema with agent tier support
+// Note: representationType is now managed in Step 4 and passed through form state
 export const commissionSchema = z.object({
 	commissionType: z.enum(["percentage", "fixed"], {
 		required_error: "Please select commission type",
 	}),
 	commissionValue: z.number().min(0, "Commission value must be positive"),
 	commissionAmount: z.number().min(0, "Commission amount must be positive"),
-	// Enhanced fields for agent tier system
-	representationType: z.enum(["single_side", "dual_agency"]).default("single_side").optional(),
+	// Agent tier system fields
 	agentTier: z.enum(["advisor", "sales_leader", "team_leader", "group_leader", "supreme_leader"]).optional(),
 	companyCommissionSplit: z.number().min(0).max(100).optional(),
-	// Commission breakdown for transparency
+	// Commission breakdown for transparency (Issue #6 - clearer earnings display)
 	breakdown: z.object({
 		totalCommission: z.number(),
 		agentCommissionShare: z.number(),
 		coBrokerShare: z.number().optional(),
 		companyShare: z.number(),
 		agentEarnings: z.number(),
+		// New: Explicit "Your Share" for clarity
+		yourShare: z.number(),
+		yourSharePercentage: z.number(),
 	}).optional(),
 });
 
@@ -255,16 +255,21 @@ export const commissionTypeOptions = [
 	{ value: "fixed", label: "Fixed Amount" },
 ] as const;
 
+// Simplified representation type options - 2 options only
 export const representationTypeOptions = [
 	{
-		value: "single_side",
-		label: "Single Side (Co-broking)",
-		description: "You represent one party, split commission with co-broker"
+		value: "direct",
+		label: "Direct Representation",
+		description: "You represent your own client exclusively in this transaction.",
+		commissionInfo: "You receive your full agent share of the commission.",
+		primaryMarketNote: "For developer projects: You represent the buyer/tenant, developer represents their project.",
+		secondaryMarketNote: "For resale: You represent the buyer/tenant, owner represents themselves or has their own agent."
 	},
 	{
-		value: "dual_agency",
-		label: "Dual Agency",
-		description: "You represent both buyer and seller, receive full commission"
+		value: "co_broking",
+		label: "Co-Broking",
+		description: "Working with another agent/agency. Commission split required.",
+		commissionInfo: "Commission split with co-broker (configurable percentage)."
 	},
 ] as const;
 
@@ -293,7 +298,7 @@ export const stepConfig = [
 	{ step: 1, title: "Initiation", description: "Basic transaction details" },
 	{ step: 2, title: "Property", description: "Property information" },
 	{ step: 3, title: "Client", description: "Client details" },
-	{ step: 4, title: "Co-Broking", description: "Co-broking arrangement" },
+	{ step: 4, title: "Representation", description: "How you represent this deal" },
 	{ step: 5, title: "Commission", description: "Commission calculation" },
 	{ step: 6, title: "Documents", description: "Upload documents" },
 	{ step: 7, title: "Review", description: "Review and submit" },
@@ -340,29 +345,45 @@ export function calculateCommission(
 	return commissionValue;
 }
 
-// Enhanced commission calculation with agent tier support
+// Enhanced commission calculation with simplified representation type support
+// Leadership bonus info for upline display
+export interface LeadershipBonusInfo {
+	uplineName?: string;
+	uplineTier?: string;
+	bonusRate: number;
+	bonusAmount: number;
+	fromCompanyShare: number;
+}
+
 export function calculateEnhancedCommission(
 	propertyPrice: number,
 	commissionType: "percentage" | "fixed",
 	commissionValue: number,
-	representationType: "single_side" | "dual_agency",
+	representationType: RepresentationType,
 	agentTier: string = "advisor",
-	companyCommissionSplit: number = 60
+	companyCommissionSplit: number = 70, // Updated default for New Leadership Plan
+	coBrokerSplitPercentage: number = 50,
+	uplineInfo?: { uplineTier: string; leadershipBonusRate: number } | null
 ) {
-	// Level 1: Calculate total commission
+	// Level 1: Calculate total commission from property
 	const totalCommission = calculateCommission(propertyPrice, commissionType, commissionValue);
 
-	// Level 2: Apply representation type split
+	// Level 2: Apply representation type split (simplified to 2 options)
 	let agentCommissionShare: number;
 	let coBrokerShare: number | undefined;
 
-	if (representationType === "dual_agency") {
-		// Dual agency: agent gets full commission
-		agentCommissionShare = totalCommission;
-	} else {
-		// Single side (co-broking): split 50/50
-		agentCommissionShare = totalCommission * 0.5;
-		coBrokerShare = totalCommission * 0.5;
+	switch (representationType) {
+		case "co_broking":
+			// Co-broking: split with co-broker based on configured split
+			agentCommissionShare = totalCommission * ((100 - coBrokerSplitPercentage) / 100);
+			coBrokerShare = totalCommission * (coBrokerSplitPercentage / 100);
+			break;
+		case "direct":
+		default:
+			// Direct representation: agent gets full commission share (no co-broker)
+			agentCommissionShare = totalCommission;
+			coBrokerShare = undefined;
+			break;
 	}
 
 	// Level 3: Apply company-agent split based on tier
@@ -370,18 +391,44 @@ export function calculateEnhancedCommission(
 	const companyShare = agentCommissionShare * (1 - agentSharePercentage);
 	const agentEarnings = agentCommissionShare * agentSharePercentage;
 
+	// Level 4: Calculate Leadership Bonus from company's share (New Leadership Plan)
+	let leadershipBonus: LeadershipBonusInfo | undefined;
+	let companyNetShare = companyShare;
+
+	if (uplineInfo && uplineInfo.leadershipBonusRate > 0) {
+		const bonusAmount = companyShare * (uplineInfo.leadershipBonusRate / 100);
+		companyNetShare = companyShare - bonusAmount;
+		leadershipBonus = {
+			uplineTier: uplineInfo.uplineTier,
+			bonusRate: uplineInfo.leadershipBonusRate,
+			bonusAmount: Math.round(bonusAmount * 100) / 100,
+			fromCompanyShare: companyShare,
+		};
+	}
+
+	// Calculate "Your Share" percentage for clear display (Issue #6)
+	const yourSharePercentage = (agentEarnings / totalCommission) * 100;
+
 	return {
 		totalCommission,
 		agentCommissionShare,
 		coBrokerShare,
 		companyShare,
+		companyNetShare: Math.round(companyNetShare * 100) / 100,
 		agentEarnings,
+		leadershipBonus,
+		// Clear "Your Share" display for Issue #6
+		yourShare: agentEarnings,
+		yourSharePercentage: Math.round(yourSharePercentage * 10) / 10,
 		breakdown: {
 			totalCommission,
 			agentCommissionShare,
 			coBrokerShare,
-			companyShare,
+			companyShare: Math.round(companyNetShare * 100) / 100,
+			leadershipBonus: leadershipBonus?.bonusAmount,
 			agentEarnings,
+			yourShare: agentEarnings,
+			yourSharePercentage: Math.round(yourSharePercentage * 10) / 10,
 		}
 	};
 }

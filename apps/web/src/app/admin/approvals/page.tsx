@@ -1,6 +1,14 @@
 "use client";
 
 import { AppSidebar } from "@/components/app-sidebar";
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+} from "@/components/dialog";
 import { Separator } from "@/components/separator";
 import {
 	SidebarInset,
@@ -30,6 +38,7 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import UserDropdown from "@/components/user-dropdown";
 import { authClient } from "@/lib/auth-client";
 import { trpc } from "@/utils/trpc";
@@ -38,16 +47,56 @@ import {
 	RiCheckboxCircleLine,
 	RiCloseLine,
 	RiDashboardLine,
+	RiLoader4Line,
 	RiRefreshLine,
 	RiShieldUserLine,
 } from "@remixicon/react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
+
+// Type for transaction from the queue
+interface QueueTransaction {
+	id: string;
+	agentId: string | null;
+	clientData: { name?: string; email?: string; phone?: string } | null;
+	propertyData: { address?: string; price?: number } | null;
+	transactionType: string;
+	commissionAmount: string | null;
+	commissionValue: string | null;
+	status: string | null;
+	submittedAt: Date | string | null;
+	createdAt: Date | string;
+	agentName: string | null;
+	agentEmail: string | null;
+}
+
+// Dialog state type
+interface ApprovalDialogState {
+	isOpen: boolean;
+	transaction: QueueTransaction | null;
+	action: "approve" | "reject" | null;
+	reviewNotes: string;
+	isSubmitting: boolean;
+}
 
 export default function AdminApprovalsPage() {
 	const router = useRouter();
+	const queryClient = useQueryClient();
 	const { data: session, isPending } = authClient.useSession();
-	const [statusFilter, setStatusFilter] = useState<string>("pending");
+	const [statusFilter, setStatusFilter] = useState<string>("submitted");
+	const [page, setPage] = useState(0);
+	const pageSize = 20;
+
+	// Dialog state for approve/reject confirmation
+	const [dialogState, setDialogState] = useState<ApprovalDialogState>({
+		isOpen: false,
+		transaction: null,
+		action: null,
+		reviewNotes: "",
+		isSubmitting: false,
+	});
 
 	// Admin role checking
 	const { data: roleData, isLoading: isRoleLoading } =
@@ -59,28 +108,54 @@ export default function AdminApprovalsPage() {
 			isLoading: boolean;
 		};
 
-	// Fetch approvals data
+	// Fetch approvals data from transactions table (like dashboard widget)
 	const {
 		data: approvalsData,
 		isLoading: isLoadingApprovals,
 		refetch: refetchApprovals
-	} = trpc.approvals.list.useQuery({
-		limit: 20,
-		offset: 0,
-		status: statusFilter === "all" ? undefined : statusFilter as any,
-		sortBy: "submittedAt",
-		sortOrder: "desc",
+	} = trpc.admin.getCommissionApprovalQueue.useQuery({
+		limit: pageSize,
+		offset: page * pageSize,
+		status: statusFilter === "all" ? undefined : statusFilter as "submitted" | "under_review",
 	}, {
+		enabled: !!session && !!roleData?.hasAdminAccess,
+		refetchOnWindowFocus: false,
+		staleTime: 30000,
+	});
+
+	// Get dashboard stats for the summary cards
+	const { data: dashboardStats, isLoading: isLoadingStats } = trpc.admin.getDashboardSummary.useQuery({}, {
 		enabled: !!session && !!roleData?.hasAdminAccess,
 	});
 
-	// Get approval statistics
-	const { data: approvalStats, isLoading: isLoadingStats } = trpc.approvals.getStats.useQuery({}, {
-		enabled: !!session && !!roleData?.hasAdminAccess,
+	// Mutation for approving/rejecting commissions
+	const processApprovalMutation = trpc.admin.processCommissionApproval.useMutation({
+		onSuccess: (data, variables) => {
+			const actionText = variables.action === "approve" ? "approved" : "rejected";
+			toast.success(`Transaction ${actionText} successfully`);
+
+			// Invalidate relevant queries
+			queryClient.invalidateQueries({ queryKey: [["admin", "getCommissionApprovalQueue"]] });
+			queryClient.invalidateQueries({ queryKey: [["admin", "getDashboardSummary"]] });
+
+			closeDialog();
+		},
+		onError: (error, variables) => {
+			const actionText = variables.action === "approve" ? "approve" : "reject";
+			toast.error(`Failed to ${actionText} transaction: ${error.message}`);
+			setDialogState((prev) => ({ ...prev, isSubmitting: false }));
+		},
 	});
 
 	// Get utils for invalidation after mutations
 	const utils = trpc.useUtils();
+
+	// Handle redirect for unauthenticated users
+	useEffect(() => {
+		if (!isPending && !session) {
+			router.push("/login");
+		}
+	}, [isPending, session, router]);
 
 	// Show loading while checking authentication and role
 	if (isPending || isRoleLoading) {
@@ -94,10 +169,16 @@ export default function AdminApprovalsPage() {
 		);
 	}
 
-	// Redirect if not authenticated
+	// Show loading while redirecting unauthenticated users
 	if (!session) {
-		router.push("/login");
-		return null;
+		return (
+			<div className="flex h-screen items-center justify-center">
+				<div className="text-center">
+					<div className="mx-auto h-8 w-8 animate-spin rounded-full border-primary border-b-2" />
+					<p className="mt-2 text-muted-foreground text-sm">Redirecting...</p>
+				</div>
+			</div>
+		);
 	}
 
 	// Access denied if not admin
@@ -132,8 +213,77 @@ export default function AdminApprovalsPage() {
 	const handleRefresh = async () => {
 		await Promise.all([
 			refetchApprovals(),
-			utils.approvals.getStats.invalidate(),
+			utils.admin.getDashboardSummary.invalidate(),
 		]);
+	};
+
+	// Handle approval action - opens dialog
+	const handleApprovalAction = (
+		transaction: QueueTransaction,
+		action: "approve" | "reject",
+	) => {
+		setDialogState({
+			isOpen: true,
+			transaction,
+			action,
+			reviewNotes: "",
+			isSubmitting: false,
+		});
+	};
+
+	// Submit approval decision
+	const submitApprovalDecision = async () => {
+		if (!dialogState.transaction || !dialogState.action) return;
+
+		setDialogState((prev) => ({ ...prev, isSubmitting: true }));
+
+		processApprovalMutation.mutate({
+			transactionId: dialogState.transaction.id,
+			action: dialogState.action,
+			reviewNotes: dialogState.reviewNotes || undefined,
+		});
+	};
+
+	// Close dialog
+	const closeDialog = () => {
+		setDialogState({
+			isOpen: false,
+			transaction: null,
+			action: null,
+			reviewNotes: "",
+			isSubmitting: false,
+		});
+	};
+
+	// Pagination handlers
+	const handlePreviousPage = () => {
+		setPage((prev) => Math.max(0, prev - 1));
+	};
+
+	const handleNextPage = () => {
+		if (approvalsData?.hasMore) {
+			setPage((prev) => prev + 1);
+		}
+	};
+
+	// Format currency
+	const formatCurrency = (amount: string | number | null) => {
+		if (!amount) return "$0.00";
+		const num = typeof amount === "string" ? parseFloat(amount) : amount;
+		return new Intl.NumberFormat("en-US", {
+			style: "currency",
+			currency: "USD",
+		}).format(num);
+	};
+
+	// Format date
+	const formatDate = (date: Date | string | null) => {
+		if (!date) return "N/A";
+		return new Date(date).toLocaleDateString("en-US", {
+			month: "short",
+			day: "numeric",
+			year: "numeric",
+		});
 	};
 
 	return (
@@ -186,15 +336,17 @@ export default function AdminApprovalsPage() {
 						{/* Approval Controls */}
 						<div className="flex items-center gap-2">
 							{/* Status Filter */}
-							<Select value={statusFilter} onValueChange={setStatusFilter}>
+							<Select value={statusFilter} onValueChange={(value) => {
+								setStatusFilter(value);
+								setPage(0); // Reset to first page when filter changes
+							}}>
 								<SelectTrigger className="w-40">
 									<SelectValue placeholder="Filter by status" />
 								</SelectTrigger>
 								<SelectContent>
-									<SelectItem value="pending">Pending Review</SelectItem>
-									<SelectItem value="approved">Approved</SelectItem>
-									<SelectItem value="rejected">Rejected</SelectItem>
-									<SelectItem value="all">All Requests</SelectItem>
+									<SelectItem value="submitted">Pending Review</SelectItem>
+									<SelectItem value="under_review">Under Review</SelectItem>
+									<SelectItem value="all">All Pending</SelectItem>
 								</SelectContent>
 							</Select>
 
@@ -223,7 +375,7 @@ export default function AdminApprovalsPage() {
 								) : (
 									<>
 										<div className="font-bold text-2xl">
-											{approvalStats?.pendingRequests || 0}
+											{approvalsData?.totalCount || 0}
 										</div>
 										<p className="text-muted-foreground text-xs">
 											Awaiting your review
@@ -235,7 +387,7 @@ export default function AdminApprovalsPage() {
 						<Card>
 							<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
 								<CardTitle className="font-medium text-sm">
-									Approved Today
+									Total Transactions
 								</CardTitle>
 								<RiCheckLine className="h-4 w-4 text-muted-foreground" />
 							</CardHeader>
@@ -248,10 +400,10 @@ export default function AdminApprovalsPage() {
 								) : (
 									<>
 										<div className="font-bold text-2xl">
-											{approvalStats?.approvedRequests || 0}
+											{dashboardStats?.totalTransactions || 0}
 										</div>
 										<p className="text-muted-foreground text-xs">
-											Total approved
+											All time
 										</p>
 									</>
 								)}
@@ -260,7 +412,7 @@ export default function AdminApprovalsPage() {
 						<Card>
 							<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
 								<CardTitle className="font-medium text-sm">
-									Total Value
+									Total Commission
 								</CardTitle>
 								<RiCheckboxCircleLine className="h-4 w-4 text-muted-foreground" />
 							</CardHeader>
@@ -273,10 +425,10 @@ export default function AdminApprovalsPage() {
 								) : (
 									<>
 										<div className="font-bold text-2xl">
-											${(approvalStats?.totalRequestedAmount || 0).toLocaleString()}
+											{formatCurrency(dashboardStats?.totalCommission || 0)}
 										</div>
 										<p className="text-muted-foreground text-xs">
-											Pending approval
+											All transactions
 										</p>
 									</>
 								)}
@@ -285,7 +437,7 @@ export default function AdminApprovalsPage() {
 						<Card>
 							<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
 								<CardTitle className="font-medium text-sm">
-									Avg Request
+									Active Agents
 								</CardTitle>
 								<RiCheckboxCircleLine className="h-4 w-4 text-muted-foreground" />
 							</CardHeader>
@@ -298,9 +450,9 @@ export default function AdminApprovalsPage() {
 								) : (
 									<>
 										<div className="font-bold text-2xl">
-											${(approvalStats?.averageRequestedAmount || 0).toLocaleString()}
+											{dashboardStats?.totalAgents || 0}
 										</div>
-										<p className="text-muted-foreground text-xs">Per request</p>
+										<p className="text-muted-foreground text-xs">In the system</p>
 									</>
 								)}
 							</CardContent>
@@ -331,52 +483,82 @@ export default function AdminApprovalsPage() {
 										</div>
 									))}
 								</div>
-							) : approvalsData?.approvals && approvalsData.approvals.length > 0 ? (
+							) : approvalsData?.transactions && approvalsData.transactions.length > 0 ? (
 								<div className="space-y-4">
-									{approvalsData.approvals.map((approval) => (
-										<div key={approval.approval.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors">
+									{approvalsData.transactions.map((transaction) => (
+										<div key={transaction.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors">
 											<div className="space-y-1">
 												<div className="flex items-center gap-2">
 													<span className="font-medium">
-														{approval.agent?.name || 'Unknown Agent'}
+														{transaction.agentName || 'Unknown Agent'}
 													</span>
 													<span className={`px-2 py-1 text-xs rounded-full ${
-														approval.approval.priority === 'urgent' ? 'bg-red-100 text-red-800' :
-														approval.approval.priority === 'normal' ? 'bg-yellow-100 text-yellow-800' :
-														'bg-green-100 text-green-800'
+														transaction.status === 'submitted' ? 'bg-yellow-100 text-yellow-800' :
+														transaction.status === 'under_review' ? 'bg-blue-100 text-blue-800' :
+														'bg-gray-100 text-gray-800'
 													}`}>
-														{approval.approval.priority}
+														{transaction.status?.replace('_', ' ') || 'pending'}
+													</span>
+													<span className="px-2 py-1 text-xs rounded-full bg-purple-100 text-purple-800">
+														{transaction.transactionType}
 													</span>
 												</div>
 												<p className="text-sm text-muted-foreground">
-													${Number(approval.approval.requestedAmount).toLocaleString()} requested
-													{approval.approval.submittedAt && ` • ${new Date(approval.approval.submittedAt).toLocaleDateString()}`}
+													{formatCurrency(transaction.commissionAmount)} commission
+													{transaction.submittedAt && ` • ${formatDate(transaction.submittedAt)}`}
 												</p>
-												{approval.approval.metadata?.submissionNotes && (
-													<p className="text-sm text-muted-foreground max-w-md truncate">
-														{approval.approval.metadata.submissionNotes}
-													</p>
-												)}
+												<p className="text-sm text-muted-foreground">
+													Client: {transaction.clientData?.name || 'Unknown'} •
+													Property: {transaction.propertyData?.address || 'N/A'}
+												</p>
 											</div>
 											<div className="flex gap-2">
-												<Button size="sm" variant="outline" className="text-green-600 hover:text-green-700">
+												<Button
+													size="sm"
+													variant="outline"
+													className="text-green-600 hover:text-green-700 hover:bg-green-50"
+													onClick={() => handleApprovalAction(transaction, "approve")}
+												>
 													<RiCheckLine className="mr-1 h-4 w-4" />
 													Approve
 												</Button>
-												<Button size="sm" variant="outline" className="text-red-600 hover:text-red-700">
+												<Button
+													size="sm"
+													variant="outline"
+													className="text-red-600 hover:text-red-700 hover:bg-red-50"
+													onClick={() => handleApprovalAction(transaction, "reject")}
+												>
 													<RiCloseLine className="mr-1 h-4 w-4" />
 													Reject
 												</Button>
 											</div>
 										</div>
 									))}
-									{approvalsData.hasMore && (
-										<div className="text-center pt-4">
-											<Button variant="outline" onClick={() => {
-												// TODO: Implement pagination
-											}}>
-												Load More
-											</Button>
+
+									{/* Pagination Controls */}
+									{(approvalsData.totalCount > pageSize || page > 0) && (
+										<div className="flex items-center justify-between pt-4 border-t">
+											<p className="text-sm text-muted-foreground">
+												Showing {page * pageSize + 1} to {Math.min((page + 1) * pageSize, approvalsData.totalCount)} of {approvalsData.totalCount} transactions
+											</p>
+											<div className="flex gap-2">
+												<Button
+													variant="outline"
+													size="sm"
+													onClick={handlePreviousPage}
+													disabled={page === 0}
+												>
+													Previous
+												</Button>
+												<Button
+													variant="outline"
+													size="sm"
+													onClick={handleNextPage}
+													disabled={!approvalsData.hasMore}
+												>
+													Next
+												</Button>
+											</div>
 										</div>
 									)}
 								</div>
@@ -401,6 +583,89 @@ export default function AdminApprovalsPage() {
 						</CardContent>
 					</Card>
 				</div>
+
+				{/* Approval Confirmation Dialog */}
+				<Dialog open={dialogState.isOpen} onOpenChange={closeDialog}>
+					<DialogContent>
+						<DialogHeader>
+							<DialogTitle>
+								{dialogState.action === "approve" ? "Approve" : "Reject"} Commission
+							</DialogTitle>
+							<DialogDescription>
+								{dialogState.transaction && (
+									<>
+										{dialogState.action === "approve" ? "Approve" : "Reject"} commission for{" "}
+										<strong>{dialogState.transaction.clientData?.name || "Unknown Client"}</strong>{" "}
+										by <strong>{dialogState.transaction.agentName || "Unknown Agent"}</strong>
+										<br />
+										Commission Amount: <strong>{formatCurrency(dialogState.transaction.commissionAmount)}</strong>
+									</>
+								)}
+							</DialogDescription>
+						</DialogHeader>
+
+						<div className="space-y-4">
+							<div>
+								<label htmlFor="review-notes" className="font-medium text-sm">
+									Review Notes{" "}
+									{dialogState.action === "reject" && (
+										<span className="text-red-500">*</span>
+									)}
+								</label>
+								<Textarea
+									id="review-notes"
+									placeholder={
+										dialogState.action === "approve"
+											? "Optional notes about the approval..."
+											: "Please provide a reason for rejection..."
+									}
+									value={dialogState.reviewNotes}
+									onChange={(e) =>
+										setDialogState((prev) => ({
+											...prev,
+											reviewNotes: e.target.value,
+										}))
+									}
+									className="mt-1"
+									rows={3}
+								/>
+							</div>
+						</div>
+
+						<DialogFooter>
+							<Button
+								variant="outline"
+								onClick={closeDialog}
+								disabled={dialogState.isSubmitting}
+							>
+								Cancel
+							</Button>
+							<Button
+								onClick={submitApprovalDecision}
+								disabled={
+									dialogState.isSubmitting ||
+									(dialogState.action === "reject" && !dialogState.reviewNotes.trim())
+								}
+								className={
+									dialogState.action === "approve"
+										? "bg-green-600 hover:bg-green-700"
+										: "bg-red-600 hover:bg-red-700"
+								}
+							>
+								{dialogState.isSubmitting ? (
+									<>
+										<RiLoader4Line className="mr-2 h-4 w-4 animate-spin" />
+										Processing...
+									</>
+								) : dialogState.action === "approve" ? (
+									"Approve"
+								) : (
+									"Reject"
+								)}
+							</Button>
+						</DialogFooter>
+					</DialogContent>
+				</Dialog>
 			</SidebarInset>
 		</SidebarProvider>
 	);

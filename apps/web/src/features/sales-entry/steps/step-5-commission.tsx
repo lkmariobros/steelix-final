@@ -10,6 +10,7 @@ import {
 	DollarSign,
 	Info,
 	Percent,
+	User,
 	Users,
 } from "lucide-react";
 import React, { useCallback, useEffect, useState } from "react";
@@ -48,10 +49,13 @@ import {
 	representationTypeOptions,
 } from "../transaction-schema";
 import { trpc } from "@/utils/trpc";
+import type { CoBrokingData, RepresentationType } from "../transaction-schema";
 
+// Issue #1 Fix: Updated props to receive representation type from Step 4
 interface StepCommissionProps {
 	data?: CommissionData;
 	propertyPrice: number;
+	coBrokingData?: CoBrokingData["coBrokingData"]; // Co-broker split info from Step 4
 	onUpdate: (data: CommissionData) => void;
 	onNext: () => void;
 	onPrevious: () => void;
@@ -60,18 +64,20 @@ interface StepCommissionProps {
 export function StepCommission({
 	data,
 	propertyPrice,
+	coBrokingData,
 	onUpdate,
 	onNext,
 	onPrevious,
 }: StepCommissionProps) {
-	// Local state for commission type and representation type
+	// Local state for commission type
 	const [localCommissionType, setLocalCommissionType] = useState<
 		"percentage" | "fixed"
 	>(data?.commissionType || "percentage");
 
-	const [representationType, setRepresentationType] = useState<
-		"single_side" | "dual_agency"
-	>(data?.representationType || "single_side");
+	// Use representation type from data (set in Step 4)
+	// Simplified to 2 options: direct or co_broking
+	const representationType = data?.representationType || "direct";
+	const coBrokerSplit = coBrokingData?.commissionSplit || 50;
 
 	const form = useForm<CommissionData>({
 		resolver: zodResolver(commissionSchema),
@@ -79,38 +85,59 @@ export function StepCommission({
 			commissionType: data?.commissionType || "percentage",
 			commissionValue: data?.commissionValue || 0,
 			commissionAmount: data?.commissionAmount || 0,
-			representationType: data?.representationType || "single_side",
+			representationType: data?.representationType || "direct",
 			agentTier: data?.agentTier,
 			companyCommissionSplit: data?.companyCommissionSplit,
 			breakdown: data?.breakdown,
 		},
 	});
 
-	// Mock enhanced commission calculation for now (will be replaced with real tRPC call)
+	// Fetch real agent tier info from backend
+	const { data: realAgentTierInfo, isLoading: isTierLoading } = trpc.agentTiers.getMyTierInfo.useQuery();
+	const { data: uplineInfo } = trpc.agentTiers.getMyUpline.useQuery();
+
+	// Agent tier info with fallback
+	const agentTierInfo = realAgentTierInfo ? {
+		agentTier: realAgentTierInfo.agentTier as "advisor" | "sales_leader" | "team_leader" | "group_leader" | "supreme_leader",
+		companyCommissionSplit: realAgentTierInfo.companyCommissionSplit || 70,
+		displayName: realAgentTierInfo.displayName,
+		description: realAgentTierInfo.description,
+		leadershipBonusRate: realAgentTierInfo.leadershipBonusRate || 0,
+	} : {
+		agentTier: "advisor" as const,
+		companyCommissionSplit: 70,
+		displayName: "Advisor",
+		description: "Entry level agent",
+		leadershipBonusRate: 0,
+	};
+
+	// Enhanced commission calculation with co-broker split and leadership bonus
 	const watchedCommissionValue = form.watch("commissionValue") || 0;
 	const enhancedCommission = React.useMemo(() => {
 		if (propertyPrice > 0 && watchedCommissionValue > 0) {
-			return calculateEnhancedCommission(
+			// Build upline info for leadership bonus calculation
+			const uplineData = uplineInfo && uplineInfo.leadershipBonusRate > 0 ? {
+				uplineTier: uplineInfo.uplineTier || "advisor",
+				leadershipBonusRate: uplineInfo.leadershipBonusRate,
+			} : null;
+
+			const baseCommission = calculateEnhancedCommission(
 				propertyPrice,
 				localCommissionType,
 				watchedCommissionValue,
 				representationType,
-				"advisor",
-				60
+				agentTierInfo.agentTier,
+				agentTierInfo.companyCommissionSplit,
+				coBrokerSplit,
+				uplineData
 			);
+
+			return baseCommission;
 		}
 		return null;
-	}, [propertyPrice, localCommissionType, watchedCommissionValue, representationType]);
+	}, [propertyPrice, localCommissionType, watchedCommissionValue, representationType, coBrokerSplit, agentTierInfo, uplineInfo]);
 
-	const isCalculating = false;
-
-	// Mock agent tier info for now (will be replaced with real data from session)
-	const agentTierInfo = {
-		agentTier: "advisor" as const,
-		companyCommissionSplit: 60,
-		displayName: "Advisor",
-		description: "Entry level agent",
-	};
+	const isCalculating = isTierLoading;
 
 	const handleSubmit = useCallback(
 		(formData: CommissionData) => {
@@ -256,41 +283,26 @@ export function StepCommission({
 
 							<Separator />
 
-							{/* Representation Type */}
-							<div className="space-y-3">
+							{/* Representation Type Display (set in Step 4) */}
+							<div className="space-y-2">
 								<Label className="text-base">Representation Type</Label>
-								<RadioGroup
-									value={representationType}
-									onValueChange={(value: "single_side" | "dual_agency") => {
-										setRepresentationType(value);
-									}}
-									className="flex flex-col space-y-3"
-								>
-									{representationTypeOptions.map((option) => (
-										<div
-											key={option.value}
-											className="flex items-start space-x-3 p-3 border rounded-lg hover:bg-gray-50"
-										>
-											<RadioGroupItem value={option.value} id={option.value} className="mt-1" />
-											<div className="flex-1">
-												<Label
-													htmlFor={option.value}
-													className="flex cursor-pointer items-center gap-2 font-medium"
-												>
-													{option.value === "dual_agency" ? (
-														<Users className="h-4 w-4" />
-													) : (
-														<Users className="h-4 w-4" />
-													)}
-													{option.label}
-												</Label>
-												<p className="text-sm text-gray-600 mt-1">
-													{option.description}
-												</p>
-											</div>
-										</div>
-									))}
-								</RadioGroup>
+								<div className="p-3 border rounded-lg bg-muted/30">
+									<div className="flex items-center gap-2">
+										<User className="h-4 w-4 text-muted-foreground" />
+										<span className="font-medium">
+											{representationType === "co_broking" ? "Co-Broking" : "Direct Representation"}
+										</span>
+									</div>
+									<p className="text-sm text-muted-foreground mt-1">
+										{representationType === "co_broking"
+											? `Commission split with co-broker (${coBrokerSplit}% to co-broker)`
+											: "You receive your full agent share of the commission"
+										}
+									</p>
+								</div>
+								<p className="text-xs text-muted-foreground">
+									To change representation type, go back to the previous step.
+								</p>
 							</div>
 
 							<Separator />
@@ -371,18 +383,33 @@ export function StepCommission({
 							/>
 
 							{/* Enhanced Commission Summary */}
+							{/* Issue #6 Fix: Improved commission breakdown with clear visual indicators */}
 							{commissionValue > 0 && enhancedCommission && !isCalculating && (
 								<Card className="border-green-200 bg-green-50">
 									<CardHeader>
 										<CardTitle className="flex items-center gap-2 text-green-800 text-lg">
 											<Calculator className="h-5 w-5" />
-											Enhanced Commission Breakdown
+											Commission Breakdown
 										</CardTitle>
 									</CardHeader>
 									<CardContent className="space-y-4 text-green-800">
+										{/* Issue #6 Fix: Prominent "Your Share" display at top */}
+										<div className="bg-green-600 text-white p-4 rounded-lg text-center">
+											<p className="text-sm opacity-90 mb-1">💰 Your Final Earnings</p>
+											<p className="text-3xl font-bold">
+												${enhancedCommission.agentEarnings.toLocaleString()}
+											</p>
+											<p className="text-xs opacity-75 mt-1">
+												After all splits and deductions
+											</p>
+										</div>
+
 										{/* Level 1: Property Commission */}
 										<div className="space-y-2">
-											<h4 className="font-semibold">Property Commission</h4>
+											<h4 className="font-semibold flex items-center gap-2">
+												<span className="bg-green-200 text-green-800 rounded-full w-6 h-6 flex items-center justify-center text-sm">1</span>
+												Property Commission
+											</h4>
 											<div className="grid grid-cols-3 gap-4 text-center bg-white/50 p-3 rounded">
 												<div>
 													<p className="text-sm text-green-600">Property Price</p>
@@ -405,44 +432,98 @@ export function StepCommission({
 											</div>
 										</div>
 
-										{/* Level 2: Representation Split */}
+										{/* Level 2: Representation Split - Issue #6 Fix: Visual flow indicator */}
 										<div className="space-y-2">
-											<h4 className="font-semibold">Commission Distribution</h4>
+											<h4 className="font-semibold flex items-center gap-2">
+												<span className="bg-green-200 text-green-800 rounded-full w-6 h-6 flex items-center justify-center text-sm">2</span>
+												Commission Distribution
+												{enhancedCommission.coBrokerShare && (
+													<Badge variant="outline" className="ml-2 text-xs">Co-Broking</Badge>
+												)}
+											</h4>
 											<div className="bg-white/50 p-3 rounded space-y-2">
+												{/* Issue #6 Fix: Visual split indicator */}
+												<div className="flex items-center gap-2 mb-3">
+													<div className="flex-1 h-3 bg-green-400 rounded-l" style={{ width: enhancedCommission.coBrokerShare ? '50%' : '100%' }} />
+													{enhancedCommission.coBrokerShare && (
+														<div className="flex-1 h-3 bg-gray-300 rounded-r" style={{ width: '50%' }} />
+													)}
+												</div>
 												<div className="flex justify-between">
-													<span>Your Commission Share:</span>
+													<span className="flex items-center gap-2">
+														<span className="w-3 h-3 bg-green-400 rounded" />
+														Your Commission Share:
+													</span>
 													<span className="font-semibold">
 														${enhancedCommission.agentCommissionShare.toLocaleString()}
 													</span>
 												</div>
 												{enhancedCommission.coBrokerShare && (
 													<div className="flex justify-between text-sm">
-														<span>Co-broker Share (50%):</span>
+														<span className="flex items-center gap-2">
+															<span className="w-3 h-3 bg-gray-300 rounded" />
+															Co-broker Share ({coBrokerSplit}%):
+														</span>
 														<span>${enhancedCommission.coBrokerShare.toLocaleString()}</span>
 													</div>
 												)}
 											</div>
 										</div>
 
-										{/* Level 3: Company-Agent Split */}
+										{/* Level 3: Company-Agent Split - Issue #6 Fix: Clear direction */}
 										{agentTierInfo && (
 											<div className="space-y-2">
-												<h4 className="font-semibold">Your Earnings ({agentTierInfo.displayName})</h4>
+												<h4 className="font-semibold flex items-center gap-2">
+													<span className="bg-green-200 text-green-800 rounded-full w-6 h-6 flex items-center justify-center text-sm">3</span>
+													Company-Agent Split ({agentTierInfo.displayName} Tier)
+												</h4>
 												<div className="bg-white/50 p-3 rounded space-y-2">
+													{/* Issue #6 Fix: Visual split bar */}
+													<div className="flex items-center gap-2 mb-3">
+														<div className="h-3 bg-gray-300 rounded-l" style={{ width: `${100 - agentTierInfo.companyCommissionSplit}%` }} />
+														<div className="h-3 bg-green-500 rounded-r" style={{ width: `${agentTierInfo.companyCommissionSplit}%` }} />
+													</div>
 													<div className="flex justify-between text-sm">
-														<span>Company Share ({100 - agentTierInfo.companyCommissionSplit}%):</span>
+														<span className="flex items-center gap-2">
+															<span className="w-3 h-3 bg-gray-300 rounded" />
+															Company Share ({100 - agentTierInfo.companyCommissionSplit}%):
+														</span>
 														<span>${enhancedCommission.companyShare.toLocaleString()}</span>
 													</div>
 													<div className="flex justify-between text-sm">
-														<span>Your Share ({agentTierInfo.companyCommissionSplit}%):</span>
-														<span>${enhancedCommission.agentEarnings.toLocaleString()}</span>
-													</div>
-													<Separator className="bg-green-200" />
-													<div className="flex justify-between font-bold text-lg">
-														<span>Final Earnings:</span>
-														<span className="text-green-700">
-															${enhancedCommission.agentEarnings.toLocaleString()}
+														<span className="flex items-center gap-2">
+															<span className="w-3 h-3 bg-green-500 rounded" />
+															You Keep ({agentTierInfo.companyCommissionSplit}%):
 														</span>
+														<span className="font-semibold">${enhancedCommission.agentEarnings.toLocaleString()}</span>
+													</div>
+												</div>
+											</div>
+										)}
+
+										{/* Level 4: Leadership Bonus (if applicable) */}
+										{enhancedCommission.leadershipBonus && uplineInfo && (
+											<div className="space-y-2">
+												<h4 className="font-semibold flex items-center gap-2">
+													<span className="bg-blue-200 text-blue-800 rounded-full w-6 h-6 flex items-center justify-center text-sm">4</span>
+													Leadership Bonus to Upline
+												</h4>
+												<div className="bg-blue-50 p-3 rounded space-y-2">
+													<div className="flex justify-between text-sm">
+														<span className="flex items-center gap-2">
+															<span className="w-3 h-3 bg-blue-400 rounded" />
+															Your Upline ({uplineInfo.uplineName}):
+														</span>
+														<span className="font-semibold text-blue-600">
+															+${enhancedCommission.leadershipBonus.bonusAmount.toLocaleString()}
+														</span>
+													</div>
+													<p className="text-xs text-blue-600">
+														{enhancedCommission.leadershipBonus.bonusRate}% leadership bonus from company's share
+													</p>
+													<div className="flex justify-between text-sm border-t pt-2">
+														<span>Company Net Share:</span>
+														<span>${enhancedCommission.companyNetShare.toLocaleString()}</span>
 													</div>
 												</div>
 											</div>
@@ -452,22 +533,21 @@ export function StepCommission({
 							)}
 
 							{/* Representation Type Alerts */}
-							{representationType === "single_side" && commissionValue > 0 && (
+							{representationType === "co_broking" && commissionValue > 0 && (
 								<Alert>
 									<Info className="h-4 w-4" />
 									<AlertDescription>
-										<strong>Co-broking Transaction:</strong> You will split the commission 50/50 with the co-broker.
+										<strong>Co-broking Transaction:</strong> You will split the commission with the co-broker ({coBrokerSplit}% to co-broker).
 										Your share will be ${enhancedCommission?.agentCommissionShare.toLocaleString() || "0"}.
 									</AlertDescription>
 								</Alert>
 							)}
 
-							{representationType === "dual_agency" && commissionValue > 0 && (
-								<Alert className="border-orange-200 bg-orange-50">
-									<AlertTriangle className="h-4 w-4" />
+							{representationType === "direct" && commissionValue > 0 && (
+								<Alert className="border-green-200 bg-green-50">
+									<Info className="h-4 w-4 text-green-600" />
 									<AlertDescription>
-										<strong>Dual Agency:</strong> You represent both buyer and seller and receive the full commission.
-										Legal disclosure may be required in your jurisdiction.
+										<strong>Direct Representation:</strong> You receive your full agent share of the commission.
 									</AlertDescription>
 								</Alert>
 							)}

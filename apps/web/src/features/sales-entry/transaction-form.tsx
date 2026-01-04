@@ -17,6 +17,7 @@ import { CheckCircle, Circle, Loader2, Save } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useClientSide } from "@/hooks/use-client-side";
+import { useDocumentUpload } from "@/hooks/use-document-upload"; // Issue #3 Fix
 import { trpc } from "@/utils/trpc";
 import { useQueryClient } from "@tanstack/react-query";
 import { invalidateTransactionQueries } from "@/lib/query-invalidation";
@@ -70,6 +71,9 @@ export function TransactionForm({
 
 	const [isSaving, setIsSaving] = useState(false);
 	const isClient = useClientSide();
+
+	// Issue #3 Fix: Use document upload hook for temp document migration
+	const { migrateDocuments, tempDocuments, clearTempDocuments } = useDocumentUpload(transactionId);
 
 	// ✅ REAL tRPC mutations for comprehensive transaction data flow
 	const createTransaction = trpc.transactions.create.useMutation({
@@ -195,11 +199,17 @@ export function TransactionForm({
 				finalTransactionId = newTransaction.id;
 			}
 
+			// Issue #3 Fix: Migrate temp documents to the new transaction
+			if (finalTransactionId && tempDocuments.length > 0) {
+				await migrateDocuments(finalTransactionId);
+			}
+
 			// Submit for review
 			if (finalTransactionId) {
 				await submitTransaction.mutateAsync({ id: finalTransactionId });
 				toast.success("Transaction submitted for review successfully!");
 				clearAutoSave();
+				clearTempDocuments(); // Issue #3 Fix: Clear temp docs after successful submission
 				onSubmit?.();
 			}
 		} catch (error) {
@@ -208,7 +218,7 @@ export function TransactionForm({
 		} finally {
 			setIsLoading(false);
 		}
-	}, [transactionId, formData, updateTransaction, createTransaction, submitTransaction, clearAutoSave, onSubmit, setIsLoading, prepareFormDataForSubmission]);
+	}, [transactionId, formData, updateTransaction, createTransaction, submitTransaction, clearAutoSave, clearTempDocuments, migrateDocuments, tempDocuments, onSubmit, setIsLoading, prepareFormDataForSubmission]);
 
 	// Handle cancel
 	const handleCancel = useCallback(() => {
@@ -259,10 +269,11 @@ export function TransactionForm({
 				return (
 					<StepCoBroking
 						data={{
+							representationType: formData.representationType ?? "direct",
 							isCoBroking: formData.isCoBroking ?? false,
 							coBrokingData: formData.coBrokingData,
 						}}
-						isDualPartyDeal={formData.clientData?.isDualPartyDeal ?? false}
+						marketType={formData.marketType}
 						onUpdate={(data) => handleStepUpdate(4, data)}
 						onNext={goToNextStep}
 						onPrevious={goToPreviousStep}
@@ -275,12 +286,13 @@ export function TransactionForm({
 							commissionType: formData.commissionType ?? "percentage",
 							commissionValue: formData.commissionValue ?? 0,
 							commissionAmount: formData.commissionAmount ?? 0,
-							representationType: formData.representationType ?? "single_side",
+							representationType: formData.representationType ?? "direct",
 							agentTier: formData.agentTier,
 							companyCommissionSplit: formData.companyCommissionSplit,
 							breakdown: formData.breakdown,
 						}}
 						propertyPrice={formData.propertyData?.price || 0}
+						coBrokingData={formData.coBrokingData}
 						onUpdate={(data) => handleStepUpdate(5, data)}
 						onNext={goToNextStep}
 						onPrevious={goToPreviousStep}
@@ -289,7 +301,7 @@ export function TransactionForm({
 			case 6:
 				return (
 					<StepDocuments
-						data={{ documents: formData.documents, notes: formData.notes }}
+						data={{ documents: formData.documents, notes: formData.notes, transactionId }}
 						onUpdate={(data) => handleStepUpdate(6, data)}
 						onNext={goToNextStep}
 						onPrevious={goToPreviousStep}
@@ -301,6 +313,7 @@ export function TransactionForm({
 						data={formData}
 						onSubmit={handleSubmit}
 						onPrevious={goToPreviousStep}
+						onEditStep={goToStep} // Issue #2 Fix: Allow editing from review
 						isLoading={isLoading}
 					/>
 				);
@@ -369,7 +382,9 @@ export function TransactionForm({
 				</CardHeader>
 				<CardContent>
 					<Tabs value={currentStep.toString()} className="w-full">
-						<TabsList className="grid w-full grid-cols-7">
+						{/* Issue #5 Fix: Mobile-friendly step navigation */}
+						{/* Desktop: Full tabs */}
+						<TabsList className="hidden md:grid w-full grid-cols-7">
 							{stepConfig.map(({ step, title }) => (
 								<TabsTrigger
 									key={step}
@@ -386,11 +401,51 @@ export function TransactionForm({
 									) : (
 										<Circle className="h-3 w-3" />
 									)}
-									<span className="hidden sm:inline">{title}</span>
-									<span className="sm:hidden">{step}</span>
+									<span>{title}</span>
 								</TabsTrigger>
 							))}
 						</TabsList>
+						{/* Mobile: Compact step indicators with touch-friendly targets */}
+						<div className="md:hidden">
+							<div className="flex items-center justify-between mb-4">
+								{stepConfig.map(({ step }) => {
+									const isCompleted = completedSteps.includes(step as FormStep);
+									const isCurrent = step === currentStep;
+									const isAccessible = step <= currentStep || isCompleted;
+									return (
+										<button
+											key={step}
+											type="button"
+											onClick={() => isAccessible && goToStep(step as FormStep)}
+											disabled={!isAccessible}
+											className={`
+												flex items-center justify-center w-10 h-10 rounded-full text-sm font-medium
+												transition-all duration-200 touch-manipulation
+												${isCurrent
+													? 'bg-primary text-primary-foreground ring-2 ring-primary ring-offset-2'
+													: isCompleted
+														? 'bg-green-500 text-white'
+														: isAccessible
+															? 'bg-muted text-muted-foreground hover:bg-muted/80'
+															: 'bg-muted/50 text-muted-foreground/50 cursor-not-allowed'
+												}
+											`}
+											aria-label={`Step ${step}: ${stepConfig[step - 1].title}${isCompleted ? ' (completed)' : ''}`}
+										>
+											{isCompleted && !isCurrent ? (
+												<CheckCircle className="h-5 w-5" />
+											) : (
+												step
+											)}
+										</button>
+									);
+								})}
+							</div>
+							{/* Mobile step title display */}
+							<div className="text-center text-sm text-muted-foreground">
+								{stepConfig[currentStep - 1].title}
+							</div>
+						</div>
 
 						<Separator className="my-6" />
 

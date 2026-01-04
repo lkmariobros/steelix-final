@@ -54,15 +54,27 @@ app.all("/api/auth/*", async (c) => {
 		const authPath = url.pathname.replace('/api/auth', '');
 		console.log(`🔐 Extracted auth path: ${authPath}`);
 
+		// Get request body for logging
+		let bodyText = "";
+		if (c.req.method !== 'GET' && c.req.method !== 'HEAD') {
+			try {
+				bodyText = await c.req.text();
+				console.log("🔐 Auth request body:", bodyText ? bodyText.substring(0, 100) + "..." : "(empty)");
+			} catch (e) {
+				console.log("🔐 Could not read body:", e);
+			}
+		}
+
 		// Create request for Better Auth handler
 		const authRequest = new Request(url.toString(), {
 			method: c.req.method,
 			headers: c.req.raw.headers,
-			body: c.req.method !== 'GET' && c.req.method !== 'HEAD' ? c.req.raw.body : undefined,
+			body: bodyText || undefined,
 		});
 
+		console.log("🔐 Calling auth.handler...");
 		const result = await auth.handler(authRequest);
-		console.log("🔐 Auth handler result:", result ? "Response received" : "No response");
+		console.log("🔐 Auth handler result:", result ? `Response received (status: ${result.status})` : "No response");
 
 		if (!result) {
 			console.log("⚠️ Auth handler returned null/undefined - creating 404 response");
@@ -74,9 +86,21 @@ app.all("/api/auth/*", async (c) => {
 			}, 404);
 		}
 
+		// Log response body for debugging
+		if (result.status >= 400) {
+			const clonedResponse = result.clone();
+			try {
+				const responseBody = await clonedResponse.text();
+				console.log("🔐 Auth error response body:", responseBody);
+			} catch (e) {
+				console.log("🔐 Could not read response body");
+			}
+		}
+
 		return result;
 	} catch (error) {
 		console.error("❌ Auth handler error:", error);
+		console.error("❌ Error stack:", error instanceof Error ? error.stack : "No stack");
 		return c.json({ error: "Auth handler failed", details: error instanceof Error ? error.message : String(error) }, 500);
 	}
 });

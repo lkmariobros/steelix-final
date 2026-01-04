@@ -165,12 +165,13 @@ const listTransactionsInput = z.object({
 		.optional(),
 });
 
-// Enhanced commission calculation input
+// Enhanced commission calculation input - simplified representation type
 const enhancedCommissionInput = z.object({
 	propertyPrice: z.number().positive("Property price must be positive"),
 	commissionType: z.enum(["percentage", "fixed"]),
 	commissionValue: z.number().positive("Commission value must be positive"),
-	representationType: z.enum(["single_side", "dual_agency"]),
+	representationType: z.enum(["direct", "co_broking"]),
+	coBrokerSplitPercentage: z.number().min(0).max(100).optional().default(50),
 });
 
 export const transactionsRouter = router({
@@ -408,7 +409,8 @@ export const transactionsRouter = router({
 				commissionRate,
 				input.representationType,
 				agentTier,
-				companyCommissionSplit
+				companyCommissionSplit,
+				input.coBrokerSplitPercentage
 			);
 
 			return {
@@ -425,7 +427,8 @@ export const transactionsRouter = router({
 	// Create transaction with enhanced commission calculation
 	createWithEnhancedCommission: protectedProcedure
 		.input(baseTransactionInput.extend({
-			representationType: z.enum(["single_side", "dual_agency"]).default("single_side"),
+			representationType: z.enum(["direct", "co_broking"]).default("direct"),
+			coBrokerSplitPercentage: z.number().min(0).max(100).optional().default(50),
 		}).refine(
 			(data: any) => {
 				// Primary market transactions must be sales
@@ -458,7 +461,8 @@ export const transactionsRouter = router({
 				commissionRate,
 				input.representationType,
 				agentTier,
-				companyCommissionSplit
+				companyCommissionSplit,
+				input.coBrokerSplitPercentage
 			);
 
 			const newTransaction = {

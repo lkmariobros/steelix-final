@@ -6,18 +6,25 @@ import {
 	getAgentTierHistory,
 	promoteAgentTier,
 	validateTierRequirements,
+	getUplineInfo,
+	getLeadershipBonusPayments,
+	setAgentUpline,
+	getDownlineAgents,
 } from "../lib/agent-tier-utils";
 import { agentTierSchema, AGENT_TIER_CONFIG, type AgentTier } from "../db/schema/auth";
 
 /**
  * Agent tier management router for commission calculations
+ * Updated for New Leadership Plan with Leadership Bonus support
  */
 
-// Input schemas
+// Input schemas - simplified representation type (2 options)
 const calculateCommissionInput = z.object({
 	propertyPrice: z.number().positive("Property price must be positive"),
 	commissionRate: z.number().min(0.1).max(100, "Commission rate must be between 0.1 and 100"),
-	representationType: z.enum(['single_side', 'dual_agency']),
+	representationType: z.enum(['direct', 'co_broking']),
+	coBrokerSplitPercentage: z.number().min(0).max(100).optional().default(50),
+	includeLeadershipBonus: z.boolean().optional().default(true),
 });
 
 const promoteAgentInput = z.object({
@@ -51,21 +58,29 @@ export const agentTiersRouter = router({
 			return await getAgentTierInfo(input.agentId);
 		}),
 
-	// Calculate enhanced commission with current user's tier
+	// Calculate enhanced commission with current user's tier and leadership bonus
 	calculateCommission: protectedProcedure
 		.input(calculateCommissionInput)
 		.query(async ({ ctx, input }) => {
 			// Get user's tier information from enhanced session
 			const userSession = ctx.session.user as any;
 			const agentTier = (userSession.agentTier || 'advisor') as AgentTier;
-			const companyCommissionSplit = userSession.companyCommissionSplit || 60;
+			const companyCommissionSplit = userSession.companyCommissionSplit || AGENT_TIER_CONFIG[agentTier].commissionSplit;
+
+			// Get upline info for leadership bonus calculation
+			let uplineInfo = null;
+			if (input.includeLeadershipBonus) {
+				uplineInfo = await getUplineInfo(ctx.session.user.id);
+			}
 
 			return calculateEnhancedCommission(
 				input.propertyPrice,
 				input.commissionRate,
 				input.representationType,
 				agentTier,
-				companyCommissionSplit
+				companyCommissionSplit,
+				input.coBrokerSplitPercentage,
+				uplineInfo
 			);
 		}),
 
@@ -76,13 +91,21 @@ export const agentTiersRouter = router({
 		}))
 		.query(async ({ input }) => {
 			const agentInfo = await getAgentTierInfo(input.agentId);
-			
+
+			// Get upline info for leadership bonus calculation
+			let uplineInfo = null;
+			if (input.includeLeadershipBonus) {
+				uplineInfo = await getUplineInfo(input.agentId);
+			}
+
 			return calculateEnhancedCommission(
 				input.propertyPrice,
 				input.commissionRate,
 				input.representationType,
 				(agentInfo.agentTier || 'advisor') as AgentTier,
-				agentInfo.companyCommissionSplit || 60
+				agentInfo.companyCommissionSplit || AGENT_TIER_CONFIG[(agentInfo.agentTier || 'advisor') as AgentTier].commissionSplit,
+				input.coBrokerSplitPercentage,
+				uplineInfo
 			);
 		}),
 
@@ -129,18 +152,20 @@ export const agentTiersRouter = router({
 			return await getAgentTierHistory(input.agentId);
 		}),
 
-	// Get commission preview for transaction
+	// Get commission preview for transaction with leadership bonus
 	getCommissionPreview: protectedProcedure
 		.input(z.object({
 			propertyPrice: z.number().positive(),
 			commissionType: z.enum(['percentage', 'fixed']),
 			commissionValue: z.number().positive(),
-			representationType: z.enum(['single_side', 'dual_agency']),
+			representationType: z.enum(['direct', 'co_broking']),
+			coBrokerSplitPercentage: z.number().min(0).max(100).optional().default(50),
+			includeLeadershipBonus: z.boolean().optional().default(true),
 		}))
 		.query(async ({ ctx, input }) => {
 			const userSession = ctx.session.user as any;
 			const agentTier = (userSession.agentTier || 'advisor') as AgentTier;
-			const companyCommissionSplit = userSession.companyCommissionSplit || 60;
+			const companyCommissionSplit = userSession.companyCommissionSplit || AGENT_TIER_CONFIG[agentTier].commissionSplit;
 
 			// Calculate commission rate
 			let commissionRate: number;
@@ -151,12 +176,20 @@ export const agentTiersRouter = router({
 				commissionRate = (input.commissionValue / input.propertyPrice) * 100;
 			}
 
+			// Get upline info for leadership bonus
+			let uplineInfo = null;
+			if (input.includeLeadershipBonus) {
+				uplineInfo = await getUplineInfo(ctx.session.user.id);
+			}
+
 			const breakdown = calculateEnhancedCommission(
 				input.propertyPrice,
 				commissionRate,
 				input.representationType,
 				agentTier,
-				companyCommissionSplit
+				companyCommissionSplit,
+				input.coBrokerSplitPercentage,
+				uplineInfo
 			);
 
 			return {
@@ -167,7 +200,13 @@ export const agentTiersRouter = router({
 					tier: agentTier,
 					displayName: AGENT_TIER_CONFIG[agentTier].displayName,
 					description: AGENT_TIER_CONFIG[agentTier].description,
+					leadershipBonusRate: AGENT_TIER_CONFIG[agentTier].leadershipBonusRate,
 				},
+				uplineInfo: uplineInfo ? {
+					uplineName: uplineInfo.uplineName,
+					uplineTier: uplineInfo.uplineTier,
+					bonusRate: uplineInfo.leadershipBonusRate,
+				} : null,
 			};
 		}),
 
@@ -180,7 +219,7 @@ export const agentTiersRouter = router({
 		.query(async ({ input }) => {
 			const { db } = await import("../db");
 			const { user } = await import("../db/schema/auth");
-			
+
 			const agents = await db
 				.select({
 					id: user.id,
@@ -189,6 +228,7 @@ export const agentTiersRouter = router({
 					agentTier: user.agentTier,
 					companyCommissionSplit: user.companyCommissionSplit,
 					tierEffectiveDate: user.tierEffectiveDate,
+					recruitedBy: user.recruitedBy,
 					role: user.role,
 					createdAt: user.createdAt,
 				})
@@ -214,7 +254,7 @@ export const agentTiersRouter = router({
 		}))
 		.mutation(async ({ ctx, input }) => {
 			const results = [];
-			
+
 			for (const update of input.updates) {
 				const result = await promoteAgentTier(
 					update.agentId,
@@ -224,7 +264,80 @@ export const agentTiersRouter = router({
 				);
 				results.push({ agentId: update.agentId, ...result });
 			}
-			
+
 			return results;
 		}),
+
+	// ========== LEADERSHIP BONUS PROCEDURES ==========
+
+	// Get current user's upline (recruiter) info
+	getMyUpline: protectedProcedure.query(async ({ ctx }) => {
+		return await getUplineInfo(ctx.session.user.id);
+	}),
+
+	// Get current user's downline agents
+	getMyDownline: protectedProcedure.query(async ({ ctx }) => {
+		return await getDownlineAgents(ctx.session.user.id);
+	}),
+
+	// Get current user's leadership bonus payments received
+	getMyLeadershipBonusPayments: protectedProcedure.query(async ({ ctx }) => {
+		return await getLeadershipBonusPayments(ctx.session.user.id);
+	}),
+
+	// Set agent's upline (admin only)
+	setAgentUpline: adminProcedure
+		.input(z.object({
+			agentId: z.string().min(1, "Agent ID is required"),
+			recruitedBy: z.string().min(1, "Recruiter ID is required"),
+		}))
+		.mutation(async ({ ctx, input }) => {
+			return await setAgentUpline(input.agentId, input.recruitedBy, ctx.session.user.id);
+		}),
+
+	// Get agent's upline (admin only)
+	getAgentUpline: adminProcedure
+		.input(z.object({ agentId: z.string() }))
+		.query(async ({ input }) => {
+			return await getUplineInfo(input.agentId);
+		}),
+
+	// Get agent's downline (admin only)
+	getAgentDownline: adminProcedure
+		.input(z.object({ agentId: z.string() }))
+		.query(async ({ input }) => {
+			return await getDownlineAgents(input.agentId);
+		}),
+
+	// Get agent's leadership bonus payments (admin only)
+	getAgentLeadershipBonusPayments: adminProcedure
+		.input(z.object({ agentId: z.string() }))
+		.query(async ({ input }) => {
+			return await getLeadershipBonusPayments(input.agentId);
+		}),
+
+	// Get leadership bonus summary for current user
+	getMyLeadershipBonusSummary: protectedProcedure.query(async ({ ctx }) => {
+		const payments = await getLeadershipBonusPayments(ctx.session.user.id);
+		const downline = await getDownlineAgents(ctx.session.user.id);
+		const agentInfo = await getAgentTierInfo(ctx.session.user.id);
+
+		const totalPending = payments
+			.filter(p => p.status === 'pending')
+			.reduce((sum, p) => sum + parseFloat(p.leadershipBonusAmount || '0'), 0);
+
+		const totalPaid = payments
+			.filter(p => p.status === 'paid')
+			.reduce((sum, p) => sum + parseFloat(p.leadershipBonusAmount || '0'), 0);
+
+		return {
+			currentTier: agentInfo.agentTier,
+			leadershipBonusRate: agentInfo.leadershipBonusRate,
+			downlineCount: downline.length,
+			totalPendingBonus: Math.round(totalPending * 100) / 100,
+			totalPaidBonus: Math.round(totalPaid * 100) / 100,
+			totalEarnings: Math.round((totalPending + totalPaid) * 100) / 100,
+			recentPayments: payments.slice(0, 10),
+		};
+	}),
 });
