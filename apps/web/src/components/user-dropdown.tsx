@@ -12,10 +12,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { authClient } from "@/lib/auth-client";
 import { RiLogoutBoxLine } from "@remixicon/react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 
 export default function UserDropdown() {
-	const router = useRouter();
 	const { data: session, isPending } = authClient.useSession();
 
 	// Loading state
@@ -41,12 +39,12 @@ export default function UserDropdown() {
 		.join("")
 		.toUpperCase();
 
-	// Logout function
+	// Logout function - use window.location.href for hard refresh to clear session properly
 	const handleSignOut = async () => {
 		await authClient.signOut({
 			fetchOptions: {
 				onSuccess: () => {
-					router.push("/login");
+					window.location.href = "/login";
 				},
 			},
 		});
