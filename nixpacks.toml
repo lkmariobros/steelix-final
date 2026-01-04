@@ -1,0 +1,15 @@
+# Nixpacks configuration for Railway deployment
+# This overrides the automatic detection to fix peer dependency conflicts
+
+[phases.setup]
+nixPkgs = ["nodejs_20", "npm-9_x"]
+
+[phases.install]
+cmds = ["npm install --legacy-peer-deps"]
+
+[phases.build]
+cmds = ["cd apps/server && npm install --legacy-peer-deps && npm run build"]
+
+[start]
+cmd = "cd apps/server && npm start"
+
