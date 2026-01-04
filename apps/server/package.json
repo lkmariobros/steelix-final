@@ -31,13 +31,13 @@
 		"drizzle-orm": "^0.44.5",
 		"hono": "^4.7.6",
 		"pg": "^8.14.1",
+		"tsc-alias": "^1.8.11",
+		"typescript": "^5.8.2",
 		"zod": "^3.25.16"
 	},
 	"devDependencies": {
 		"@types/bun": "^1.2.6",
 		"@types/pg": "^8.11.11",
-		"drizzle-kit": "^0.31.8",
-		"tsc-alias": "^1.8.11",
-		"typescript": "^5.8.2"
+		"drizzle-kit": "^0.31.8"
 	}
 }
