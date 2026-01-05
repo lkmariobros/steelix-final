@@ -40,8 +40,9 @@ async function hashPasswordBetterAuth(password: string): Promise<string> {
 }
 
 async function fixPasswords() {
-	const email = "josephkwantum@gmail.com";
-	const password = "Admin123!";
+	// Change these to fix a specific user's password
+	const email = process.argv[2] || "elson@devots.com.my";
+	const password = process.argv[3] || "DevOts2024!";
 
 	console.log("🔧 Fixing password format for Better Auth");
 	console.log("📧 Email:", email);

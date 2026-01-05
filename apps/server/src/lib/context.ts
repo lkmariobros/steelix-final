@@ -9,9 +9,28 @@ export type CreateContextOptions = {
 };
 
 export async function createContext({ context }: CreateContextOptions) {
+	// Debug: Log cookies for tRPC requests
+	const cookies = context.req.header("cookie");
+	const userAgent = context.req.header("user-agent") || "";
+	const isMobile = /iPhone|iPad|Android|Mobile/i.test(userAgent);
+
+	if (isMobile || !cookies) {
+		console.log("🍪 tRPC Cookie Debug:", {
+			hasCookies: !!cookies,
+			cookieLength: cookies?.length || 0,
+			isMobile,
+			userAgent: userAgent.substring(0, 80),
+			url: context.req.url,
+		});
+	}
+
 	const session = await auth.api.getSession({
 		headers: context.req.raw.headers,
 	});
+
+	if (isMobile && !session) {
+		console.log("📱 Mobile session issue: No session found despite login");
+	}
 
 	// ✅ CRITICAL: Enhance session with agent tier information for commission calculations
 	if (session?.user) {
