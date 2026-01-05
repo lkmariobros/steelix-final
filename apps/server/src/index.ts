@@ -59,7 +59,7 @@ app.all("/api/auth/*", async (c) => {
 		if (c.req.method !== 'GET' && c.req.method !== 'HEAD') {
 			try {
 				bodyText = await c.req.text();
-				console.log("🔐 Auth request body:", bodyText ? bodyText.substring(0, 100) + "..." : "(empty)");
+				console.log("🔐 Auth request body:", bodyText ? `${bodyText.substring(0, 100)}...` : "(empty)");
 			} catch (e) {
 				console.log("🔐 Could not read body:", e);
 			}
@@ -293,46 +293,12 @@ console.log(
 );
 console.log(`   - BETTER_AUTH_URL: ${process.env.BETTER_AUTH_URL}`);
 
-// For Bun runtime, we export the app directly and let Bun handle serving
-// For Railway deployment, we'll use a different approach
-if (process.env.NODE_ENV === "production" || process.env.RAILWAY_ENVIRONMENT) {
-	// Use @hono/node-server for Railway
-	import("@hono/node-server").then(({ serve }) => {
-		try {
-			const server = serve({
-				fetch: app.fetch,
-				port: Number(port),
-				hostname: "0.0.0.0", // Bind to all interfaces for Railway
-			});
+// Detect runtime environment
+const isBunRuntime = typeof globalThis.Bun !== "undefined";
+const isProduction = process.env.NODE_ENV === "production" || process.env.RAILWAY_ENVIRONMENT;
 
-			console.log(`✅ Server successfully bound to 0.0.0.0:${port}`);
-			console.log(
-				"🌐 Server should be accessible at https://steelix-final-production.up.railway.app",
-			);
-
-			// Keep the process alive
-			process.on("SIGTERM", () => {
-				console.log("🛑 SIGTERM received, shutting down gracefully");
-				server.close(() => {
-					console.log("✅ Server closed");
-					process.exit(0);
-				});
-			});
-
-			process.on("SIGINT", () => {
-				console.log("🛑 SIGINT received, shutting down gracefully");
-				server.close(() => {
-					console.log("✅ Server closed");
-					process.exit(0);
-				});
-			});
-		} catch (error) {
-			console.error("❌ Failed to start server:", error);
-			process.exit(1);
-		}
-	});
-} else {
-	// For development with Bun, actually start the server
+if (isBunRuntime) {
+	// For development with Bun runtime
 	try {
 		const server = Bun.serve({
 			fetch: app.fetch,
@@ -360,6 +326,47 @@ if (process.env.NODE_ENV === "production" || process.env.RAILWAY_ENVIRONMENT) {
 		console.error("❌ Failed to start development server:", error);
 		process.exit(1);
 	}
+} else {
+	// For Node.js runtime (production on Railway or local with Node)
+	import("@hono/node-server").then(({ serve }) => {
+		try {
+			const hostname = isProduction ? "0.0.0.0" : "localhost";
+			const server = serve({
+				fetch: app.fetch,
+				port: Number(port),
+				hostname,
+			});
+
+			console.log(`✅ Server successfully bound to ${hostname}:${port}`);
+			if (isProduction) {
+				console.log(
+					"🌐 Server should be accessible at https://steelix-final-production.up.railway.app",
+				);
+			} else {
+				console.log(`🌐 Server accessible at http://localhost:${port}`);
+			}
+
+			// Handle graceful shutdown
+			process.on("SIGTERM", () => {
+				console.log("🛑 SIGTERM received, shutting down gracefully");
+				server.close(() => {
+					console.log("✅ Server closed");
+					process.exit(0);
+				});
+			});
+
+			process.on("SIGINT", () => {
+				console.log("🛑 SIGINT received, shutting down gracefully");
+				server.close(() => {
+					console.log("✅ Server closed");
+					process.exit(0);
+				});
+			});
+		} catch (error) {
+			console.error("❌ Failed to start server:", error);
+			process.exit(1);
+		}
+	});
 }
 
 // Export the app for compatibility

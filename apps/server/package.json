@@ -6,11 +6,11 @@
 		"node": ">=20.0.0"
 	},
 	"scripts": {
-		"build": "tsc && tsc-alias",
+		"build": "esbuild src/index.ts --bundle --platform=node --target=node20 --outfile=dist/index.js --format=esm --packages=external",
 		"check-types": "tsc --noEmit",
 		"compile": "bun build --compile --minify --sourcemap --bytecode ./src/index.ts --outfile server",
 		"dev": "bun run --hot src/index.ts",
-		"start": "node dist/src/index.js",
+		"start": "node dist/index.js",
 		"db:push": "drizzle-kit push",
 		"db:studio": "drizzle-kit studio",
 		"db:generate": "drizzle-kit generate",
@@ -25,10 +25,13 @@
 		"@supabase/supabase-js": "^2.51.0",
 		"@trpc/client": "^11.0.0",
 		"@trpc/server": "^11.0.0",
+		"@types/bun": "^1.2.6",
+		"@types/node": "^25.0.3",
 		"bcryptjs": "^3.0.2",
 		"better-auth": "^1.2.9",
 		"dotenv": "^16.4.7",
 		"drizzle-orm": "^0.44.5",
+		"esbuild": "^0.27.2",
 		"hono": "^4.7.6",
 		"pg": "^8.14.1",
 		"tsc-alias": "^1.8.11",
@@ -36,7 +39,6 @@
 		"zod": "^3.25.16"
 	},
 	"devDependencies": {
-		"@types/bun": "^1.2.6",
 		"@types/pg": "^8.11.11",
 		"drizzle-kit": "^0.31.8"
 	}

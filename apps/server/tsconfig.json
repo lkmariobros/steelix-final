@@ -7,11 +7,12 @@
 		"strict": true,
 		"skipLibCheck": true,
 		"baseUrl": "./",
+		"rootDir": "./src",
 		"paths": {
 			"@/*": ["./src/*"]
 		},
 		"outDir": "./dist",
-		"types": ["bun"],
+		"types": ["node", "bun"],
 		"declaration": false,
 		"declarationMap": false,
 		"jsx": "react-jsx",
