@@ -57,7 +57,7 @@ export function TeamSwitcher({ teams = [] }: TeamSwitcherProps) {
 
 	// Default team for display (using fixed company name as per requirements)
 	const displayTeam = teams[0] || {
-		name: "SteelixTech",
+		name: "DevotsPortal",
 		logo: "https://raw.githubusercontent.com/origin-space/origin-images/refs/heads/main/exp1/logo-01_kp2j8x.png"
 	};
 
