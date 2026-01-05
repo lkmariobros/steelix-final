@@ -19,11 +19,13 @@ export default function Providers({
 		trpc.createClient({
 			links: [
 				httpBatchLink({
-					url: `${process.env.NEXT_PUBLIC_SERVER_URL}/trpc`,
+					// Use local proxy to avoid cross-origin cookie issues on mobile
+					// The proxy forwards requests to the backend server
+					url: "/api/trpc",
 					fetch(url, options) {
 						return fetch(url, {
 							...options,
-							credentials: "include", // Better Auth cookies
+							credentials: "include", // Include cookies (now same-origin)
 						});
 					},
 				}),

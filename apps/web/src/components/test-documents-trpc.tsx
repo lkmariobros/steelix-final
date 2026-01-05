@@ -8,7 +8,7 @@ export function TestDocumentsTRPC() {
   const testQuery = useQuery({
     queryKey: ['healthCheck'],
     queryFn: async () => {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_SERVER_URL}/trpc/healthCheck`, {
+      const response = await fetch(`/api/trpc/healthCheck`, {
         credentials: 'include'
       });
       return response.json();

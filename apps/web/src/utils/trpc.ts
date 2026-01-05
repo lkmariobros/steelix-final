@@ -24,7 +24,8 @@ export const trpc = createTRPCReact<AppRouter>();
 export const trpcClient = trpc.createClient({
 	links: [
 		httpBatchLink({
-			url: process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:8080/trpc',
+			// Use local proxy to avoid cross-origin cookie issues on mobile
+			url: typeof window !== 'undefined' ? '/api/trpc' : `${process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:8080'}/trpc`,
 			headers() {
 				return {
 					'Content-Type': 'application/json',

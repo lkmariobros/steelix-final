@@ -100,7 +100,7 @@ export function useDocumentUpload(transactionId?: string) {
       }
 
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_SERVER_URL}/trpc/documents.list?input=${encodeURIComponent(JSON.stringify({ transactionId }))}`,
+        `/api/trpc/documents.list?input=${encodeURIComponent(JSON.stringify({ transactionId }))}`,
         {
           credentials: 'include',
         }
@@ -127,7 +127,7 @@ export function useDocumentUpload(transactionId?: string) {
       documentCategory: string;
       base64Data: string;
     }) => {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_SERVER_URL}/trpc/documents.upload`, {
+      const response = await fetch("/api/trpc/documents.upload", {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -147,7 +147,7 @@ export function useDocumentUpload(transactionId?: string) {
 
   const deleteMutation = useMutation({
     mutationFn: async (input: { documentId: string }) => {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_SERVER_URL}/trpc/documents.delete`, {
+      const response = await fetch("/api/trpc/documents.delete", {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
