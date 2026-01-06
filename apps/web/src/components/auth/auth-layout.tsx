@@ -52,7 +52,7 @@ export function AuthLayout({ children, title, subtitle }: AuthLayoutProps) {
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-orange-500 to-orange-600 shadow-lg">
               <Building2 className="h-6 w-6 text-white" />
             </div>
-            <span className="text-2xl font-bold text-white tracking-tight">Steelix</span>
+            <span className="text-2xl font-bold text-white tracking-tight">DevotsPortal</span>
           </div>
           
           {/* Main Text */}
@@ -94,7 +94,7 @@ export function AuthLayout({ children, title, subtitle }: AuthLayoutProps) {
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-orange-500 to-orange-600">
               <Building2 className="h-6 w-6 text-white" />
             </div>
-            <span className="text-2xl font-bold text-slate-900 dark:text-white">Steelix</span>
+            <span className="text-2xl font-bold text-slate-900 dark:text-white">DevotsPortal</span>
           </div>
           
           {/* Header */}
