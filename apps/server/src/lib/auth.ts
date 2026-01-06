@@ -1,22 +1,33 @@
-// import { expo } from "@better-auth/expo"; // Temporarily disabled for production debugging
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { db } from "../db";
 import * as schema from "../db/schema/auth";
 import { count, eq } from "drizzle-orm";
 
-console.log("🔐 Initializing Better Auth...");
-console.log("🔧 Environment variables check:");
-console.log(`   - BETTER_AUTH_URL: ${process.env.BETTER_AUTH_URL}`);
-console.log(`   - BETTER_AUTH_SECRET: ${process.env.BETTER_AUTH_SECRET ? 'SET' : 'NOT SET'}`);
-console.log(`   - DATABASE_URL: ${process.env.DATABASE_URL ? 'SET' : 'NOT SET'}`);
-console.log(`   - NODE_ENV: ${process.env.NODE_ENV}`);
-console.log(`   - CORS_ORIGIN: ${process.env.CORS_ORIGIN}`);
+const isProduction = process.env.NODE_ENV === "production";
+const isDevelopment = process.env.NODE_ENV !== "production";
+
+// ✅ SECURITY: Only log non-sensitive info, and only in development
+if (isDevelopment) {
+	console.log("🔐 Initializing Better Auth...");
+	console.log("🔧 Environment variables check:");
+	console.log(`   - BETTER_AUTH_URL: ${process.env.BETTER_AUTH_URL || "[NOT SET]"}`);
+	console.log(`   - BETTER_AUTH_SECRET: ${process.env.BETTER_AUTH_SECRET ? "[SET]" : "[NOT SET]"}`);
+	console.log(`   - DATABASE_URL: ${process.env.DATABASE_URL ? "[SET]" : "[NOT SET]"}`);
+	console.log(`   - NODE_ENV: ${process.env.NODE_ENV || "development"}`);
+}
+
+// ✅ SECURITY: Fail fast in production if auth secret is not configured
+if (isProduction && !process.env.BETTER_AUTH_SECRET) {
+	throw new Error("CRITICAL: BETTER_AUTH_SECRET environment variable is required in production!");
+}
 
 let auth: ReturnType<typeof betterAuth>;
 
 try {
-	console.log("🔧 Creating Better Auth instance...");
+	if (isDevelopment) {
+		console.log("🔧 Creating Better Auth instance...");
+	}
 	auth = betterAuth({
 	database: drizzleAdapter(db, {
 		provider: "pg",
@@ -24,9 +35,8 @@ try {
 	}),
 	// ✅ CRITICAL FIX: baseURL should be the backend URL, not frontend
 	baseURL: process.env.BETTER_AUTH_URL || "http://localhost:8080",
-	secret:
-		process.env.BETTER_AUTH_SECRET ||
-		"fallback-secret-key-change-in-production",
+	// ✅ SECURITY: Use env secret in production, allow fallback only in development for local testing
+	secret: process.env.BETTER_AUTH_SECRET || (isDevelopment ? "dev-secret-not-for-production" : ""),
 	trustedOrigins: [
 		// Frontend URLs that can make requests to this auth server
 		...(process.env.CORS_ORIGIN?.split(',') || []),
@@ -97,7 +107,10 @@ try {
 						// Assign role based on whether this is the first user
 						const role = isFirstUser ? "admin" : "agent";
 
-						console.log(`🔐 User creation: ${userData.email} - Role: ${role} (First user: ${isFirstUser})`);
+						// ✅ SECURITY: Only log in development, and redact PII
+						if (isDevelopment) {
+							console.log(`🔐 User creation: [REDACTED] - Role: ${role} (First user: ${isFirstUser})`);
+						}
 
 						return {
 							data: {
@@ -106,7 +119,7 @@ try {
 							},
 						};
 					} catch (error) {
-						console.error("❌ Error in user creation hook:", error);
+						console.error("❌ Error in user creation hook:", error instanceof Error ? error.message : "Unknown error");
 						// Fallback to default role if there's an error
 						return {
 							data: {
@@ -117,9 +130,6 @@ try {
 					}
 				},
 				after: async (user) => {
-					// Log successful user creation
-					console.log(`✅ User created successfully: ${user.email}`);
-
 					// Check if this user has admin role by querying the database
 					try {
 						const createdUser = await db
@@ -128,11 +138,15 @@ try {
 							.where(eq(schema.user.id, user.id))
 							.limit(1);
 
-						if (createdUser[0]?.role === "admin") {
-							console.log("🎉 BOOTSTRAP COMPLETE: First admin user created! Admin dashboard access enabled.");
+						// ✅ SECURITY: Only log in development, and redact PII
+						if (isDevelopment) {
+							console.log(`✅ User created successfully`);
+							if (createdUser[0]?.role === "admin") {
+								console.log("🎉 BOOTSTRAP COMPLETE: First admin user created!");
+							}
 						}
 					} catch (error) {
-						console.error("❌ Error checking user role after creation:", error);
+						console.error("❌ Error checking user role after creation:", error instanceof Error ? error.message : "Unknown error");
 					}
 				},
 			},
@@ -142,37 +156,39 @@ try {
 	// plugins: [expo()],
 });
 
-	console.log("✅ Better Auth initialized successfully");
-	console.log("🔧 Auth object type:", typeof auth);
-	console.log("🔧 Auth handler type:", typeof auth.handler);
+	if (isDevelopment) {
+		console.log("✅ Better Auth initialized successfully");
+	}
 } catch (error) {
-	console.error("❌ CRITICAL: Better Auth initialization failed:", error);
-	console.error("❌ Error details:", error instanceof Error ? error.message : String(error));
-	console.error("❌ Stack trace:", error instanceof Error ? error.stack : 'No stack trace');
+	// ✅ SECURITY: Error logging is acceptable for troubleshooting, but avoid exposing secrets
+	console.error("❌ CRITICAL: Better Auth initialization failed");
+	console.error("❌ Error:", error instanceof Error ? error.message : "Unknown error");
 
-	// Log more detailed error information
-	if (error instanceof Error) {
-		console.error("❌ Error name:", error.name);
-		console.error("❌ Error cause:", error.cause);
+	// Only log detailed stack traces in development
+	if (isDevelopment) {
+		console.error("❌ Stack trace:", error instanceof Error ? error.stack : "No stack trace");
+		console.error("❌ Environment debug:");
+		console.error("   - NODE_ENV:", process.env.NODE_ENV);
+		console.error("   - BETTER_AUTH_SECRET: [REDACTED]");
+		console.error("   - DATABASE_URL: [REDACTED]");
+		console.error("   - BETTER_AUTH_URL:", process.env.BETTER_AUTH_URL);
 	}
 
-	// Log environment state for debugging
-	console.error("❌ Environment debug:");
-	console.error("   - NODE_ENV:", process.env.NODE_ENV);
-	console.error("   - BETTER_AUTH_SECRET length:", process.env.BETTER_AUTH_SECRET?.length || 0);
-	console.error("   - DATABASE_URL exists:", !!process.env.DATABASE_URL);
-	console.error("   - BETTER_AUTH_URL:", process.env.BETTER_AUTH_URL);
+	// ✅ SECURITY: In production, fail completely rather than running with a broken auth
+	if (isProduction) {
+		throw new Error("Auth initialization failed in production. Check server logs.");
+	}
 
-	// Create a fallback auth object to prevent server crashes
+	// Create a fallback auth object to prevent server crashes (development only)
 	auth = {
 		handler: async () => {
 			return new Response(JSON.stringify({
 				error: "Auth not initialized",
-				details: error instanceof Error ? error.message : String(error),
-				timestamp: new Date().toISOString()
+				// ✅ SECURITY: Don't expose error details in response
+				message: "Authentication service unavailable",
 			}), {
 				status: 500,
-				headers: { 'Content-Type': 'application/json' }
+				headers: { "Content-Type": "application/json" }
 			});
 		},
 		api: {

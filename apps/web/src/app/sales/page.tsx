@@ -16,7 +16,6 @@ import { toast } from "sonner";
 
 import { useTransactionModal } from "@/contexts/transaction-modal-context";
 import { useClientSide } from "@/hooks/use-client-side";
-// import { trpc } from "@/utils/trpc"; // Temporarily disabled for build
 
 interface Transaction {
 	id: string;
@@ -64,13 +63,7 @@ function SalesPageContent() {
 	const { openCreateModal, openEditModal, openViewModal } = useTransactionModal();
 	const isClient = useClientSide();
 
-	// tRPC queries - temporarily mocked for build compatibility
-	// const { data: transactionsData, isLoading, refetch } = trpc.transactions.list.useQuery({
-	//   limit: 10,
-	//   offset: 0,
-	// });
-
-	// Mock data for build compatibility
+	// Mock data for build compatibility (tRPC integration pending)
 	const transactionsData = {
 		transactions: [] as Transaction[],
 		total: 0,

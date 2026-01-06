@@ -10,23 +10,44 @@ import { db } from "./db";
 
 const app = new Hono();
 
+// ✅ SECURITY: Use environment-based CORS configuration
+const isDevelopment = process.env.NODE_ENV !== "production";
+
+// Build CORS origins from environment variables
+const getCorsOrigins = (): string[] => {
+	const origins: string[] = [];
+
+	// Development origins (only in dev mode)
+	if (isDevelopment) {
+		origins.push(
+			"http://localhost:3000",
+			"http://localhost:3001",
+			"http://localhost:3002"
+		);
+	}
+
+	// Production origins from environment variable
+	// Format: CORS_ORIGINS=https://app.example.com,https://admin.example.com
+	const envOrigins = process.env.CORS_ORIGINS || process.env.CORS_ORIGIN;
+	if (envOrigins) {
+		origins.push(...envOrigins.split(",").map(o => o.trim()).filter(Boolean));
+	}
+
+	// Fallback for Vercel preview deployments (configurable via env)
+	const vercelProjectName = process.env.VERCEL_PROJECT_NAME;
+	if (vercelProjectName) {
+		// Allow main deployment and preview deployments
+		origins.push(`https://${vercelProjectName}.vercel.app`);
+	}
+
+	return origins;
+};
+
 app.use(logger());
 app.use(
 	"/*",
 	cors({
-		origin: [
-			// Allow all localhost origins for development
-			"http://localhost:3000",
-			"http://localhost:3001",
-			"http://localhost:3002",
-			// Allow all Vercel domains (wildcard pattern)
-			"https://steelix-final-web.vercel.app",
-			"https://steelix-final-web-git-master-lkmariobros-projects.vercel.app",
-			"https://steelix-final-mx4or73lk-lkmariobros-projects.vercel.app",
-			// Add branch-specific URLs
-			"https://steelix-final-web-git-admin-typescript-errors-solved-lkmariobros-projects.vercel.app",
-			...(process.env.CORS_ORIGIN?.split(',') || []),
-		],
+		origin: getCorsOrigins(),
 		allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
 		allowHeaders: [
 			"Content-Type",
@@ -44,24 +65,23 @@ app.use(
 
 // Better Auth handler - handle all auth routes
 app.all("/api/auth/*", async (c) => {
-	console.log(`🔐 Auth request: ${c.req.method} ${c.req.url}`);
-	console.log(`🔐 Auth path: ${c.req.path}`);
-	console.log("🔐 Auth headers:", Object.fromEntries(c.req.raw.headers.entries()));
+	// ✅ SECURITY: Only log in development, and never log sensitive data
+	if (isDevelopment) {
+		console.log(`🔐 Auth request: ${c.req.method} ${c.req.path}`);
+	}
 
 	try {
 		// Create a new Request object with the correct URL structure
 		const url = new URL(c.req.url);
-		const authPath = url.pathname.replace('/api/auth', '');
-		console.log(`🔐 Extracted auth path: ${authPath}`);
+		const authPath = url.pathname.replace("/api/auth", "");
 
-		// Get request body for logging
+		// Get request body (needed for POST requests)
 		let bodyText = "";
-		if (c.req.method !== 'GET' && c.req.method !== 'HEAD') {
+		if (c.req.method !== "GET" && c.req.method !== "HEAD") {
 			try {
 				bodyText = await c.req.text();
-				console.log("🔐 Auth request body:", bodyText ? `${bodyText.substring(0, 100)}...` : "(empty)");
-			} catch (e) {
-				console.log("🔐 Could not read body:", e);
+			} catch {
+				// Body already consumed or empty - this is fine
 			}
 		}
 
@@ -72,48 +92,52 @@ app.all("/api/auth/*", async (c) => {
 			body: bodyText || undefined,
 		});
 
-		console.log("🔐 Calling auth.handler...");
 		const result = await auth.handler(authRequest);
-		console.log("🔐 Auth handler result:", result ? `Response received (status: ${result.status})` : "No response");
 
 		if (!result) {
-			console.log("⚠️ Auth handler returned null/undefined - creating 404 response");
+			// ✅ SECURITY: Don't expose internal paths in production
 			return c.json({
 				error: "Auth endpoint not found",
-				path: c.req.path,
-				authPath: authPath,
-				availableEndpoints: ['/session', '/sign-in', '/sign-up', '/sign-out']
+				message: "The requested authentication endpoint does not exist",
 			}, 404);
 		}
 
-		// Log response body for debugging
-		if (result.status >= 400) {
+		// ✅ SECURITY: Only log errors in development
+		if (isDevelopment && result.status >= 400) {
 			const clonedResponse = result.clone();
 			try {
 				const responseBody = await clonedResponse.text();
-				console.log("🔐 Auth error response body:", responseBody);
-			} catch (e) {
-				console.log("🔐 Could not read response body");
+				console.log("🔐 Auth error response:", responseBody);
+			} catch {
+				// Could not read response body
 			}
 		}
 
 		return result;
 	} catch (error) {
-		console.error("❌ Auth handler error:", error);
-		console.error("❌ Error stack:", error instanceof Error ? error.stack : "No stack");
-		return c.json({ error: "Auth handler failed", details: error instanceof Error ? error.message : String(error) }, 500);
+		console.error("❌ Auth handler error:", error instanceof Error ? error.message : "Unknown error");
+		// ✅ SECURITY: Don't expose error details in production
+		return c.json({
+			error: "Auth handler failed",
+			message: isDevelopment && error instanceof Error ? error.message : "Authentication service error",
+		}, 500);
 	}
 });
 
 // Fallback auth handler for root auth paths (in case Better Auth expects different routing)
 app.all("/auth/*", async (c) => {
-	console.log(`🔐 Fallback auth request: ${c.req.method} ${c.req.url}`);
+	if (isDevelopment) {
+		console.log(`🔐 Fallback auth request: ${c.req.method} ${c.req.path}`);
+	}
 	try {
 		const result = await auth.handler(c.req.raw);
 		return result || c.json({ error: "Auth endpoint not found" }, 404);
 	} catch (error) {
-		console.error("❌ Fallback auth handler error:", error);
-		return c.json({ error: "Auth handler failed", details: error instanceof Error ? error.message : String(error) }, 500);
+		console.error("❌ Fallback auth handler error:", error instanceof Error ? error.message : "Unknown error");
+		return c.json({
+			error: "Auth handler failed",
+			message: isDevelopment && error instanceof Error ? error.message : "Authentication service error",
+		}, 500);
 	}
 });
 
@@ -128,14 +152,10 @@ app.use(
 );
 
 app.get("/", (c) => {
-	console.log(`📥 Received request to / at ${new Date().toISOString()}`);
-	console.log("📊 Request headers:", c.req.header());
-	console.log("🌐 Request URL:", c.req.url);
 	return c.text(`OK - Server is working! Time: ${new Date().toISOString()}`);
 });
 
 app.get("/health", (c) => {
-	console.log(`🏥 Health check requested at ${new Date().toISOString()}`);
 	return c.json({
 		status: "healthy",
 		timestamp: new Date().toISOString(),
@@ -150,14 +170,15 @@ app.get("/ping", (c) => c.text("pong"));
 app.get("/.well-known/health", (c) => c.json({ status: "ok" }));
 
 // Debug endpoint to check auth configuration
+// ✅ SECURITY: Only available in development
 app.get("/debug/auth-config", (c) => {
-	console.log("🔍 Debug: Checking auth configuration");
-	console.log("🔍 Auth object:", auth);
-	console.log("🔍 Auth handler:", auth?.handler);
+	if (!isDevelopment) {
+		return c.json({ error: "Debug endpoints disabled in production" }, 403);
+	}
 
 	return c.json({
 		betterAuthUrl: process.env.BETTER_AUTH_URL,
-		corsOrigins: process.env.CORS_ORIGIN?.split(',') || [],
+		corsOrigins: getCorsOrigins(),
 		hasSecret: !!process.env.BETTER_AUTH_SECRET,
 		hasDatabaseUrl: !!process.env.DATABASE_URL,
 		nodeEnv: process.env.NODE_ENV,
@@ -169,13 +190,13 @@ app.get("/debug/auth-config", (c) => {
 	});
 });
 
+// ✅ SECURITY: All debug endpoints are development-only
 // Debug endpoint to test auth session directly
 app.get("/debug/auth-session", async (c) => {
+	if (!isDevelopment) {
+		return c.json({ error: "Debug endpoints disabled in production" }, 403);
+	}
 	try {
-		console.log("🔍 Debug: Testing auth session directly");
-		console.log("🔍 Request headers:", Object.fromEntries(c.req.raw.headers.entries()));
-
-		// Try to get session using Better Auth
 		const session = await auth.api.getSession({
 			headers: c.req.raw.headers
 		});
@@ -184,54 +205,16 @@ app.get("/debug/auth-session", async (c) => {
 			hasSession: !!session,
 			session: session ? {
 				userId: session.user?.id,
-				userEmail: session.user?.email,
+				// ✅ SECURITY: Don't expose email even in dev
+				hasEmail: !!session.user?.email,
 				sessionId: session.session?.id
 			} : null,
 			timestamp: new Date().toISOString()
 		});
 	} catch (error) {
-		console.error("❌ Debug auth session error:", error);
 		return c.json({
 			error: "Failed to get session",
-			details: error instanceof Error ? error.message : String(error),
-			timestamp: new Date().toISOString()
-		}, 500);
-	}
-});
-
-// Manual test endpoint for auth session endpoint
-app.get("/debug/test-auth-session", async (c) => {
-	try {
-		console.log("🧪 Manual test: Creating auth session request");
-
-		// Create a manual request to the auth session endpoint
-		const sessionUrl = `${process.env.BETTER_AUTH_URL || 'http://localhost:8080'}/api/auth/session`;
-		console.log("🧪 Session URL:", sessionUrl);
-
-		const response = await fetch(sessionUrl, {
-			method: 'GET',
-			headers: {
-				'Content-Type': 'application/json',
-				'Cookie': c.req.header('Cookie') || '',
-			}
-		});
-
-		console.log("🧪 Session response status:", response.status);
-		const responseText = await response.text();
-		console.log("🧪 Session response body:", responseText);
-
-		return c.json({
-			sessionUrl,
-			status: response.status,
-			headers: Object.fromEntries(response.headers.entries()),
-			body: responseText,
-			timestamp: new Date().toISOString()
-		});
-	} catch (error) {
-		console.error("❌ Manual auth session test error:", error);
-		return c.json({
-			error: "Failed to test auth session",
-			details: error instanceof Error ? error.message : String(error),
+			message: error instanceof Error ? error.message : "Unknown error",
 			timestamp: new Date().toISOString()
 		}, 500);
 	}
@@ -239,8 +222,10 @@ app.get("/debug/test-auth-session", async (c) => {
 
 // Debug endpoint to test database connection
 app.get("/debug/db-test", async (c) => {
+	if (!isDevelopment) {
+		return c.json({ error: "Debug endpoints disabled in production" }, 403);
+	}
 	try {
-		// Simple query to test database connection
 		const result = await db.execute("SELECT 1 as test");
 		return c.json({
 			status: "success",
@@ -251,15 +236,16 @@ app.get("/debug/db-test", async (c) => {
 		return c.json({
 			status: "error",
 			dbConnected: false,
-			error: error instanceof Error ? error.message : String(error)
+			error: error instanceof Error ? error.message : "Unknown error"
 		}, 500);
 	}
 });
 
-// Temporary debug endpoints removed after authentication issue was resolved
-
 // Debug endpoint to test auth session
 app.get("/debug/session-test", async (c) => {
+	if (!isDevelopment) {
+		return c.json({ error: "Debug endpoints disabled in production" }, 403);
+	}
 	try {
 		const session = await auth.api.getSession({
 			headers: c.req.raw.headers,
@@ -268,15 +254,15 @@ app.get("/debug/session-test", async (c) => {
 			hasSession: !!session,
 			session: session ? {
 				userId: session.user.id,
-				email: session.user.email,
-				name: session.user.name
+				// ✅ SECURITY: Don't expose email
+				hasEmail: !!session.user.email,
+				hasName: !!session.user.name
 			} : null,
-			cookies: c.req.header('cookie') || 'No cookies',
-			headers: Object.fromEntries(c.req.raw.headers.entries())
+			hasCookies: !!c.req.header("cookie"),
 		});
 	} catch (error) {
 		return c.json({
-			error: error instanceof Error ? error.message : String(error),
+			error: error instanceof Error ? error.message : "Unknown error",
 			hasSession: false
 		}, 500);
 	}
@@ -284,18 +270,19 @@ app.get("/debug/session-test", async (c) => {
 
 const port = process.env.PORT || 3000;
 
+// ✅ SECURITY: Minimal startup logging in production
 console.log(`🚀 Server starting on port ${port}`);
-console.log("📊 Environment check:");
-console.log(`   - NODE_ENV: ${process.env.NODE_ENV}`);
-console.log(`   - PORT: ${process.env.PORT}`);
-console.log(
-	`   - DATABASE_URL: ${process.env.DATABASE_URL ? "SET" : "NOT SET"}`,
-);
-console.log(`   - BETTER_AUTH_URL: ${process.env.BETTER_AUTH_URL}`);
+if (isDevelopment) {
+	console.log("📊 Environment check:");
+	console.log(`   - NODE_ENV: ${process.env.NODE_ENV}`);
+	console.log(`   - PORT: ${process.env.PORT}`);
+	console.log(`   - DATABASE_URL: ${process.env.DATABASE_URL ? "SET" : "NOT SET"}`);
+	console.log(`   - BETTER_AUTH_URL: ${process.env.BETTER_AUTH_URL}`);
+}
 
 // Detect runtime environment
 const isBunRuntime = typeof globalThis.Bun !== "undefined";
-const isProduction = process.env.NODE_ENV === "production" || process.env.RAILWAY_ENVIRONMENT;
+const isProduction = process.env.NODE_ENV === "production" || !!process.env.RAILWAY_ENVIRONMENT;
 
 if (isBunRuntime) {
 	// For development with Bun runtime
@@ -306,24 +293,23 @@ if (isBunRuntime) {
 			hostname: "localhost",
 		});
 
-		console.log(`✅ Development server started successfully on port ${port}`);
-		console.log(`🌐 Server accessible at http://localhost:${port}`);
-		console.log("🔥 Hot reload enabled");
+		console.log(`✅ Server started on port ${port}`);
+		if (isDevelopment) {
+			console.log(`🌐 Server accessible at http://localhost:${port}`);
+		}
 
 		// Handle graceful shutdown
 		process.on("SIGTERM", () => {
-			console.log("🛑 SIGTERM received, shutting down gracefully");
 			server.stop();
 			process.exit(0);
 		});
 
 		process.on("SIGINT", () => {
-			console.log("🛑 SIGINT received, shutting down gracefully");
 			server.stop();
 			process.exit(0);
 		});
 	} catch (error) {
-		console.error("❌ Failed to start development server:", error);
+		console.error("❌ Failed to start server:", error instanceof Error ? error.message : "Unknown error");
 		process.exit(1);
 	}
 } else {
@@ -331,39 +317,32 @@ if (isBunRuntime) {
 	import("@hono/node-server").then(({ serve }) => {
 		try {
 			const hostname = isProduction ? "0.0.0.0" : "localhost";
-			const server = serve({
+			serve({
 				fetch: app.fetch,
 				port: Number(port),
 				hostname,
 			});
 
-			console.log(`✅ Server successfully bound to ${hostname}:${port}`);
+			console.log(`✅ Server bound to ${hostname}:${port}`);
 			if (isProduction) {
-				console.log(
-					"🌐 Server should be accessible at https://steelix-final-production.up.railway.app",
-				);
-			} else {
+				// ✅ SECURITY: Don't log specific URLs in production
+				console.log("🌐 Server ready for incoming connections");
+			} else if (isDevelopment) {
 				console.log(`🌐 Server accessible at http://localhost:${port}`);
 			}
 
-			// Handle graceful shutdown
+			// Handle graceful shutdown (silent in production)
 			process.on("SIGTERM", () => {
-				console.log("🛑 SIGTERM received, shutting down gracefully");
-				server.close(() => {
-					console.log("✅ Server closed");
-					process.exit(0);
-				});
+				if (isDevelopment) console.log("🛑 Shutting down gracefully");
+				process.exit(0);
 			});
 
 			process.on("SIGINT", () => {
-				console.log("🛑 SIGINT received, shutting down gracefully");
-				server.close(() => {
-					console.log("✅ Server closed");
-					process.exit(0);
-				});
+				if (isDevelopment) console.log("🛑 Shutting down gracefully");
+				process.exit(0);
 			});
 		} catch (error) {
-			console.error("❌ Failed to start server:", error);
+			console.error("❌ Failed to start server:", error instanceof Error ? error.message : "Unknown error");
 			process.exit(1);
 		}
 	});
