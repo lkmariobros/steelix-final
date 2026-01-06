@@ -325,7 +325,7 @@ export default function TransactionsPage() {
 											{isLoadingPipeline ? (
 												<RiLoader4Line className="h-6 w-6 animate-spin" />
 											) : (
-												pipelineData?.totalDeals || displayTransactions.length
+												pipelineData?.pipeline?.reduce((sum, s) => sum + s.count, 0) || displayTransactions.length
 											)}
 										</div>
 										<p className="text-muted-foreground text-xs">In progress</p>
@@ -341,7 +341,7 @@ export default function TransactionsPage() {
 											{isLoadingPipeline ? (
 												<RiLoader4Line className="h-6 w-6 animate-spin" />
 											) : (
-												formatCurrency(pipelineData?.totalValue || 0)
+												formatCurrency(pipelineData?.pipeline?.reduce((sum, s) => sum + s.totalValue, 0) || 0)
 											)}
 										</div>
 										<p className="text-muted-foreground text-xs">Total potential commission</p>

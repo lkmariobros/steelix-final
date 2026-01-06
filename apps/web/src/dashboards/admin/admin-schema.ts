@@ -20,7 +20,7 @@ export const commissionApprovalSchema = z.object({
 	clientData: z
 		.object({
 			name: z.string(),
-			email: z.string(),
+			email: z.string().optional(),
 			phone: z.string(),
 			type: z.enum(["buyer", "seller", "tenant", "landlord"]),
 			source: z.string(),
@@ -85,7 +85,7 @@ export const urgentTaskSchema = z.object({
 	clientData: z
 		.object({
 			name: z.string(),
-			email: z.string(),
+			email: z.string().optional(),
 			phone: z.string(),
 			type: z.enum(["buyer", "seller", "tenant", "landlord"]),
 			source: z.string(),

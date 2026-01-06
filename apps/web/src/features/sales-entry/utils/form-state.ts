@@ -54,7 +54,7 @@ export const initialFormData: Partial<CompleteTransactionData> = {
 		name: "",
 		email: "",
 		phone: "",
-		type: undefined as "buyer" | "seller" | "tenant" | "landlord" | undefined,
+		type: "buyer" as "buyer" | "seller" | "tenant" | "landlord",
 		source: "",
 		notes: "",
 	},

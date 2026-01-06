@@ -38,12 +38,6 @@ export function FinancialOverview({ dateRange }: FinancialOverviewProps) {
 		startDate: dateRange?.startDate,
 		endDate: dateRange?.endDate,
 	}, {
-		onSuccess: (data) => {
-			console.log('🔍 Financial Overview Data:', data);
-		},
-		onError: (error) => {
-			console.error('❌ Financial Overview Error:', error);
-		},
 		retry: 1,
 		staleTime: 30000, // 30 seconds
 	});

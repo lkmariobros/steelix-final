@@ -70,7 +70,7 @@ export const transactions = pgTable("transactions", {
 	// Step 3: Client
 	clientData: jsonb("client_data").$type<{
 		name: string;
-		email: string;
+		email?: string;
 		phone: string;
 		type: "buyer" | "seller" | "tenant" | "landlord";
 		source: string;
@@ -80,10 +80,12 @@ export const transactions = pgTable("transactions", {
 	// Step 4: Co-Broking
 	isCoBroking: boolean("is_co_broking").default(false),
 	coBrokingData: jsonb("co_broking_data").$type<{
-		agentName: string;
-		agencyName: string;
-		commissionSplit: number;
-		contactInfo: string;
+		agentName?: string;
+		agencyName?: string;
+		commissionSplit?: number;
+		contactInfo?: string;
+		agentEmail?: string;
+		agentPhone?: string;
 	}>(),
 
 	// Step 5: Commission
@@ -165,7 +167,7 @@ export const insertTransactionSchema = z.object({
 	clientData: z
 		.object({
 			name: z.string().min(1, "Client name is required"),
-			email: z.string().email("Valid email is required"),
+			email: z.string().email("Valid email is required").optional().or(z.literal("")),
 			phone: z.string().min(1, "Phone number is required"),
 			type: z.enum(["buyer", "seller", "tenant", "landlord"]),
 			source: z.string().min(1, "Client source is required"),
@@ -175,13 +177,16 @@ export const insertTransactionSchema = z.object({
 	isCoBroking: z.boolean().default(false),
 	coBrokingData: z
 		.object({
-			agentName: z.string().min(1, "Agent name is required"),
-			agencyName: z.string().min(1, "Agency name is required"),
+			agentName: z.string().optional(),
+			agencyName: z.string().optional(),
 			commissionSplit: z
 				.number()
 				.min(0)
-				.max(100, "Commission split must be between 0-100%"),
-			contactInfo: z.string().min(1, "Contact info is required"),
+				.max(100, "Commission split must be between 0-100%")
+				.optional(),
+			contactInfo: z.string().optional(),
+			agentEmail: z.string().email().optional().or(z.literal("")),
+			agentPhone: z.string().optional(),
 		})
 		.optional(),
 	commissionType: z.enum(["percentage", "fixed"]),

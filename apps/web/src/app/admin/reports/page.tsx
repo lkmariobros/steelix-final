@@ -622,8 +622,8 @@ export default function AdminReportsPage() {
 												</div>
 											</div>
 											<div className="p-4 border rounded-lg">
-												<div className="text-sm text-muted-foreground">Unique Agencies</div>
-												<div className="text-2xl font-bold">{coBrokingData.summary.uniqueAgencies}</div>
+												<div className="text-sm text-muted-foreground">Partner Agencies</div>
+												<div className="text-2xl font-bold">{coBrokingData.summary.uniquePartnerAgencies}</div>
 											</div>
 										</div>
 									)}
@@ -725,24 +725,24 @@ export default function AdminReportsPage() {
 									)}
 
 									{/* Summary Stats */}
-									{clientData?.summary && (
+									{clientData?.clientTypeSummary && (
 										<div className="grid gap-4 mt-4 md:grid-cols-4">
 											<div className="p-4 border rounded-lg">
 												<div className="text-sm text-muted-foreground">Total Clients</div>
-												<div className="text-2xl font-bold">{clientData.summary.totalClients}</div>
+												<div className="text-2xl font-bold">{clientData.totalClients}</div>
 											</div>
 											<div className="p-4 border rounded-lg">
 												<div className="text-sm text-muted-foreground">Buyers</div>
-												<div className="text-2xl font-bold">{clientData.summary.byType?.buyer || 0}</div>
+												<div className="text-2xl font-bold">{clientData.clientTypeSummary?.buyer?.count || 0}</div>
 											</div>
 											<div className="p-4 border rounded-lg">
 												<div className="text-sm text-muted-foreground">Sellers</div>
-												<div className="text-2xl font-bold">{clientData.summary.byType?.seller || 0}</div>
+												<div className="text-2xl font-bold">{clientData.clientTypeSummary?.seller?.count || 0}</div>
 											</div>
 											<div className="p-4 border rounded-lg">
 												<div className="text-sm text-muted-foreground">Tenants/Landlords</div>
 												<div className="text-2xl font-bold">
-													{(clientData.summary.byType?.tenant || 0) + (clientData.summary.byType?.landlord || 0)}
+													{(clientData.clientTypeSummary?.tenant?.count || 0) + (clientData.clientTypeSummary?.landlord?.count || 0)}
 												</div>
 											</div>
 										</div>

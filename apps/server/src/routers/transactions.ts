@@ -12,10 +12,11 @@ import { protectedProcedure, router } from "../lib/trpc";
 import { calculateEnhancedCommission, logCommissionAudit } from "../lib/agent-tier-utils";
 
 // Base transaction input schema (without validation)
+// All fields are optional to support draft saving with partial data
 const baseTransactionInput = z.object({
-	marketType: z.enum(["primary", "secondary"]),
-	transactionType: z.enum(["sale", "lease"]),
-	transactionDate: z.coerce.date(),
+	marketType: z.enum(["primary", "secondary"]).optional(),
+	transactionType: z.enum(["sale", "lease"]).optional(),
+	transactionDate: z.coerce.date().optional(),
 	propertyData: z
 		.object({
 			address: z.string().min(1, "Address is required"),
@@ -30,7 +31,7 @@ const baseTransactionInput = z.object({
 	clientData: z
 		.object({
 			name: z.string().min(1, "Client name is required"),
-			email: z.string().email("Valid email is required"),
+			email: z.string().email("Valid email is required").optional().or(z.literal("")),
 			phone: z.string().min(1, "Phone number is required"),
 			type: z.enum(["buyer", "seller", "tenant", "landlord"]),
 			source: z.string().min(1, "Client source is required"),
@@ -40,18 +41,22 @@ const baseTransactionInput = z.object({
 	isCoBroking: z.boolean().default(false),
 	coBrokingData: z
 		.object({
-			agentName: z.string().min(1, "Agent name is required"),
-			agencyName: z.string().min(1, "Agency name is required"),
+			agentName: z.string().optional(),
+			agencyName: z.string().optional(),
 			commissionSplit: z
 				.number()
 				.min(0)
-				.max(100, "Commission split must be between 0-100%"),
-			contactInfo: z.string().min(1, "Contact info is required"),
+				.max(100, "Commission split must be between 0-100%")
+				.optional(),
+			contactInfo: z.string().optional(),
+			// New fields for enhanced co-broking
+			agentEmail: z.string().email().optional().or(z.literal("")),
+			agentPhone: z.string().optional(),
 		})
 		.optional(),
-	commissionType: z.enum(["percentage", "fixed"]),
-	commissionValue: z.number().positive(),
-	commissionAmount: z.number().positive(),
+	commissionType: z.enum(["percentage", "fixed"]).optional(),
+	commissionValue: z.number().positive().optional(),
+	commissionAmount: z.number().positive().optional(),
 	documents: z
 		.array(
 			z.object({
@@ -183,9 +188,14 @@ export const transactionsRouter = router({
 				...input,
 				agentId: ctx.session.user.id,
 				status: "draft" as const,
-				// Convert numbers to strings for decimal fields
-				commissionValue: input.commissionValue.toString(),
-				commissionAmount: input.commissionAmount.toString(),
+				// Convert numbers to strings for decimal fields (handle optional values)
+				commissionValue: input.commissionValue?.toString() ?? "0",
+				commissionAmount: input.commissionAmount?.toString() ?? "0",
+				// Ensure required fields have defaults for drafts
+				marketType: input.marketType ?? "secondary",
+				transactionType: input.transactionType ?? "sale",
+				transactionDate: input.transactionDate ?? new Date(),
+				commissionType: input.commissionType ?? "percentage",
 			};
 
 			const [transaction] = await db
@@ -450,10 +460,11 @@ export const transactionsRouter = router({
 
 			// Calculate enhanced commission
 			let commissionRate: number;
+			const commissionValue = input.commissionValue ?? 0;
 			if (input.commissionType === 'percentage') {
-				commissionRate = input.commissionValue;
+				commissionRate = commissionValue;
 			} else {
-				commissionRate = (input.commissionValue / (input.propertyData?.price || 1)) * 100;
+				commissionRate = (commissionValue / (input.propertyData?.price || 1)) * 100;
 			}
 
 			const commissionBreakdown = calculateEnhancedCommission(
@@ -470,8 +481,13 @@ export const transactionsRouter = router({
 				agentId: ctx.session.user.id,
 				status: "draft" as const,
 				// Convert numbers to strings for decimal fields
-				commissionValue: input.commissionValue.toString(),
+				commissionValue: commissionValue.toString(),
 				commissionAmount: commissionBreakdown.totalCommission.toString(),
+				// Ensure required fields have defaults for drafts
+				marketType: input.marketType ?? "secondary",
+				transactionType: input.transactionType ?? "sale",
+				transactionDate: input.transactionDate ?? new Date(),
+				commissionType: input.commissionType ?? "percentage",
 			};
 
 			const [transaction] = await db

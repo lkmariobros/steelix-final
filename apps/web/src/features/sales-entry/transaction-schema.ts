@@ -58,23 +58,23 @@ export const clientSchema = z.object({
 // Step 4: Representation & Co-Broking Schema
 // Simplified to 2 options: direct representation or co-broking
 const coBrokingBaseSchema = z.object({
-	// Simplified representation type - single source of truth
-	representationType: representationTypeEnum.default("direct"),
+	// Simplified representation type - single source of truth (required field)
+	representationType: representationTypeEnum,
 	// Legacy field for backward compatibility (derived from representationType)
 	isCoBroking: z.boolean().optional(),
 	coBrokingData: z
 		.object({
 			// All fields are optional at base level - validation is done via refine based on representationType
-			agentName: z.string().optional().default(""),
-			agencyName: z.string().optional().default(""),
+			agentName: z.string().optional(),
+			agencyName: z.string().optional(),
 			commissionSplit: z
 				.number()
 				.min(0)
 				.max(100, "Commission split must be between 0-100%")
-				.default(50),
+				.optional(),
 			// Separate email and phone fields for clarity (Issue #11)
 			agentEmail: z.string().email("Please enter a valid email").optional().or(z.literal("")),
-			agentPhone: z.string().optional().default(""),
+			agentPhone: z.string().optional(),
 			// Legacy field for backward compatibility
 			contactInfo: z.string().optional(),
 		})
@@ -118,13 +118,15 @@ export const createCoBrokingSchema = () => {
 export const coBrokingSchema = createCoBrokingSchema();
 
 // Step 5: Enhanced Commission Schema with agent tier support
-// Note: representationType is now managed in Step 4 and passed through form state
+// Note: representationType is passed from Step 4 for commission calculation display
 export const commissionSchema = z.object({
 	commissionType: z.enum(["percentage", "fixed"], {
 		required_error: "Please select commission type",
 	}),
 	commissionValue: z.number().min(0, "Commission value must be positive"),
 	commissionAmount: z.number().min(0, "Commission amount must be positive"),
+	// Representation type for commission calculation display (from Step 4)
+	representationType: representationTypeEnum.optional(),
 	// Agent tier system fields
 	agentTier: z.enum(["advisor", "sales_leader", "team_leader", "group_leader", "supreme_leader"]).optional(),
 	companyCommissionSplit: z.number().min(0).max(100).optional(),
