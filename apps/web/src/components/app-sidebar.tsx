@@ -26,6 +26,8 @@ import {
 	RiLogoutBoxLine,
 	RiSettings3Line,
 	RiTeamLine,
+	RiUserLine,
+	RiMessageLine,
 } from "@remixicon/react";
 
 // Clean data structure - no mock teams
@@ -92,13 +94,23 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 							url: "/dashboard",
 							icon: RiDashboardLine,
 						},
-						{
-							title: "Transactions",
-							url: "/dashboard/transactions",
-							icon: RiFileTextLine,
-						},
-					],
-				},
+					{
+						title: "Transactions",
+						url: "/dashboard/transactions",
+						icon: RiFileTextLine,
+					},
+					{
+						title: "CRM",
+						url: "/dashboard/crm",
+						icon: RiUserLine,
+					},
+					{
+						title: "WhatsApp",
+						url: "/dashboard/whatsapp",
+						icon: RiMessageLine,
+					},
+				],
+			},
 				{
 					title: "Configuration",
 					url: "#",
