@@ -895,7 +895,7 @@ export default function CRMPage() {
 												size="sm"
 												onClick={() => handleView(prospect)}
 												style={{color: "#5858ff"}}
-												className="cursor-pointer border-blue-500/50 text-blue-600 hover:bg-blue	-500/10 hover:text-blue-700 dark:text-blue-400 dark:hover:bg-blue-500/20 dark:hover:text-blue-300"
+												className="cursor-pointer border-blue-500/50 text-blue-600 hover:bg-blue-500/10 hover:text-blue-700 dark:text-blue-400 dark:hover:bg-blue-500/20 dark:hover:text-blue-300"
 											>
 												<RiEyeLine className="mr-2 h-4 w-4" />
 												View
