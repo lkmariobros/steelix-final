@@ -28,6 +28,7 @@ import {
 	RiTeamLine,
 	RiUserLine,
 	RiMessageLine,
+	RiRobotLine,
 } from "@remixicon/react";
 
 // Clean data structure - no mock teams
@@ -108,6 +109,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 						title: "WhatsApp",
 						url: "/dashboard/whatsapp",
 						icon: RiMessageLine,
+					},
+					{
+						title: "Auto-Reply",
+						url: "/dashboard/auto-reply",
+						icon: RiRobotLine,
 					},
 				],
 			},
