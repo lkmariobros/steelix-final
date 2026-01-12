@@ -1,10 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
+import { authClient } from "@/lib/auth-client";
+import { trpc } from "@/utils/trpc";
 import { AppSidebar } from "@/components/app-sidebar";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -67,7 +71,8 @@ import {
 	RiAlertLine,
 } from "@remixicon/react";
 
-// Mock prospect data - will be replaced with API calls later
+// Prospect interface matching database schema
+// Dates come as strings from API and are converted when needed
 interface Prospect {
 	id: string;
 	name: string;
@@ -77,8 +82,11 @@ interface Prospect {
 	type: "tenant" | "owner";
 	property: "property_developer" | "secondary_market_owner";
 	status: "active" | "inactive" | "pending";
-	lastContact?: string;
-	nextContact?: string;
+	lastContact: Date | string | null;
+	nextContact: Date | string | null;
+	agentId: string;
+	createdAt: Date | string;
+	updatedAt: Date | string;
 }
 
 // Form validation schema
@@ -103,33 +111,40 @@ const prospectFormSchema = z.object({
 
 type ProspectFormValues = z.infer<typeof prospectFormSchema>;
 
-const initialProspects: Prospect[] = [
-	{
-		id: "1",
-		name: "John Smith",
-		email: "john@email.com",
-		phone: "+65 9123 4567",
-		source: "Website",
-		type: "tenant",
-		property: "secondary_market_owner",
-		status: "active",
-		lastContact: "2 days ago",
-	},
-	{
-		id: "2",
-		name: "Sarah Lee",
-		email: "sarah@email.com",
-		phone: "+65 9876 5432",
-		source: "Social Media",
-		type: "owner",
-		property: "property_developer",
-		status: "active",
-		nextContact: "Today",
-	},
-];
+// Helper function to format date for display
+// Handle both Date objects and date strings from API
+const formatContactDate = (date: Date | string | null | undefined): string | undefined => {
+	if (!date) return undefined;
+	
+	// Convert string to Date if needed
+	const dateObj = typeof date === 'string' ? new Date(date) : date;
+	
+	// Check if date is valid
+	if (isNaN(dateObj.getTime())) return undefined;
+	
+	const now = new Date();
+	const diffMs = now.getTime() - dateObj.getTime();
+	const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+	
+	if (diffDays === 0) return "Today";
+	if (diffDays === 1) return "1 day ago";
+	if (diffDays < 7) return `${diffDays} days ago`;
+	
+	// For future dates
+	if (diffMs < 0) {
+		const futureDays = Math.abs(diffDays);
+		if (futureDays === 0) return "Today";
+		if (futureDays === 1) return "Tomorrow";
+		return `In ${futureDays} days`;
+	}
+	
+	return dateObj.toLocaleDateString();
+};
 
 export default function CRMPage() {
-	const [prospects, setProspects] = useState<Prospect[]>(initialProspects);
+	const router = useRouter();
+	const queryClient = useQueryClient();
+	const { data: session, isPending } = authClient.useSession();
 	const [searchQuery, setSearchQuery] = useState("");
 	const [typeFilter, setTypeFilter] = useState("all");
 	const [statusFilter, setStatusFilter] = useState("all");
@@ -140,9 +155,38 @@ export default function CRMPage() {
 	const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 	const [selectedProspect, setSelectedProspect] = useState<Prospect | null>(null);
 	const [prospectToDelete, setProspectToDelete] = useState<Prospect | null>(null);
-	const [isSubmitting, setIsSubmitting] = useState(false);
-	const [isDeleting, setIsDeleting] = useState(false);
 	const itemsPerPage = 10;
+
+	// Fetch prospects with tRPC - only when session is available
+	const {
+		data: prospectsData,
+		isLoading: isLoadingProspects,
+		error: prospectsError,
+		refetch: refetchProspects,
+	} = trpc.crm.list.useQuery(
+		{
+			search: searchQuery || undefined,
+			type: typeFilter !== "all" ? (typeFilter as "tenant" | "owner") : undefined,
+			property:
+				propertyFilter !== "all"
+					? (propertyFilter as "property_developer" | "secondary_market_owner")
+					: undefined,
+			status:
+				statusFilter !== "all"
+					? (statusFilter as "active" | "inactive" | "pending")
+					: undefined,
+			page: currentPage,
+			limit: itemsPerPage,
+		},
+		{
+			enabled: !!session, // Only run query when user is authenticated
+			retry: 1,
+			staleTime: 30000, // 30 seconds
+		},
+	);
+
+	const prospects = prospectsData?.prospects || [];
+	const totalPages = prospectsData?.pagination.totalPages || 0;
 
 	// Form setup
 	const form = useForm<ProspectFormValues>({
@@ -158,25 +202,37 @@ export default function CRMPage() {
 		},
 	});
 
-	// Filter prospects based on search, type, status, and property
-	const filteredProspects = prospects.filter((prospect) => {
-		const matchesSearch =
-			prospect.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-			prospect.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-			prospect.phone.includes(searchQuery);
-		const matchesType = typeFilter === "all" || prospect.type === typeFilter;
-		const matchesStatus =
-			statusFilter === "all" || prospect.status === statusFilter;
-		const matchesProperty =
-			propertyFilter === "all" || prospect.property === propertyFilter;
-		return matchesSearch && matchesType && matchesStatus && matchesProperty;
+	// Create prospect mutation
+	const createProspectMutation = trpc.crm.create.useMutation({
+		onSuccess: () => {
+			toast.success("Prospect added successfully!");
+			setIsAddDialogOpen(false);
+			form.reset();
+			// Invalidate and refetch prospects list
+			queryClient.invalidateQueries({ queryKey: [["crm", "list"]] });
+			refetchProspects();
+		},
+		onError: (error) => {
+			console.error("Error adding prospect:", error);
+			toast.error("Failed to add prospect. Please try again.");
+		},
 	});
 
-	// Pagination
-	const totalPages = Math.ceil(filteredProspects.length / itemsPerPage);
-	const startIndex = (currentPage - 1) * itemsPerPage;
-	const endIndex = startIndex + itemsPerPage;
-	const paginatedProspects = filteredProspects.slice(startIndex, endIndex);
+	// Delete prospect mutation
+	const deleteProspectMutation = trpc.crm.delete.useMutation({
+		onSuccess: () => {
+			toast.success("Prospect deleted successfully!");
+			setIsDeleteDialogOpen(false);
+			setProspectToDelete(null);
+			// Invalidate and refetch prospects list
+			queryClient.invalidateQueries({ queryKey: [["crm", "list"]] });
+			refetchProspects();
+		},
+		onError: (error) => {
+			console.error("Error deleting prospect:", error);
+			toast.error("Failed to delete prospect. Please try again.");
+		},
+	});
 
 	const handleAddProspect = () => {
 		form.reset();
@@ -184,28 +240,7 @@ export default function CRMPage() {
 	};
 
 	const onSubmit = async (data: ProspectFormValues) => {
-		setIsSubmitting(true);
-		try {
-			// TODO: Replace with actual API call
-			const newProspect: Prospect = {
-				id: Date.now().toString(),
-				...data,
-				lastContact: undefined,
-				nextContact: undefined,
-			};
-
-			// Add to prospects state (in real app, this would be an API call)
-			setProspects((prev) => [newProspect, ...prev]);
-
-			toast.success("Prospect added successfully!");
-			setIsAddDialogOpen(false);
-			form.reset();
-		} catch (error) {
-			console.error("Error adding prospect:", error);
-			toast.error("Failed to add prospect. Please try again.");
-		} finally {
-			setIsSubmitting(false);
-		}
+		createProspectMutation.mutate(data);
 	};
 
 	const handleMessage = (prospect: Prospect) => {
@@ -235,24 +270,22 @@ export default function CRMPage() {
 
 	const handleDeleteConfirm = async () => {
 		if (!prospectToDelete) return;
-
-		setIsDeleting(true);
-		try {
-			// TODO: Replace with actual API call
-			setProspects((prev) =>
-				prev.filter((p) => p.id !== prospectToDelete.id)
-			);
-
-			toast.success("Prospect deleted successfully!");
-			setIsDeleteDialogOpen(false);
-			setProspectToDelete(null);
-		} catch (error) {
-			console.error("Error deleting prospect:", error);
-			toast.error("Failed to delete prospect. Please try again.");
-		} finally {
-			setIsDeleting(false);
-		}
+		deleteProspectMutation.mutate({ id: prospectToDelete.id });
 	};
+
+	// Authentication check
+	if (isPending) {
+		return (
+			<div className="flex h-screen items-center justify-center">
+				<RiLoader4Line className="h-8 w-8 animate-spin text-muted-foreground" />
+			</div>
+		);
+	}
+
+	if (!session) {
+		router.push("/login");
+		return null;
+	}
 
 	return (
 		<SidebarProvider>
@@ -499,12 +532,12 @@ export default function CRMPage() {
 											type="button"
 											variant="outline"
 											onClick={() => setIsAddDialogOpen(false)}
-											disabled={isSubmitting}
+											disabled={createProspectMutation.isPending}
 										>
 											Cancel
 										</Button>
-										<Button type="submit" disabled={isSubmitting} className="bg-green-600 hover:bg-green-700">
-											{isSubmitting ? (
+										<Button type="submit" disabled={createProspectMutation.isPending} className="bg-green-600 hover:bg-green-700">
+											{createProspectMutation.isPending ? (
 												<>
 													<RiLoader4Line className="mr-2 h-4 w-4 animate-spin" />
 													Adding...
@@ -648,7 +681,7 @@ export default function CRMPage() {
 																Last Contact
 															</div>
 															<div className="text-sm font-medium">
-																{selectedProspect.lastContact}
+																{formatContactDate(selectedProspect.lastContact)}
 															</div>
 														</div>
 													</div>
@@ -661,7 +694,7 @@ export default function CRMPage() {
 																Next Contact
 															</div>
 															<div className="text-sm font-medium">
-																{selectedProspect.nextContact}
+																{formatContactDate(selectedProspect.nextContact)}
 															</div>
 														</div>
 													</div>
@@ -736,17 +769,17 @@ export default function CRMPage() {
 										setIsDeleteDialogOpen(false);
 										setProspectToDelete(null);
 									}}
-									disabled={isDeleting}
+									disabled={deleteProspectMutation.isPending}
 								>
 									Cancel
 								</Button>
 								<Button
 									variant="destructive"
 									onClick={handleDeleteConfirm}
-									disabled={isDeleting}
+									disabled={deleteProspectMutation.isPending}
 									className="bg-red-600 hover:bg-red-700"
 								>
-									{isDeleting ? (
+									{deleteProspectMutation.isPending ? (
 										<>
 											<RiLoader4Line className="mr-2 h-4 w-4 animate-spin" />
 											Deleting...
@@ -812,8 +845,32 @@ export default function CRMPage() {
 
 					{/* Prospects List */}
 					<div className="flex flex-col gap-3">
-						{paginatedProspects.map((prospect) => (
-							<Card key={prospect.id}>
+						{isLoadingProspects ? (
+							<div className="col-span-full flex items-center justify-center py-12">
+								<RiLoader4Line className="h-8 w-8 animate-spin text-muted-foreground" />
+							</div>
+						) : prospectsError ? (
+							<div className="col-span-full text-center py-12">
+								<div className="text-red-500 mb-2">Error loading prospects</div>
+								<div className="text-sm text-muted-foreground">
+									{prospectsError.message}
+								</div>
+								<Button
+									variant="outline"
+									size="sm"
+									onClick={() => refetchProspects()}
+									className="mt-4"
+								>
+									Retry
+								</Button>
+							</div>
+						) : prospects.length === 0 ? (
+							<div className="col-span-full text-center py-12 text-muted-foreground">
+								No prospects found. Click "Add Prospect" to get started.
+							</div>
+						) : (
+							prospects.map((prospect) => (
+								<Card key={prospect.id}>
 								<CardContent className="p-4">
 									<div className="flex items-start justify-between">
 										<div className="flex-1 space-y-3">
@@ -864,7 +921,7 @@ export default function CRMPage() {
 													<div className="flex items-center gap-2">
 														<RiCalendarLine className="size-4 text-muted-foreground" />
 														<span className="text-muted-foreground">
-															Last: {prospect.lastContact}
+															Last: {formatContactDate(prospect.lastContact)}
 														</span>
 													</div>
 												)}
@@ -872,7 +929,7 @@ export default function CRMPage() {
 													<div className="flex items-center gap-2">
 														<RiCalendarLine className="size-4 text-muted-foreground" />
 														<span className="text-muted-foreground">
-															Next: {prospect.nextContact}
+															Next: {formatContactDate(prospect.nextContact)}
 														</span>
 													</div>
 												)}
@@ -913,36 +970,39 @@ export default function CRMPage() {
 									</div>
 								</CardContent>
 							</Card>
-						))}
+							))
+						)}
 					</div>
 
 					{/* Pagination */}
-					<div className="flex items-center justify-between">
-						<div className="text-sm text-muted-foreground">
-							Showing {startIndex + 1}-{Math.min(endIndex, filteredProspects.length)} of{" "}
-							{filteredProspects.length} prospects
+					{totalPages > 0 && (
+						<div className="flex items-center justify-between">
+							<div className="text-sm text-muted-foreground">
+								Showing {((currentPage - 1) * itemsPerPage) + 1}-{Math.min(currentPage * itemsPerPage, prospectsData?.pagination.total || 0)} of{" "}
+								{prospectsData?.pagination.total || 0} prospects
+							</div>
+							<div className="flex items-center gap-2">
+								<Button
+									variant="outline"
+									size="sm"
+									onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+									disabled={currentPage === 1}
+								>
+									&lt; Prev
+								</Button>
+								<Button
+									variant="outline"
+									size="sm"
+									onClick={() =>
+										setCurrentPage((prev) => Math.min(totalPages, prev + 1))
+									}
+									disabled={currentPage === totalPages}
+								>
+									Next &gt;
+								</Button>
+							</div>
 						</div>
-						<div className="flex items-center gap-2">
-							<Button
-								variant="outline"
-								size="sm"
-								onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-								disabled={currentPage === 1}
-							>
-								&lt; Prev
-							</Button>
-							<Button
-								variant="outline"
-								size="sm"
-								onClick={() =>
-									setCurrentPage((prev) => Math.min(totalPages, prev + 1))
-								}
-								disabled={currentPage === totalPages}
-							>
-								Next &gt;
-							</Button>
-						</div>
-					</div>
+					)}
 				</div>
 			</SidebarInset>
 		</SidebarProvider>

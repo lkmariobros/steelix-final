@@ -147,6 +147,33 @@ app.get("/health", (c) => {
 // Railway might check these paths
 app.get("/healthz", (c) => c.text("OK"));
 app.get("/ping", (c) => c.text("pong"));
+
+// Kapso WhatsApp Webhook - receives incoming messages from Kapso
+app.post("/webhook/kapso", async (c) => {
+	try {
+		const body = await c.req.json();
+		console.log("📨 Kapso webhook received:", JSON.stringify(body, null, 2));
+
+		// Import webhook handler (dynamic import to avoid circular dependencies)
+		const { handleKapsoWebhook } = await import("./lib/kapso-webhook");
+		const result = await handleKapsoWebhook(body);
+
+		if (result.success) {
+			return c.json({ success: true, message: "Webhook processed" }, 200);
+		} else {
+			return c.json(
+				{ success: false, error: result.error },
+				result.statusCode || 400,
+			);
+		}
+	} catch (error: any) {
+		console.error("❌ Kapso webhook error:", error);
+		return c.json(
+			{ success: false, error: error.message || "Webhook processing failed" },
+			500,
+		);
+	}
+});
 app.get("/.well-known/health", (c) => c.json({ status: "ok" }));
 
 // Debug endpoint to check auth configuration
@@ -299,33 +326,79 @@ const isProduction = process.env.NODE_ENV === "production" || process.env.RAILWA
 
 if (isBunRuntime) {
 	// For development with Bun runtime
-	try {
-		const server = Bun.serve({
-			fetch: app.fetch,
-			port: Number(port),
-			hostname: "localhost",
-		});
-
-		console.log(`✅ Development server started successfully on port ${port}`);
-		console.log(`🌐 Server accessible at http://localhost:${port}`);
-		console.log("🔥 Hot reload enabled");
-
-		// Handle graceful shutdown
-		process.on("SIGTERM", () => {
-			console.log("🛑 SIGTERM received, shutting down gracefully");
-			server.stop();
-			process.exit(0);
-		});
-
-		process.on("SIGINT", () => {
-			console.log("🛑 SIGINT received, shutting down gracefully");
-			server.stop();
-			process.exit(0);
-		});
-	} catch (error) {
-		console.error("❌ Failed to start development server:", error);
-		process.exit(1);
+	// Store server reference globally to handle hot reload
+	const globalServer = globalThis as unknown as { 
+		server?: ReturnType<typeof Bun.serve>;
+		serverStopping?: boolean;
+	};
+	
+	// Stop existing server if it exists (for hot reload)
+	if (globalServer.server && !globalServer.serverStopping) {
+		try {
+			console.log("🔄 Stopping existing server for hot reload...");
+			globalServer.serverStopping = true;
+			globalServer.server.stop(true); // Force stop immediately
+			delete globalServer.server;
+			// Use setTimeout to delay server start (non-blocking)
+			setTimeout(() => {
+				globalServer.serverStopping = false;
+			}, 300);
+		} catch (error) {
+			console.warn("⚠️ Error stopping existing server:", error);
+			globalServer.serverStopping = false;
+		}
 	}
+
+	// Start server with retry logic for hot reload
+	const startServer = () => {
+		if (globalServer.serverStopping) {
+			// Wait a bit and retry
+			setTimeout(startServer, 200);
+			return;
+		}
+
+		try {
+			const server = Bun.serve({
+				fetch: app.fetch,
+				port: Number(port),
+				hostname: "127.0.0.1", // Use 127.0.0.1 for better Windows compatibility
+			});
+
+			// Store server reference for hot reload
+			globalServer.server = server;
+
+			console.log(`✅ Development server started successfully on port ${port}`);
+			console.log(`🌐 Server accessible at http://localhost:${port}`);
+			console.log("🔥 Hot reload enabled");
+
+			// Handle graceful shutdown
+			process.on("SIGTERM", () => {
+				console.log("🛑 SIGTERM received, shutting down gracefully");
+				server.stop();
+				delete globalServer.server;
+				process.exit(0);
+			});
+
+			process.on("SIGINT", () => {
+				console.log("🛑 SIGINT received, shutting down gracefully");
+				server.stop();
+				delete globalServer.server;
+				process.exit(0);
+			});
+		} catch (error: any) {
+			// If port is in use, wait and retry (common during hot reload)
+			if (error?.code === "EADDRINUSE" || error?.message?.includes("port") || error?.message?.includes("in use")) {
+				console.warn(`⚠️ Port ${port} is in use, retrying in 500ms...`);
+				setTimeout(startServer, 500);
+			} else {
+				console.error("❌ Failed to start development server:", error);
+				console.error("💡 Tip: Run 'netstat -ano | findstr :8080' to find the process, then 'taskkill /PID <PID> /F' to kill it");
+			}
+		}
+	};
+
+	// Start the server
+	startServer();
 } else {
 	// For Node.js runtime (production on Railway or local with Node)
 	import("@hono/node-server").then(({ serve }) => {
@@ -370,4 +443,7 @@ if (isBunRuntime) {
 }
 
 // Export the app for compatibility
+// Note: When using `bun run --hot`, Bun will try to auto-serve the default export
+// if it has a fetch method. We handle the server manually above, but Bun's hot reload
+// may still try to auto-serve. The manual server setup should take precedence.
 export default app;

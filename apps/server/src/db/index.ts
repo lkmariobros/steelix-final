@@ -4,12 +4,18 @@ import * as authSchema from "./schema/auth";
 import * as transactionSchema from "./schema/transactions";
 import * as approvalsSchema from "./schema/approvals";
 import * as reportsSchema from "./schema/reports";
+import * as crmSchema from "./schema/crm";
+import * as autoReplySchema from "./schema/auto-reply";
+import * as whatsappSchema from "./schema/whatsapp";
 
 const schema = {
 	...authSchema,
 	...transactionSchema,
 	...approvalsSchema,
 	...reportsSchema,
+	...crmSchema,
+	...autoReplySchema,
+	...whatsappSchema,
 };
 
 // ✅ PERFORMANCE: Connection pooling for better database performance

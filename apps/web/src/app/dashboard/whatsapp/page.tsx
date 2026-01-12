@@ -1,6 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { authClient } from "@/lib/auth-client";
+import { trpc } from "@/utils/trpc";
 import { AppSidebar } from "@/components/app-sidebar";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -20,6 +25,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import UserDropdown from "@/components/user-dropdown";
 import {
 	RiDashboardLine,
@@ -32,9 +38,10 @@ import {
 	RiSettings3Line,
 	RiMessageLine,
 	RiCheckDoubleLine,
+	RiLoader4Line,
 } from "@remixicon/react";
 
-// Mock data types
+// Message interface matching API response
 interface Message {
 	id: string;
 	text: string;
@@ -43,6 +50,7 @@ interface Message {
 	read?: boolean;
 }
 
+// Conversation interface matching API response
 interface Conversation {
 	id: string;
 	name: string;
@@ -50,106 +58,122 @@ interface Conversation {
 	lastMessage: string;
 	unreadCount: number;
 	timestamp: string;
-	messages: Message[];
+	messages?: Message[];
 }
 
-// Mock conversations data
-const mockConversations: Conversation[] = [
-	{
-		id: "1",
-		name: "John S.",
-		phone: "+65 9123 4567",
-		lastMessage: "Hi...",
-		unreadCount: 2,
-		timestamp: "10:30 AM",
-		messages: [
-			{
-				id: "1",
-				text: "Hi, I'm interested",
-				timestamp: "10:30 AM",
-				sender: "user",
-			},
-			{
-				id: "2",
-				text: "Thank you!",
-				timestamp: "10:32 AM",
-				sender: "agent",
-				read: true,
-			},
-			{
-				id: "3",
-				text: "What's the price?",
-				timestamp: "10:35 AM",
-				sender: "user",
-			},
-		],
-	},
-	{
-		id: "2",
-		name: "Sarah L.",
-		phone: "+65 9876 5432",
-		lastMessage: "When...",
-		unreadCount: 1,
-		timestamp: "09:15 AM",
-		messages: [
-			{
-				id: "1",
-				text: "When can I view the property?",
-				timestamp: "09:15 AM",
-				sender: "user",
-			},
-		],
-	},
-];
+// Helper function to format timestamp
+const formatTimestamp = (timestamp: string): string => {
+	try {
+		const date = new Date(timestamp);
+		const now = new Date();
+		const diff = now.getTime() - date.getTime();
+		const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+
+		if (days === 0) {
+			// Today - show time
+			return date.toLocaleTimeString("en-US", {
+				hour: "2-digit",
+				minute: "2-digit",
+			});
+		} else if (days === 1) {
+			return "Yesterday";
+		} else if (days < 7) {
+			return date.toLocaleDateString("en-US", { weekday: "short" });
+		} else {
+			return date.toLocaleDateString("en-US", {
+				month: "short",
+				day: "numeric",
+			});
+		}
+	} catch {
+		return timestamp;
+	}
+};
 
 export default function WhatsAppPage() {
+	const router = useRouter();
+	const queryClient = useQueryClient();
+	const { data: session, isPending: isSessionPending } = authClient.useSession();
 	const [searchQuery, setSearchQuery] = useState("");
 	const [filter, setFilter] = useState<"all" | "unread">("all");
-	const [selectedConversation, setSelectedConversation] =
-		useState<Conversation | null>(mockConversations[0]);
+	const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
 	const [messageInput, setMessageInput] = useState("");
 
-	// Filter conversations
-	const filteredConversations = mockConversations.filter((conv) => {
-		const matchesSearch =
-			conv.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-			conv.phone.includes(searchQuery);
-		const matchesFilter =
-			filter === "all" || (filter === "unread" && conv.unreadCount > 0);
-		return matchesSearch && matchesFilter;
-	});
+	// Fetch conversations with tRPC
+	const {
+		data: conversationsData,
+		isLoading: isLoadingConversations,
+		error: conversationsError,
+		refetch: refetchConversations,
+	} = trpc.whatsapp.list.useQuery(
+		{
+			search: searchQuery || undefined,
+			filter,
+			page: 1,
+			limit: 50,
+		},
+		{
+			enabled: !!session,
+			retry: 1,
+			staleTime: 10000, // 10 seconds - refresh more frequently for real-time feel
+			refetchInterval: 30000, // Auto-refresh every 30 seconds
+		},
+	);
 
-	const totalConversations = mockConversations.length;
-	const unreadCount = mockConversations.reduce(
+	const conversations = conversationsData?.conversations || [];
+	const totalConversations = conversations.length;
+	const unreadCount = conversations.reduce(
 		(sum, conv) => sum + conv.unreadCount,
 		0,
 	);
 
+	// Fetch selected conversation details
+	const {
+		data: conversationData,
+		isLoading: isLoadingConversation,
+		refetch: refetchConversation,
+	} = trpc.whatsapp.get.useQuery(
+		{ id: selectedConversationId! },
+		{
+			enabled: !!selectedConversationId && !!session,
+			retry: 1,
+			staleTime: 5000, // 5 seconds
+			refetchInterval: 10000, // Auto-refresh every 10 seconds when conversation is open
+		},
+	);
+
+	const selectedConversation = conversationData || null;
+
+	// Send message mutation
+	const sendMessageMutation = trpc.whatsapp.send.useMutation({
+		onSuccess: (data) => {
+			toast.success("Message sent successfully!");
+			setMessageInput("");
+			// Invalidate and refetch conversations and current conversation
+			queryClient.invalidateQueries({ queryKey: [["whatsapp", "list"]] });
+			queryClient.invalidateQueries({ queryKey: [["whatsapp", "get"]] });
+			refetchConversations();
+			refetchConversation();
+		},
+		onError: (error) => {
+			console.error("Error sending message:", error);
+			toast.error(error.message || "Failed to send message. Please try again.");
+		},
+	});
+
+	// Auto-select first conversation if none selected
+	useEffect(() => {
+		if (!selectedConversationId && conversations.length > 0) {
+			setSelectedConversationId(conversations[0].id);
+		}
+	}, [conversations, selectedConversationId]);
+
 	const handleSendMessage = () => {
-		if (!messageInput.trim() || !selectedConversation) return;
-
-		// TODO: Send message via API
-		const newMessage: Message = {
-			id: Date.now().toString(),
-			text: messageInput,
-			timestamp: new Date().toLocaleTimeString("en-US", {
-				hour: "2-digit",
-				minute: "2-digit",
-			}),
-			sender: "agent",
-			read: false,
-		};
-
-		// Update conversation messages (in real app, this would be API call)
-		const updatedConversation = {
-			...selectedConversation,
-			messages: [...selectedConversation.messages, newMessage],
-			lastMessage: messageInput,
-			timestamp: newMessage.timestamp,
-		};
-
-		setSelectedConversation(updatedConversation);
-		setMessageInput("");
+		if (!messageInput.trim() || !selectedConversationId) return;
+		sendMessageMutation.mutate({
+			conversationId: selectedConversationId,
+			message: messageInput.trim(),
+		});
 	};
 
 	const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -158,6 +182,24 @@ export default function WhatsAppPage() {
 			handleSendMessage();
 		}
 	};
+
+	const handleSelectConversation = (conversationId: string) => {
+		setSelectedConversationId(conversationId);
+	};
+
+	// Authentication check
+	if (isSessionPending) {
+		return (
+			<div className="flex h-screen items-center justify-center">
+				<LoadingSpinner size="lg" text="Loading..." />
+			</div>
+		);
+	}
+
+	if (!session) {
+		router.push("/login");
+		return null;
+	}
 
 	return (
 		<SidebarProvider>
@@ -244,51 +286,83 @@ export default function WhatsAppPage() {
 						{/* Conversation List */}
 						<ScrollArea className="flex-1">
 							<div className="flex flex-col">
-								{filteredConversations.map((conversation) => (
-									<button
-										key={conversation.id}
-										onClick={() => setSelectedConversation(conversation)}
-										className={`flex items-center gap-3 border-b p-4 text-left transition-colors hover:bg-muted/50 ${
-											selectedConversation?.id === conversation.id
-												? "bg-muted"
-												: ""
-										}`}
-									>
-										<div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary/10">
-											<RiUserLine className="size-5 text-primary" />
+								{isLoadingConversations ? (
+									<div className="flex items-center justify-center py-12">
+										<RiLoader4Line className="h-6 w-6 animate-spin text-muted-foreground" />
+									</div>
+								) : conversationsError ? (
+									<div className="text-center py-12 px-4">
+										<div className="text-red-500 mb-2">Error loading conversations</div>
+										<div className="text-sm text-muted-foreground mb-4">
+											{conversationsError.message}
 										</div>
-										<div className="flex-1 min-w-0">
-											<div className="flex items-center justify-between">
-												<span className="truncate font-medium">
-													{conversation.name}
-												</span>
-												<span className="shrink-0 text-xs text-muted-foreground">
-													{conversation.timestamp}
-												</span>
+										<Button
+											variant="outline"
+											size="sm"
+											onClick={() => refetchConversations()}
+										>
+											Retry
+										</Button>
+									</div>
+								) : conversations.length === 0 ? (
+									<div className="text-center py-12 px-4 text-muted-foreground">
+										<RiMessageLine className="mx-auto mb-2 size-8" />
+										<p className="text-sm">No conversations yet</p>
+										<p className="text-xs mt-1">
+											Messages will appear here when received
+										</p>
+									</div>
+								) : (
+									conversations.map((conversation) => (
+										<button
+											key={conversation.id}
+											onClick={() => handleSelectConversation(conversation.id)}
+											className={`flex items-center gap-3 border-b p-4 text-left transition-colors hover:bg-muted/50 ${
+												selectedConversationId === conversation.id
+													? "bg-muted"
+													: ""
+											}`}
+										>
+											<div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary/10">
+												<RiUserLine className="size-5 text-primary" />
 											</div>
-											<div className="flex items-center justify-between gap-2">
-												<span className="truncate text-sm text-muted-foreground">
-													{conversation.lastMessage}
-												</span>
-												{conversation.unreadCount > 0 && (
-													<Badge
-														variant="destructive"
-														className="shrink-0 size-5 items-center justify-center rounded-full p-0 text-xs"
-													>
-														{conversation.unreadCount}
-													</Badge>
-												)}
+											<div className="flex-1 min-w-0">
+												<div className="flex items-center justify-between">
+													<span className="truncate font-medium">
+														{conversation.name}
+													</span>
+													<span className="shrink-0 text-xs text-muted-foreground">
+														{formatTimestamp(conversation.timestamp)}
+													</span>
+												</div>
+												<div className="flex items-center justify-between gap-2">
+													<span className="truncate text-sm text-muted-foreground">
+														{conversation.lastMessage}
+													</span>
+													{conversation.unreadCount > 0 && (
+														<Badge
+															variant="destructive"
+															className="shrink-0 size-5 items-center justify-center rounded-full p-0 text-xs"
+														>
+															{conversation.unreadCount}
+														</Badge>
+													)}
+												</div>
 											</div>
-										</div>
-									</button>
-								))}
+										</button>
+									))
+								)}
 							</div>
 						</ScrollArea>
 					</div>
 
 					{/* Right Pane - Conversation View */}
 					<div className="flex flex-1 flex-col">
-						{selectedConversation ? (
+						{isLoadingConversation ? (
+							<div className="flex flex-1 items-center justify-center">
+								<RiLoader4Line className="h-8 w-8 animate-spin text-muted-foreground" />
+							</div>
+						) : selectedConversation ? (
 							<>
 								{/* Conversation Header */}
 								<div className="flex items-center justify-between border-b p-4">
@@ -304,9 +378,6 @@ export default function WhatsAppPage() {
 										</div>
 									</div>
 									<div className="flex items-center gap-2">
-										{/* <Button variant="ghost" size="sm">
-											<RiPhoneLine className="h-4 w-4" />
-										</Button> */}
 										<Button variant="ghost" size="sm">
 											<RiInformationLine className="h-4 w-4" />
 										</Button>
@@ -316,54 +387,62 @@ export default function WhatsAppPage() {
 								{/* Messages Area */}
 								<ScrollArea className="flex-1 p-4">
 									<div className="flex flex-col gap-4">
-										{selectedConversation.messages.map((message) => (
-											<div
-												key={message.id}
-												className={`flex ${
-													message.sender === "agent"
-														? "justify-end"
-														: "justify-start"
-												}`}
-											>
+										{selectedConversation.messages && selectedConversation.messages.length > 0 ? (
+											selectedConversation.messages.map((message) => (
 												<div
-													className={`max-w-[70%] rounded-lg px-4 py-2 ${
+													key={message.id}
+													className={`flex ${
 														message.sender === "agent"
-															? "bg-primary text-primary-foreground"
-															: "bg-muted"
+															? "justify-end"
+															: "justify-start"
 													}`}
 												>
-													<div className="text-sm">{message.text}</div>
 													<div
-														className={`mt-1 flex items-center gap-1 text-xs ${
+														className={`max-w-[70%] rounded-lg px-4 py-2 ${
 															message.sender === "agent"
-																? "text-primary-foreground/70"
-																: "text-muted-foreground"
+																? "bg-primary text-primary-foreground"
+																: "bg-muted"
 														}`}
 													>
-														<span>{message.timestamp}</span>
-														{message.sender === "agent" && (
-															<>
-																{message.read ? (
-																	<RiCheckDoubleLine className="size-3 text-blue-400" />
-																) : (
-																	<RiCheckDoubleLine className="size-3" />
-																)}
-																{message.read && (
-																	<span className="text-[10px]">Read</span>
-																)}
-															</>
-														)}
+														<div className="text-sm">{message.text}</div>
+														<div
+															className={`mt-1 flex items-center gap-1 text-xs ${
+																message.sender === "agent"
+																	? "text-primary-foreground/70"
+																	: "text-muted-foreground"
+															}`}
+														>
+															<span>{formatTimestamp(message.timestamp)}</span>
+															{message.sender === "agent" && (
+																<>
+																	{message.read ? (
+																		<RiCheckDoubleLine className="size-3 text-blue-400" />
+																	) : (
+																		<RiCheckDoubleLine className="size-3" />
+																	)}
+																	{message.read && (
+																		<span className="text-[10px]">Read</span>
+																	)}
+																</>
+															)}
+														</div>
 													</div>
 												</div>
+											))
+										) : (
+											<div className="text-center py-12 text-muted-foreground">
+												<RiMessageLine className="mx-auto mb-2 size-8" />
+												<p className="text-sm">No messages yet</p>
+												<p className="text-xs mt-1">Start the conversation</p>
 											</div>
-										))}
+										)}
 									</div>
 								</ScrollArea>
 
 								{/* Message Input */}
 								<div className="border-t p-4">
 									<div className="flex items-center gap-2">
-										<Button variant="ghost" size="sm">
+										<Button variant="ghost" size="sm" disabled>
 											<RiAttachmentLine className="h-4 w-4" />
 										</Button>
 										<Input
@@ -371,15 +450,20 @@ export default function WhatsAppPage() {
 											value={messageInput}
 											onChange={(e) => setMessageInput(e.target.value)}
 											onKeyPress={handleKeyPress}
+											disabled={sendMessageMutation.isPending}
 											className="flex-1"
 										/>
 										<Button
 											size="sm"
 											onClick={handleSendMessage}
-											disabled={!messageInput.trim()}
+											disabled={!messageInput.trim() || sendMessageMutation.isPending}
 											className="bg-green-600 hover:bg-green-700"
 										>
-											<RiSendPlaneLine className="h-4 w-4" />
+											{sendMessageMutation.isPending ? (
+												<RiLoader4Line className="h-4 w-4 animate-spin" />
+											) : (
+												<RiSendPlaneLine className="h-4 w-4" />
+											)}
 										</Button>
 									</div>
 								</div>

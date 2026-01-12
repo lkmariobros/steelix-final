@@ -9,7 +9,20 @@
  * as first-party cookies (same domain), which mobile browsers accept.
  */
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_SERVER_URL || 'https://steelix-final-production.up.railway.app'
+// Use localhost for development, production URL for production
+// Use 127.0.0.1 instead of localhost for better Windows compatibility
+const getBackendUrl = () => {
+  if (process.env.NEXT_PUBLIC_SERVER_URL) {
+    return process.env.NEXT_PUBLIC_SERVER_URL
+  }
+  if (process.env.NODE_ENV === 'production') {
+    return 'https://steelix-final-production.up.railway.app'
+  }
+  // Use 127.0.0.1 for better Windows compatibility
+  return 'http://127.0.0.1:8080'
+}
+
+const BACKEND_URL = getBackendUrl()
 
 async function handler(request: Request) {
   const url = new URL(request.url)
@@ -35,6 +48,8 @@ async function handler(request: Request) {
 
   // Log for debugging
   console.log(`🔐 Auth proxy: ${request.method} ${authPath}`)
+  console.log(`🔐 Target URL: ${targetUrl}`)
+  console.log(`🔐 BACKEND_URL: ${BACKEND_URL}`)
 
   try {
     const response = await fetch(targetUrl, {
@@ -81,8 +96,23 @@ async function handler(request: Request) {
     })
   } catch (error) {
     console.error('Auth proxy error:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    const errorDetails = error instanceof Error && 'cause' in error ? String(error.cause) : ''
+    
+    // Provide helpful error message if backend is not reachable
+    if (errorMessage.includes('fetch failed') || errorMessage.includes('EACCES') || errorMessage.includes('ECONNREFUSED')) {
+      return new Response(
+        JSON.stringify({ 
+          error: 'Backend server not reachable', 
+          details: `Cannot connect to ${BACKEND_URL}. Please ensure the backend server is running on port 8080.`,
+          hint: 'Run "cd apps/server && bun dev" to start the backend server. If the issue persists, check Windows Firewall settings.'
+        }),
+        { status: 502, headers: { 'Content-Type': 'application/json' } }
+      )
+    }
+    
     return new Response(
-      JSON.stringify({ error: 'Proxy error', details: error instanceof Error ? error.message : 'Unknown error' }),
+      JSON.stringify({ error: 'Proxy error', details: errorMessage, cause: errorDetails }),
       { status: 502, headers: { 'Content-Type': 'application/json' } }
     )
   }
