@@ -3,10 +3,13 @@ import { adminRouter } from "./admin";
 import { agentTiersRouter } from "./agent-tiers";
 import { agentsRouter } from "./agents";
 import { approvalsRouter } from "./approvals";
+import { autoReplyRouter } from "./auto-reply";
+import { crmRouter } from "./crm";
 import { dashboardRouter } from "./dashboard";
 import { documentsRouter } from "./documents";
 import { reportsRouter } from "./reports";
 import { transactionsRouter } from "./transactions";
+import { whatsappRouter } from "./whatsapp";
 
 export const appRouter = router({
 	healthCheck: publicProcedure.query(() => {
@@ -26,6 +29,9 @@ export const appRouter = router({
 	approvals: approvalsRouter,
 	documents: documentsRouter,
 	reports: reportsRouter,
+	crm: crmRouter,
+	autoReply: autoReplyRouter,
+	whatsapp: whatsappRouter,
 });
 
 export type AppRouter = typeof appRouter;

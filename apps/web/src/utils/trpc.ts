@@ -46,7 +46,8 @@ export const trpcClient = trpc.createClient({
 	links: [
 		httpBatchLink({
 			// Use local proxy to avoid cross-origin cookie issues on mobile
-			url: typeof window !== 'undefined' ? '/api/trpc' : `${process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:8080'}/trpc`,
+			// Use 127.0.0.1 instead of localhost for better Windows compatibility
+			url: typeof window !== 'undefined' ? '/api/trpc' : `${process.env.NEXT_PUBLIC_SERVER_URL || 'http://127.0.0.1:8080'}/trpc`,
 			headers() {
 				return {
 					'Content-Type': 'application/json',

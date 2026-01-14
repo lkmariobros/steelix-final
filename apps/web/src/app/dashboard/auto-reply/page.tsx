@@ -1,6 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
+import { authClient } from "@/lib/auth-client";
+import { trpc } from "@/utils/trpc";
 import { AppSidebar } from "@/components/app-sidebar";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -35,6 +39,7 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@/components/ui/dialog";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { toast } from "sonner";
 import UserDropdown from "@/components/user-dropdown";
 import {
@@ -49,7 +54,7 @@ import {
 	RiLoader4Line,
 } from "@remixicon/react";
 
-// Mock data types
+// Auto-reply rule interface matching database schema
 interface AutoReplyRule {
 	id: string;
 	trigger: {
@@ -62,103 +67,52 @@ interface AutoReplyRule {
 	logCount: number;
 }
 
-// Mock rules data
-const initialRules: AutoReplyRule[] = [
-	{
-		id: "1",
-		trigger: {
-			type: "contains",
-			keywords: ["hello", "hi"],
-		},
-		response: "Hello! Thank you for contacting us. How can I assist you today?",
-		messageOwner: "John Smith",
-		status: "owner",
-		logCount: 12,
-	},
-	{
-		id: "2",
-		trigger: {
-			type: "contains",
-			keywords: ["price", "cost"],
-		},
-		response: "The price range for properties varies. Let me connect you with our agent for detailed pricing information.",
-		messageOwner: "Sarah Lee",
-		status: "tenant",
-		logCount: 8,
-	},
-	{
-		id: "3",
-		trigger: {
-			type: "contains",
-			keywords: ["view", "visit", "see"],
-		},
-		response: "I'd be happy to schedule a property viewing for you. Please let me know your preferred date and time.",
-		messageOwner: "John Smith",
-		status: "owner",
-		logCount: 5,
-	},
-	{
-		id: "4",
-		trigger: {
-			type: "contains",
-			keywords: ["location", "where", "address"],
-		},
-		response: "The property is located in a prime area. I'll send you the exact address shortly.",
-		messageOwner: "Mike Chen",
-		status: "tenant",
-		logCount: 3,
-	},
-];
-
 export default function AutoReplyPage() {
-	const [rules, setRules] = useState<AutoReplyRule[]>(initialRules);
+	const router = useRouter();
+	const queryClient = useQueryClient();
+	const { data: session, isPending } = authClient.useSession();
 	const [searchQuery, setSearchQuery] = useState("");
 	const [statusFilter, setStatusFilter] = useState<"all" | "tenant" | "owner">("all");
 	const [sortBy, setSortBy] = useState<"owner" | "status">("status");
-	const [isNewRuleDialogOpen, setIsNewRuleDialogOpen] = useState(false);
 	const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 	const [ruleToDelete, setRuleToDelete] = useState<AutoReplyRule | null>(null);
-	const [isDeleting, setIsDeleting] = useState(false);
 
-	// Filter and sort rules
-	const filteredRules = rules
-		.filter((rule) => {
-			const matchesSearch =
-				rule.response.toLowerCase().includes(searchQuery.toLowerCase()) ||
-				rule.trigger.keywords.some((keyword) =>
-					keyword.toLowerCase().includes(searchQuery.toLowerCase())
-				) ||
-				rule.messageOwner.toLowerCase().includes(searchQuery.toLowerCase());
-			const matchesStatus =
-				statusFilter === "all" || rule.status === statusFilter;
-			return matchesSearch && matchesStatus;
-		})
-		.sort((a, b) => {
-			if (sortBy === "status") {
-				// Sort by status: owner first, then tenant
-				if (a.status === b.status) {
-					return a.messageOwner.localeCompare(b.messageOwner);
-				}
-				return a.status === "owner" ? -1 : 1;
-			}
-			if (sortBy === "owner") {
-				return a.messageOwner.localeCompare(b.messageOwner);
-			}
-			return 0;
-		});
+	// Fetch auto-reply rules with tRPC - only when session is available
+	const {
+		data: rulesData,
+		isLoading: isLoadingRules,
+		error: rulesError,
+		refetch: refetchRules,
+	} = trpc.autoReply.list.useQuery(
+		{
+			search: searchQuery || undefined,
+			status: statusFilter !== "all" ? (statusFilter as "tenant" | "owner") : undefined,
+			sortBy,
+		},
+		{
+			enabled: !!session, // Only run query when user is authenticated
+			retry: 1,
+			staleTime: 30000, // 30 seconds
+		},
+	);
 
-	const totalRules = rules.length;
-	const ownerRules = rules.filter((r) => r.status === "owner").length;
-	const tenantRules = rules.filter((r) => r.status === "tenant").length;
+	const rules = rulesData?.rules || [];
+	const summary = rulesData?.summary || { total: 0, owner: 0, tenant: 0 };
 
-	const handleNewRule = () => {
-		setIsNewRuleDialogOpen(true);
-	};
-
-	const handleEdit = (rule: AutoReplyRule) => {
-		// TODO: Open edit dialog
-		console.log("Edit rule:", rule);
-	};
+	// Delete rule mutation
+	const deleteRuleMutation = trpc.autoReply.delete.useMutation({
+		onSuccess: () => {
+			toast.success("Auto-reply rule deleted successfully!");
+			setIsDeleteDialogOpen(false);
+			setRuleToDelete(null);
+			queryClient.invalidateQueries({ queryKey: [["autoReply", "list"]] });
+			refetchRules();
+		},
+		onError: (error) => {
+			console.error("Error deleting rule:", error);
+			toast.error("Failed to delete rule. Please try again.");
+		},
+	});
 
 	const handleDeleteClick = (rule: AutoReplyRule) => {
 		setRuleToDelete(rule);
@@ -167,32 +121,22 @@ export default function AutoReplyPage() {
 
 	const handleDeleteConfirm = async () => {
 		if (!ruleToDelete) return;
-
-		setIsDeleting(true);
-		try {
-			// TODO: Replace with actual API call
-			setRules((prev) => prev.filter((r) => r.id !== ruleToDelete.id));
-
-			toast.success("Auto-reply rule deleted successfully!");
-			setIsDeleteDialogOpen(false);
-			setRuleToDelete(null);
-		} catch (error) {
-			console.error("Error deleting rule:", error);
-			toast.error("Failed to delete rule. Please try again.");
-		} finally {
-			setIsDeleting(false);
-		}
+		deleteRuleMutation.mutate({ id: ruleToDelete.id });
 	};
 
-	const handleTest = (rule: AutoReplyRule) => {
-		// TODO: Test rule execution
-		console.log("Test rule:", rule);
-	};
+	// Authentication check
+	if (isPending) {
+		return (
+			<div className="flex h-screen items-center justify-center">
+				<LoadingSpinner size="lg" text="Loading..." />
+			</div>
+		);
+	}
 
-	const handleViewLogs = (rule: AutoReplyRule) => {
-		// TODO: Open logs dialog
-		console.log("View logs for rule:", rule);
-	};
+	if (!session) {
+		router.push("/login");
+		return null;
+	}
 
 	return (
 		<SidebarProvider>
@@ -267,7 +211,31 @@ export default function AutoReplyPage() {
 
 					{/* Rules List */}
 					<div className="flex flex-col gap-6">
-						{filteredRules.map((rule) => (
+						{isLoadingRules ? (
+							<div className="flex items-center justify-center py-12">
+								<RiLoader4Line className="h-8 w-8 animate-spin text-muted-foreground" />
+							</div>
+						) : rulesError ? (
+							<div className="text-center py-12">
+								<div className="text-red-500 mb-2">Error loading rules</div>
+								<div className="text-sm text-muted-foreground">
+									{rulesError.message}
+								</div>
+								<Button
+									variant="outline"
+									size="sm"
+									onClick={() => refetchRules()}
+									className="mt-4"
+								>
+									Retry
+								</Button>
+							</div>
+						) : rules.length === 0 ? (
+							<div className="text-center py-12 text-muted-foreground">
+								No auto-reply rules found. Create your first rule to get started.
+							</div>
+						) : (
+							rules.map((rule) => (
 							<Card key={rule.id} className="border-2">
 								<CardContent>
 									<div className="space-y-6">
@@ -331,15 +299,16 @@ export default function AutoReplyPage() {
 									</div>
 								</CardContent>
 							</Card>
-						))}
+							))
+						)}
 					</div>
 
 					{/* Summary */}
 					<div className="flex items-center justify-between border-t pt-4">
 						<div className="text-sm text-muted-foreground">
-							Total Rules: <span className="font-medium">{totalRules}</span> | Owner:{" "}
-							<span className="font-medium text-blue-600 dark:text-blue-400">{ownerRules}</span> | Tenant:{" "}
-							<span className="font-medium text-purple-600 dark:text-purple-400">{tenantRules}</span>
+							Total Rules: <span className="font-medium">{summary.total}</span> | Owner:{" "}
+							<span className="font-medium text-blue-600 dark:text-blue-400">{summary.owner}</span> | Tenant:{" "}
+							<span className="font-medium text-purple-600 dark:text-purple-400">{summary.tenant}</span>
 						</div>
 					</div>
 				</div>
@@ -415,16 +384,16 @@ export default function AutoReplyPage() {
 									setIsDeleteDialogOpen(false);
 									setRuleToDelete(null);
 								}}
-								disabled={isDeleting}
+								disabled={deleteRuleMutation.isPending}
 							>
 								Cancel
 							</Button>
 							<Button
 								onClick={handleDeleteConfirm}
-								disabled={isDeleting}
+								disabled={deleteRuleMutation.isPending}
 								className="bg-red-600 hover:bg-red-700"
 							>
-								{isDeleting ? (
+								{deleteRuleMutation.isPending ? (
 									<>
 										<RiLoader4Line className="mr-2 h-4 w-4 animate-spin" />
 										Deleting...
