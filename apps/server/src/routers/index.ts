@@ -8,6 +8,7 @@ import { crmRouter } from "./crm";
 import { dashboardRouter } from "./dashboard";
 import { documentsRouter } from "./documents";
 import { reportsRouter } from "./reports";
+import { tagsRouter } from "./tags";
 import { transactionsRouter } from "./transactions";
 import { whatsappRouter } from "./whatsapp";
 
@@ -32,6 +33,7 @@ export const appRouter = router({
 	crm: crmRouter,
 	autoReply: autoReplyRouter,
 	whatsapp: whatsappRouter,
+	tags: tagsRouter,
 });
 
 export type AppRouter = typeof appRouter;

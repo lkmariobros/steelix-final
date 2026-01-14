@@ -29,6 +29,7 @@ import {
 	RiUserLine,
 	RiMessageLine,
 	RiRobotLine,
+	RiPriceTagLine,
 } from "@remixicon/react";
 
 // Clean data structure - no mock teams
@@ -61,14 +62,19 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 							icon: RiCheckboxCircleLine,
 						},
 						{
+							title: "Reports & Analytics",
+							url: "/admin/reports",
+							icon: RiBarChartLine,
+						},
+						{
 							title: "Agent Management",
 							url: "/admin/agents",
 							icon: RiTeamLine,
 						},
 						{
-							title: "Reports & Analytics",
-							url: "/admin/reports",
-							icon: RiBarChartLine,
+							title: "Tag Management",
+							url: "/admin/tags",
+							icon: RiPriceTagLine,
 						},
 					],
 				},

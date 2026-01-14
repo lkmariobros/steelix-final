@@ -28,7 +28,10 @@ interface Prospect {
 	status: "active" | "inactive" | "pending";
 	stage: PipelineStage;
 	leadType: "personal" | "company";
-	tags: string | null;
+	tags: string | null; // Old: Comma-separated tags (kept for backward compatibility)
+	tagIds?: string[]; // New: Array of tag IDs (optional for backward compatibility)
+	tagNames?: string[]; // New: Array of tag names (optional for backward compatibility)
+	agentName?: string | null; // Agent name
 	lastContact: Date | string | null;
 	nextContact: Date | string | null;
 	agentId: string | null;
@@ -220,17 +223,29 @@ export function KanbanBoard({
 										</div>
 
 										{/* Tags */}
-										{prospect.tags && (
+										{((prospect.tagNames && prospect.tagNames.length > 0) || (prospect.tags && prospect.tags.trim())) && (
 											<div className="flex flex-wrap gap-1 mb-3">
-												{prospect.tags.split(",").map((tag, idx) => (
-													<Badge
-														key={idx}
-														variant="secondary"
-														className="text-xs"
-													>
-														{tag.trim()}
-													</Badge>
-												))}
+												{prospect.tagNames && prospect.tagNames.length > 0
+													? prospect.tagNames.map((tag, idx) => (
+															<Badge
+																key={idx}
+																variant="secondary"
+																className="text-xs"
+															>
+																{tag}
+															</Badge>
+														))
+													: prospect.tags
+														? prospect.tags.split(",").map((tag, idx) => (
+																<Badge
+																	key={idx}
+																	variant="secondary"
+																	className="text-xs"
+																>
+																	{tag.trim()}
+																</Badge>
+															))
+														: null}
 											</div>
 										)}
 
