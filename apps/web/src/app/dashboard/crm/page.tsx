@@ -92,6 +92,7 @@ interface Prospect {
 	lastContact: Date | string | null;
 	nextContact: Date | string | null;
 	agentId: string | null; // Can be null for unclaimed company leads
+	agentName?: string | null; // Agent name (from backend join)
 	createdAt: Date | string;
 	updatedAt: Date | string;
 }
@@ -102,6 +103,7 @@ interface ProspectNote {
 	prospectId: string;
 	content: string;
 	agentId: string;
+	agentName?: string; // Agent name (from backend join)
 	createdAt: Date | string;
 }
 
@@ -312,7 +314,7 @@ export default function CRMPage() {
 		},
 	);
 
-	const notes = notesData || [];
+	const notes: ProspectNote[] = (notesData || []) as ProspectNote[];
 
 	const handleView = (prospect: Prospect) => {
 		setSelectedProspect(prospect);
@@ -709,6 +711,30 @@ export default function CRMPage() {
 										)}
 									/>
 
+									{/* Tags */}
+									<FormField
+										control={form.control}
+										name="tags"
+										render={({ field }) => (
+											<FormItem>
+												<FormLabel>
+													Tags
+												</FormLabel>
+												<FormControl>
+													<Input
+														placeholder="e.g., [ads lead] breeze hill, VIP, Investor"
+														{...field}
+														value={field.value || ""}
+													/>
+												</FormControl>
+												<FormMessage />
+												<p className="text-xs text-muted-foreground">
+													Enter tags separated by commas to categorize this prospect by project.
+												</p>
+											</FormItem>
+										)}
+									/>
+
 									<DialogFooter>
 										<Button
 											type="button"
@@ -816,6 +842,32 @@ export default function CRMPage() {
 														: "Owner"}
 												</Badge>
 											</div>
+											{selectedProspect.tags && (
+												<div className="flex items-center justify-between">
+													<div className="flex items-center gap-2 text-sm text-muted-foreground">
+														<RiPriceTagLine className="size-4" />
+														Tags
+													</div>
+													<div className="flex flex-wrap gap-2">
+														{selectedProspect.tags.split(",").map((tag, idx) => (
+															<Badge key={idx} variant="secondary" className="text-xs">
+																{tag.trim()}
+															</Badge>
+														))}
+													</div>
+												</div>
+											)}
+											{selectedProspect.agentName && (
+												<div className="flex items-center justify-between">
+													<div className="flex items-center gap-2 text-sm text-muted-foreground">
+														<RiUserLine className="size-4" />
+														Owner
+													</div>
+													<div className="text-sm font-medium">
+														{selectedProspect.agentName}
+													</div>
+												</div>
+											)}
 											<div className="flex items-center justify-between">
 												<div className="flex items-center gap-2 text-sm text-muted-foreground">
 													<RiPriceTagLine className="size-4" />
@@ -896,16 +948,37 @@ export default function CRMPage() {
 													No notes yet. Add a note to track interactions.
 												</div>
 											) : (
-												notes.map((note) => (
-													<div key={note.id} className="border-b last:border-0 pb-3 last:pb-0">
-														<div className="flex items-start justify-between mb-1">
-															<div className="text-xs text-muted-foreground">
-																{new Date(note.createdAt).toLocaleString()}
+												notes.map((note) => {
+													const noteDate = new Date(note.createdAt);
+													// Format date with GMT timezone (e.g., "Dec 23, 2025 04:45 PM (GMT +08)")
+													const formattedDate = noteDate.toLocaleString("en-US", {
+														month: "short",
+														day: "numeric",
+														year: "numeric",
+														hour: "2-digit",
+														minute: "2-digit",
+														hour12: true,
+													});
+													// Get GMT offset
+													const gmtOffset = -noteDate.getTimezoneOffset() / 60;
+													const gmtSign = gmtOffset >= 0 ? "+" : "";
+													const gmtString = `(GMT ${gmtSign}${gmtOffset.toString().padStart(2, "0")})`;
+
+													return (
+														<div key={note.id} className="border-b last:border-0 pb-3 last:pb-0 space-y-1">
+															<div className="text-sm text-foreground">{note.content}</div>
+															<div className="flex items-center gap-2 text-xs text-muted-foreground">
+																<span>{formattedDate} {gmtString}</span>
+																{note.agentName && (
+																	<>
+																		<span>•</span>
+																		<span>Created by: {note.agentName}</span>
+																	</>
+																)}
 															</div>
 														</div>
-														<div className="text-sm">{note.content}</div>
-													</div>
-												))
+													);
+												})
 											)}
 										</div>
 										{/* Add Note Form */}
@@ -1211,6 +1284,17 @@ export default function CRMPage() {
 														</div>
 													</div>
 
+													{/* Tags */}
+													{prospect.tags && (
+														<div className="flex flex-wrap items-center gap-2">
+															{prospect.tags.split(",").map((tag, idx) => (
+																<Badge key={idx} variant="secondary" className="text-xs">
+																	{tag.trim()}
+																</Badge>
+															))}
+														</div>
+													)}
+
 													{/* Details */}
 													<div className="flex flex-wrap items-center gap-4 text-sm">
 														<div className="flex items-center gap-2">
@@ -1236,6 +1320,14 @@ export default function CRMPage() {
 																	: "Secondary Market Owner"}
 															</span>
 														</div>
+														{prospect.agentName && (
+															<div className="flex items-center gap-2">
+																<RiUserLine className="size-4 text-muted-foreground" />
+																<span className="text-muted-foreground">
+																	Owner: {prospect.agentName}
+																</span>
+															</div>
+														)}
 														{prospect.lastContact && (
 															<div className="flex items-center gap-2">
 																<RiCalendarLine className="size-4 text-muted-foreground" />

@@ -17,6 +17,7 @@ import {
 	pipelineStageSchema,
 	leadTypeSchema,
 } from "../db/schema/crm";
+import { user } from "../db/schema/auth";
 import { protectedProcedure, router } from "../lib/trpc";
 
 // List prospects input schema
@@ -115,26 +116,35 @@ export const crmRouter = router({
 
 			const total = Number(countResult?.count || 0);
 
-			// Get paginated results
+			// Get paginated results with agent name
 			const offset = (page - 1) * limit;
 			const results = await db
-				.select()
+				.select({
+					prospect: prospects,
+					agentName: user.name,
+				})
 				.from(prospects)
+				.leftJoin(user, eq(prospects.agentId, user.id))
 				.where(and(...conditions))
 				.orderBy(desc(prospects.createdAt))
 				.limit(limit)
 				.offset(offset);
 
 			return {
-				prospects: results.map((p) => {
+				prospects: results.map((r) => {
 					// Handle missing columns gracefully (for databases that haven't been migrated yet)
 					const prospect = {
-						...p,
-						stage: p.stage || "prospect",
-						leadType: p.leadType || "personal",
-						tags: p.tags || null,
+						...r.prospect,
+						stage: r.prospect.stage || "prospect",
+						leadType: r.prospect.leadType || "personal",
+						tags: r.prospect.tags || null,
 					};
-					return selectProspectSchema.parse(prospect);
+					const parsed = selectProspectSchema.parse(prospect);
+					// Add agentName to the response (not in schema, but useful for frontend)
+					return {
+						...parsed,
+						agentName: r.agentName || null,
+					};
 				}),
 				pagination: {
 					total,
@@ -187,16 +197,23 @@ export const crmRouter = router({
 			throw new Error("Prospect not found");
 		}
 
-		// Get notes for this prospect
+		// Get notes for this prospect with agent names
 		const notes = await db
-			.select()
+			.select({
+				note: prospectNotes,
+				agentName: user.name,
+			})
 			.from(prospectNotes)
+			.leftJoin(user, eq(prospectNotes.agentId, user.id))
 			.where(eq(prospectNotes.prospectId, id))
 			.orderBy(desc(prospectNotes.createdAt));
 
 		return {
 			prospect: selectProspectSchema.parse(prospect),
-			notes: notes.map((n) => selectProspectNoteSchema.parse(n)),
+			notes: notes.map((n) => ({
+				...selectProspectNoteSchema.parse(n.note),
+				agentName: n.agentName || "Unknown",
+			})),
 		};
 	}),
 
@@ -419,12 +436,20 @@ export const crmRouter = router({
 				throw new Error("Prospect not found");
 			}
 
+			// Get notes with agent names
 			const notes = await db
-				.select()
+				.select({
+					note: prospectNotes,
+					agentName: user.name,
+				})
 				.from(prospectNotes)
+				.leftJoin(user, eq(prospectNotes.agentId, user.id))
 				.where(eq(prospectNotes.prospectId, id))
 				.orderBy(desc(prospectNotes.createdAt));
 
-			return notes.map((n) => selectProspectNoteSchema.parse(n));
+			return notes.map((n) => ({
+				...selectProspectNoteSchema.parse(n.note),
+				agentName: n.agentName || "Unknown",
+			}));
 		}),
 });
