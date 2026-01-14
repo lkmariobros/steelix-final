@@ -1,4 +1,4 @@
-import { and, desc, eq, ilike, or } from "drizzle-orm";
+import { and, desc, eq, ilike, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../db";
 import {
@@ -66,10 +66,10 @@ export const whatsappRouter = router({
 					}
 				}
 
-				// Unread filter
-				if (filter === "unread") {
-					conditions.push(eq(whatsappConversations.unreadCount, "0").not());
-				}
+			// Unread filter
+			if (filter === "unread") {
+				conditions.push(sql`${whatsappConversations.unreadCount} != '0'`);
+			}
 
 				// Get paginated results
 				const offset = (page - 1) * limit;
@@ -212,22 +212,22 @@ export const whatsappRouter = router({
 					throw new Error(sendResult.error || "Failed to send message");
 				}
 
-				// Save message to database
-				const newMessage: InsertWhatsappMessage = {
-					kapsoMessageId: sendResult.messageId,
-					conversationId,
-					content: message,
-					direction: "outbound",
-					status: "sent",
-					agentId,
-					isAutoReply: false,
-					sentAt: new Date(),
-				};
+			// Save message to database
+			const newMessage = {
+				kapsoMessageId: sendResult.messageId,
+				conversationId,
+				content: message,
+				direction: "outbound" as const,
+				status: "sent" as const,
+				agentId,
+				isAutoReply: false,
+				sentAt: new Date(),
+			};
 
-				const [savedMessage] = await db
-					.insert(whatsappMessages)
-					.values(newMessage)
-					.returning();
+			const [savedMessage] = await db
+				.insert(whatsappMessages)
+				.values(newMessage)
+				.returning();
 
 				// Update conversation
 				await db

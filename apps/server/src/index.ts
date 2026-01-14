@@ -163,7 +163,7 @@ app.post("/webhook/kapso", async (c) => {
 		} else {
 			return c.json(
 				{ success: false, error: result.error },
-				result.statusCode || 400,
+				// result.statusCode || 400,
 			);
 		}
 	} catch (error: any) {
@@ -174,6 +174,127 @@ app.post("/webhook/kapso", async (c) => {
 		);
 	}
 });
+// Test endpoint to send first message (initiates conversation)
+app.post("/test/send-first-message", async (c) => {
+	try {
+		const { phoneNumber, message } = await c.req.json();
+		
+		if (!phoneNumber) {
+			return c.json({ error: "phoneNumber is required" }, 400);
+		}
+
+		const { getKapsoClient } = await import("./lib/kapso");
+		const kapsoClient = getKapsoClient();
+
+		if (!kapsoClient) {
+			return c.json({ error: "Kapso client not configured" }, 500);
+		}
+
+		// Format phone number (ensure it starts with + and remove any double plus)
+		let formattedPhone = phoneNumber.trim();
+		// Remove any double plus signs
+		formattedPhone = formattedPhone.replace(/^\+\+/, "+");
+		// Ensure it starts with +
+		if (!formattedPhone.startsWith("+")) {
+			formattedPhone = `+${formattedPhone}`;
+		}
+		const messageText = message || "Hello! This is a test message from your WhatsApp Business account. You can now reply to this message.";
+
+		console.log(`📤 Sending first message to ${formattedPhone}...`);
+		
+		const result = await kapsoClient.sendMessage({
+			to: formattedPhone,
+			message: messageText,
+		});
+
+		if (result.success) {
+			return c.json({
+				success: true,
+				message: "First message sent successfully!",
+				messageId: result.messageId,
+				note: "The recipient can now reply to this message within 24 hours.",
+			});
+		} else {
+			return c.json({
+				success: false,
+				error: result.error || "Failed to send message",
+			}, 500);
+		}
+	} catch (error: any) {
+		console.error("❌ Test send message error:", error);
+		return c.json(
+			{ success: false, error: error.message || "Failed to send test message" },
+			500,
+		);
+	}
+});
+
+// Debug endpoint to test Kapso API connection
+app.get("/test/kapso-connection", async (c) => {
+	try {
+		const { getKapsoClient } = await import("./lib/kapso");
+		const kapsoClient = getKapsoClient();
+
+		if (!kapsoClient) {
+			return c.json({ 
+				error: "Kapso client not configured",
+				hint: "Check KAPSO_API_KEY in .env file"
+			}, 500);
+		}
+
+		// Get the API URL being used
+		const apiUrl = process.env.KAPSO_API_URL || "https://api.kapso.ai";
+		
+		// Test different endpoints (Kapso uses /meta/whatsapp/v24.0 as base)
+		const testEndpoints = [
+			`${apiUrl}/meta/whatsapp/v24.0/messages`,
+			`${apiUrl}/v1/messages`,
+			`${apiUrl}/api/v1/messages`,
+			`${apiUrl}/messages`,
+			`${apiUrl}/health`,
+			`${apiUrl}/api/health`,
+		];
+
+		const results = [];
+
+		for (const endpoint of testEndpoints) {
+			try {
+				const response = await fetch(endpoint, {
+					method: "GET",
+					headers: {
+						"Authorization": `Bearer ${process.env.KAPSO_API_KEY}`,
+					},
+				});
+				results.push({
+					endpoint,
+					status: response.status,
+					statusText: response.statusText,
+					reachable: true,
+				});
+			} catch (error: any) {
+				results.push({
+					endpoint,
+					reachable: false,
+					error: error.message,
+					code: error.code,
+				});
+			}
+		}
+
+		return c.json({
+			apiUrl,
+			apiKeySet: !!process.env.KAPSO_API_KEY,
+			apiKeyLength: process.env.KAPSO_API_KEY?.length || 0,
+			testResults: results,
+			recommendation: "Check your Kapso dashboard for the correct API URL and update KAPSO_API_URL in .env",
+		});
+	} catch (error: any) {
+		return c.json({
+			error: error.message || "Failed to test connection",
+		}, 500);
+	}
+});
+
 app.get("/.well-known/health", (c) => c.json({ status: "ok" }));
 
 // Debug endpoint to check auth configuration
@@ -350,6 +471,9 @@ if (isBunRuntime) {
 	}
 
 	// Start server with retry logic for hot reload
+	let retryCount = 0;
+	const MAX_RETRIES = 10; // Maximum 10 retries (5 seconds total)
+	
 	const startServer = () => {
 		if (globalServer.serverStopping) {
 			// Wait a bit and retry
@@ -366,6 +490,7 @@ if (isBunRuntime) {
 
 			// Store server reference for hot reload
 			globalServer.server = server;
+			retryCount = 0; // Reset retry count on success
 
 			console.log(`✅ Development server started successfully on port ${port}`);
 			console.log(`🌐 Server accessible at http://localhost:${port}`);
@@ -387,12 +512,23 @@ if (isBunRuntime) {
 			});
 		} catch (error: any) {
 			// If port is in use, wait and retry (common during hot reload)
-			if (error?.code === "EADDRINUSE" || error?.message?.includes("port") || error?.message?.includes("in use")) {
-				console.warn(`⚠️ Port ${port} is in use, retrying in 500ms...`);
+			if ((error?.code === "EADDRINUSE" || error?.message?.includes("port") || error?.message?.includes("in use")) && retryCount < MAX_RETRIES) {
+				retryCount++;
+				console.warn(`⚠️ Port ${port} is in use, retrying (${retryCount}/${MAX_RETRIES})...`);
 				setTimeout(startServer, 500);
+			} else if (retryCount >= MAX_RETRIES) {
+				console.error(`❌ Failed to start server after ${MAX_RETRIES} retries. Port ${port} is still in use.`);
+				console.error("💡 Solutions:");
+				console.error(`   1. Kill the process using port ${port}:`);
+				console.error(`      netstat -ano | findstr :${port}`);
+				console.error(`      taskkill /PID <PID> /F`);
+				console.error(`   2. Or use a different port by setting PORT environment variable`);
+				console.error(`   3. Or wait a few seconds and try again`);
+				process.exit(1);
 			} else {
 				console.error("❌ Failed to start development server:", error);
 				console.error("💡 Tip: Run 'netstat -ano | findstr :8080' to find the process, then 'taskkill /PID <PID> /F' to kill it");
+				process.exit(1);
 			}
 		}
 	};
