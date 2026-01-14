@@ -357,14 +357,40 @@ export default function CRMPage() {
 		deleteProspectMutation.mutate({ id: prospectToDelete.id });
 	};
 
-	// Stage change handler (for Kanban drag-and-drop)
+	// Stage change handler (for Kanban drag-and-drop) with optimistic updates
 	const updateStageMutation = trpc.crm.updateStage.useMutation({
-		onSuccess: () => {
-			toast.success("Stage updated successfully!");
-			queryClient.invalidateQueries({ queryKey: [["crm", "list"]] });
-			refetchProspects();
+		onMutate: async (variables) => {
+			// Cancel any outgoing refetches (so they don't overwrite our optimistic update)
+			await queryClient.cancelQueries({ queryKey: [["crm", "list"]] });
+
+			// Snapshot the previous value
+			const previousData = queryClient.getQueryData([["crm", "list"]]);
+
+			// Optimistically update the cache - move prospect to new stage immediately
+			queryClient.setQueryData([["crm", "list"]], (old: any) => {
+				if (!old?.prospects) return old;
+				return {
+					...old,
+					prospects: old.prospects.map((p: Prospect) =>
+						p.id === variables.id
+							? { ...p, stage: variables.stage, updatedAt: new Date().toISOString() }
+							: p
+					),
+				};
+			});
+
+			// Return context with the snapshotted value for rollback
+			return { previousData };
 		},
-		onError: (error) => {
+		onSuccess: () => {
+			// Silently sync with server (no toast for drag-and-drop to avoid spam)
+			queryClient.invalidateQueries({ queryKey: [["crm", "list"]] });
+		},
+		onError: (error, variables, context) => {
+			// Rollback optimistic update on error
+			if (context?.previousData) {
+				queryClient.setQueryData([["crm", "list"]], context.previousData);
+			}
 			console.error("Error updating stage:", error);
 			toast.error("Failed to update stage. Please try again.");
 		},
