@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -67,12 +67,49 @@ export function KanbanBoard({
 	onClaimLead,
 }: KanbanBoardProps) {
 	const [draggedProspect, setDraggedProspect] = useState<Prospect | null>(null);
+	const [optimisticUpdates, setOptimisticUpdates] = useState<Map<string, PipelineStage>>(new Map());
 
-	// Group prospects by stage
+	// Merge optimistic updates with actual prospects data
+	const mergedProspects = prospects.map((p) => {
+		const optimisticStage = optimisticUpdates.get(p.id);
+		return optimisticStage ? { ...p, stage: optimisticStage } : p;
+	});
+
+	// Group prospects by stage (including optimistic updates)
 	const prospectsByStage = PIPELINE_STAGES.reduce((acc, stage) => {
-		acc[stage.id] = prospects.filter((p) => p.stage === stage.id);
+		acc[stage.id] = mergedProspects.filter((p) => p.stage === stage.id);
 		return acc;
 	}, {} as Record<PipelineStage, Prospect[]>);
+
+	// Clean up optimistic updates when server data syncs
+	// This ensures optimistic updates don't persist after the server has confirmed the change
+	useEffect(() => {
+		setOptimisticUpdates((prev) => {
+			const next = new Map(prev);
+			let changed = false;
+			
+			// Clear optimistic updates for prospects whose stage matches server data
+			for (const [id, optimisticStage] of next) {
+				const serverProspect = prospects.find((p) => p.id === id);
+				if (serverProspect && serverProspect.stage === optimisticStage) {
+					// Server has confirmed the change, clear optimistic update
+					next.delete(id);
+					changed = true;
+				}
+			}
+			
+			// Also clear optimistic updates for prospects that no longer exist
+			const prospectIds = new Set(prospects.map((p) => p.id));
+			for (const [id] of next) {
+				if (!prospectIds.has(id)) {
+					next.delete(id);
+					changed = true;
+				}
+			}
+			
+			return changed ? next : prev;
+		});
+	}, [prospects]);
 
 	const handleDragStart = (e: React.DragEvent, prospect: Prospect) => {
 		setDraggedProspect(prospect);
@@ -87,7 +124,19 @@ export function KanbanBoard({
 	const handleDrop = (e: React.DragEvent, targetStage: PipelineStage) => {
 		e.preventDefault();
 		if (draggedProspect && draggedProspect.stage !== targetStage) {
+			// Optimistically update UI immediately (before backend call)
+			// This provides instant visual feedback while the mutation is in progress
+			setOptimisticUpdates((prev) => {
+				const next = new Map(prev);
+				next.set(draggedProspect.id, targetStage);
+				return next;
+			});
+
+			// Call backend mutation (which will also update query cache optimistically)
 			onStageChange(draggedProspect.id, targetStage);
+
+			// Clear optimistic update when query data updates (handled by query cache)
+			// The optimistic update will be replaced by the actual data from the server
 		}
 		setDraggedProspect(null);
 	};

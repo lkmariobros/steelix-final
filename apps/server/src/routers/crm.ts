@@ -206,12 +206,12 @@ export const crmRouter = router({
 		.mutation(async ({ input, ctx }) => {
 			const agentId = ctx.session.user.id;
 
-		// If it's a company lead, agentId can be null (unclaimed)
-		// Otherwise, set agentId for personal leads
-		const newProspect: InsertProspect & { agentId?: string | null } = {
-			...input,
-			agentId: input.leadType === "company" ? null : agentId,
-		};
+			// If it's a company lead, agentId can be null (unclaimed)
+			// Otherwise, set agentId for personal leads
+			const newProspect: InsertProspect & { agentId?: string | null } = {
+				...input,
+				agentId: input.leadType === "company" ? null : agentId,
+			};
 
 			const [created] = await db
 				.insert(prospects)
