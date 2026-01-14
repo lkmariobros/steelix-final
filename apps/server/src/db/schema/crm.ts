@@ -101,6 +101,49 @@ export const prospectNotes = pgTable(
 	}),
 );
 
+// Master tags table (admin-managed)
+export const crmTags = pgTable(
+	"crm_tags",
+	{
+		id: uuid("id").primaryKey().defaultRandom(),
+		name: text("name").notNull().unique(), // Tag name, e.g., "[ads lead] breeze hill"
+		// Admin who created the tag
+		createdBy: text("created_by")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+		updatedAt: timestamp("updated_at").defaultNow().notNull(),
+	},
+	(table) => ({
+		nameIdx: index("idx_crm_tags_name").on(table.name),
+		createdByIdx: index("idx_crm_tags_created_by").on(table.createdBy),
+	}),
+);
+
+// Junction table for many-to-many relationship between prospects and tags
+export const prospectTags = pgTable(
+	"prospect_tags",
+	{
+		id: uuid("id").primaryKey().defaultRandom(),
+		prospectId: uuid("prospect_id")
+			.notNull()
+			.references(() => prospects.id, { onDelete: "cascade" }),
+		tagId: uuid("tag_id")
+			.notNull()
+			.references(() => crmTags.id, { onDelete: "cascade" }),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+	},
+	(table) => ({
+		prospectIdIdx: index("idx_prospect_tags_prospect_id").on(table.prospectId),
+		tagIdIdx: index("idx_prospect_tags_tag_id").on(table.tagId),
+		// Unique constraint: a prospect can only have a tag once
+		uniqueProspectTag: index("idx_prospect_tags_unique").on(
+			table.prospectId,
+			table.tagId,
+		),
+	}),
+);
+
 // Zod schemas for validation
 export const prospectTypeSchema = z.enum(["tenant", "owner"]);
 export const propertyTypeSchema = z.enum([
@@ -172,6 +215,34 @@ export const selectProspectNoteSchema = insertProspectNoteSchema.extend({
 	createdAt: z.date(),
 });
 
+// Master tags schemas
+export const insertCrmTagSchema = z.object({
+	name: z.string().min(1, "Tag name is required"),
+});
+
+export const selectCrmTagSchema = z.object({
+	id: z.string().uuid(),
+	name: z.string(),
+	createdBy: z.string(),
+	createdAt: z.date(),
+	updatedAt: z.date(),
+});
+
+export const updateCrmTagSchema = insertCrmTagSchema.partial().extend({
+	id: z.string().uuid(),
+});
+
+// Prospect tags junction schemas
+export const insertProspectTagSchema = z.object({
+	prospectId: z.string().uuid(),
+	tagId: z.string().uuid(),
+});
+
+export const selectProspectTagSchema = insertProspectTagSchema.extend({
+	id: z.string().uuid(),
+	createdAt: z.date(),
+});
+
 // TypeScript types
 export type ProspectType = z.infer<typeof prospectTypeSchema>;
 export type PropertyType = z.infer<typeof propertyTypeSchema>;
@@ -183,3 +254,8 @@ export type SelectProspect = z.infer<typeof selectProspectSchema>;
 export type UpdateProspect = z.infer<typeof updateProspectSchema>;
 export type InsertProspectNote = z.infer<typeof insertProspectNoteSchema>;
 export type SelectProspectNote = z.infer<typeof selectProspectNoteSchema>;
+export type InsertCrmTag = z.infer<typeof insertCrmTagSchema>;
+export type SelectCrmTag = z.infer<typeof selectCrmTagSchema>;
+export type UpdateCrmTag = z.infer<typeof updateCrmTagSchema>;
+export type InsertProspectTag = z.infer<typeof insertProspectTagSchema>;
+export type SelectProspectTag = z.infer<typeof selectProspectTagSchema>;

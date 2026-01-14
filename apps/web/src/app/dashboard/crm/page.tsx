@@ -71,6 +71,7 @@ import {
 	RiAlertLine,
 } from "@remixicon/react";
 import { KanbanBoard, type PipelineStage } from "@/components/crm-kanban-board";
+import { TagSelector } from "@/components/tag-selector";
 
 // Pipeline stages for Kanban board
 type LeadType = "personal" | "company";
@@ -88,7 +89,9 @@ interface Prospect {
 	status: "active" | "inactive" | "pending";
 	stage: PipelineStage; // New: Pipeline stage for Kanban
 	leadType: LeadType; // New: Personal or company lead
-	tags: string | null; // New: Comma-separated tags
+	tags: string | null; // Old: Comma-separated tags (kept for backward compatibility)
+	tagIds?: string[]; // New: Array of tag IDs (optional for backward compatibility)
+	tagNames?: string[]; // New: Array of tag names (optional for backward compatibility)
 	lastContact: Date | string | null;
 	nextContact: Date | string | null;
 	agentId: string | null; // Can be null for unclaimed company leads
@@ -127,7 +130,7 @@ const prospectFormSchema = z.object({
 	}),
 	stage: z.enum(["prospect", "outreach", "discovery", "proposal", "negotiation", "closed_won", "closed_lost"]).default("prospect").optional(),
 	leadType: z.enum(["personal", "company"]).default("personal").optional(),
-	tags: z.string().optional(),
+	tagIds: z.array(z.string().uuid()).optional(),
 });
 
 type ProspectFormValues = z.infer<typeof prospectFormSchema>;
@@ -714,22 +717,22 @@ export default function CRMPage() {
 									{/* Tags */}
 									<FormField
 										control={form.control}
-										name="tags"
+										name="tagIds"
 										render={({ field }) => (
 											<FormItem>
 												<FormLabel>
 													Tags
 												</FormLabel>
 												<FormControl>
-													<Input
-														placeholder="e.g., [ads lead] breeze hill, VIP, Investor"
-														{...field}
-														value={field.value || ""}
+													<TagSelector
+														value={field.value || []}
+														onChange={field.onChange}
+														placeholder="Select tags..."
 													/>
 												</FormControl>
 												<FormMessage />
 												<p className="text-xs text-muted-foreground">
-													Enter tags separated by commas to categorize this prospect by project.
+													Select tags from the master list to categorize this prospect by project.
 												</p>
 											</FormItem>
 										)}
@@ -779,7 +782,7 @@ export default function CRMPage() {
 							{selectedProspect && (
 								<div className="space-y-6 py-4">
 									{/* Name Section */}
-									<div className="space-y-2">
+									<div className="space-y-2" style={{ marginBottom: "15px" }}>
 										<div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
 											<RiUserLine className="size-4" />
 											Full Name
@@ -790,7 +793,7 @@ export default function CRMPage() {
 									</div>
 
 									{/* Contact Information */}
-									<div className="space-y-3">
+									<div className="space-y-3" style={{ marginBottom: "15px" }}>
 										<div className="text-sm font-medium text-muted-foreground">
 											Contact Information
 										</div>
@@ -817,7 +820,7 @@ export default function CRMPage() {
 									</div>
 
 									{/* Prospect Details */}
-									<div className="space-y-3">
+									<div className="space-y-3" style={{ marginBottom: "15px" }}>
 										<div className="text-sm font-medium text-muted-foreground">
 											Prospect Details
 										</div>
@@ -842,21 +845,29 @@ export default function CRMPage() {
 														: "Owner"}
 												</Badge>
 											</div>
-											{selectedProspect.tags && (
+											{(selectedProspect.tagNames && selectedProspect.tagNames.length > 0) || (selectedProspect.tags && selectedProspect.tags.trim()) ? (
 												<div className="flex items-center justify-between">
 													<div className="flex items-center gap-2 text-sm text-muted-foreground">
 														<RiPriceTagLine className="size-4" />
 														Tags
 													</div>
 													<div className="flex flex-wrap gap-2">
-														{selectedProspect.tags.split(",").map((tag, idx) => (
-															<Badge key={idx} variant="secondary" className="text-xs">
-																{tag.trim()}
-															</Badge>
-														))}
+														{selectedProspect.tagNames && selectedProspect.tagNames.length > 0
+															? selectedProspect.tagNames.map((tag, idx) => (
+																	<Badge key={idx} variant="secondary" className="text-xs">
+																		{tag}
+																	</Badge>
+																))
+															: selectedProspect.tags
+																? selectedProspect.tags.split(",").map((tag, idx) => (
+																		<Badge key={idx} variant="secondary" className="text-xs">
+																			{tag.trim()}
+																		</Badge>
+																	))
+																: null}
 													</div>
 												</div>
-											)}
+											) : null}
 											{selectedProspect.agentName && (
 												<div className="flex items-center justify-between">
 													<div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -942,7 +953,7 @@ export default function CRMPage() {
 										<div className="text-sm font-medium text-muted-foreground">
 											Notes & Timeline
 										</div>
-										<div className="space-y-3 rounded-lg border bg-muted/30 p-4 max-h-64 overflow-y-auto">
+										<div className="space-y-3 rounded-lg border bg-muted/30 p-4 max-h-64 overflow-y-auto" style={{ height: "100px" }}>
 											{notes.length === 0 ? (
 												<div className="text-sm text-muted-foreground text-center py-4">
 													No notes yet. Add a note to track interactions.
@@ -1285,15 +1296,23 @@ export default function CRMPage() {
 													</div>
 
 													{/* Tags */}
-													{prospect.tags && (
+													{(prospect.tagNames && prospect.tagNames.length > 0) || (prospect.tags && prospect.tags.trim()) ? (
 														<div className="flex flex-wrap items-center gap-2">
-															{prospect.tags.split(",").map((tag, idx) => (
-																<Badge key={idx} variant="secondary" className="text-xs">
-																	{tag.trim()}
-																</Badge>
-															))}
+															{prospect.tagNames && prospect.tagNames.length > 0
+																? prospect.tagNames.map((tag, idx) => (
+																		<Badge key={idx} variant="secondary" className="text-xs">
+																			{tag}
+																		</Badge>
+																	))
+																: prospect.tags
+																	? prospect.tags.split(",").map((tag, idx) => (
+																			<Badge key={idx} variant="secondary" className="text-xs">
+																				{tag.trim()}
+																			</Badge>
+																		))
+																	: null}
 														</div>
-													)}
+													) : null}
 
 													{/* Details */}
 													<div className="flex flex-wrap items-center gap-4 text-sm">
