@@ -1,4 +1,4 @@
-import { and, desc, eq, ilike, or, sql } from "drizzle-orm";
+import { and, desc, eq, ilike, or, sql, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../db";
 import {
@@ -45,14 +45,18 @@ export const whatsappRouter = router({
 				const { search, filter, page, limit } = input;
 				const agentId = ctx.session.user.id;
 
+				console.log("🔍 WhatsApp list query - agentId:", agentId);
+
 				// Build where conditions
 				const conditions = [
 					// Only show conversations assigned to this agent or unassigned
 					or(
 						eq(whatsappConversations.assignedAgentId, agentId),
-						eq(whatsappConversations.assignedAgentId, null as any),
+						isNull(whatsappConversations.assignedAgentId),
 					)!,
 				];
+
+				console.log("🔍 WhatsApp list query - conditions:", conditions.length);
 
 				// Search filter
 				if (search) {
@@ -80,6 +84,17 @@ export const whatsappRouter = router({
 					.orderBy(desc(whatsappConversations.lastMessageAt))
 					.limit(limit)
 					.offset(offset);
+
+				console.log("🔍 WhatsApp list query - found conversations:", conversations.length);
+				if (conversations.length > 0) {
+					console.log("🔍 First conversation:", {
+						id: conversations[0].id,
+						contactName: conversations[0].contactName,
+						contactPhone: conversations[0].contactPhone,
+						assignedAgentId: conversations[0].assignedAgentId,
+						lastMessage: conversations[0].lastMessage,
+					});
+				}
 
 				// Get total count
 				const total = conversations.length; // Simplified - in production, use COUNT query
@@ -119,7 +134,7 @@ export const whatsappRouter = router({
 					eq(whatsappConversations.id, id),
 					or(
 						eq(whatsappConversations.assignedAgentId, agentId),
-						eq(whatsappConversations.assignedAgentId, null as any),
+						isNull(whatsappConversations.assignedAgentId),
 					)!,
 				),
 			)
@@ -178,7 +193,7 @@ export const whatsappRouter = router({
 							eq(whatsappConversations.id, conversationId),
 							or(
 								eq(whatsappConversations.assignedAgentId, agentId),
-								eq(whatsappConversations.assignedAgentId, null as any),
+								isNull(whatsappConversations.assignedAgentId),
 							)!,
 						),
 					)
@@ -212,22 +227,33 @@ export const whatsappRouter = router({
 					throw new Error(sendResult.error || "Failed to send message");
 				}
 
-			// Save message to database
-			const newMessage = {
-				kapsoMessageId: sendResult.messageId,
-				conversationId,
-				content: message,
-				direction: "outbound" as const,
-				status: "sent" as const,
-				agentId,
-				isAutoReply: false,
-				sentAt: new Date(),
-			};
+				console.log("💾 Saving sent message to database:", {
+					conversationId,
+					messageLength: message.length,
+					kapsoMessageId: sendResult.messageId,
+				});
 
-			const [savedMessage] = await db
-				.insert(whatsappMessages)
-				.values(newMessage)
-				.returning();
+				// Save message to database
+				const newMessage = {
+					kapsoMessageId: sendResult.messageId || undefined,
+					conversationId,
+					content: message,
+					direction: "outbound" as const,
+					status: "sent" as const,
+					agentId,
+					isAutoReply: false,
+					sentAt: new Date(),
+				};
+
+				const [savedMessage] = await db
+					.insert(whatsappMessages)
+					.values(newMessage)
+					.returning();
+
+				console.log("✅ Sent message saved successfully:", {
+					messageId: savedMessage.id,
+					conversationId: savedMessage.conversationId,
+				});
 
 				// Update conversation
 				await db

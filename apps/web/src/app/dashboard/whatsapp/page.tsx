@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -115,8 +115,9 @@ export default function WhatsAppPage() {
 		{
 			enabled: !!session,
 			retry: 1,
-			staleTime: 10000, // 10 seconds - refresh more frequently for real-time feel
-			refetchInterval: 30000, // Auto-refresh every 30 seconds
+			staleTime: 2000, // 2 seconds - refresh more frequently for real-time feel
+			refetchInterval: 5000, // Auto-refresh every 5 seconds to catch new messages quickly
+			refetchOnWindowFocus: true, // Refetch when user returns to the tab
 		},
 	);
 
@@ -137,25 +138,70 @@ export default function WhatsAppPage() {
 		{
 			enabled: !!selectedConversationId && !!session,
 			retry: 1,
-			staleTime: 5000, // 5 seconds
-			refetchInterval: 10000, // Auto-refresh every 10 seconds when conversation is open
+			staleTime: 3000, // 3 seconds - very fresh for active conversation
+			refetchInterval: 8000, // Auto-refresh every 8 seconds when conversation is open
 		},
 	);
 
 	const selectedConversation = conversationData || null;
+	const messagesEndRef = useRef<HTMLDivElement>(null);
+
+	// Auto-scroll to bottom when new messages arrive
+	useEffect(() => {
+		if (messagesEndRef.current && selectedConversation?.messages) {
+			messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+		}
+	}, [selectedConversation?.messages]);
 
 	// Send message mutation
 	const sendMessageMutation = trpc.whatsapp.send.useMutation({
+		onMutate: async (newMessage) => {
+			// Cancel any outgoing refetches to avoid overwriting optimistic update
+			await queryClient.cancelQueries({ queryKey: [["whatsapp", "get", { id: newMessage.conversationId }]] });
+
+			// Snapshot the previous value
+			const previousConversation = queryClient.getQueryData([
+				["whatsapp", "get", { id: newMessage.conversationId }],
+			]);
+
+			// Optimistically update the conversation with the new message
+			queryClient.setQueryData(
+				[["whatsapp", "get", { id: newMessage.conversationId }]],
+				(old: any) => {
+					if (!old) return old;
+					const optimisticMessage = {
+						id: `temp-${Date.now()}`,
+						text: newMessage.message,
+						timestamp: new Date().toISOString(),
+						sender: "agent" as const,
+						read: false,
+					};
+					return {
+						...old,
+						messages: [...(old.messages || []), optimisticMessage],
+					};
+				},
+			);
+
+			return { previousConversation };
+		},
 		onSuccess: (data) => {
 			toast.success("Message sent successfully!");
 			setMessageInput("");
-			// Invalidate and refetch conversations and current conversation
+			// Invalidate and refetch to get the real message from server
 			queryClient.invalidateQueries({ queryKey: [["whatsapp", "list"]] });
 			queryClient.invalidateQueries({ queryKey: [["whatsapp", "get"]] });
 			refetchConversations();
 			refetchConversation();
 		},
-		onError: (error) => {
+		onError: (error, variables, context) => {
+			// Rollback optimistic update on error
+			if (context?.previousConversation) {
+				queryClient.setQueryData(
+					[["whatsapp", "get", { id: variables.conversationId }]],
+					context.previousConversation,
+				);
+			}
 			console.error("Error sending message:", error);
 			toast.error(error.message || "Failed to send message. Please try again.");
 		},
@@ -182,6 +228,15 @@ export default function WhatsAppPage() {
 			handleSendMessage();
 		}
 	};
+
+	// Scroll to bottom when new messages arrive or after sending
+	useEffect(() => {
+		if (messagesEndRef.current && selectedConversation?.messages) {
+			setTimeout(() => {
+				messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+			}, 100);
+		}
+	}, [selectedConversation?.messages, sendMessageMutation.isSuccess]);
 
 	const handleSelectConversation = (conversationId: string) => {
 		setSelectedConversationId(conversationId);
@@ -244,6 +299,18 @@ export default function WhatsAppPage() {
 						<div className="flex items-center justify-between border-b p-4">
 							<h2 className="font-semibold text-lg">WhatsApp Inbox</h2>
 							<div className="flex items-center gap-2">
+								<Button
+									variant="ghost"
+									size="sm"
+									onClick={() => {
+										refetchConversations();
+										toast.success("Refreshing conversations...");
+									}}
+									disabled={isLoadingConversations}
+									title="Refresh conversations"
+								>
+									<RiLoader4Line className={`h-4 w-4 ${isLoadingConversations ? "animate-spin" : ""}`} />
+								</Button>
 								<Button variant="ghost" size="sm">
 									<RiSettings3Line className="h-4 w-4" />
 								</Button>
@@ -388,47 +455,50 @@ export default function WhatsAppPage() {
 								<ScrollArea className="flex-1 p-4">
 									<div className="flex flex-col gap-4">
 										{selectedConversation.messages && selectedConversation.messages.length > 0 ? (
-											selectedConversation.messages.map((message) => (
-												<div
-													key={message.id}
-													className={`flex ${
-														message.sender === "agent"
-															? "justify-end"
-															: "justify-start"
-													}`}
-												>
+											<>
+												{selectedConversation.messages.map((message) => (
 													<div
-														className={`max-w-[70%] rounded-lg px-4 py-2 ${
+														key={message.id}
+														className={`flex ${
 															message.sender === "agent"
-																? "bg-primary text-primary-foreground"
-																: "bg-muted"
+																? "justify-end"
+																: "justify-start"
 														}`}
 													>
-														<div className="text-sm">{message.text}</div>
 														<div
-															className={`mt-1 flex items-center gap-1 text-xs ${
+															className={`max-w-[70%] rounded-lg px-4 py-2 ${
 																message.sender === "agent"
-																	? "text-primary-foreground/70"
-																	: "text-muted-foreground"
+																	? "bg-primary text-primary-foreground"
+																	: "bg-muted"
 															}`}
 														>
-															<span>{formatTimestamp(message.timestamp)}</span>
-															{message.sender === "agent" && (
-																<>
-																	{message.read ? (
-																		<RiCheckDoubleLine className="size-3 text-blue-400" />
-																	) : (
-																		<RiCheckDoubleLine className="size-3" />
-																	)}
-																	{message.read && (
-																		<span className="text-[10px]">Read</span>
-																	)}
-																</>
-															)}
+															<div className="text-sm">{message.text}</div>
+															<div
+																className={`mt-1 flex items-center gap-1 text-xs ${
+																	message.sender === "agent"
+																		? "text-primary-foreground/70"
+																		: "text-muted-foreground"
+																}`}
+															>
+																<span>{formatTimestamp(message.timestamp)}</span>
+																{message.sender === "agent" && (
+																	<>
+																		{message.read ? (
+																			<RiCheckDoubleLine className="size-3 text-blue-400" />
+																		) : (
+																			<RiCheckDoubleLine className="size-3" />
+																		)}
+																		{message.read && (
+																			<span className="text-[10px]">Read</span>
+																		)}
+																	</>
+																)}
+															</div>
 														</div>
 													</div>
-												</div>
-											))
+												))}
+												<div ref={messagesEndRef} />
+											</>
 										) : (
 											<div className="text-center py-12 text-muted-foreground">
 												<RiMessageLine className="mx-auto mb-2 size-8" />
