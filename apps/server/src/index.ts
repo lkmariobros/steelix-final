@@ -149,31 +149,43 @@ app.get("/healthz", (c) => c.text("OK"));
 app.get("/ping", (c) => c.text("pong"));
 
 // Kapso WhatsApp Webhook - receives incoming messages from Kapso
-app.post("/webhook/kapso", async (c) => {
+// Support multiple webhook paths that Kapso might use
+const handleKapsoWebhookRequest = async (c: any) => {
 	try {
 		const body = await c.req.json();
-		console.log("📨 Kapso webhook received:", JSON.stringify(body, null, 2));
+		console.log("📨 Kapso webhook received at:", c.req.path);
+		console.log("📨 Webhook payload:", JSON.stringify(body, null, 2));
 
 		// Import webhook handler (dynamic import to avoid circular dependencies)
 		const { handleKapsoWebhook } = await import("./lib/kapso-webhook");
 		const result = await handleKapsoWebhook(body);
 
 		if (result.success) {
+			console.log("✅ Webhook processed successfully");
 			return c.json({ success: true, message: "Webhook processed" }, 200);
 		} else {
+			console.error("❌ Webhook processing failed:", result.error);
 			return c.json(
 				{ success: false, error: result.error },
-				// result.statusCode || 400,
+				result.statusCode || 400,
 			);
 		}
 	} catch (error: any) {
 		console.error("❌ Kapso webhook error:", error);
+		console.error("❌ Error stack:", error.stack);
 		return c.json(
 			{ success: false, error: error.message || "Webhook processing failed" },
 			500,
 		);
 	}
-});
+};
+
+// Register webhook endpoints for different Kapso webhook URL formats
+// Kapso is calling: /webhooks/kapso/whatsapp (plural "webhooks" with "/whatsapp" suffix)
+app.post("/webhook/kapso", handleKapsoWebhookRequest);
+app.post("/webhooks/kapso", handleKapsoWebhookRequest);
+app.post("/webhooks/kapso/whatsapp", handleKapsoWebhookRequest); // This is what Kapso is calling!
+app.post("/webhook/kapso/whatsapp", handleKapsoWebhookRequest);
 // Test endpoint to send first message (initiates conversation)
 app.post("/test/send-first-message", async (c) => {
 	try {
@@ -226,6 +238,51 @@ app.post("/test/send-first-message", async (c) => {
 			{ success: false, error: error.message || "Failed to send test message" },
 			500,
 		);
+	}
+});
+
+// Debug endpoint to check WhatsApp conversations in database
+app.get("/debug/whatsapp-conversations", async (c) => {
+	try {
+		const { db } = await import("./db");
+		const { whatsappConversations, whatsappMessages } = await import("./db/schema/whatsapp");
+		
+		const allConversations = await db
+			.select()
+			.from(whatsappConversations)
+			.limit(20);
+		
+		const allMessages = await db
+			.select()
+			.from(whatsappMessages)
+			.limit(20);
+		
+		return c.json({
+			conversationsCount: allConversations.length,
+			conversations: allConversations.map((conv) => ({
+				id: conv.id,
+				kapsoContactId: conv.kapsoContactId,
+				contactName: conv.contactName,
+				contactPhone: conv.contactPhone,
+				assignedAgentId: conv.assignedAgentId,
+				lastMessage: conv.lastMessage,
+				unreadCount: conv.unreadCount,
+				lastMessageAt: conv.lastMessageAt,
+				createdAt: conv.createdAt,
+			})),
+			messagesCount: allMessages.length,
+			messages: allMessages.map((msg) => ({
+				id: msg.id,
+				conversationId: msg.conversationId,
+				content: msg.content,
+				direction: msg.direction,
+				status: msg.status,
+				sentAt: msg.sentAt,
+			})),
+		});
+	} catch (error: any) {
+		console.error("❌ Error in /debug/whatsapp-conversations:", error);
+		return c.json({ error: error.message || "Failed to fetch conversations" }, 500);
 	}
 });
 
@@ -453,6 +510,21 @@ if (isBunRuntime) {
 		serverStopping?: boolean;
 	};
 	
+	// Helper function to check if port is available
+	const checkPortAvailable = async (port: number): Promise<boolean> => {
+		try {
+			const server = Bun.serve({
+				fetch: () => new Response("test"),
+				port,
+				hostname: "127.0.0.1",
+			});
+			server.stop();
+			return true;
+		} catch {
+			return false;
+		}
+	};
+
 	// Stop existing server if it exists (for hot reload)
 	if (globalServer.server && !globalServer.serverStopping) {
 		try {
@@ -460,10 +532,9 @@ if (isBunRuntime) {
 			globalServer.serverStopping = true;
 			globalServer.server.stop(true); // Force stop immediately
 			delete globalServer.server;
-			// Use setTimeout to delay server start (non-blocking)
-			setTimeout(() => {
-				globalServer.serverStopping = false;
-			}, 300);
+			// Wait longer for port to be released
+			await new Promise(resolve => setTimeout(resolve, 1000));
+			globalServer.serverStopping = false;
 		} catch (error) {
 			console.warn("⚠️ Error stopping existing server:", error);
 			globalServer.serverStopping = false;
@@ -472,12 +543,21 @@ if (isBunRuntime) {
 
 	// Start server with retry logic for hot reload
 	let retryCount = 0;
-	const MAX_RETRIES = 10; // Maximum 10 retries (5 seconds total)
+	const MAX_RETRIES = 15; // Increased to 15 retries (7.5 seconds total)
 	
-	const startServer = () => {
+	const startServer = async () => {
 		if (globalServer.serverStopping) {
 			// Wait a bit and retry
-			setTimeout(startServer, 200);
+			setTimeout(startServer, 300);
+			return;
+		}
+
+		// Check if port is available before trying to start
+		const portAvailable = await checkPortAvailable(Number(port));
+		if (!portAvailable && retryCount < MAX_RETRIES) {
+			retryCount++;
+			console.warn(`⚠️ Port ${port} is still in use, waiting... (${retryCount}/${MAX_RETRIES})`);
+			setTimeout(startServer, 500);
 			return;
 		}
 
@@ -524,6 +604,7 @@ if (isBunRuntime) {
 				console.error(`      taskkill /PID <PID> /F`);
 				console.error(`   2. Or use a different port by setting PORT environment variable`);
 				console.error(`   3. Or wait a few seconds and try again`);
+				console.error(`   4. Or stop the server and restart: Press Ctrl+C to stop`);
 				process.exit(1);
 			} else {
 				console.error("❌ Failed to start development server:", error);
@@ -580,6 +661,11 @@ if (isBunRuntime) {
 
 // Export the app for compatibility
 // Note: When using `bun run --hot`, Bun will try to auto-serve the default export
-// if it has a fetch method. We handle the server manually above, but Bun's hot reload
-// may still try to auto-serve. The manual server setup should take precedence.
-export default app;
+// if it has a fetch method. Since we're manually starting the server above with Bun.serve(),
+// we export a wrapper that prevents Bun from auto-serving by not having a fetch method
+// at the top level. The manual Bun.serve() call above handles the server.
+// This prevents the "port in use" error during hot reload.
+export default {
+	// Don't include fetch to prevent Bun's auto-serve
+	// The app is manually served via Bun.serve() above
+} as any;

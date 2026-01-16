@@ -9,6 +9,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { z } from "zod";
 import { user } from "./auth";
+import { prospects } from "./crm";
 
 // Message direction enum
 export const messageDirectionEnum = pgEnum("message_direction", [
@@ -39,6 +40,10 @@ export const whatsappConversations = pgTable(
 		assignedAgentId: text("assigned_agent_id").references(() => user.id, {
 			onDelete: "set null",
 		}),
+		// Link to CRM prospect (optional - for prospects that have WhatsApp conversations)
+		prospectId: uuid("prospect_id").references(() => prospects.id, {
+			onDelete: "set null",
+		}),
 		// Conversation metadata
 		lastMessage: text("last_message"),
 		lastMessageAt: timestamp("last_message_at"),
@@ -58,6 +63,9 @@ export const whatsappConversations = pgTable(
 		),
 		assignedAgentIdIdx: index("idx_whatsapp_conv_assigned_agent_id").on(
 			table.assignedAgentId,
+		),
+		prospectIdIdx: index("idx_whatsapp_conv_prospect_id").on(
+			table.prospectId,
 		),
 	}),
 );
