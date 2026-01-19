@@ -131,21 +131,55 @@ interface KapsoConfig {
 		  data?.message ||
 		  data?.error ||
 		  `HTTP ${res.status}`;
-  
+
+		console.error("❌ Kapso API error response:", {
+		  status: res.status,
+		  statusText: res.statusText,
+		  error: msg,
+		  data: data,
+		  url: url.substring(0, 100) + "...",
+		});
+
 		return {
 		  success: false,
 		  error: `Failed to send WhatsApp message: ${msg}`,
 		  raw: data,
 		};
 	  }
-  
+
+	  // Check if response contains error indicators even if HTTP status is OK
+	  if (data?.error || data?.errorMessage) {
+		const errorMsg = data?.error?.message || data?.errorMessage || data?.error;
+		console.error("❌ Kapso API returned error in response body:", {
+		  error: errorMsg,
+		  fullResponse: data,
+		});
+		return {
+		  success: false,
+		  error: `Kapso API error: ${errorMsg}`,
+		  raw: data,
+		};
+	  }
+
 	  // Meta-style response: { messages: [{ id: "..." }] }
 	  const messageId =
 		data?.messages?.[0]?.id ||
 		data?.message_id ||
 		data?.id ||
 		data?.messageId;
-  
+
+	  console.log("✅ Kapso API success response:", {
+		messageId: messageId || "none",
+		hasMessagesArray: !!data?.messages,
+		responseKeys: Object.keys(data || {}),
+		status: res.status,
+	  });
+
+	  // Warn if no messageId is returned (might indicate issue)
+	  if (!messageId) {
+		console.warn("⚠️ Kapso API returned success but no messageId. Response:", data);
+	  }
+
 	  return {
 		success: true,
 		messageId,

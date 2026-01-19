@@ -214,17 +214,82 @@ export const whatsappRouter = router({
 				// Send message via Kapso
 				const kapsoClient = getKapsoClient();
 				if (!kapsoClient) {
-					throw new Error("Kapso client not configured");
+					console.error("❌ Kapso client not configured - cannot send message");
+					throw new Error("Kapso client not configured. Please check KAPSO_API_KEY and KAPSO_PHONE_NUMBER_ID environment variables.");
 				}
 
-				const sendResult = await kapsoClient.sendMessage({
-					to: conversation.contactPhone,
-					message,
-					contactId: conversation.kapsoContactId,
+				// Normalize phone number to E.164 format (required by WhatsApp)
+				let phoneNumber = conversation.contactPhone.trim();
+				// Remove any double plus signs
+				phoneNumber = phoneNumber.replace(/^\+\+/, "+");
+				// Ensure it starts with +
+				if (!phoneNumber.startsWith("+")) {
+					phoneNumber = `+${phoneNumber}`;
+				}
+
+				console.log("📤 Attempting to send WhatsApp message:", {
+					originalPhone: conversation.contactPhone,
+					normalizedPhone: phoneNumber,
+					messageLength: message.length,
+					conversationId,
 				});
 
+				const sendResult = await kapsoClient.sendMessage({
+					to: phoneNumber,
+					message,
+				});
+
+				console.log("📤 Kapso sendMessage result:", {
+					success: sendResult.success,
+					messageId: sendResult.messageId,
+					error: sendResult.error,
+					raw: sendResult.raw ? JSON.stringify(sendResult.raw).substring(0, 300) : "none",
+				});
+
+				// CRITICAL: Only proceed if message was successfully sent
 				if (!sendResult.success) {
-					throw new Error(sendResult.error || "Failed to send message");
+					console.error("❌ Failed to send message via Kapso API:", {
+						error: sendResult.error,
+						raw: sendResult.raw,
+						phoneNumber,
+					});
+
+					// Handle specific WhatsApp Business API errors with user-friendly messages
+					const errorCode = sendResult.raw?.error?.code;
+					const errorMessage = sendResult.error || "Failed to send message";
+
+					if (errorCode === 131037 || errorMessage.includes("display name approval")) {
+						throw new Error(
+							"Your WhatsApp Business account display name needs to be approved by WhatsApp before you can send messages. " +
+							"Please complete the display name approval process in your Meta Business Manager. " +
+							"Once approved, you'll be able to send messages to customers."
+						);
+					}
+
+					if (errorCode === 131047 || errorMessage.includes("message template")) {
+						throw new Error(
+							"This message requires a pre-approved template. " +
+							"For messages outside the 24-hour window, please use approved message templates."
+						);
+					}
+
+					if (errorCode === 131026 || errorMessage.includes("24 hour")) {
+						throw new Error(
+							"Cannot send message: More than 24 hours have passed since the customer's last message. " +
+							"Please use an approved message template to initiate the conversation."
+						);
+					}
+
+					// Generic error
+					throw new Error(errorMessage || "Failed to send message via Kapso API. Message was NOT sent and will NOT be saved.");
+				}
+
+				// Warn if no messageId (but don't fail - some APIs might not return it immediately)
+				if (!sendResult.messageId) {
+					console.warn("⚠️ Message sent but no messageId returned from Kapso. This might indicate an issue:", {
+						raw: sendResult.raw,
+						phoneNumber,
+					});
 				}
 
 				console.log("💾 Saving sent message to database:", {
