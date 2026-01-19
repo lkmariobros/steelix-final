@@ -567,7 +567,7 @@ if (isBunRuntime) {
 			console.warn("⚠️ Error stopping existing server:", error);
 			globalServer.serverStopping = false;
 		}
-	}
+	}						
 
 	// Start server with retry logic for hot reload
 	let retryCount = 0;
