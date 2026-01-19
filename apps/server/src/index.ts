@@ -10,6 +10,23 @@ import { db } from "./db";
 
 const app = new Hono();
 
+// Global error handler to prevent crashes
+app.onError((err, c) => {
+	console.error("❌ Unhandled error in Hono app:", err);
+	console.error("❌ Error stack:", err.stack);
+	console.error("❌ Request path:", c.req.path);
+	console.error("❌ Request method:", c.req.method);
+	
+	return c.json(
+		{
+			error: "Internal server error",
+			message: err.message || "An unexpected error occurred",
+			...(process.env.NODE_ENV === "development" && { stack: err.stack }),
+		},
+		500,
+	);
+});
+
 app.use(logger());
 app.use(
 	"/*",
@@ -487,7 +504,18 @@ app.get("/debug/session-test", async (c) => {
 	}
 });
 
-const port = process.env.PORT || 3000;
+const port = process.env.PORT || 8080;
+
+// Add global error handlers to prevent crashes
+process.on('unhandledRejection', (reason, promise) => {
+	console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
+	// Don't exit - log and continue
+});
+
+process.on('uncaughtException', (error) => {
+	console.error('❌ Uncaught Exception:', error);
+	// Don't exit - log and continue (server should keep running)
+});
 
 console.log(`🚀 Server starting on port ${port}`);
 console.log("📊 Environment check:");
