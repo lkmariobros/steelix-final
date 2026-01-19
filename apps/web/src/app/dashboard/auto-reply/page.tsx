@@ -22,6 +22,8 @@ import {
 } from "@/components/ui/breadcrumb";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
 	Select,
 	SelectContent,
@@ -76,6 +78,16 @@ export default function AutoReplyPage() {
 	const [sortBy, setSortBy] = useState<"owner" | "status">("status");
 	const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 	const [ruleToDelete, setRuleToDelete] = useState<AutoReplyRule | null>(null);
+	const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+	const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+	const [ruleToEdit, setRuleToEdit] = useState<AutoReplyRule | null>(null);
+	
+	// Form state for create/edit
+	const [formTriggerType, setFormTriggerType] = useState<"contains" | "equals" | "starts_with" | "regex">("contains");
+	const [formKeywords, setFormKeywords] = useState("");
+	const [formResponse, setFormResponse] = useState("");
+	const [formMessageOwner, setFormMessageOwner] = useState("");
+	const [formStatus, setFormStatus] = useState<"tenant" | "owner">("tenant");
 
 	// Fetch auto-reply rules with tRPC - only when session is available
 	const {
@@ -99,6 +111,37 @@ export default function AutoReplyPage() {
 	const rules = rulesData?.rules || [];
 	const summary = rulesData?.summary || { total: 0, owner: 0, tenant: 0 };
 
+	// Create rule mutation
+	const createRuleMutation = trpc.autoReply.create.useMutation({
+		onSuccess: () => {
+			toast.success("Auto-reply rule created successfully!");
+			setIsCreateDialogOpen(false);
+			resetForm();
+			queryClient.invalidateQueries({ queryKey: [["autoReply", "list"]] });
+			refetchRules();
+		},
+		onError: (error) => {
+			console.error("Error creating rule:", error);
+			toast.error(error.message || "Failed to create rule. Please try again.");
+		},
+	});
+
+	// Update rule mutation
+	const updateRuleMutation = trpc.autoReply.update.useMutation({
+		onSuccess: () => {
+			toast.success("Auto-reply rule updated successfully!");
+			setIsEditDialogOpen(false);
+			setRuleToEdit(null);
+			resetForm();
+			queryClient.invalidateQueries({ queryKey: [["autoReply", "list"]] });
+			refetchRules();
+		},
+		onError: (error) => {
+			console.error("Error updating rule:", error);
+			toast.error(error.message || "Failed to update rule. Please try again.");
+		},
+	});
+
 	// Delete rule mutation
 	const deleteRuleMutation = trpc.autoReply.delete.useMutation({
 		onSuccess: () => {
@@ -113,6 +156,95 @@ export default function AutoReplyPage() {
 			toast.error("Failed to delete rule. Please try again.");
 		},
 	});
+
+	// Reset form fields
+	const resetForm = () => {
+		setFormTriggerType("contains");
+		setFormKeywords("");
+		setFormResponse("");
+		setFormMessageOwner("");
+		setFormStatus("tenant");
+	};
+
+	// Open create dialog
+	const handleCreateClick = () => {
+		resetForm();
+		setIsCreateDialogOpen(true);
+	};
+
+	// Open edit dialog
+	const handleEditClick = (rule: AutoReplyRule) => {
+		setRuleToEdit(rule);
+		setFormTriggerType(rule.trigger.type);
+		setFormKeywords(rule.trigger.keywords.join(", "));
+		setFormResponse(rule.response);
+		setFormMessageOwner(rule.messageOwner);
+		setFormStatus(rule.status);
+		setIsEditDialogOpen(true);
+	};
+
+	// Handle create submit
+	const handleCreateSubmit = () => {
+		const keywords = formKeywords.split(",").map(k => k.trim()).filter(k => k.length > 0);
+		
+		if (keywords.length === 0) {
+			toast.error("Please provide at least one keyword");
+			return;
+		}
+		
+		if (!formResponse.trim()) {
+			toast.error("Please provide a response message");
+			return;
+		}
+		
+		if (!formMessageOwner.trim()) {
+			toast.error("Please provide a message owner name");
+			return;
+		}
+
+		createRuleMutation.mutate({
+			trigger: {
+				type: formTriggerType,
+				keywords,
+			},
+			response: formResponse.trim(),
+			messageOwner: formMessageOwner.trim(),
+			status: formStatus,
+		});
+	};
+
+	// Handle edit submit
+	const handleEditSubmit = () => {
+		if (!ruleToEdit) return;
+
+		const keywords = formKeywords.split(",").map(k => k.trim()).filter(k => k.length > 0);
+		
+		if (keywords.length === 0) {
+			toast.error("Please provide at least one keyword");
+			return;
+		}
+		
+		if (!formResponse.trim()) {
+			toast.error("Please provide a response message");
+			return;
+		}
+		
+		if (!formMessageOwner.trim()) {
+			toast.error("Please provide a message owner name");
+			return;
+		}
+
+		updateRuleMutation.mutate({
+			id: ruleToEdit.id,
+			trigger: {
+				type: formTriggerType,
+				keywords,
+			},
+			response: formResponse.trim(),
+			messageOwner: formMessageOwner.trim(),
+			status: formStatus,
+		});
+	};
 
 	const handleDeleteClick = (rule: AutoReplyRule) => {
 		setRuleToDelete(rule);
@@ -175,6 +307,10 @@ export default function AutoReplyPage() {
 					{/* Page Header */}
 					<div className="flex items-center justify-between">
 						<h1 className="font-semibold text-2xl">Auto-Reply Rules</h1>
+						<Button onClick={handleCreateClick} size="sm" className="gap-2">
+							<RiAddLine className="h-4 w-4" />
+							Create Rule
+						</Button>
 					</div>
 
 					{/* Search and Filters */}
@@ -263,7 +399,10 @@ export default function AutoReplyPage() {
 												TRIGGER:
 											</div>
 											<div className="text-base text-foreground">
-												Message contains:{" "}
+												{rule.trigger.type === "contains" && "Message contains: "}
+												{rule.trigger.type === "equals" && "Message equals: "}
+												{rule.trigger.type === "starts_with" && "Message starts with: "}
+												{rule.trigger.type === "regex" && "Message matches regex: "}
 												<span className="font-semibold">
 													"{rule.trigger.keywords.join('" or "')}"
 												</span>
@@ -286,6 +425,15 @@ export default function AutoReplyPage() {
 
 										{/* Action Buttons */}
 										<div className="flex items-center gap-2 pt-4 border-t">
+											<Button
+												variant="outline"
+												size="sm"
+												onClick={() => handleEditClick(rule)}
+												className="border-blue-500 text-blue-600 hover:bg-blue-50 hover:text-blue-700 dark:text-blue-400 dark:border-blue-500/50 dark:hover:bg-blue-500/10 dark:hover:text-blue-300"
+											>
+												<RiEditLine className="mr-2 h-4 w-4" />
+												Edit
+											</Button>
 											<Button
 												variant="outline"
 												size="sm"
@@ -312,6 +460,251 @@ export default function AutoReplyPage() {
 						</div>
 					</div>
 				</div>
+
+				{/* Create Rule Dialog */}
+				<Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+					<DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+						<DialogHeader>
+							<DialogTitle className="flex items-center gap-2">
+								<RiAddLine className="size-5" />
+								Create Auto-Reply Rule
+							</DialogTitle>
+							<DialogDescription>
+								Create a new auto-reply rule that will automatically respond to incoming messages.
+							</DialogDescription>
+						</DialogHeader>
+
+						<div className="space-y-4 py-4">
+							{/* Trigger Type */}
+							<div className="space-y-2">
+								<Label htmlFor="trigger-type">Trigger Type *</Label>
+								<Select value={formTriggerType} onValueChange={(value) => setFormTriggerType(value as typeof formTriggerType)}>
+									<SelectTrigger id="trigger-type">
+										<SelectValue />
+									</SelectTrigger>
+									<SelectContent>
+										<SelectItem value="contains">Contains</SelectItem>
+										<SelectItem value="equals">Equals</SelectItem>
+										<SelectItem value="starts_with">Starts With</SelectItem>
+										<SelectItem value="regex">Regex</SelectItem>
+									</SelectContent>
+								</Select>
+								<p className="text-xs text-muted-foreground">
+									{formTriggerType === "contains" && "Message contains any of the keywords"}
+									{formTriggerType === "equals" && "Message exactly equals one of the keywords"}
+									{formTriggerType === "starts_with" && "Message starts with one of the keywords"}
+									{formTriggerType === "regex" && "Message matches the regex pattern"}
+								</p>
+							</div>
+
+							{/* Keywords */}
+							<div className="space-y-2">
+								<Label htmlFor="keywords">Keywords * (comma-separated)</Label>
+								<Input
+									id="keywords"
+									value={formKeywords}
+									onChange={(e) => setFormKeywords(e.target.value)}
+									placeholder="hello, hi, greeting"
+								/>
+								<p className="text-xs text-muted-foreground">
+									Separate multiple keywords with commas
+								</p>
+							</div>
+
+							{/* Response */}
+							<div className="space-y-2">
+								<Label htmlFor="response">Response Message *</Label>
+								<Textarea
+									id="response"
+									value={formResponse}
+									onChange={(e) => setFormResponse(e.target.value)}
+									placeholder="Thank you for your message. We'll get back to you soon!"
+									rows={4}
+								/>
+							</div>
+
+							{/* Message Owner */}
+							<div className="space-y-2">
+								<Label htmlFor="message-owner">Message Owner *</Label>
+								<Input
+									id="message-owner"
+									value={formMessageOwner}
+									onChange={(e) => setFormMessageOwner(e.target.value)}
+									placeholder="Agent Name"
+								/>
+								<p className="text-xs text-muted-foreground">
+									The name of the agent or user who created this rule
+								</p>
+							</div>
+
+							{/* Status */}
+							<div className="space-y-2">
+								<Label htmlFor="status">Status *</Label>
+								<Select value={formStatus} onValueChange={(value) => setFormStatus(value as typeof formStatus)}>
+									<SelectTrigger id="status">
+										<SelectValue />
+									</SelectTrigger>
+									<SelectContent>
+										<SelectItem value="owner">Owner</SelectItem>
+										<SelectItem value="tenant">Tenant</SelectItem>
+									</SelectContent>
+								</Select>
+							</div>
+						</div>
+
+						<DialogFooter>
+							<Button
+								variant="outline"
+								onClick={() => {
+									setIsCreateDialogOpen(false);
+									resetForm();
+								}}
+								disabled={createRuleMutation.isPending}
+							>
+								Cancel
+							</Button>
+							<Button
+								onClick={handleCreateSubmit}
+								disabled={createRuleMutation.isPending}
+							>
+								{createRuleMutation.isPending ? (
+									<>
+										<RiLoader4Line className="mr-2 h-4 w-4 animate-spin" />
+										Creating...
+									</>
+								) : (
+									<>
+										<RiAddLine className="mr-2 h-4 w-4" />
+										Create Rule
+									</>
+								)}
+							</Button>
+						</DialogFooter>
+					</DialogContent>
+				</Dialog>
+
+				{/* Edit Rule Dialog */}
+				<Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+					<DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+						<DialogHeader>
+							<DialogTitle className="flex items-center gap-2">
+								<RiEditLine className="size-5" />
+								Edit Auto-Reply Rule
+							</DialogTitle>
+							<DialogDescription>
+								Update the auto-reply rule settings.
+							</DialogDescription>
+						</DialogHeader>
+
+						<div className="space-y-4 py-4">
+							{/* Trigger Type */}
+							<div className="space-y-2">
+								<Label htmlFor="edit-trigger-type">Trigger Type *</Label>
+								<Select value={formTriggerType} onValueChange={(value) => setFormTriggerType(value as typeof formTriggerType)}>
+									<SelectTrigger id="edit-trigger-type">
+										<SelectValue />
+									</SelectTrigger>
+									<SelectContent>
+										<SelectItem value="contains">Contains</SelectItem>
+										<SelectItem value="equals">Equals</SelectItem>
+										<SelectItem value="starts_with">Starts With</SelectItem>
+										<SelectItem value="regex">Regex</SelectItem>
+									</SelectContent>
+								</Select>
+								<p className="text-xs text-muted-foreground">
+									{formTriggerType === "contains" && "Message contains any of the keywords"}
+									{formTriggerType === "equals" && "Message exactly equals one of the keywords"}
+									{formTriggerType === "starts_with" && "Message starts with one of the keywords"}
+									{formTriggerType === "regex" && "Message matches the regex pattern"}
+								</p>
+							</div>
+
+							{/* Keywords */}
+							<div className="space-y-2">
+								<Label htmlFor="edit-keywords">Keywords * (comma-separated)</Label>
+								<Input
+									id="edit-keywords"
+									value={formKeywords}
+									onChange={(e) => setFormKeywords(e.target.value)}
+									placeholder="hello, hi, greeting"
+								/>
+								<p className="text-xs text-muted-foreground">
+									Separate multiple keywords with commas
+								</p>
+							</div>
+
+							{/* Response */}
+							<div className="space-y-2">
+								<Label htmlFor="edit-response">Response Message *</Label>
+								<Textarea
+									id="edit-response"
+									value={formResponse}
+									onChange={(e) => setFormResponse(e.target.value)}
+									placeholder="Thank you for your message. We'll get back to you soon!"
+									rows={4}
+								/>
+							</div>
+
+							{/* Message Owner */}
+							<div className="space-y-2">
+								<Label htmlFor="edit-message-owner">Message Owner *</Label>
+								<Input
+									id="edit-message-owner"
+									value={formMessageOwner}
+									onChange={(e) => setFormMessageOwner(e.target.value)}
+									placeholder="Agent Name"
+								/>
+								<p className="text-xs text-muted-foreground">
+									The name of the agent or user who created this rule
+								</p>
+							</div>
+
+							{/* Status */}
+							<div className="space-y-2">
+								<Label htmlFor="edit-status">Status *</Label>
+								<Select value={formStatus} onValueChange={(value) => setFormStatus(value as typeof formStatus)}>
+									<SelectTrigger id="edit-status">
+										<SelectValue />
+									</SelectTrigger>
+									<SelectContent>
+										<SelectItem value="owner">Owner</SelectItem>
+										<SelectItem value="tenant">Tenant</SelectItem>
+									</SelectContent>
+								</Select>
+							</div>
+						</div>
+
+						<DialogFooter>
+							<Button
+								variant="outline"
+								onClick={() => {
+									setIsEditDialogOpen(false);
+									setRuleToEdit(null);
+									resetForm();
+								}}
+								disabled={updateRuleMutation.isPending}
+							>
+								Cancel
+							</Button>
+							<Button
+								onClick={handleEditSubmit}
+								disabled={updateRuleMutation.isPending}
+							>
+								{updateRuleMutation.isPending ? (
+									<>
+										<RiLoader4Line className="mr-2 h-4 w-4 animate-spin" />
+										Updating...
+									</>
+								) : (
+									<>
+										<RiEditLine className="mr-2 h-4 w-4" />
+										Update Rule
+									</>
+								)}
+							</Button>
+						</DialogFooter>
+					</DialogContent>
+				</Dialog>
 
 				{/* Delete Confirmation Dialog */}
 				<Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
@@ -356,7 +749,10 @@ export default function AutoReplyPage() {
 												TRIGGER:
 											</div>
 											<div className="text-base text-foreground">
-												Message contains:{" "}
+												{ruleToDelete.trigger.type === "contains" && "Message contains: "}
+												{ruleToDelete.trigger.type === "equals" && "Message equals: "}
+												{ruleToDelete.trigger.type === "starts_with" && "Message starts with: "}
+												{ruleToDelete.trigger.type === "regex" && "Message matches regex: "}
 												<span className="font-semibold">
 													"{ruleToDelete.trigger.keywords.join('" or "')}"
 												</span>
