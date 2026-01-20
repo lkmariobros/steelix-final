@@ -10,13 +10,10 @@ import { z } from "zod";
 import { user } from "./auth";
 
 // Prospect type enum
-export const prospectTypeEnum = pgEnum("prospect_type", ["tenant", "owner"]);
+export const prospectTypeEnum = pgEnum("prospect_type", ["tenant", "buyer"]);
 
-// Property type enum
-export const propertyTypeEnum = pgEnum("property_type", [
-	"property_developer",
-	"secondary_market_owner",
-]);
+// Property type - changed from enum to free text field
+// Removed propertyTypeEnum - now using text field for flexibility
 
 // Prospect status enum (keeping for backward compatibility)
 export const prospectStatusEnum = pgEnum("prospect_status", [
@@ -52,7 +49,7 @@ export const prospects = pgTable(
 		phone: text("phone").notNull(),
 		source: text("source").notNull(), // e.g., "Website", "Social Media", "Referral"
 		type: prospectTypeEnum("type").notNull(),
-		property: propertyTypeEnum("property").notNull(),
+		property: text("property").notNull(), // Free text field - users can enter any property name
 		status: prospectStatusEnum("status").notNull(), // Keep for backward compatibility
 		// Pipeline stage for Kanban board
 		stage: pipelineStageEnum("stage").default("prospect").notNull(),
@@ -145,11 +142,8 @@ export const prospectTags = pgTable(
 );
 
 // Zod schemas for validation
-export const prospectTypeSchema = z.enum(["tenant", "owner"]);
-export const propertyTypeSchema = z.enum([
-	"property_developer",
-	"secondary_market_owner",
-]);
+export const prospectTypeSchema = z.enum(["tenant", "buyer"]);
+export const propertyTypeSchema = z.string().min(1, "Property name is required"); // Free text validation
 export const prospectStatusSchema = z.enum(["active", "inactive", "pending"]);
 export const pipelineStageSchema = z.enum([
 	"prospect",
@@ -245,7 +239,7 @@ export const selectProspectTagSchema = insertProspectTagSchema.extend({
 
 // TypeScript types
 export type ProspectType = z.infer<typeof prospectTypeSchema>;
-export type PropertyType = z.infer<typeof propertyTypeSchema>;
+export type PropertyType = string; // Property is now free text
 export type ProspectStatus = z.infer<typeof prospectStatusSchema>;
 export type PipelineStage = z.infer<typeof pipelineStageSchema>;
 export type LeadType = z.infer<typeof leadTypeSchema>;

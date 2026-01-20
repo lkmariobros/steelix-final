@@ -25,8 +25,8 @@ import { protectedProcedure, router } from "../lib/trpc";
 // List prospects input schema
 const listProspectsInput = z.object({
 	search: z.string().optional(),
-	type: z.enum(["tenant", "owner"]).optional(),
-	property: z.enum(["property_developer", "secondary_market_owner"]).optional(),
+	type: z.enum(["tenant", "buyer"]).optional(),
+	property: z.string().optional(), // Free text search for property name
 	status: z.enum(["active", "inactive", "pending"]).optional(),
 	stage: pipelineStageSchema.optional(), // Filter by pipeline stage
 	leadType: leadTypeSchema.optional(), // Filter by lead type
@@ -63,7 +63,8 @@ export const crmRouter = router({
 			const agentId = ctx.session.user.id;
 
 			// Build where conditions
-			const conditions = [];
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			const conditions: any[] = [];
 			
 			// Show agent's personal leads OR unclaimed company leads (if includeCompanyLeads is true)
 			if (includeCompanyLeads) {
@@ -94,9 +95,9 @@ export const crmRouter = router({
 				conditions.push(eq(prospects.type, type));
 			}
 
-			// Property filter
+			// Property filter (text search)
 			if (property) {
-				conditions.push(eq(prospects.property, property));
+				conditions.push(ilike(prospects.property, `%${property}%`));
 			}
 
 			// Status filter
@@ -114,27 +115,68 @@ export const crmRouter = router({
 				conditions.push(eq(prospects.leadType, leadType));
 			}
 
+			// Helper function to execute query with timeout and retry
+			const executeQueryWithRetry = async <T>(
+				queryFn: () => Promise<T>,
+				queryName: string,
+				maxRetries = 2
+			): Promise<T> => {
+				for (let attempt = 0; attempt <= maxRetries; attempt++) {
+					try {
+						// Create timeout promise (25 seconds)
+						const timeoutPromise = new Promise<never>((_, reject) => {
+							setTimeout(() => reject(new Error(`Query timeout: ${queryName}`)), 25000);
+						});
+
+						// Race query against timeout
+						return await Promise.race([queryFn(), timeoutPromise]);
+					} catch (error: any) {
+						const isRetryable = 
+							error?.message?.includes("timeout") ||
+							error?.message?.includes("Connection terminated") ||
+							error?.message?.includes("MaxClientsInSessionMode") ||
+							error?.code === "XX000" ||
+							error?.code === "57P01";
+
+						if (isRetryable && attempt < maxRetries) {
+							const waitTime = 200 * (attempt + 1); // 200ms, 400ms
+							console.warn(`⚠️ ${queryName} failed, retrying in ${waitTime}ms... (attempt ${attempt + 1}/${maxRetries + 1})`);
+							await new Promise(resolve => setTimeout(resolve, waitTime));
+							continue;
+						}
+						throw error;
+					}
+				}
+				throw new Error(`${queryName} failed after ${maxRetries + 1} attempts`);
+			};
+
 			// Get total count for pagination
-			const [countResult] = await db
-				.select({ count: sql<number>`count(*)` })
-				.from(prospects)
-				.where(and(...conditions));
+			const [countResult] = await executeQueryWithRetry(
+				() => db
+					.select({ count: sql<number>`count(*)` })
+					.from(prospects)
+					.where(and(...conditions)),
+				"Count prospects query"
+			);
 
 			const total = Number(countResult?.count || 0);
 
 			// Get paginated results with agent name
 			const offset = (page - 1) * limit;
-			const results = await db
-				.select({
-					prospect: prospects,
-					agentName: user.name,
-				})
-				.from(prospects)
-				.leftJoin(user, eq(prospects.agentId, user.id))
-				.where(and(...conditions))
-				.orderBy(desc(prospects.createdAt))
-				.limit(limit)
-				.offset(offset);
+			const results = await executeQueryWithRetry(
+				() => db
+					.select({
+						prospect: prospects,
+						agentName: user.name,
+					})
+					.from(prospects)
+					.leftJoin(user, eq(prospects.agentId, user.id))
+					.where(and(...conditions))
+					.orderBy(desc(prospects.createdAt))
+					.limit(limit)
+					.offset(offset),
+				"Fetch prospects query"
+			);
 
 			// Get all prospect IDs to fetch their tags
 			const prospectIds = results.map((r) => r.prospect.id);
@@ -170,8 +212,11 @@ export const crmRouter = router({
 			return {
 				prospects: results.map((r) => {
 					// Handle missing columns gracefully (for databases that haven't been migrated yet)
+					// Also handle legacy "owner" type - convert to "buyer"
+					const prospectType = (r.prospect.type as string) === "owner" ? "buyer" : r.prospect.type;
 					const prospect = {
 						...r.prospect,
+						type: prospectType as "tenant" | "buyer", // Migrate "owner" to "buyer"
 						stage: r.prospect.stage || "prospect",
 						leadType: r.prospect.leadType || "personal",
 						tags: r.prospect.tags || null, // Keep for backward compatibility
@@ -192,11 +237,12 @@ export const crmRouter = router({
 					totalPages: Math.ceil(total / limit),
 				},
 			};
-		} catch (error) {
+		} catch (error: any) {
 			console.error("❌ CRM list error:", error);
-			const errorMessage = error instanceof Error ? error.message : String(error);
+			const errorMessage = error?.message || String(error);
 			console.error("❌ Error details:", errorMessage);
-			console.error("❌ Error stack:", error instanceof Error ? error.stack : "No stack");
+			console.error("❌ Error code:", error?.code);
+			console.error("❌ Error stack:", error?.stack || "No stack");
 			
 			// Check if this is a missing column error
 			if (errorMessage.includes("does not exist") || errorMessage.includes("column") || errorMessage.includes("unknown column")) {
@@ -206,6 +252,17 @@ export const crmRouter = router({
 				);
 				helpfulError.cause = error;
 				throw helpfulError;
+			}
+
+			// Provide more specific error messages for connection issues
+			if (errorMessage.includes("timeout") || errorMessage.includes("Query timeout") || error?.code === "ETIMEDOUT") {
+				throw new Error("Database query timed out. The database may be under heavy load. Please try again.");
+			}
+			if (errorMessage.includes("Connection terminated") || errorMessage.includes("Connection terminated unexpectedly") || error?.code === "57P01") {
+				throw new Error("Database connection lost. Please try again.");
+			}
+			if (errorMessage.includes("MaxClientsInSessionMode") || error?.code === "XX000") {
+				throw new Error("Database connection pool exhausted. Please try again in a moment.");
 			}
 			
 			throw error;
@@ -262,9 +319,16 @@ export const crmRouter = router({
 			console.warn("⚠️ Could not fetch prospect tags:", error);
 		}
 
+		// Handle legacy "owner" type - convert to "buyer"
+		const prospectType = (prospect.type as string) === "owner" ? "buyer" : prospect.type;
+		const prospectForParse = {
+			...prospect,
+			type: prospectType as "tenant" | "buyer",
+		};
+
 		return {
 			prospect: {
-				...selectProspectSchema.parse(prospect),
+				...selectProspectSchema.parse(prospectForParse),
 				tagIds: prospectTagsData.map((t) => t.tag.id),
 				tagNames: prospectTagsData.map((t) => t.tag.name),
 			},
@@ -279,20 +343,21 @@ export const crmRouter = router({
 	create: protectedProcedure
 		.input(createProspectInput)
 		.mutation(async ({ input, ctx }) => {
-			const agentId = ctx.session.user.id;
-			const { tagIds, ...prospectData } = input;
+			try {
+				const agentId = ctx.session.user.id;
+				const { tagIds, ...prospectData } = input;
 
-			// If it's a company lead, agentId can be null (unclaimed)
-			// Otherwise, set agentId for personal leads
-			const newProspect: InsertProspect & { agentId?: string | null } = {
-				...prospectData,
-				agentId: prospectData.leadType === "company" ? null : agentId,
-			};
+				// If it's a company lead, agentId can be null (unclaimed)
+				// Otherwise, set agentId for personal leads
+				const newProspect: InsertProspect & { agentId?: string | null } = {
+					...prospectData,
+					agentId: prospectData.leadType === "company" ? null : agentId,
+				};
 
-			const [created] = await db
-				.insert(prospects)
-				.values(newProspect)
-				.returning();
+				const [created] = await db
+					.insert(prospects)
+					.values(newProspect)
+					.returning();
 
 			// Associate tags if provided
 			if (tagIds && tagIds.length > 0) {
@@ -334,11 +399,67 @@ export const crmRouter = router({
 				console.warn("⚠️ Could not fetch prospect tags:", error);
 			}
 
-			return {
-				...selectProspectSchema.parse(created),
-				tagIds: prospectTagsData.map((t) => t.tag.id),
-				tagNames: prospectTagsData.map((t) => t.tag.name),
+			// Handle legacy "owner" type - convert to "buyer"
+			const createdType = (created.type as string) === "owner" ? "buyer" : created.type;
+			const createdForParse = {
+				...created,
+				type: createdType as "tenant" | "buyer",
 			};
+
+				return {
+					...selectProspectSchema.parse(createdForParse),
+					tagIds: prospectTagsData.map((t) => t.tag.id),
+					tagNames: prospectTagsData.map((t) => t.tag.name),
+				};
+			} catch (error: any) {
+				console.error("❌ CRM create error:", error);
+				
+				// Extract error message from error or its cause (Drizzle wraps PostgreSQL errors)
+				const errorMessage = error?.message || error?.cause?.message || String(error);
+				const errorCode = error?.code || error?.cause?.code;
+				const fullErrorText = JSON.stringify(error?.cause || error, null, 2);
+				
+				console.error("❌ Error details:", errorMessage);
+				console.error("❌ Error code:", errorCode);
+				console.error("❌ Full error:", fullErrorText);
+
+				// Check if this is a database enum mismatch error for prospect_type
+				const isProspectTypeError = 
+					errorMessage.includes("invalid input value for enum prospect_type") || 
+					(errorMessage.includes("invalid input value for enum") && errorMessage.includes("buyer")) ||
+					errorMessage.includes("prospect_type") && errorMessage.includes("buyer") ||
+					(errorCode === "22P02" && (errorMessage.includes("prospect_type") || fullErrorText.includes("prospect_type")));
+
+				if (isProspectTypeError) {
+					throw new Error(
+						"Database schema mismatch: The prospect_type enum in the database still only has 'tenant' and 'owner' values, but the code is trying to insert 'buyer'. " +
+						"Please run this SQL command: ALTER TYPE prospect_type ADD VALUE IF NOT EXISTS 'buyer'; " +
+						"Or use the migration file: apps/server/src/db/migrations/0003_update_prospect_type_enum.sql"
+					);
+				}
+
+				// Check if this is a property column enum error
+				const isPropertyTypeError = 
+					errorMessage.includes("invalid input value for enum property_type") || 
+					errorMessage.includes("property_type") ||
+					(errorCode === "22P02" && (errorMessage.includes("property_type") || fullErrorText.includes("property_type")));
+
+				if (isPropertyTypeError) {
+					throw new Error(
+						"Database schema mismatch: The property column is still an enum type in the database, but the code is trying to insert free text. " +
+						"Please run this migration script: bun run apps/server/scripts/run-property-to-text-migration.ts " +
+						"Or use the migration file: apps/server/src/db/migrations/0004_update_property_to_text.sql"
+					);
+				}
+
+				// Check for validation errors
+				if (error?.issues) {
+					const validationErrors = error.issues.map((i: any) => `${i.path.join(".")}: ${i.message}`).join(", ");
+					throw new Error(`Validation error: ${validationErrors}`);
+				}
+
+				throw new Error(`Failed to create prospect: ${errorMessage}`);
+			}
 		}),
 
 	// Update an existing prospect
@@ -417,8 +538,15 @@ export const crmRouter = router({
 				console.warn("⚠️ Could not fetch prospect tags:", error);
 			}
 
+			// Handle legacy "owner" type - convert to "buyer"
+			const updatedType = (updated.type as string) === "owner" ? "buyer" : updated.type;
+			const updatedForParse = {
+				...updated,
+				type: updatedType as "tenant" | "buyer",
+			};
+
 			return {
-				...selectProspectSchema.parse(updated),
+				...selectProspectSchema.parse(updatedForParse),
 				tagIds: prospectTagsData.map((t) => t.tag.id),
 				tagNames: prospectTagsData.map((t) => t.tag.name),
 			};
@@ -456,7 +584,13 @@ export const crmRouter = router({
 				.where(eq(prospects.id, id))
 				.returning();
 
-			return selectProspectSchema.parse(updated);
+			// Handle legacy "owner" type - convert to "buyer"
+			const updatedType = (updated.type as string) === "owner" ? "buyer" : updated.type;
+			const updatedForParse = {
+				...updated,
+				type: updatedType as "tenant" | "buyer",
+			};
+			return selectProspectSchema.parse(updatedForParse);
 		}),
 
 	// Claim a company lead
@@ -493,7 +627,13 @@ export const crmRouter = router({
 				.where(eq(prospects.id, id))
 				.returning();
 
-			return selectProspectSchema.parse(claimed);
+			// Handle legacy "owner" type - convert to "buyer"
+		const claimedType = (claimed.type as string) === "owner" ? "buyer" : claimed.type;
+		const claimedForParse = {
+			...claimed,
+			type: claimedType as "tenant" | "buyer",
+		};
+		return selectProspectSchema.parse(claimedForParse);
 		}),
 
 	// Delete a prospect
