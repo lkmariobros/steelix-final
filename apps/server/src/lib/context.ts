@@ -34,31 +34,66 @@ export async function createContext({ context }: CreateContextOptions) {
 
 	// ✅ CRITICAL: Enhance session with agent tier information for commission calculations
 	if (session?.user) {
-		try {
-			// Fetch latest tier and commission split from database
-			const [userWithTier] = await db
-				.select({
-					agentTier: user.agentTier,
-					companyCommissionSplit: user.companyCommissionSplit,
-					agencyId: user.agencyId,
-					teamId: user.teamId,
-					role: user.role,
-				})
-				.from(user)
-				.where(eq(user.id, session.user.id))
-				.limit(1);
+		const MAX_DB_RETRIES = 3;
+		const INITIAL_RETRY_DELAY = 100; // ms
+		
+		for (let attempt = 0; attempt < MAX_DB_RETRIES; attempt++) {
+			try {
+				// Fetch latest tier and commission split from database with timeout
+				const queryPromise = db
+					.select({
+						agentTier: user.agentTier,
+						companyCommissionSplit: user.companyCommissionSplit,
+						agencyId: user.agencyId,
+						teamId: user.teamId,
+						role: user.role,
+					})
+					.from(user)
+					.where(eq(user.id, session.user.id))
+					.limit(1);
 
-			if (userWithTier) {
-				// Enhance session user with tier information
-				(session.user as any).agentTier = userWithTier.agentTier;
-				(session.user as any).companyCommissionSplit = userWithTier.companyCommissionSplit;
-				(session.user as any).agencyId = userWithTier.agencyId;
-				(session.user as any).teamId = userWithTier.teamId;
-				(session.user as any).role = userWithTier.role;
+				// Add timeout wrapper (30 seconds)
+				const timeoutPromise = new Promise((_, reject) => {
+					setTimeout(() => reject(new Error("Database query timeout")), 30000);
+				});
+
+				const [userWithTier] = await Promise.race([queryPromise, timeoutPromise]) as any[];
+
+				if (userWithTier) {
+					// Enhance session user with tier information
+					(session.user as any).agentTier = userWithTier.agentTier;
+					(session.user as any).companyCommissionSplit = userWithTier.companyCommissionSplit;
+					(session.user as any).agencyId = userWithTier.agencyId;
+					(session.user as any).teamId = userWithTier.teamId;
+					(session.user as any).role = userWithTier.role;
+				}
+				break; // Success, exit retry loop
+			} catch (error: any) {
+				const isRetryable = 
+					error?.message?.includes("timeout") ||
+					error?.message?.includes("Connection terminated") ||
+					error?.message?.includes("MaxClientsInSessionMode") ||
+					error?.code === "XX000" ||
+					error?.code === "57P01"; // Admin shutdown
+
+				if (isRetryable && attempt < MAX_DB_RETRIES - 1) {
+					const waitTime = INITIAL_RETRY_DELAY * Math.pow(2, attempt);
+					console.warn(`⚠️ Database query failed, retrying in ${waitTime}ms... (attempt ${attempt + 1}/${MAX_DB_RETRIES})`, {
+						error: error?.message || error,
+						code: error?.code,
+					});
+					await new Promise(resolve => setTimeout(resolve, waitTime));
+				} else {
+					// Log error but don't break authentication - use cached/default values
+					console.error("❌ Error fetching agent tier information after retries:", {
+						error: error?.message || error,
+						code: error?.code,
+						attempts: attempt + 1,
+					});
+					// Continue without tier info - session will still work
+					break;
+				}
 			}
-		} catch (error) {
-			// Log error but don't break authentication
-			console.error("❌ Error fetching agent tier information:", error);
 		}
 	}
 

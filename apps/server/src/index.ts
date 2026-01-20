@@ -594,6 +594,7 @@ if (isBunRuntime) {
 				fetch: app.fetch,
 				port: Number(port),
 				hostname: "127.0.0.1", // Use 127.0.0.1 for better Windows compatibility
+				idleTimeout: 60, // 60 seconds timeout for long-running queries (default is 10s)
 			});
 
 			// Store server reference for hot reload

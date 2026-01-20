@@ -44,6 +44,7 @@ import {
 import {
 	Form,
 	FormControl,
+	FormDescription,
 	FormField,
 	FormItem,
 	FormLabel,
@@ -84,8 +85,8 @@ interface Prospect {
 	email: string;
 	phone: string;
 	source: string;
-	type: "tenant" | "owner";
-	property: "property_developer" | "secondary_market_owner";
+	type: "tenant" | "buyer";
+	property: string; // Free text field
 	status: "active" | "inactive" | "pending";
 	stage: PipelineStage; // New: Pipeline stage for Kanban
 	leadType: LeadType; // New: Personal or company lead
@@ -119,12 +120,10 @@ const prospectFormSchema = z.object({
 		.min(8, "Phone number must be at least 8 characters")
 		.regex(/^[\d\s\+\-\(\)]+$/, "Please enter a valid phone number"),
 	source: z.string().min(1, "Please select a source"),
-	type: z.enum(["tenant", "owner"], {
+	type: z.enum(["tenant", "buyer"], {
 		required_error: "Please select a type",
 	}),
-	property: z.enum(["property_developer", "secondary_market_owner"], {
-		required_error: "Please select a property type",
-	}),
+	property: z.string().min(1, "Property name is required"),
 	status: z.enum(["active", "inactive", "pending"], {
 		required_error: "Please select a status",
 	}),
@@ -197,11 +196,8 @@ export default function CRMPage() {
 	} = trpc.crm.list.useQuery(
 		{
 			search: searchQuery || undefined,
-			type: typeFilter !== "all" ? (typeFilter as "tenant" | "owner") : undefined,
-			property:
-				propertyFilter !== "all"
-					? (propertyFilter as "property_developer" | "secondary_market_owner")
-					: undefined,
+			type: typeFilter !== "all" ? (typeFilter as "tenant" | "buyer") : undefined,
+			property: propertyFilter !== "all" ? propertyFilter : undefined,
 			status:
 				statusFilter !== "all"
 					? (statusFilter as "active" | "inactive" | "pending")
@@ -228,8 +224,8 @@ export default function CRMPage() {
 			email: "",
 			phone: "",
 			source: "",
-			type: "owner",
-			property: "property_developer",
+			type: "buyer",
+			property: "",
 			status: "active",
 		},
 	});
@@ -645,7 +641,7 @@ export default function CRMPage() {
 														</FormControl>
 														<SelectContent>
 															<SelectItem value="tenant">Tenant</SelectItem>
-															<SelectItem value="owner">Owner</SelectItem>
+															<SelectItem value="buyer">Buyer</SelectItem>
 														</SelectContent>
 													</Select>
 													<FormMessage />
@@ -653,36 +649,27 @@ export default function CRMPage() {
 											)}
 										/>
 
-										<FormField
-											control={form.control}
-											name="property"
-											render={({ field }) => (
-												<FormItem>
-													<FormLabel>
-														Property <span className="text-destructive">*</span>
-													</FormLabel>
-													<Select
-														onValueChange={field.onChange}
-														defaultValue={field.value}
-													>
-														<FormControl>
-															<SelectTrigger>
-																<SelectValue placeholder="Select property" />
-															</SelectTrigger>
-														</FormControl>
-														<SelectContent>
-															<SelectItem value="property_developer">
-																Property Developer
-															</SelectItem>
-															<SelectItem value="secondary_market_owner">
-																Secondary Market Owner
-															</SelectItem>
-														</SelectContent>
-													</Select>
-													<FormMessage />
-												</FormItem>
-											)}
-										/>
+									<FormField
+										control={form.control}
+										name="property"
+										render={({ field }) => (
+											<FormItem>
+												<FormLabel>
+													Property <span className="text-destructive">*</span>
+												</FormLabel>
+												<FormControl>
+													<Input
+														{...field}
+														placeholder="Enter property name (e.g., Breeze Hill, Marina Bay Residences)"
+													/>
+												</FormControl>
+												<FormDescription>
+													Enter the property name. Tags can be used to categorize properties in the database.
+												</FormDescription>
+												<FormMessage />
+											</FormItem>
+										)}
+									/>
 									</div>
 
 									{/* Status */}
@@ -900,12 +887,10 @@ export default function CRMPage() {
 											<div className="flex items-center justify-between">
 												<div className="flex items-center gap-2 text-sm text-muted-foreground">
 													<RiHomeLine className="size-4" />
-													Property Type
+													Property
 												</div>
 												<div className="text-sm font-medium">
-													{selectedProspect.property === "property_developer"
-														? "Property Developer"
-														: "Secondary Market Owner"}
+													{selectedProspect.property || "Not specified"}
 												</div>
 											</div>
 										</div>
@@ -1182,23 +1167,19 @@ export default function CRMPage() {
 							<SelectContent>
 								<SelectItem value="all">All</SelectItem>
 								<SelectItem value="tenant">Tenant</SelectItem>
-								<SelectItem value="owner">Owner</SelectItem>
+								<SelectItem value="buyer">Buyer</SelectItem>
 							</SelectContent>
 						</Select>
-						<Select value={propertyFilter} onValueChange={setPropertyFilter}>
-							<SelectTrigger className="w-40">
-								<SelectValue placeholder="Property" />
-							</SelectTrigger>
-							<SelectContent>
-								<SelectItem value="all">All</SelectItem>
-								<SelectItem value="property_developer">
-									Property Developer
-								</SelectItem>
-								<SelectItem value="secondary_market_owner">
-									Secondary Market Owner
-								</SelectItem>
-							</SelectContent>
-						</Select>
+						<Input
+							type="text"
+							placeholder="Search by property..."
+							value={propertyFilter === "all" ? "" : propertyFilter}
+							onChange={(e) => {
+								const value = e.target.value.trim();
+								setPropertyFilter(value || "all");
+							}}
+							className="w-48"
+						/>
 						<Select value={statusFilter} onValueChange={setStatusFilter}>
 							<SelectTrigger className="w-36">
 								<SelectValue placeholder="Status" />
@@ -1333,10 +1314,7 @@ export default function CRMPage() {
 														<div className="flex items-center gap-2">
 															<RiHomeLine className="size-4 text-muted-foreground" />
 															<span className="text-muted-foreground">
-																Property:{" "}
-																{prospect.property === "property_developer"
-																	? "Property Developer"
-																	: "Secondary Market Owner"}
+																Property: {prospect.property || "Not specified"}
 															</span>
 														</div>
 														{prospect.agentName && (

@@ -23,8 +23,8 @@ interface Prospect {
 	email: string;
 	phone: string;
 	source: string;
-	type: "tenant" | "owner";
-	property: "property_developer" | "secondary_market_owner";
+	type: "tenant" | "buyer";
+	property: string; // Free text field
 	status: "active" | "inactive" | "pending";
 	stage: PipelineStage;
 	leadType: "personal" | "company";

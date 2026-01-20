@@ -25,13 +25,19 @@ const connectionString = process.env.DATABASE_URL || "";
 // Detect if using Supabase Supavisor transaction mode (port 6543)
 const isTransactionMode = connectionString.includes(":6543");
 
+// Pool configuration optimized for different environments
+// Supavisor transaction mode has strict connection limits
+const maxConnections = isTransactionMode ? 1 : 10; // Only 1 connection for Supavisor Session mode
+const minConnections = isTransactionMode ? 0 : 2; // Don't keep idle connections for transaction mode
+
 const pool = new Pool({
 	connectionString,
-	// Pool configuration optimized for serverless/Railway deployment
-	max: 10,                      // Maximum number of connections in pool
-	min: 2,                       // Minimum connections to keep open
-	idleTimeoutMillis: 30000,     // Close idle connections after 30 seconds
-	connectionTimeoutMillis: 5000, // Fail fast if can't connect in 5 seconds
+	max: maxConnections,
+	min: minConnections,
+	idleTimeoutMillis: isTransactionMode ? 10000 : 30000, // 10s for transaction mode, 30s otherwise
+	connectionTimeoutMillis: 10000, // Increased to 10 seconds for better reliability
+	statement_timeout: 30000, // 30 second query timeout
+	query_timeout: 30000, // 30 second query timeout
 	// Supavisor transaction mode doesn't support prepared statements
 	...(isTransactionMode && {
 		allowExitOnIdle: true,
@@ -40,16 +46,39 @@ const pool = new Pool({
 
 // Log pool configuration on startup (helpful for debugging)
 console.log("🔗 Database pool initialized:", {
-	max: 10,
-	min: 2,
+	max: maxConnections,
+	min: minConnections,
 	isTransactionMode,
 	hasConnectionString: !!connectionString,
+	idleTimeoutMillis: isTransactionMode ? 10000 : 30000,
+	connectionTimeoutMillis: 10000,
 });
 
 // Handle pool errors gracefully
 pool.on("error", (err) => {
 	console.error("❌ Unexpected database pool error:", err);
+	// Don't crash the app on pool errors - let queries handle their own errors
 });
+
+// Monitor pool lifecycle
+pool.on("connect", (client) => {
+	console.log("✅ New database connection established");
+});
+
+pool.on("remove", (client) => {
+	console.log("🔄 Database connection removed from pool");
+});
+
+// Log pool stats periodically in development (every 5 minutes)
+if (process.env.NODE_ENV !== "production") {
+	setInterval(() => {
+		console.log("📊 Database pool stats:", {
+			totalCount: pool.totalCount,
+			idleCount: pool.idleCount,
+			waitingCount: pool.waitingCount,
+		});
+	}, 5 * 60 * 1000); // Every 5 minutes
+}
 
 // Create Drizzle instance with the pool
 // Note: If using Supavisor transaction mode, prepared statements are handled by pg.Pool
