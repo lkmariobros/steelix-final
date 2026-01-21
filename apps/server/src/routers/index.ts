@@ -4,6 +4,7 @@ import { agentTiersRouter } from "./agent-tiers";
 import { agentsRouter } from "./agents";
 import { approvalsRouter } from "./approvals";
 import { autoReplyRouter } from "./auto-reply";
+import { calendarRouter } from "./calendar";
 import { crmRouter } from "./crm";
 import { dashboardRouter } from "./dashboard";
 import { documentsRouter } from "./documents";
@@ -34,6 +35,7 @@ export const appRouter = router({
 	autoReply: autoReplyRouter,
 	whatsapp: whatsappRouter,
 	tags: tagsRouter,
+	calendar: calendarRouter,
 });
 
 export type AppRouter = typeof appRouter;

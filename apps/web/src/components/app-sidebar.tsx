@@ -17,10 +17,14 @@ import {
 	SidebarMenuItem,
 	SidebarRail,
 } from "@/components/sidebar";
+import { Badge } from "@/components/ui/badge";
+import { authClient } from "@/lib/auth-client";
+import { trpc } from "@/utils/trpc";
 import { TeamSwitcher } from "@/components/team-switcher";
 import {
 	RiBarChartLine,
 	RiCheckboxCircleLine,
+	RiCalendarLine,
 	RiDashboardLine,
 	RiFileTextLine,
 	RiLogoutBoxLine,
@@ -36,6 +40,37 @@ import {
 const data = {
 	teams: [],
 };
+
+// Component to show announcement count badge
+function AnnouncementBadge() {
+	const pathname = usePathname();
+	const { data: session } = authClient.useSession();
+	const isCurrentlyInAdminPortal = pathname.startsWith("/admin");
+	
+	// Only show badge for agent portal, not admin portal
+	const { data: announcementsData } = trpc.calendar.listAnnouncements.useQuery(
+		{ includeExpired: false, includeInactive: false },
+		{ 
+			enabled: !!session && !isCurrentlyInAdminPortal,
+			refetchInterval: 30000, // Refetch every 30 seconds
+		}
+	);
+
+	const announcementCount = announcementsData?.announcements?.length || 0;
+
+	if (announcementCount === 0) {
+		return null;
+	}
+
+	return (
+		<Badge 
+			variant="destructive" 
+			className="ml-auto h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs"
+		>
+			{announcementCount}
+		</Badge>
+	);
+}
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 	const pathname = usePathname();
@@ -71,24 +106,29 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 							url: "/admin/agents",
 							icon: RiTeamLine,
 						},
-						{
-							title: "Tag Management",
-							url: "/admin/tags",
-							icon: RiPriceTagLine,
-						},
-					],
-				},
-				{
-					title: "Configuration",
-					url: "#",
-					items: [
-						{
-							title: "Settings",
-							url: "/admin/settings",
-							icon: RiSettings3Line,
-						},
-					],
-				},
+					{
+						title: "Tag Management",
+						url: "/admin/tags",
+						icon: RiPriceTagLine,
+					},
+					{
+						title: "Office Calendar",
+						url: "/admin/calendar",
+						icon: RiCalendarLine,
+					},
+				],
+			},
+			{
+				title: "Configuration",
+				url: "#",
+				items: [
+					{
+						title: "Settings",
+						url: "/admin/settings",
+						icon: RiSettings3Line,
+					},
+				],
+			},
 			]
 		: [
 				// Agent Portal Navigation
@@ -120,6 +160,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 						title: "Auto-Reply",
 						url: "/dashboard/auto-reply",
 						icon: RiRobotLine,
+					},
+					{
+						title: "Office Calendar",
+						url: "/dashboard/calendar",
+						icon: RiCalendarLine,
 					},
 				],
 			},
@@ -159,15 +204,20 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 											className="group/menu-button h-9 gap-3 rounded-md bg-gradient-to-r font-medium hover:bg-transparent hover:from-sidebar-accent hover:to-sidebar-accent/40 data-[active=true]:from-primary/20 data-[active=true]:to-primary/5 [&>svg]:size-auto"
 											isActive={pathname === menuItem.url}
 										>
-											<a href={menuItem.url}>
-												{menuItem.icon && (
-													<menuItem.icon
-														className="text-muted-foreground/60 group-data-[active=true]/menu-button:text-primary"
-														size={22}
-														aria-hidden="true"
-													/>
+											<a href={menuItem.url} className="relative flex items-center justify-between w-full">
+												<div className="flex items-center gap-3">
+													{menuItem.icon && (
+														<menuItem.icon
+															className="text-muted-foreground/60 group-data-[active=true]/menu-button:text-primary"
+															size={22}
+															aria-hidden="true"
+														/>
+													)}
+													<span>{menuItem.title}</span>
+												</div>
+												{menuItem.title === "Office Calendar" && !pathname.startsWith("/admin") && (
+													<AnnouncementBadge />
 												)}
-												<span>{menuItem.title}</span>
 											</a>
 										</SidebarMenuButton>
 									</SidebarMenuItem>
