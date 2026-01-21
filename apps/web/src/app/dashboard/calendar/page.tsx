@@ -55,6 +55,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import UserDropdown from "@/components/user-dropdown";
 import {
 	RiCalendarLine,
@@ -449,7 +450,7 @@ export default function CalendarPage() {
 	if (isPending) {
 		return (
 			<div className="flex h-screen items-center justify-center">
-				<div className="animate-spin">Loading...</div>
+				<LoadingSpinner size="lg" text="Loading..." />
 			</div>
 		);
 	}

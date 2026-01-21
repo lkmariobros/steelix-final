@@ -28,7 +28,6 @@ import { RecentTransactions } from "./components/recent-transactions";
 import { TeamLeaderboard } from "./components/team-leaderboard";
 import { TransactionOverview } from "./components/transaction-overview";
 import { LeadershipBonusWidget } from "./components/leadership-bonus-widget";
-import { AnnouncementWidget } from "./components/announcement-widget";
 
 interface AgentDashboardProps {
 	className?: string;
@@ -188,12 +187,7 @@ export function AgentDashboard({ className }: AgentDashboardProps) {
 					<TeamLeaderboard />
 				</div>
 
-				{/* Fourth Row - Announcements Widget */}
-				<div className="col-span-full">
-					<AnnouncementWidget />
-				</div>
-
-				{/* Fifth Row - Leadership Bonus Widget */}
+				{/* Fourth Row - Leadership Bonus Widget */}
 				<div className="col-span-full">
 					<LeadershipBonusWidget />
 				</div>

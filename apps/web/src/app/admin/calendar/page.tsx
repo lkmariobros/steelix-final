@@ -54,6 +54,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import UserDropdown from "@/components/user-dropdown";
 import {
 	RiCalendarLine,
@@ -458,10 +459,7 @@ export default function AdminCalendarPage() {
 	if (isPending || isRoleLoading) {
 		return (
 			<div className="flex h-screen items-center justify-center">
-				<div className="text-center">
-					<div className="mx-auto h-8 w-8 animate-spin rounded-full border-primary border-b-2" />
-					<p className="mt-2 text-muted-foreground text-sm">Loading...</p>
-				</div>
+				<LoadingSpinner size="lg" text="Loading..." />
 			</div>
 		);
 	}
