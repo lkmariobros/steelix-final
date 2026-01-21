@@ -126,7 +126,7 @@ function AnnouncementNotification() {
 			<PopoverContent
 				align="start"
 				side="right"
-				className="w-80 max-h-[400px] overflow-y-auto p-0"
+				className="w-80 max-h-[400px] overflow-y-auto p-0 -translate-y-[5px]"
 			>
 				<div className="border-b p-4">
 					<div className="flex items-center justify-between">
