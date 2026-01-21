@@ -589,36 +589,36 @@ if (isBunRuntime) {
 			return;
 		}
 
-		try {
-			const server = Bun.serve({
-				fetch: app.fetch,
-				port: Number(port),
+	try {
+		const server = Bun.serve({
+			fetch: app.fetch,
+			port: Number(port),
 				hostname: "127.0.0.1", // Use 127.0.0.1 for better Windows compatibility
 				idleTimeout: 60, // 60 seconds timeout for long-running queries (default is 10s)
-			});
+		});
 
 			// Store server reference for hot reload
 			globalServer.server = server;
 			retryCount = 0; // Reset retry count on success
 
-			console.log(`✅ Development server started successfully on port ${port}`);
-			console.log(`🌐 Server accessible at http://localhost:${port}`);
-			console.log("🔥 Hot reload enabled");
+		console.log(`✅ Development server started successfully on port ${port}`);
+		console.log(`🌐 Server accessible at http://localhost:${port}`);
+		console.log("🔥 Hot reload enabled");
 
-			// Handle graceful shutdown
-			process.on("SIGTERM", () => {
-				console.log("🛑 SIGTERM received, shutting down gracefully");
-				server.stop();
+		// Handle graceful shutdown
+		process.on("SIGTERM", () => {
+			console.log("🛑 SIGTERM received, shutting down gracefully");
+			server.stop();
 				delete globalServer.server;
-				process.exit(0);
-			});
+			process.exit(0);
+		});
 
-			process.on("SIGINT", () => {
-				console.log("🛑 SIGINT received, shutting down gracefully");
-				server.stop();
+		process.on("SIGINT", () => {
+			console.log("🛑 SIGINT received, shutting down gracefully");
+			server.stop();
 				delete globalServer.server;
-				process.exit(0);
-			});
+			process.exit(0);
+		});
 		} catch (error: any) {
 			// If port is in use, wait and retry (common during hot reload)
 			if ((error?.code === "EADDRINUSE" || error?.message?.includes("port") || error?.message?.includes("in use")) && retryCount < MAX_RETRIES) {
@@ -636,10 +636,10 @@ if (isBunRuntime) {
 				console.error(`   4. Or stop the server and restart: Press Ctrl+C to stop`);
 				process.exit(1);
 			} else {
-				console.error("❌ Failed to start development server:", error);
+		console.error("❌ Failed to start development server:", error);
 				console.error("💡 Tip: Run 'netstat -ano | findstr :8080' to find the process, then 'taskkill /PID <PID> /F' to kill it");
-				process.exit(1);
-			}
+		process.exit(1);
+	}
 		}
 	};
 

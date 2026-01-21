@@ -7,6 +7,7 @@ import * as reportsSchema from "./schema/reports";
 import * as crmSchema from "./schema/crm";
 import * as autoReplySchema from "./schema/auto-reply";
 import * as whatsappSchema from "./schema/whatsapp";
+import * as calendarSchema from "./schema/calendar";
 
 const schema = {
 	...authSchema,
@@ -16,6 +17,7 @@ const schema = {
 	...crmSchema,
 	...autoReplySchema,
 	...whatsappSchema,
+	...calendarSchema,
 };
 
 // ✅ PERFORMANCE: Connection pooling for better database performance
