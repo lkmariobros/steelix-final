@@ -217,7 +217,7 @@ export const crmRouter = router({
 					const prospect = {
 						...r.prospect,
 						type: prospectType as "tenant" | "buyer", // Migrate "owner" to "buyer"
-						stage: r.prospect.stage || "prospect",
+						stage: r.prospect.stage || "new_lead",
 						leadType: r.prospect.leadType || "personal",
 						tags: r.prospect.tags || null, // Keep for backward compatibility
 					};

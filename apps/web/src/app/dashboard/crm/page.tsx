@@ -127,7 +127,18 @@ const prospectFormSchema = z.object({
 	status: z.enum(["active", "inactive", "pending"], {
 		required_error: "Please select a status",
 	}),
-	stage: z.enum(["prospect", "outreach", "discovery", "proposal", "negotiation", "closed_won", "closed_lost"]).default("prospect").optional(),
+	stage: z.enum([
+		"new_lead",
+		"follow_up_in_progress",
+		"no_pick_reply",
+		"follow_up_for_appointment",
+		"potential_lead",
+		"consider_seen",
+		"appointment_made",
+		"reject_project",
+		"booking_made",
+		"spam_fake_lead",
+	]).default("new_lead").optional(),
 	leadType: z.enum(["personal", "company"]).default("personal").optional(),
 	tagIds: z.array(z.string().uuid()).optional(),
 });
@@ -275,11 +286,11 @@ export default function CRMPage() {
 		// TODO: Open WhatsApp message
 		console.log("Message prospect:", prospect);
 		
-		// Show micro-prompt to move to Outreach stage
-		if (prospect.stage === "prospect") {
+		// Show micro-prompt to move to Follow Up In Progress stage
+		if (prospect.stage === "new_lead") {
 			setStagePromptProspect(prospect);
-			setStagePromptMessage("Move lead to Outreach stage?");
-			setStagePromptTargetStage("outreach");
+			setStagePromptMessage("Move lead to Follow Up In Progress?");
+			setStagePromptTargetStage("follow_up_in_progress");
 			setIsStagePromptOpen(true);
 		}
 	};
@@ -289,15 +300,15 @@ export default function CRMPage() {
 		console.log("Call prospect:", prospect);
 		
 		// Show micro-prompt based on current stage
-		if (prospect.stage === "prospect") {
+		if (prospect.stage === "new_lead") {
 			setStagePromptProspect(prospect);
-			setStagePromptMessage("Move lead to Outreach stage?");
-			setStagePromptTargetStage("outreach");
+			setStagePromptMessage("Move lead to Follow Up In Progress?");
+			setStagePromptTargetStage("follow_up_in_progress");
 			setIsStagePromptOpen(true);
-		} else if (prospect.stage === "outreach") {
+		} else if (prospect.stage === "follow_up_in_progress") {
 			setStagePromptProspect(prospect);
-			setStagePromptMessage("Move lead to Discovery stage?");
-			setStagePromptTargetStage("discovery");
+			setStagePromptMessage("Move lead to Follow Up For Appointment?");
+			setStagePromptTargetStage("follow_up_for_appointment");
 			setIsStagePromptOpen(true);
 		}
 	};
@@ -1047,11 +1058,11 @@ export default function CRMPage() {
 										Prospect: <span className="font-semibold text-foreground">{stagePromptProspect.name}</span>
 									</div>
 									<div className="text-sm text-muted-foreground mt-1">
-										Current: <span className="font-semibold text-foreground capitalize">{stagePromptProspect.stage.replace("_", " ")}</span>
+										Current: <span className="font-semibold text-foreground capitalize">{stagePromptProspect.stage.replace(/_/g, " ")}</span>
 									</div>
 									{stagePromptTargetStage && (
 										<div className="text-sm text-muted-foreground mt-1">
-											New: <span className="font-semibold text-foreground capitalize">{stagePromptTargetStage.replace("_", " ")}</span>
+											New: <span className="font-semibold text-foreground capitalize">{stagePromptTargetStage.replace(/_/g, " ")}</span>
 										</div>
 									)}
 								</div>
