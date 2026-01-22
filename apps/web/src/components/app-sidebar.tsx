@@ -1,6 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
+import { useState } from "react";
 import type * as React from "react";
 
 import { SearchForm } from "@/components/search-form";
@@ -53,7 +54,13 @@ const data = {
 };
 
 // Component for notification bell with announcements popover
-function AnnouncementNotification() {
+function AnnouncementNotification({ 
+	open, 
+	onOpenChange 
+}: { 
+	open?: boolean; 
+	onOpenChange?: (open: boolean) => void;
+}) {
 	const pathname = usePathname();
 	const router = useRouter();
 	const { data: session } = authClient.useSession();
@@ -101,7 +108,7 @@ function AnnouncementNotification() {
 	}
 
 	return (
-		<Popover>
+		<Popover open={open} onOpenChange={onOpenChange}>
 			<PopoverTrigger asChild>
 				<Button
 					variant="ghost"
@@ -201,6 +208,7 @@ function AnnouncementNotification() {
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 	const pathname = usePathname();
+	const [isAnnouncementPopoverOpen, setIsAnnouncementPopoverOpen] = useState(false);
 
 	// Path-based navigation logic - no role checking in sidebar
 	const isCurrentlyInAdminPortal = pathname.startsWith("/admin");
@@ -352,14 +360,25 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 				))}
 			</SidebarContent>
 			<SidebarFooter>
+				{/* Notification Bell - Bottom Left (above Sign Out) */}
+				<div className="flex flex-col gap-2 px-2 py-2">
+					<div 
+						className="flex justify-start items-center gap-2 cursor-pointer hover:bg-sidebar-accent rounded-md p-1 transition-colors"
+						onClick={() => setIsAnnouncementPopoverOpen(true)}
+					>
+						<AnnouncementNotification 
+							open={isAnnouncementPopoverOpen}
+							onOpenChange={setIsAnnouncementPopoverOpen}
+						/>
+						<span>Announcement</span>
+					</div>
+				</div>
 				<hr className="-mt-px mx-2 border-border border-t" />
-				<div className="flex items-center gap-2 px-2 py-2">
-					{/* Notification Bell - Bottom Left */}
-					<AnnouncementNotification />
+				<div className="flex flex-col gap-2 px-2 py-2">
 					{/* Sign Out Button */}
-					<SidebarMenu className="flex-1">
+					<SidebarMenu>
 						<SidebarMenuItem>
-							<SidebarMenuButton className="h-9 gap-3 rounded-md bg-gradient-to-r font-medium hover:bg-transparent hover:from-sidebar-accent hover:to-sidebar-accent/40 data-[active=true]:from-primary/20 data-[active=true]:to-primary/5 [&>svg]:size-auto">
+							<SidebarMenuButton className="h-9 gap-4 rounded-md bg-gradient-to-r font-medium hover:bg-transparent hover:from-sidebar-accent hover:to-sidebar-accent/40 data-[active=true]:from-primary/20 data-[active=true]:to-primary/5 [&>svg]:size-auto">
 								<RiLogoutBoxLine
 									className="text-muted-foreground/60 group-data-[active=true]/menu-button:text-primary"
 									size={22}

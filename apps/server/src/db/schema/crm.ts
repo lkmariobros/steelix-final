@@ -22,15 +22,18 @@ export const prospectStatusEnum = pgEnum("prospect_status", [
 	"pending",
 ]);
 
-// Pipeline stage enum (for Kanban board)
+// Pipeline stage enum (for Kanban board) - Updated to match client's CRM system
 export const pipelineStageEnum = pgEnum("pipeline_stage", [
-	"prospect",
-	"outreach",
-	"discovery",
-	"proposal",
-	"negotiation",
-	"closed_won",
-	"closed_lost",
+	"new_lead",
+	"follow_up_in_progress",
+	"no_pick_reply",
+	"follow_up_for_appointment",
+	"potential_lead",
+	"consider_seen",
+	"appointment_made",
+	"reject_project",
+	"booking_made",
+	"spam_fake_lead",
 ]);
 
 // Lead type enum (company vs personal)
@@ -52,7 +55,7 @@ export const prospects = pgTable(
 		property: text("property").notNull(), // Free text field - users can enter any property name
 		status: prospectStatusEnum("status").notNull(), // Keep for backward compatibility
 		// Pipeline stage for Kanban board
-		stage: pipelineStageEnum("stage").default("prospect").notNull(),
+		stage: pipelineStageEnum("stage").default("new_lead").notNull(),
 		// Lead type: personal (agent's own) or company (can be claimed)
 		leadType: leadTypeEnum("lead_type").default("personal").notNull(),
 		// Tags for categorization (stored as comma-separated string for simplicity)
@@ -146,13 +149,16 @@ export const prospectTypeSchema = z.enum(["tenant", "buyer"]);
 export const propertyTypeSchema = z.string().min(1, "Property name is required"); // Free text validation
 export const prospectStatusSchema = z.enum(["active", "inactive", "pending"]);
 export const pipelineStageSchema = z.enum([
-	"prospect",
-	"outreach",
-	"discovery",
-	"proposal",
-	"negotiation",
-	"closed_won",
-	"closed_lost",
+	"new_lead",
+	"follow_up_in_progress",
+	"no_pick_reply",
+	"follow_up_for_appointment",
+	"potential_lead",
+	"consider_seen",
+	"appointment_made",
+	"reject_project",
+	"booking_made",
+	"spam_fake_lead",
 ]);
 export const leadTypeSchema = z.enum(["personal", "company"]);
 
@@ -167,7 +173,7 @@ export const insertProspectSchema = z.object({
 	type: prospectTypeSchema,
 	property: propertyTypeSchema,
 	status: prospectStatusSchema,
-	stage: pipelineStageSchema.default("prospect").optional(),
+	stage: pipelineStageSchema.default("new_lead").optional(),
 	leadType: leadTypeSchema.default("personal").optional(),
 	tags: z.string().optional(), // Comma-separated tags
 	lastContact: z.date().optional(),

@@ -55,6 +55,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { Calendar } from "@/components/ui/calendar";
 import UserDropdown from "@/components/user-dropdown";
 import {
 	RiCalendarLine,
@@ -68,7 +69,11 @@ import {
 	RiNotificationLine,
 	RiPushpinLine,
 	RiShieldUserLine,
+	RiArrowLeftLine,
+	RiArrowRightLine,
+	RiSearchLine,
 } from "@remixicon/react";
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isToday, isSameMonth, addMonths, subMonths } from "date-fns";
 
 // Type definitions
 type EventType = "meeting" | "training" | "announcement" | "holiday" | "deadline" | "other";
@@ -140,6 +145,8 @@ export default function AdminCalendarPage() {
 	const [isAnnouncementDialogOpen, setIsAnnouncementDialogOpen] = useState(false);
 	const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
 	const [editingAnnouncement, setEditingAnnouncement] = useState<Announcement | null>(null);
+	const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
+	const [selectedDateForEvent, setSelectedDateForEvent] = useState<Date | null>(null);
 
 	// Admin role checking
 	const { data: roleData, isLoading: isRoleLoading } = trpc.admin.checkAdminRole.useQuery(
@@ -153,16 +160,16 @@ export default function AdminCalendarPage() {
 	// Check if user is admin
 	const isAdmin = roleData?.hasAdminAccess || (session?.user as any)?.role === "admin";
 
-	// Fetch upcoming events
-	const { data: upcomingEventsData } = trpc.calendar.upcomingEvents.useQuery(
-		{ days: 30 },
-		{ enabled: !!session && (eventViewMode === "upcoming" || !isAdmin) }
+	// Fetch all events for calendar view (needed for monthly display)
+	const { data: allEventsData } = trpc.calendar.listEvents.useQuery(
+		{ includeInactive: isAdmin },
+		{ enabled: !!session }
 	);
 
-	// Fetch all events (admin only, includes past and inactive)
-	const { data: allEventsData } = trpc.calendar.listEvents.useQuery(
-		{ includeInactive: true },
-		{ enabled: !!session && isAdmin && eventViewMode === "all" }
+	// Fetch upcoming events for list view
+	const { data: upcomingEventsData } = trpc.calendar.upcomingEvents.useQuery(
+		{ days: 30 },
+		{ enabled: !!session && (eventViewMode === "upcoming" || !isAdmin) && viewMode !== "calendar" }
 	);
 
 	// Fetch announcements
@@ -173,8 +180,20 @@ export default function AdminCalendarPage() {
 
 	const upcomingEvents = upcomingEventsData?.events || [];
 	const allEvents = allEventsData?.events || [];
-	const events = isAdmin && eventViewMode === "all" ? allEvents : upcomingEvents;
+	// For calendar view, always use all events; for list view, use filtered events
+	const events = viewMode === "calendar" ? allEvents : (isAdmin && eventViewMode === "all" ? allEvents : upcomingEvents);
 	const announcements = announcementsData?.announcements || [];
+
+	// Group events by date for calendar display
+	const eventsByDate = new Map<string, CalendarEvent[]>();
+	events.forEach((event) => {
+		const eventDate = typeof event.startDate === "string" ? new Date(event.startDate) : event.startDate;
+		const dateKey = format(eventDate, "yyyy-MM-dd");
+		if (!eventsByDate.has(dateKey)) {
+			eventsByDate.set(dateKey, []);
+		}
+		eventsByDate.get(dateKey)!.push(event as CalendarEvent);
+	});
 
 	// Event form
 	const eventForm = useForm<EventFormValues>({
@@ -214,6 +233,7 @@ export default function AdminCalendarPage() {
 			setIsEventDialogOpen(false);
 			eventForm.reset();
 			setEditingEvent(null);
+			setSelectedDateForEvent(null);
 		},
 		onError: (error) => {
 			toast.error(error.message || "Failed to create event");
@@ -227,6 +247,7 @@ export default function AdminCalendarPage() {
 			setIsEventDialogOpen(false);
 			eventForm.reset();
 			setEditingEvent(null);
+			setSelectedDateForEvent(null);
 		},
 		onError: (error) => {
 			toast.error(error.message || "Failed to update event");
@@ -237,6 +258,10 @@ export default function AdminCalendarPage() {
 		onSuccess: () => {
 			toast.success("Event deleted successfully!");
 			queryClient.invalidateQueries({ queryKey: [["calendar"]] });
+			setIsEventDialogOpen(false);
+			eventForm.reset();
+			setEditingEvent(null);
+			setSelectedDateForEvent(null);
 		},
 		onError: (error) => {
 			toast.error(error.message || "Failed to delete event");
@@ -331,14 +356,45 @@ export default function AdminCalendarPage() {
 	};
 
 	// Handlers
-	const handleCreateEvent = () => {
+	const handleCreateEvent = (date?: Date) => {
 		setEditingEvent(null);
-		eventForm.reset();
+		const defaultDate = date || new Date();
+		eventForm.reset({
+			title: "",
+			description: "",
+			eventType: "meeting",
+			startDate: format(defaultDate, "yyyy-MM-dd"),
+			startTime: "",
+			endDate: "",
+			endTime: "",
+			location: "",
+			priority: "normal",
+			isAllDay: false,
+			assignedToAgentId: null,
+		});
+		setSelectedDateForEvent(date || null);
 		setIsEventDialogOpen(true);
+	};
+
+	const handleDayClick = (date: Date) => {
+		if (isAdmin) {
+			handleCreateEvent(date);
+		}
+	};
+
+	const navigateMonth = (direction: "prev" | "next" | "today") => {
+		if (direction === "prev") {
+			setCurrentMonth(subMonths(currentMonth, 1));
+		} else if (direction === "next") {
+			setCurrentMonth(addMonths(currentMonth, 1));
+		} else {
+			setCurrentMonth(new Date());
+		}
 	};
 
 	const handleEditEvent = (event: CalendarEvent) => {
 		setEditingEvent(event);
+		setSelectedDateForEvent(null);
 		const startDate = typeof event.startDate === "string" ? new Date(event.startDate) : event.startDate;
 		const endDate = event.endDate ? (typeof event.endDate === "string" ? new Date(event.endDate) : event.endDate) : null;
 
@@ -535,9 +591,9 @@ export default function AdminCalendarPage() {
 						</div>
 						{isAdmin && (
 							<div className="flex gap-2">
-								<Button onClick={handleCreateEvent} variant="default">
+								<Button onClick={() => handleCreateEvent()} variant="default">
 									<RiAddLine className="mr-2 size-4" />
-									Add Event
+									New Event
 								</Button>
 								<Button onClick={handleCreateAnnouncement} variant="outline">
 									<RiAddLine className="mr-2 size-4" />
@@ -569,162 +625,163 @@ export default function AdminCalendarPage() {
 								Announcements
 							</Button>
 						</div>
-						{isAdmin && viewMode === "calendar" && (
-							<div className="flex items-center gap-1 border rounded-md p-1 bg-muted/50 w-fit">
-								<Button
-									variant={eventViewMode === "upcoming" ? "default" : "ghost"}
-									size="sm"
-									onClick={() => setEventViewMode("upcoming")}
-									className="h-8 text-xs"
-								>
-									Upcoming
-								</Button>
-								<Button
-									variant={eventViewMode === "all" ? "default" : "ghost"}
-									size="sm"
-									onClick={() => setEventViewMode("all")}
-									className="h-8 text-xs"
-								>
-									All Events
-								</Button>
-							</div>
-						)}
 					</div>
 
-					{/* Calendar Events View */}
+					{/* Calendar Events View - Monthly Grid */}
 					{viewMode === "calendar" && (
-						<div className="space-y-4">
-							{events.length === 0 ? (
-								<Card>
-									<CardContent className="flex flex-col items-center justify-center py-12">
-										<RiCalendarLine className="mb-4 size-12 text-muted-foreground" />
-										<p className="text-lg font-medium">
-											{eventViewMode === "all" ? "No events found" : "No upcoming events"}
-										</p>
-										<p className="text-sm text-muted-foreground">
-											{isAdmin
-												? "Create an event to get started"
-												: "Check back later for upcoming events"}
-										</p>
-									</CardContent>
-								</Card>
-							) : (
-								<div className="space-y-4">
-									{isAdmin && eventViewMode === "all" && (
-										<div className="text-sm text-muted-foreground">
-											Showing {events.length} event{events.length !== 1 ? "s" : ""} (including past and inactive)
+						<Card className="w-full">
+							<CardContent className="p-6">
+								{/* Calendar Header with Navigation */}
+								<div className="flex items-center justify-between mb-6">
+									{/* Current Date Display */}
+									<div className="flex items-center gap-4">
+										<div className="flex flex-col items-center justify-center bg-muted rounded-lg p-3 min-w-[60px]">
+											<div className="text-xs font-medium text-muted-foreground uppercase">
+												{format(currentMonth, "MMM")}
+											</div>
+											<div className="text-2xl font-bold">
+												{format(new Date(), "d")}
+											</div>
 										</div>
-									)}
-									<div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-										{events.map((event) => {
-											const daysUntil = getDaysUntil(event.startDate);
-											const isUpcoming = daysUntil >= 0 && daysUntil <= 7;
-											const isPast = daysUntil < 0;
+										<div>
+											<h2 className="text-2xl font-semibold">
+												{format(currentMonth, "MMMM, yyyy")}
+											</h2>
+											<p className="text-sm text-muted-foreground">
+												{format(startOfMonth(currentMonth), "MMM d, yyyy")} - {format(endOfMonth(currentMonth), "MMM d, yyyy")}
+											</p>
+										</div>
+									</div>
 
-											return (
-												<Card 
-													key={event.id} 
-													className={
-														isPast && eventViewMode === "all"
-															? "border-gray-300 opacity-75"
-															: isUpcoming
-															? "border-blue-500"
-															: ""
-													}
-												>
-												<CardHeader>
-													<div className="flex items-start justify-between">
-														<div className="flex-1">
-															<CardTitle className="text-lg">{event.title}</CardTitle>
-															{isAdmin && !event.isActive && (
-																<Badge variant="outline" className="mt-1 text-xs text-muted-foreground">
-																	Inactive
-																</Badge>
-															)}
-														</div>
-														{isAdmin && (
-															<div className="flex gap-1">
-																<Button
-																	variant="ghost"
-																	size="sm"
-																	onClick={() => handleEditEvent(event as CalendarEvent)}
-																	className="h-8 w-8 p-0"
-																>
-																	<RiEditLine className="size-4" />
-																</Button>
-																<Button
-																	variant="ghost"
-																	size="sm"
-																	onClick={() => handleDeleteEvent(event.id)}
-																	className="h-8 w-8 p-0 text-destructive"
-																>
-																	<RiDeleteBinLine className="size-4" />
-																</Button>
-															</div>
-														)}
-													</div>
-													<div className="flex flex-wrap gap-2 mt-2">
-														<Badge className={getEventTypeColor(event.eventType)}>
-															{event.eventType}
-														</Badge>
-														<Badge className={getPriorityColor(event.priority || "normal")}>
-															{event.priority || "normal"}
-														</Badge>
-														{isPast && eventViewMode === "all" && (
-															<Badge variant="outline" className="text-xs">
-																Past
-															</Badge>
-														)}
-													</div>
-												</CardHeader>
-												<CardContent className="space-y-2">
-													{event.description && (
-														<p className="text-sm text-muted-foreground">{event.description}</p>
-													)}
-													<div className="space-y-1 text-sm">
-														<div className="flex items-center gap-2">
-															<RiTimeLine className="size-4 text-muted-foreground" />
-															<span>
-																{formatDate(event.startDate)}
-																{!event.isAllDay && ` at ${formatTime(event.startDate)}`}
-															</span>
-														</div>
-														{event.location && (
-															<div className="flex items-center gap-2">
-																<RiMapPinLine className="size-4 text-muted-foreground" />
-																<span>{event.location}</span>
-															</div>
-														)}
-														{daysUntil >= 0 && daysUntil <= 7 && (
-															<div className="flex items-center gap-2 text-blue-600 font-medium">
-																<RiAlarmLine className="size-4" />
-																<span>
-																	{daysUntil === 0
-																		? "Today"
-																		: daysUntil === 1
-																			? "Tomorrow"
-																			: `In ${daysUntil} days`}
-																</span>
-															</div>
-														)}
-														{isPast && eventViewMode === "all" && (
-															<div className="flex items-center gap-2 text-muted-foreground text-sm">
-																<span>
-																	{Math.abs(daysUntil) === 1
-																		? "Yesterday"
-																		: `${Math.abs(daysUntil)} days ago`}
-																</span>
-															</div>
-														)}
-													</div>
-												</CardContent>
-												</Card>
-											);
-										})}
+									{/* Navigation Controls */}
+									<div className="flex items-center gap-2">
+										<Button
+											variant="ghost"
+											size="icon"
+											onClick={() => navigateMonth("prev")}
+											className="h-9 w-9"
+										>
+											<RiArrowLeftLine className="size-5" />
+										</Button>
+										<Button
+											variant="outline"
+											size="sm"
+											onClick={() => navigateMonth("today")}
+											className="h-9"
+										>
+											Today
+										</Button>
+										<Button
+											variant="ghost"
+											size="icon"
+											onClick={() => navigateMonth("next")}
+											className="h-9 w-9"
+										>
+											<RiArrowRightLine className="size-5" />
+										</Button>
+										{isAdmin && (
+											<Button
+												variant="default"
+												size="sm"
+												onClick={() => handleCreateEvent()}
+												className="h-9 ml-2"
+											>
+												<RiAddLine className="mr-2 size-4" />
+												New Event
+											</Button>
+										)}
 									</div>
 								</div>
-							)}
-						</div>
+
+								{/* Calendar Grid */}
+								<div className="border rounded-lg overflow-hidden">
+									{/* Days of Week Header */}
+									<div className="grid grid-cols-7 border-b bg-muted/50">
+										{["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
+											<div
+												key={day}
+												className="p-3 text-center text-sm font-medium text-muted-foreground border-r last:border-r-0"
+											>
+												{day}
+											</div>
+										))}
+									</div>
+
+									{/* Calendar Days Grid */}
+									<div className="grid grid-cols-7">
+										{(() => {
+											const monthStart = startOfMonth(currentMonth);
+											const monthEnd = endOfMonth(currentMonth);
+											const calendarStart = new Date(monthStart);
+											calendarStart.setDate(calendarStart.getDate() - calendarStart.getDay());
+											const calendarEnd = new Date(monthEnd);
+											calendarEnd.setDate(calendarEnd.getDate() + (6 - calendarEnd.getDay()));
+											const days = eachDayOfInterval({ start: calendarStart, end: calendarEnd });
+
+											return days.map((day, index) => {
+												const dateKey = format(day, "yyyy-MM-dd");
+												const dayEvents = eventsByDate.get(dateKey) || [];
+												const isCurrentMonth = isSameMonth(day, currentMonth);
+												const isCurrentDay = isToday(day);
+
+												return (
+													<div
+														key={index}
+														className={`min-h-[120px] border-r border-b last:border-r-0 p-2 ${
+															!isCurrentMonth ? "bg-muted/30" : "bg-background"
+														} ${isAdmin ? "cursor-pointer hover:bg-muted/50 transition-colors" : ""}`}
+														onClick={() => isAdmin && handleDayClick(day)}
+													>
+														<div className="flex items-center justify-between mb-1">
+															<span
+																className={`text-sm font-medium ${
+																	isCurrentDay
+																		? "flex items-center justify-center w-7 h-7 rounded-full bg-primary text-primary-foreground"
+																		: !isCurrentMonth
+																		? "text-muted-foreground"
+																		: "text-foreground"
+																}`}
+															>
+																{format(day, "d")}
+															</span>
+														</div>
+														<div className="space-y-1">
+															{dayEvents.slice(0, 3).map((event) => (
+																<div
+																	key={event.id}
+																	onClick={(e) => {
+																		e.stopPropagation();
+																		if (isAdmin) {
+																			handleEditEvent(event);
+																		}
+																	}}
+																	className={`text-xs p-1.5 rounded truncate cursor-pointer ${
+																		getEventTypeColor(event.eventType)
+																	} ${!event.isActive ? "opacity-50" : ""}`}
+																	title={event.title}
+																>
+																	{!event.isAllDay && (
+																		<span className="font-medium">
+																			{formatTime(event.startDate)}{" "}
+																		</span>
+																	)}
+																	{event.title}
+																</div>
+															))}
+															{dayEvents.length > 3 && (
+																<div className="text-xs text-muted-foreground p-1">
+																	+{dayEvents.length - 3} more
+																</div>
+															)}
+														</div>
+													</div>
+												);
+											});
+										})()}
+									</div>
+								</div>
+							</CardContent>
+						</Card>
 					)}
 
 					{/* Announcements View */}
@@ -999,21 +1056,36 @@ export default function AdminCalendarPage() {
 									)}
 								/>
 
-								<DialogFooter>
-									<Button
-										type="button"
-										variant="outline"
-										onClick={() => {
-											setIsEventDialogOpen(false);
-											eventForm.reset();
-											setEditingEvent(null);
-										}}
-									>
-										Cancel
-									</Button>
-									<Button type="submit" disabled={createEventMutation.isPending || updateEventMutation.isPending}>
-										{editingEvent ? "Update Event" : "Create Event"}
-									</Button>
+								<DialogFooter className="flex items-center justify-between sm:justify-between">
+									{editingEvent && (
+										<Button
+											type="button"
+											variant="destructive"
+											onClick={() => handleDeleteEvent(editingEvent.id)}
+											disabled={deleteEventMutation.isPending || createEventMutation.isPending || updateEventMutation.isPending}
+											className="mr-auto"
+										>
+											<RiDeleteBinLine className="mr-2 size-4" />
+											Delete Event
+										</Button>
+									)}
+									<div className="flex gap-2 ml-auto">
+										<Button
+											type="button"
+											variant="outline"
+											onClick={() => {
+												setIsEventDialogOpen(false);
+												eventForm.reset();
+												setEditingEvent(null);
+												setSelectedDateForEvent(null);
+											}}
+										>
+											Cancel
+										</Button>
+										<Button type="submit" disabled={createEventMutation.isPending || updateEventMutation.isPending || deleteEventMutation.isPending}>
+											{editingEvent ? "Update Event" : "Create Event"}
+										</Button>
+									</div>
 								</DialogFooter>
 							</form>
 						</Form>
