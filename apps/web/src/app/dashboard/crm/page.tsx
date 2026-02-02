@@ -52,7 +52,7 @@ import {
 } from "@/components/ui/form";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import UserDropdown from "@/components/user-dropdown";
+import { HeaderActions } from "@/components/header-actions";
 import {
 	RiDashboardLine,
 	RiAddLine,
@@ -490,7 +490,7 @@ export default function CRMPage() {
 						</Breadcrumb>
 					</div>
 					<div className="ml-auto flex gap-3">
-						<UserDropdown />
+						<HeaderActions />
 					</div>
 				</header>
 				<div className="flex flex-1 flex-col gap-4 py-4 lg:gap-6 lg:py-6">

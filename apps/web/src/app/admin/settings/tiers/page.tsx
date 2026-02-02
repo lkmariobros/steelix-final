@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/breadcrumb";
 import { LoadingScreen } from "@/components/ui/loading-spinner";
 import { Separator } from "@/components/ui/separator";
-import UserDropdown from "@/components/user-dropdown";
+import { HeaderActions } from "@/components/header-actions";
 import { authClient } from "@/lib/auth-client";
 import { trpc } from "@/utils/trpc";
 import { RiDashboardLine, RiSettings3Line } from "@remixicon/react";
@@ -91,7 +91,7 @@ export default function TierConfigurationPage() {
 						</Breadcrumb>
 					</div>
 					<div className="ml-auto flex gap-3">
-						<UserDropdown />
+						<HeaderActions />
 					</div>
 				</header>
 				<div className="flex flex-1 flex-col gap-4 py-4 lg:gap-6 lg:py-6">

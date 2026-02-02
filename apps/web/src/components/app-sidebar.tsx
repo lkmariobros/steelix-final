@@ -208,6 +208,7 @@ function AnnouncementNotification({
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 	const pathname = usePathname();
+	const router = useRouter();
 	const [isAnnouncementPopoverOpen, setIsAnnouncementPopoverOpen] = useState(false);
 
 	// Path-based navigation logic - no role checking in sidebar
@@ -286,21 +287,21 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 						url: "/dashboard/crm",
 						icon: RiUserLine,
 					},
-					{
-						title: "WhatsApp",
-						url: "/dashboard/whatsapp",
-						icon: RiMessageLine,
-					},
-					{
-						title: "Auto-Reply",
-						url: "/dashboard/auto-reply",
-						icon: RiRobotLine,
-					},
-					{
-						title: "Office Calendar",
-						url: "/dashboard/calendar",
-						icon: RiCalendarLine,
-					},
+					// {
+					// 	title: "WhatsApp",
+					// 	url: "/dashboard/whatsapp",
+					// 	icon: RiMessageLine,
+					// },
+					// {
+					// 	title: "Auto-Reply",
+					// 	url: "/dashboard/auto-reply",
+					// 	icon: RiRobotLine,
+					// },
+					// {
+					// 	title: "Office Calendar",
+					// 	url: "/dashboard/calendar",
+					// 	icon: RiCalendarLine,
+					// },
 				],
 			},
 				{
@@ -360,20 +361,24 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 				))}
 			</SidebarContent>
 			<SidebarFooter>
-				{/* Notification Bell - Bottom Left (above Sign Out) */}
-				<div className="flex flex-col gap-2 px-2 py-2">
-					<div 
-						className="flex justify-start items-center gap-2 cursor-pointer hover:bg-sidebar-accent rounded-md p-1 transition-colors"
-						onClick={() => setIsAnnouncementPopoverOpen(true)}
-					>
-						<AnnouncementNotification 
-							open={isAnnouncementPopoverOpen}
-							onOpenChange={setIsAnnouncementPopoverOpen}
-						/>
-						<span>Announcement</span>
-					</div>
-				</div>
-				<hr className="-mt-px mx-2 border-border border-t" />
+				{/* Announcement button: only on agent dashboard, not admin */}
+				{!isCurrentlyInAdminPortal && (
+					<>
+						<div className="flex flex-col gap-2 px-2 py-2">
+							<div
+								className="flex justify-start items-center gap-2 cursor-pointer hover:bg-sidebar-accent rounded-md p-1 transition-colors"
+								onClick={() => router.push("/dashboard/calendar")}
+							>
+								<AnnouncementNotification
+									open={isAnnouncementPopoverOpen}
+									onOpenChange={setIsAnnouncementPopoverOpen}
+								/>
+								<span>Announcement</span>
+							</div>
+						</div>
+						<hr className="-mt-px mx-2 border-border border-t" />
+					</>
+				)}
 				<div className="flex flex-col gap-2 px-2 py-2">
 					{/* Sign Out Button */}
 					<SidebarMenu>

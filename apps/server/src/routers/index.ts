@@ -8,6 +8,7 @@ import { calendarRouter } from "./calendar";
 import { crmRouter } from "./crm";
 import { dashboardRouter } from "./dashboard";
 import { documentsRouter } from "./documents";
+import { feedbackRouter } from "./feedback";
 import { reportsRouter } from "./reports";
 import { tagsRouter } from "./tags";
 import { transactionsRouter } from "./transactions";
@@ -36,6 +37,7 @@ export const appRouter = router({
 	whatsapp: whatsappRouter,
 	tags: tagsRouter,
 	calendar: calendarRouter,
+	feedback: feedbackRouter,
 });
 
 export type AppRouter = typeof appRouter;

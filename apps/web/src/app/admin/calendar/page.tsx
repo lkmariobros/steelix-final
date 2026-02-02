@@ -56,7 +56,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Calendar } from "@/components/ui/calendar";
-import UserDropdown from "@/components/user-dropdown";
+import { HeaderActions } from "@/components/header-actions";
 import {
 	RiCalendarLine,
 	RiDashboardLine,
@@ -576,7 +576,7 @@ export default function AdminCalendarPage() {
 						</Breadcrumb>
 					</div>
 					<div className="ml-auto flex gap-3">
-						<UserDropdown />
+						<HeaderActions />
 					</div>
 				</header>
 
