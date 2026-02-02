@@ -43,7 +43,7 @@ import {
 } from "@/components/ui/dialog";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { toast } from "sonner";
-import UserDropdown from "@/components/user-dropdown";
+import { HeaderActions } from "@/components/header-actions";
 import {
 	RiDashboardLine,
 	RiAddLine,
@@ -300,7 +300,7 @@ export default function AutoReplyPage() {
 						</Breadcrumb>
 					</div>
 					<div className="ml-auto flex gap-3">
-						<UserDropdown />
+						<HeaderActions />
 					</div>
 				</header>
 				<div className="flex flex-1 flex-col gap-4 py-4 lg:gap-6 lg:py-6">

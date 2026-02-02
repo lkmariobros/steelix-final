@@ -48,7 +48,7 @@ import {
 	TabsTrigger,
 } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import UserDropdown from "@/components/user-dropdown";
+import { HeaderActions } from "@/components/header-actions";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { useTransactionModalActions } from "@/contexts/transaction-modal-context";
 import {
@@ -232,7 +232,7 @@ export default function TransactionsPage() {
 						</Breadcrumb>
 					</div>
 					<div className="ml-auto flex gap-3">
-						<UserDropdown />
+						<HeaderActions />
 					</div>
 				</header>
 				<div className="flex flex-1 flex-col gap-4 py-4 lg:gap-6 lg:py-6">
