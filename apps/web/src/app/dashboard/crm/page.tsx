@@ -87,6 +87,8 @@ interface Prospect {
 	source: string;
 	type: "tenant" | "buyer";
 	property: string; // Free text field
+	projectId?: string | null; // Optional developer project (admin-managed)
+	projectName?: string | null; // Joined label from backend
 	status: "active" | "inactive" | "pending";
 	stage: PipelineStage; // New: Pipeline stage for Kanban
 	leadType: LeadType; // New: Personal or company lead
@@ -124,6 +126,7 @@ const prospectFormSchema = z.object({
 		required_error: "Please select a type",
 	}),
 	property: z.string().min(1, "Property name is required"),
+	projectId: z.string().uuid().optional(),
 	status: z.enum(["active", "inactive", "pending"], {
 		required_error: "Please select a status",
 	}),
@@ -197,6 +200,12 @@ export default function CRMPage() {
 	const [selectedProspect, setSelectedProspect] = useState<Prospect | null>(null);
 	const [prospectToDelete, setProspectToDelete] = useState<Prospect | null>(null);
 	const itemsPerPage = 10;
+
+	// Projects (admin-managed developer projects) for dropdown selection
+	const { data: projectsData } = trpc.crm.projectsList.useQuery(undefined, {
+		enabled: !!session,
+		staleTime: 60_000,
+	});
 
 	// Fetch prospects with tRPC - only when session is available
 	const {
@@ -683,6 +692,39 @@ export default function CRMPage() {
 									/>
 									</div>
 
+									{/* Developer Project (admin-managed) */}
+									<FormField
+										control={form.control}
+										name="projectId"
+										render={({ field }) => (
+											<FormItem>
+												<FormLabel>Developer Project</FormLabel>
+												<Select
+													onValueChange={(value) => field.onChange(value === "__none__" ? undefined : value)}
+													value={field.value ?? "__none__"}
+												>
+													<FormControl>
+														<SelectTrigger>
+															<SelectValue placeholder="Select developer project (optional)" />
+														</SelectTrigger>
+													</FormControl>
+													<SelectContent>
+														<SelectItem value="__none__">None</SelectItem>
+														{(projectsData || []).map((p: any) => (
+															<SelectItem key={p.id} value={p.id}>
+																{p.name}
+															</SelectItem>
+														))}
+													</SelectContent>
+												</Select>
+												<FormDescription>
+													Optional: choose a developer project defined by admin. For agent-defined project names, use the Property field or tags.
+												</FormDescription>
+												<FormMessage />
+											</FormItem>
+										)}
+									/>
+
 									{/* Status */}
 									<FormField
 										control={form.control}
@@ -904,6 +946,17 @@ export default function CRMPage() {
 													{selectedProspect.property || "Not specified"}
 												</div>
 											</div>
+											{selectedProspect.projectName && (
+												<div className="flex items-center justify-between">
+													<div className="flex items-center gap-2 text-sm text-muted-foreground">
+														<RiHomeLine className="size-4" />
+														Developer Project
+													</div>
+													<div className="text-sm font-medium">
+														{selectedProspect.projectName}
+													</div>
+												</div>
+											)}
 										</div>
 									</div>
 
@@ -1328,6 +1381,14 @@ export default function CRMPage() {
 																Property: {prospect.property || "Not specified"}
 															</span>
 														</div>
+														{prospect.projectName && (
+															<div className="flex items-center gap-2">
+																<RiHomeLine className="size-4 text-muted-foreground" />
+																<span className="text-muted-foreground">
+																	Project: {prospect.projectName}
+																</span>
+															</div>
+														)}
 														{prospect.agentName && (
 															<div className="flex items-center gap-2">
 																<RiUserLine className="size-4 text-muted-foreground" />

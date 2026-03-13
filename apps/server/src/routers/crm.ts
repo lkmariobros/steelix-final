@@ -2,11 +2,14 @@ import { and, desc, eq, ilike, inArray, isNull, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../db";
 import {
+	crmProjects,
 	type InsertProspect,
 	type InsertProspectNote,
 	type SelectProspect,
 	type SelectProspectNote,
 	type UpdateProspect,
+	insertCrmProjectSchema,
+	updateCrmProjectSchema,
 	insertProspectSchema,
 	insertProspectNoteSchema,
 	prospectNotes,
@@ -20,7 +23,7 @@ import {
 	leadTypeSchema,
 } from "../db/schema/crm";
 import { user } from "../db/schema/auth";
-import { protectedProcedure, router } from "../lib/trpc";
+import { adminProcedure, protectedProcedure, router } from "../lib/trpc";
 
 // List prospects input schema
 const listProspectsInput = z.object({
@@ -56,6 +59,44 @@ const deleteProspectInput = z.object({
 });
 
 export const crmRouter = router({
+	// Projects
+	projectsList: protectedProcedure.query(async () => {
+		const projects = await db
+			.select()
+			.from(crmProjects)
+			.orderBy(desc(crmProjects.updatedAt));
+		return projects;
+	}),
+
+	projectsCreate: adminProcedure
+		.input(insertCrmProjectSchema)
+		.mutation(async ({ input, ctx }) => {
+			const [created] = await db
+				.insert(crmProjects)
+				.values({
+					name: input.name,
+					createdBy: ctx.session.user.id,
+					updatedAt: new Date(),
+				})
+				.returning();
+			return created;
+		}),
+
+	projectsUpdate: adminProcedure
+		.input(updateCrmProjectSchema)
+		.mutation(async ({ input }) => {
+			const { id, ...update } = input;
+			const [updated] = await db
+				.update(crmProjects)
+				.set({
+					...update,
+					updatedAt: new Date(),
+				})
+				.where(eq(crmProjects.id, id))
+				.returning();
+			return updated;
+		}),
+
 	// List all prospects with filters and pagination
 	list: protectedProcedure.input(listProspectsInput).query(async ({ input, ctx }) => {
 		try {
@@ -168,9 +209,11 @@ export const crmRouter = router({
 					.select({
 						prospect: prospects,
 						agentName: user.name,
+						projectName: crmProjects.name,
 					})
 					.from(prospects)
 					.leftJoin(user, eq(prospects.agentId, user.id))
+					.leftJoin(crmProjects, eq(prospects.projectId, crmProjects.id))
 					.where(and(...conditions))
 					.orderBy(desc(prospects.createdAt))
 					.limit(limit)
@@ -226,6 +269,7 @@ export const crmRouter = router({
 					return {
 						...parsed,
 						agentName: r.agentName || null,
+						projectName: r.projectName || null,
 						tagIds: tagsByProspectId[r.prospect.id]?.map((t) => t.id) || [],
 						tagNames: tagsByProspectId[r.prospect.id]?.map((t) => t.name) || [],
 					};

@@ -1,13 +1,53 @@
-CREATE TYPE "public"."trigger_type" AS ENUM('contains', 'equals', 'starts_with', 'regex');--> statement-breakpoint
-CREATE TYPE "public"."user_status" AS ENUM('tenant', 'owner');--> statement-breakpoint
-CREATE TYPE "public"."event_type" AS ENUM('meeting', 'training', 'announcement', 'holiday', 'deadline', 'other');--> statement-breakpoint
-CREATE TYPE "public"."priority_level" AS ENUM('low', 'normal', 'high', 'urgent');--> statement-breakpoint
-CREATE TYPE "public"."lead_type" AS ENUM('personal', 'company');--> statement-breakpoint
-CREATE TYPE "public"."pipeline_stage" AS ENUM('prospect', 'outreach', 'discovery', 'proposal', 'negotiation', 'closed_won', 'closed_lost');--> statement-breakpoint
-CREATE TYPE "public"."prospect_status" AS ENUM('active', 'inactive', 'pending');--> statement-breakpoint
-CREATE TYPE "public"."prospect_type" AS ENUM('tenant', 'buyer');--> statement-breakpoint
-CREATE TYPE "public"."message_direction" AS ENUM('inbound', 'outbound');--> statement-breakpoint
-CREATE TYPE "public"."message_status" AS ENUM('sent', 'delivered', 'read', 'failed', 'pending');--> statement-breakpoint
+DO $$ BEGIN
+	CREATE TYPE "public"."trigger_type" AS ENUM('contains', 'equals', 'starts_with', 'regex');
+EXCEPTION
+	WHEN duplicate_object THEN NULL;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+	CREATE TYPE "public"."user_status" AS ENUM('tenant', 'owner');
+EXCEPTION
+	WHEN duplicate_object THEN NULL;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+	CREATE TYPE "public"."event_type" AS ENUM('meeting', 'training', 'announcement', 'holiday', 'deadline', 'other');
+EXCEPTION
+	WHEN duplicate_object THEN NULL;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+	CREATE TYPE "public"."priority_level" AS ENUM('low', 'normal', 'high', 'urgent');
+EXCEPTION
+	WHEN duplicate_object THEN NULL;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+	CREATE TYPE "public"."lead_type" AS ENUM('personal', 'company');
+EXCEPTION
+	WHEN duplicate_object THEN NULL;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+	CREATE TYPE "public"."pipeline_stage" AS ENUM('prospect', 'outreach', 'discovery', 'proposal', 'negotiation', 'closed_won', 'closed_lost');
+EXCEPTION
+	WHEN duplicate_object THEN NULL;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+	CREATE TYPE "public"."prospect_status" AS ENUM('active', 'inactive', 'pending');
+EXCEPTION
+	WHEN duplicate_object THEN NULL;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+	CREATE TYPE "public"."prospect_type" AS ENUM('tenant', 'buyer');
+EXCEPTION
+	WHEN duplicate_object THEN NULL;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+	CREATE TYPE "public"."message_direction" AS ENUM('inbound', 'outbound');
+EXCEPTION
+	WHEN duplicate_object THEN NULL;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+	CREATE TYPE "public"."message_status" AS ENUM('sent', 'delivered', 'read', 'failed', 'pending');
+EXCEPTION
+	WHEN duplicate_object THEN NULL;
+END $$;--> statement-breakpoint
 CREATE TABLE "leadership_bonus_payments" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"transaction_id" uuid NOT NULL,

@@ -9,6 +9,25 @@ import {
 import { z } from "zod";
 import { user } from "./auth";
 
+// CRM projects table (admin-managed developer projects)
+export const crmProjects = pgTable(
+	"crm_projects",
+	{
+		id: uuid("id").primaryKey().defaultRandom(),
+		name: text("name").notNull().unique(),
+		// Who created the project (admin)
+		createdBy: text("created_by")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+		updatedAt: timestamp("updated_at").defaultNow().notNull(),
+	},
+	(table) => ({
+		nameIdx: index("idx_crm_projects_name").on(table.name),
+		createdByIdx: index("idx_crm_projects_created_by").on(table.createdBy),
+	}),
+);
+
 // Prospect type enum
 export const prospectTypeEnum = pgEnum("prospect_type", ["tenant", "buyer"]);
 
@@ -53,6 +72,10 @@ export const prospects = pgTable(
 		source: text("source").notNull(), // e.g., "Website", "Social Media", "Referral"
 		type: prospectTypeEnum("type").notNull(),
 		property: text("property").notNull(), // Free text field - users can enter any property name
+		// Optional admin-managed project association (developer projects)
+		projectId: uuid("project_id").references(() => crmProjects.id, {
+			onDelete: "set null",
+		}),
 		status: prospectStatusEnum("status").notNull(), // Keep for backward compatibility
 		// Pipeline stage for Kanban board
 		stage: pipelineStageEnum("stage").default("new_lead").notNull(),
@@ -76,6 +99,7 @@ export const prospects = pgTable(
 		typeIdx: index("idx_prospects_type").on(table.type),
 		propertyIdx: index("idx_prospects_property").on(table.property),
 		leadTypeIdx: index("idx_prospects_lead_type").on(table.leadType),
+		projectIdIdx: index("idx_prospects_project_id").on(table.projectId),
 	}),
 );
 
@@ -172,6 +196,7 @@ export const insertProspectSchema = z.object({
 	source: z.string().min(1, "Please select a source"),
 	type: prospectTypeSchema,
 	property: propertyTypeSchema,
+	projectId: z.string().uuid().optional(),
 	status: prospectStatusSchema,
 	stage: pipelineStageSchema.default("new_lead").optional(),
 	leadType: leadTypeSchema.default("personal").optional(),
@@ -188,6 +213,7 @@ export const selectProspectSchema = z.object({
 	source: z.string(),
 	type: prospectTypeSchema,
 	property: propertyTypeSchema,
+	projectId: z.string().uuid().nullable(),
 	status: prospectStatusSchema,
 	stage: pipelineStageSchema,
 	leadType: leadTypeSchema,
@@ -201,6 +227,23 @@ export const selectProspectSchema = z.object({
 
 export const updateProspectSchema = insertProspectSchema.partial().extend({
 	id: z.string(),
+});
+
+// CRM projects schemas
+export const insertCrmProjectSchema = z.object({
+	name: z.string().min(1, "Project name is required"),
+});
+
+export const selectCrmProjectSchema = z.object({
+	id: z.string().uuid(),
+	name: z.string(),
+	createdBy: z.string(),
+	createdAt: z.date(),
+	updatedAt: z.date(),
+});
+
+export const updateCrmProjectSchema = insertCrmProjectSchema.partial().extend({
+	id: z.string().uuid(),
 });
 
 // Prospect notes schemas
@@ -252,6 +295,9 @@ export type LeadType = z.infer<typeof leadTypeSchema>;
 export type InsertProspect = z.infer<typeof insertProspectSchema>;
 export type SelectProspect = z.infer<typeof selectProspectSchema>;
 export type UpdateProspect = z.infer<typeof updateProspectSchema>;
+export type InsertCrmProject = z.infer<typeof insertCrmProjectSchema>;
+export type SelectCrmProject = z.infer<typeof selectCrmProjectSchema>;
+export type UpdateCrmProject = z.infer<typeof updateCrmProjectSchema>;
 export type InsertProspectNote = z.infer<typeof insertProspectNoteSchema>;
 export type SelectProspectNote = z.infer<typeof selectProspectNoteSchema>;
 export type InsertCrmTag = z.infer<typeof insertCrmTagSchema>;
