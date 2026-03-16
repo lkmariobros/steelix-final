@@ -211,7 +211,7 @@ async function testNewAccount() {
 		if (passwordResult?.rows?.[0]?.password) {
 			const isValid = await bcrypt.compare(
 				NEW_PASSWORD,
-				passwordResult.rows[0].password,
+				passwordResult.rows[0].password as string,
 			);
 			console.log(`   Password validation: ${isValid ? "✅" : "❌"}`);
 
@@ -267,14 +267,16 @@ async function main() {
 		}
 
 		// Step 2: Clean up old account
-		const cleanupSuccess = await cleanupOldAccount(userData.id);
+		const cleanupSuccess = await cleanupOldAccount(userData.id as string);
 		if (!cleanupSuccess) {
 			console.log("❌ Cleanup failed, aborting");
 			return;
 		}
 
 		// Step 3: Create fresh account
-		const newAccount = await createFreshAccount(userData);
+		const newAccount = await createFreshAccount(
+			userData as unknown as unknown as UserBackupRow,
+		);
 		if (!newAccount) {
 			console.log("❌ Account creation failed");
 			return;

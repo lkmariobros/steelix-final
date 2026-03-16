@@ -115,13 +115,18 @@ async function testPasswordHashes(users: UserRow[]) {
 			}
 
 			const storedHash = passwordResult.rows[0].password;
-			const isValid = await bcrypt.compare(testPassword, storedHash);
+			const isValid = await bcrypt.compare(
+				testPassword as string,
+				storedHash as string,
+			);
 
 			console.log(`   Hash validation: ${isValid ? "✅ VALID" : "❌ INVALID"}`);
 			console.log(
-				`   Hash format: ${storedHash.startsWith("$2b$") ? "✅ bcrypt" : "❌ unknown"}`,
+				`   Hash format: ${typeof storedHash === "string" && storedHash.startsWith("$2b$") ? "✅ bcrypt" : "❌ unknown"}`,
 			);
-			console.log(`   Hash length: ${storedHash.length} characters`);
+			console.log(
+				`   Hash length: ${typeof storedHash === "string" ? storedHash.length : 0} characters`,
+			);
 
 			if (!isValid) {
 				console.log("   🔍 Testing other possible passwords...");
@@ -134,7 +139,10 @@ async function testPasswordHashes(users: UserRow[]) {
 
 				for (const testPwd of otherPasswords) {
 					if (testPwd !== testPassword) {
-						const testResult = await bcrypt.compare(testPwd, storedHash);
+						const testResult = await bcrypt.compare(
+							testPwd as string,
+							storedHash as string,
+						);
 						if (testResult) {
 							console.log(`   ✅ Password "${testPwd}" works!`);
 							break;
@@ -207,8 +215,8 @@ async function main() {
 			return;
 		}
 
-		await testPasswordHashes(users);
-		await checkAccountConsistency(users);
+		await testPasswordHashes(users as UserRow[]);
+		await checkAccountConsistency(users as UserRow[]);
 
 		console.log("\n📊 ANALYSIS SUMMARY:");
 		console.log("===================");
@@ -220,21 +228,23 @@ async function main() {
 			console.log("\n🔍 KEY DIFFERENCES:");
 
 			// Compare key fields
-			const differences = [];
+			const differences: string[] = [];
 
 			if (workingUser.email_verified !== failingUser.email_verified) {
 				differences.push(
-					`Email verified: ${workingUser.email_verified} vs ${failingUser.email_verified}`,
+					`Email verified: ${String(workingUser.email_verified)} vs ${String(failingUser.email_verified)}`,
 				);
 			}
 
 			if (workingUser.role !== failingUser.role) {
-				differences.push(`Role: ${workingUser.role} vs ${failingUser.role}`);
+				differences.push(
+					`Role: ${String(workingUser.role)} vs ${String(failingUser.role)}`,
+				);
 			}
 
 			if (workingUser.password_length !== failingUser.password_length) {
 				differences.push(
-					`Password length: ${workingUser.password_length} vs ${failingUser.password_length}`,
+					`Password length: ${Number(workingUser.password_length)} vs ${Number(failingUser.password_length)}`,
 				);
 			}
 
