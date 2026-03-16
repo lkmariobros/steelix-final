@@ -1,13 +1,13 @@
-import { Pool } from "pg";
 import { drizzle } from "drizzle-orm/node-postgres";
-import * as authSchema from "./schema/auth";
-import * as transactionSchema from "./schema/transactions";
+import { Pool } from "pg";
 import * as approvalsSchema from "./schema/approvals";
-import * as reportsSchema from "./schema/reports";
-import * as crmSchema from "./schema/crm";
+import * as authSchema from "./schema/auth";
 import * as autoReplySchema from "./schema/auto-reply";
-import * as whatsappSchema from "./schema/whatsapp";
 import * as calendarSchema from "./schema/calendar";
+import * as crmSchema from "./schema/crm";
+import * as reportsSchema from "./schema/reports";
+import * as transactionSchema from "./schema/transactions";
+import * as whatsappSchema from "./schema/whatsapp";
 
 const schema = {
 	...authSchema,
@@ -73,13 +73,16 @@ pool.on("remove", (client) => {
 
 // Log pool stats periodically in development (every 5 minutes)
 if (process.env.NODE_ENV !== "production") {
-	setInterval(() => {
-		console.log("📊 Database pool stats:", {
-			totalCount: pool.totalCount,
-			idleCount: pool.idleCount,
-			waitingCount: pool.waitingCount,
-		});
-	}, 5 * 60 * 1000); // Every 5 minutes
+	setInterval(
+		() => {
+			console.log("📊 Database pool stats:", {
+				totalCount: pool.totalCount,
+				idleCount: pool.idleCount,
+				waitingCount: pool.waitingCount,
+			});
+		},
+		5 * 60 * 1000,
+	); // Every 5 minutes
 }
 
 // Create Drizzle instance with the pool

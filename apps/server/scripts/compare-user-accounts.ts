@@ -72,7 +72,7 @@ async function compareUserAccounts() {
 				console.log(`   Account Created: ${user.account_created}`);
 				console.log(`   Account Updated: ${user.account_updated}`);
 			} else {
-				console.log(`   ❌ NO ACCOUNT RECORD FOUND`);
+				console.log("   ❌ NO ACCOUNT RECORD FOUND");
 			}
 		});
 
@@ -83,7 +83,9 @@ async function compareUserAccounts() {
 	}
 }
 
-async function testPasswordHashes(users: any[]) {
+type UserRow = { id: string; email: string; password_status?: string };
+
+async function testPasswordHashes(users: UserRow[]) {
 	console.log("\n2️⃣ Testing password hashes...");
 
 	const passwords = {
@@ -141,12 +143,13 @@ async function testPasswordHashes(users: any[]) {
 				}
 			}
 		} catch (error) {
-			console.error(`   ❌ Error testing password: ${error.message}`);
+			const msg = error instanceof Error ? error.message : String(error);
+			console.error(`   ❌ Error testing password: ${msg}`);
 		}
 	}
 }
 
-async function checkAccountConsistency(users: any[]) {
+async function checkAccountConsistency(users: UserRow[]) {
 	console.log("\n3️⃣ Checking account consistency...");
 
 	for (const user of users) {
@@ -168,14 +171,16 @@ async function checkAccountConsistency(users: any[]) {
 
 			console.log(`   Total accounts: ${accountsResult.rows.length}`);
 
-			accountsResult.rows.forEach((account, index) => {
-				console.log(`   Account ${index + 1}:`);
+			let index = 0;
+			for (const account of accountsResult.rows) {
+				index++;
+				console.log(`   Account ${index}:`);
 				console.log(`     ID: ${account.id}`);
 				console.log(`     Account ID: ${account.account_id}`);
 				console.log(`     Provider: ${account.provider_id}`);
 				console.log(`     Created: ${account.created_at}`);
 				console.log(`     Updated: ${account.updated_at}`);
-			});
+			}
 
 			// Check for orphaned sessions
 			const sessionsResult = await db.execute(sql`
@@ -234,7 +239,7 @@ async function main() {
 			}
 
 			if (differences.length > 0) {
-				differences.forEach((diff) => console.log(`   - ${diff}`));
+				for (const diff of differences) console.log(`   - ${diff}`);
 			} else {
 				console.log("   No obvious structural differences found");
 				console.log("   Issue might be with password hash or account linking");

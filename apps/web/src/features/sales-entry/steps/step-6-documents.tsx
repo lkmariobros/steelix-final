@@ -27,10 +27,14 @@ import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 
-import { type DocumentsData, documentsSchema } from "../transaction-schema";
-import { useDocumentUpload, type DocumentCategory, type DocumentFile } from "@/hooks/use-document-upload";
 import { DocumentCategorySelector } from "@/components/document-category-selector";
 import { UploadProgress } from "@/components/upload-progress";
+import {
+	type DocumentCategory,
+	type DocumentFile,
+	useDocumentUpload,
+} from "@/hooks/use-document-upload";
+import { type DocumentsData, documentsSchema } from "../transaction-schema";
 
 interface StepDocumentsProps {
 	data?: DocumentsData;
@@ -45,7 +49,8 @@ export function StepDocuments({
 	onNext,
 	onPrevious,
 }: StepDocumentsProps) {
-	const [selectedCategory, setSelectedCategory] = useState<DocumentCategory>('contract');
+	const [selectedCategory, setSelectedCategory] =
+		useState<DocumentCategory>("contract");
 	const [showCategorySelector, setShowCategorySelector] = useState(false);
 	// Store as File[] instead of FileList to avoid the live object issue
 	const [pendingFiles, setPendingFiles] = useState<File[] | null>(null);
@@ -58,11 +63,18 @@ export function StepDocuments({
 		isUploading,
 		uploadProgress,
 		uploadError,
-		isLoadingDocuments
+		isLoadingDocuments,
 	} = useDocumentUpload(data?.transactionId);
 
 	// Debug logging
-	console.log('[StepDocuments] Render - isUploading:', isUploading, 'uploadProgress:', uploadProgress, 'documents:', documents.length);
+	console.log(
+		"[StepDocuments] Render - isUploading:",
+		isUploading,
+		"uploadProgress:",
+		uploadProgress,
+		"documents:",
+		documents.length,
+	);
 
 	const form = useForm<DocumentsData>({
 		resolver: zodResolver(documentsSchema),
@@ -127,11 +139,11 @@ export function StepDocuments({
 
 	// Handle category selection and upload
 	const handleCategorySelect = async (category: DocumentCategory) => {
-		console.log('[StepDocuments] handleCategorySelect called with:', category);
-		console.log('[StepDocuments] pendingFiles:', pendingFiles);
+		console.log("[StepDocuments] handleCategorySelect called with:", category);
+		console.log("[StepDocuments] pendingFiles:", pendingFiles);
 
 		if (!pendingFiles || pendingFiles.length === 0) {
-			console.log('[StepDocuments] No pending files, returning');
+			console.log("[StepDocuments] No pending files, returning");
 			return;
 		}
 
@@ -140,7 +152,10 @@ export function StepDocuments({
 
 		// pendingFiles is already File[] - no need to convert
 		const filesArray = pendingFiles;
-		console.log('[StepDocuments] Files to upload:', filesArray.map(f => f.name));
+		console.log(
+			"[StepDocuments] Files to upload:",
+			filesArray.map((f) => f.name),
+		);
 
 		// Clear pending files immediately to prevent UI issues
 		setPendingFiles(null);
@@ -151,11 +166,11 @@ export function StepDocuments({
 		try {
 			// Upload files sequentially to avoid overwhelming the server
 			for (const file of filesArray) {
-				console.log('[StepDocuments] Uploading file:', file.name);
+				console.log("[StepDocuments] Uploading file:", file.name);
 				try {
 					await uploadFile(file, category);
 					successCount++;
-					console.log('[StepDocuments] File uploaded successfully:', file.name);
+					console.log("[StepDocuments] File uploaded successfully:", file.name);
 				} catch (fileError) {
 					console.error(`Failed to upload ${file.name}:`, fileError);
 					errorCount++;
@@ -170,7 +185,10 @@ export function StepDocuments({
 				toast.error(`${errorCount} file(s) failed to upload`);
 			}
 
-			console.log('[StepDocuments] All uploads complete. Documents:', documents);
+			console.log(
+				"[StepDocuments] All uploads complete. Documents:",
+				documents,
+			);
 			handleFormChange();
 		} catch (error) {
 			console.error("Upload error:", error);
@@ -274,14 +292,14 @@ export function StepDocuments({
 
 								{/* Show uploading indicator when no progress entries but isUploading is true */}
 								{isUploading && Object.keys(uploadProgress).length === 0 && (
-									<div className="p-3 border rounded-lg bg-muted/50 text-sm text-muted-foreground">
+									<div className="rounded-lg border bg-muted/50 p-3 text-muted-foreground text-sm">
 										Preparing files for upload...
 									</div>
 								)}
 
 								{/* Category Selector Modal */}
 								{showCategorySelector && (
-									<div className="space-y-4 p-4 border rounded-lg bg-background">
+									<div className="space-y-4 rounded-lg border bg-background p-4">
 										<DocumentCategorySelector
 											onSelect={handleCategorySelect}
 											selectedCategory={selectedCategory}

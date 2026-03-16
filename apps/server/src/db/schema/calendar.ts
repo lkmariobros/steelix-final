@@ -1,11 +1,11 @@
 import {
+	boolean,
 	index,
 	pgEnum,
 	pgTable,
 	text,
 	timestamp,
 	uuid,
-	boolean,
 } from "drizzle-orm/pg-core";
 import { z } from "zod";
 import { user } from "./auth";
@@ -46,26 +46,21 @@ export const calendarEvents = pgTable(
 			.notNull()
 			.references(() => user.id, { onDelete: "cascade" }),
 		// Optional: assign to specific agents or teams
-		assignedToAgentId: text("assigned_to_agent_id").references(
-			() => user.id,
-			{ onDelete: "set null" }
-		), // null = all agents see it
+		assignedToAgentId: text("assigned_to_agent_id").references(() => user.id, {
+			onDelete: "set null",
+		}), // null = all agents see it
 		isActive: boolean("is_active").default(true).notNull(),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 		updatedAt: timestamp("updated_at").defaultNow().notNull(),
 	},
 	(table) => ({
-		startDateIdx: index("idx_calendar_events_start_date").on(
-			table.startDate
-		),
-		createdByIdx: index("idx_calendar_events_created_by").on(
-			table.createdBy
-		),
+		startDateIdx: index("idx_calendar_events_start_date").on(table.startDate),
+		createdByIdx: index("idx_calendar_events_created_by").on(table.createdBy),
 		assignedToAgentIdIdx: index("idx_calendar_events_assigned_to").on(
-			table.assignedToAgentId
+			table.assignedToAgentId,
 		),
 		isActiveIdx: index("idx_calendar_events_is_active").on(table.isActive),
-	})
+	}),
 );
 
 // Announcements table (for general office updates without specific dates)
@@ -93,7 +88,7 @@ export const announcements = pgTable(
 		isActiveIdx: index("idx_announcements_is_active").on(table.isActive),
 		isPinnedIdx: index("idx_announcements_is_pinned").on(table.isPinned),
 		expiresAtIdx: index("idx_announcements_expires_at").on(table.expiresAt),
-	})
+	}),
 );
 
 // Zod schemas for validation

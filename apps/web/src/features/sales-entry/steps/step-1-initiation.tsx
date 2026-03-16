@@ -6,6 +6,10 @@ import { ArrowRight } from "lucide-react";
 import { useCallback, useEffect } from "react";
 import { useForm } from "react-hook-form";
 
+// Issue #8 Fix: Import accessible date picker
+import { AccessibleDatePicker } from "@/components/accessible-date-picker";
+// Issue #9 Fix: Import required label components
+import { RequiredFieldsNote, RequiredLabel } from "@/components/required-label";
 import { Button } from "@/components/ui/button";
 import {
 	Card,
@@ -31,10 +35,6 @@ import {
 	SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-// Issue #8 Fix: Import accessible date picker
-import { AccessibleDatePicker } from "@/components/accessible-date-picker";
-// Issue #9 Fix: Import required label components
-import { RequiredLabel, RequiredFieldsNote } from "@/components/required-label";
 
 import {
 	type CompleteTransactionData,
@@ -72,10 +72,13 @@ export function StepInitiation({
 		}
 	}, [form, onUpdate]);
 
-	const handleSubmit = useCallback((formData: InitiationData) => {
-		onUpdate(formData);
-		onNext();
-	}, [onUpdate, onNext]);
+	const handleSubmit = useCallback(
+		(formData: InitiationData) => {
+			onUpdate(formData);
+			onNext();
+		},
+		[onUpdate, onNext],
+	);
 
 	// Auto-selection: Primary Market → Sale
 	useEffect(() => {
@@ -98,7 +101,9 @@ export function StepInitiation({
 
 	// Watch form values for summary display and auto-selection logic
 	const watchedValues = form.watch();
-	const isAutoSelected = watchedValues.marketType === "primary" && watchedValues.transactionType === "sale";
+	const isAutoSelected =
+		watchedValues.marketType === "primary" &&
+		watchedValues.transactionType === "sale";
 
 	return (
 		<div className="space-y-6">
@@ -125,7 +130,9 @@ export function StepInitiation({
 									name="marketType"
 									render={({ field }) => (
 										<FormItem>
-											<FormLabel><RequiredLabel>Market Type</RequiredLabel></FormLabel>
+											<FormLabel>
+												<RequiredLabel>Market Type</RequiredLabel>
+											</FormLabel>
 											<Select
 												onValueChange={(value) => {
 													field.onChange(value);
@@ -164,7 +171,7 @@ export function StepInitiation({
 											<FormLabel>
 												<RequiredLabel>Transaction Type</RequiredLabel>
 												{isAutoSelected && (
-													<span className="ml-2 text-xs text-blue-600 font-medium">
+													<span className="ml-2 font-medium text-blue-600 text-xs">
 														(Auto-selected for Primary Market)
 													</span>
 												)}
@@ -178,10 +185,12 @@ export function StepInitiation({
 												disabled={watchedValues.marketType === "primary"}
 											>
 												<FormControl>
-													<SelectTrigger className={cn(
-														watchedValues.marketType === "primary" &&
-														"bg-blue-50 border-blue-200"
-													)}>
+													<SelectTrigger
+														className={cn(
+															watchedValues.marketType === "primary" &&
+																"border-blue-200 bg-blue-50",
+														)}
+													>
 														<SelectValue placeholder="Select transaction type" />
 													</SelectTrigger>
 												</FormControl>
@@ -196,8 +205,7 @@ export function StepInitiation({
 											<FormDescription>
 												{watchedValues.marketType === "primary"
 													? "Primary market transactions must be sales"
-													: "Specify the type of transaction you're processing"
-												}
+													: "Specify the type of transaction you're processing"}
 											</FormDescription>
 											<FormMessage />
 										</FormItem>
@@ -230,8 +238,8 @@ export function StepInitiation({
 											/>
 										</FormControl>
 										<FormDescription id="transaction-date-description">
-											Enter the date manually (MM/DD/YYYY) or use the calendar button.
-											Date must be today or earlier.
+											Enter the date manually (MM/DD/YYYY) or use the calendar
+											button. Date must be today or earlier.
 										</FormDescription>
 										<FormMessage />
 									</FormItem>

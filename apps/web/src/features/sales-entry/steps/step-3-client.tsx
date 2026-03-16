@@ -32,14 +32,14 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 
+// Issue #9 Fix: Import required label components
+import { RequiredFieldsNote, RequiredLabel } from "@/components/required-label";
 import {
 	type ClientData,
 	clientSchema,
 	clientSourceOptions,
 	clientTypeOptions,
 } from "../transaction-schema";
-// Issue #9 Fix: Import required label components
-import { RequiredLabel, RequiredFieldsNote } from "@/components/required-label";
 
 interface StepClientProps {
 	data?: ClientData;
@@ -130,10 +130,14 @@ export function StepClient({
 	// Filter client type options based on transaction type
 	const getFilteredClientTypes = () => {
 		if (transactionType === "sale") {
-			return clientTypeOptions.filter(opt => opt.value === "buyer" || opt.value === "seller");
+			return clientTypeOptions.filter(
+				(opt) => opt.value === "buyer" || opt.value === "seller",
+			);
 		}
 		if (transactionType === "lease") {
-			return clientTypeOptions.filter(opt => opt.value === "tenant" || opt.value === "landlord");
+			return clientTypeOptions.filter(
+				(opt) => opt.value === "tenant" || opt.value === "landlord",
+			);
 		}
 		return clientTypeOptions;
 	};
@@ -168,7 +172,9 @@ export function StepClient({
 									name="name"
 									render={({ field }) => (
 										<FormItem>
-											<FormLabel><RequiredLabel>Full Name</RequiredLabel></FormLabel>
+											<FormLabel>
+												<RequiredLabel>Full Name</RequiredLabel>
+											</FormLabel>
 											<FormControl>
 												<Input
 													placeholder="Enter client&apos;s full name"
@@ -191,7 +197,9 @@ export function StepClient({
 										name="email"
 										render={({ field }) => (
 											<FormItem>
-												<FormLabel><RequiredLabel>Email Address</RequiredLabel></FormLabel>
+												<FormLabel>
+													<RequiredLabel>Email Address</RequiredLabel>
+												</FormLabel>
 												<FormControl>
 													<Input
 														type="email"
@@ -214,7 +222,9 @@ export function StepClient({
 										name="phone"
 										render={({ field }) => (
 											<FormItem>
-												<FormLabel><RequiredLabel>Phone Number</RequiredLabel></FormLabel>
+												<FormLabel>
+													<RequiredLabel>Phone Number</RequiredLabel>
+												</FormLabel>
 												<FormControl>
 													<Input
 														type="tel"
@@ -270,8 +280,9 @@ export function StepClient({
 												</Select>
 												<FormDescription>
 													{isAutoSuggested && marketType && transactionType ? (
-														<span className="text-blue-600 font-medium">
-															✨ Auto-suggested based on {transactionType} transaction
+														<span className="font-medium text-blue-600">
+															✨ Auto-suggested based on {transactionType}{" "}
+															transaction
 														</span>
 													) : (
 														"Specify the client's role in this transaction"

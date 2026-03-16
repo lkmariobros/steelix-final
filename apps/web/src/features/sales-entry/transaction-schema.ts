@@ -7,29 +7,31 @@ export const representationTypeEnum = z.enum(["direct", "co_broking"]);
 export type RepresentationType = z.infer<typeof representationTypeEnum>;
 
 // Step 1: Initiation Schema with Primary Market → Sale validation
-export const initiationSchema = z.object({
-	marketType: z.enum(["primary", "secondary"], {
-		required_error: "Please select a market type",
-	}),
-	transactionType: z.enum(["sale", "lease"], {
-		required_error: "Please select a transaction type",
-	}),
-	transactionDate: z.date({
-		required_error: "Please select a transaction date",
-	}),
-}).refine(
-	(data) => {
-		// Primary market transactions must be sales
-		if (data.marketType === "primary") {
-			return data.transactionType === "sale";
-		}
-		return true;
-	},
-	{
-		message: "Primary market transactions must be sales",
-		path: ["transactionType"], // Target the error to the transaction type field
-	}
-);
+export const initiationSchema = z
+	.object({
+		marketType: z.enum(["primary", "secondary"], {
+			required_error: "Please select a market type",
+		}),
+		transactionType: z.enum(["sale", "lease"], {
+			required_error: "Please select a transaction type",
+		}),
+		transactionDate: z.date({
+			required_error: "Please select a transaction date",
+		}),
+	})
+	.refine(
+		(data) => {
+			// Primary market transactions must be sales
+			if (data.marketType === "primary") {
+				return data.transactionType === "sale";
+			}
+			return true;
+		},
+		{
+			message: "Primary market transactions must be sales",
+			path: ["transactionType"], // Target the error to the transaction type field
+		},
+	);
 
 // Step 2: Property Schema
 export const propertySchema = z.object({
@@ -46,7 +48,11 @@ export const propertySchema = z.object({
 // Note: isDualPartyDeal has been moved to unified representationType in Step 4
 export const clientSchema = z.object({
 	name: z.string().min(1, "Client name is required"),
-	email: z.string().email("Please enter a valid email address").optional().or(z.literal("")),
+	email: z
+		.string()
+		.email("Please enter a valid email address")
+		.optional()
+		.or(z.literal("")),
 	phone: z.string().min(1, "Phone number is required"),
 	type: z.enum(["buyer", "seller", "tenant", "landlord"], {
 		required_error: "Please select client type",
@@ -73,7 +79,11 @@ const coBrokingBaseSchema = z.object({
 				.max(100, "Commission split must be between 0-100%")
 				.optional(),
 			// Separate email and phone fields for clarity (Issue #11)
-			agentEmail: z.string().email("Please enter a valid email").optional().or(z.literal("")),
+			agentEmail: z
+				.string()
+				.email("Please enter a valid email")
+				.optional()
+				.or(z.literal("")),
 			agentPhone: z.string().optional(),
 			// Legacy field for backward compatibility
 			contactInfo: z.string().optional(),
@@ -128,19 +138,29 @@ export const commissionSchema = z.object({
 	// Representation type for commission calculation display (from Step 4)
 	representationType: representationTypeEnum.optional(),
 	// Agent tier system fields
-	agentTier: z.enum(["advisor", "sales_leader", "team_leader", "group_leader", "supreme_leader"]).optional(),
+	agentTier: z
+		.enum([
+			"advisor",
+			"sales_leader",
+			"team_leader",
+			"group_leader",
+			"supreme_leader",
+		])
+		.optional(),
 	companyCommissionSplit: z.number().min(0).max(100).optional(),
 	// Commission breakdown for transparency (Issue #6 - clearer earnings display)
-	breakdown: z.object({
-		totalCommission: z.number(),
-		agentCommissionShare: z.number(),
-		coBrokerShare: z.number().optional(),
-		companyShare: z.number(),
-		agentEarnings: z.number(),
-		// New: Explicit "Your Share" for clarity
-		yourShare: z.number(),
-		yourSharePercentage: z.number(),
-	}).optional(),
+	breakdown: z
+		.object({
+			totalCommission: z.number(),
+			agentCommissionShare: z.number(),
+			coBrokerShare: z.number().optional(),
+			companyShare: z.number(),
+			agentEarnings: z.number(),
+			// New: Explicit "Your Share" for clarity
+			yourShare: z.number(),
+			yourSharePercentage: z.number(),
+		})
+		.optional(),
 });
 
 // Step 6: Documents Schema
@@ -153,7 +173,9 @@ export const documentsSchema = z.object({
 				type: z.string(),
 				url: z.string(),
 				uploadedAt: z.string(),
-				category: z.enum(['contract', 'identification', 'financial', 'miscellaneous']).optional(),
+				category: z
+					.enum(["contract", "identification", "financial", "miscellaneous"])
+					.optional(),
 			}),
 		)
 		.optional(),
@@ -162,45 +184,47 @@ export const documentsSchema = z.object({
 });
 
 // Complete Transaction Schema (all steps combined) with Primary Market → Sale validation
-export const completeTransactionSchema = z.object({
-	// Step 1: Initiation
-	marketType: z.enum(["primary", "secondary"], {
-		required_error: "Please select a market type",
-	}),
-	transactionType: z.enum(["sale", "lease"], {
-		required_error: "Please select a transaction type",
-	}),
-	transactionDate: z.date({
-		required_error: "Please select a transaction date",
-	}),
+export const completeTransactionSchema = z
+	.object({
+		// Step 1: Initiation
+		marketType: z.enum(["primary", "secondary"], {
+			required_error: "Please select a market type",
+		}),
+		transactionType: z.enum(["sale", "lease"], {
+			required_error: "Please select a transaction type",
+		}),
+		transactionDate: z.date({
+			required_error: "Please select a transaction date",
+		}),
 
-	// Step 2: Property
-	propertyData: propertySchema,
+		// Step 2: Property
+		propertyData: propertySchema,
 
-	// Step 3: Client
-	clientData: clientSchema,
+		// Step 3: Client
+		clientData: clientSchema,
 
-	// Step 4: Co-Broking
-	...coBrokingBaseSchema.shape,
+		// Step 4: Co-Broking
+		...coBrokingBaseSchema.shape,
 
-	// Step 5: Commission
-	...commissionSchema.shape,
+		// Step 5: Commission
+		...commissionSchema.shape,
 
-	// Step 6: Documents
-	...documentsSchema.shape,
-}).refine(
-	(data) => {
-		// Primary market transactions must be sales
-		if (data.marketType === "primary") {
-			return data.transactionType === "sale";
-		}
-		return true;
-	},
-	{
-		message: "Primary market transactions must be sales",
-		path: ["transactionType"],
-	}
-);
+		// Step 6: Documents
+		...documentsSchema.shape,
+	})
+	.refine(
+		(data) => {
+			// Primary market transactions must be sales
+			if (data.marketType === "primary") {
+				return data.transactionType === "sale";
+			}
+			return true;
+		},
+		{
+			message: "Primary market transactions must be sales",
+			path: ["transactionType"],
+		},
+	);
 
 // Individual step schemas for validation
 export const stepSchemas = {
@@ -262,16 +286,21 @@ export const representationTypeOptions = [
 	{
 		value: "direct",
 		label: "Direct Representation",
-		description: "You represent your own client exclusively in this transaction.",
+		description:
+			"You represent your own client exclusively in this transaction.",
 		commissionInfo: "You receive your full agent share of the commission.",
-		primaryMarketNote: "For developer projects: You represent the buyer/tenant, developer represents their project.",
-		secondaryMarketNote: "For resale: You represent the buyer/tenant, owner represents themselves or has their own agent."
+		primaryMarketNote:
+			"For developer projects: You represent the buyer/tenant, developer represents their project.",
+		secondaryMarketNote:
+			"For resale: You represent the buyer/tenant, owner represents themselves or has their own agent.",
 	},
 	{
 		value: "co_broking",
 		label: "Co-Broking",
-		description: "Working with another agent/agency. Commission split required.",
-		commissionInfo: "Commission split with co-broker (configurable percentage)."
+		description:
+			"Working with another agent/agency. Commission split required.",
+		commissionInfo:
+			"Commission split with co-broker (configurable percentage).",
 	},
 ] as const;
 
@@ -300,7 +329,11 @@ export const stepConfig = [
 	{ step: 1, title: "Initiation", description: "Basic transaction details" },
 	{ step: 2, title: "Property", description: "Property information" },
 	{ step: 3, title: "Client", description: "Client details" },
-	{ step: 4, title: "Representation", description: "How you represent this deal" },
+	{
+		step: 4,
+		title: "Representation",
+		description: "How you represent this deal",
+	},
 	{ step: 5, title: "Commission", description: "Commission calculation" },
 	{ step: 6, title: "Documents", description: "Upload documents" },
 	{ step: 7, title: "Review", description: "Review and submit" },
@@ -362,13 +395,17 @@ export function calculateEnhancedCommission(
 	commissionType: "percentage" | "fixed",
 	commissionValue: number,
 	representationType: RepresentationType,
-	agentTier: string = "advisor",
-	companyCommissionSplit: number = 70, // Updated default for New Leadership Plan
-	coBrokerSplitPercentage: number = 50,
-	uplineInfo?: { uplineTier: string; leadershipBonusRate: number } | null
+	agentTier = "advisor",
+	companyCommissionSplit = 70, // Updated default for New Leadership Plan
+	coBrokerSplitPercentage = 50,
+	uplineInfo?: { uplineTier: string; leadershipBonusRate: number } | null,
 ) {
 	// Level 1: Calculate total commission from property
-	const totalCommission = calculateCommission(propertyPrice, commissionType, commissionValue);
+	const totalCommission = calculateCommission(
+		propertyPrice,
+		commissionType,
+		commissionValue,
+	);
 
 	// Level 2: Apply representation type split (simplified to 2 options)
 	let agentCommissionShare: number;
@@ -377,10 +414,10 @@ export function calculateEnhancedCommission(
 	switch (representationType) {
 		case "co_broking":
 			// Co-broking: split with co-broker based on configured split
-			agentCommissionShare = totalCommission * ((100 - coBrokerSplitPercentage) / 100);
+			agentCommissionShare =
+				totalCommission * ((100 - coBrokerSplitPercentage) / 100);
 			coBrokerShare = totalCommission * (coBrokerSplitPercentage / 100);
 			break;
-		case "direct":
 		default:
 			// Direct representation: agent gets full commission share (no co-broker)
 			agentCommissionShare = totalCommission;
@@ -431,6 +468,6 @@ export function calculateEnhancedCommission(
 			agentEarnings,
 			yourShare: agentEarnings,
 			yourSharePercentage: Math.round(yourSharePercentage * 10) / 10,
-		}
+		},
 	};
 }

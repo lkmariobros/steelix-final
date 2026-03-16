@@ -124,28 +124,40 @@ export const transactions = pgTable("transactions", {
 });
 
 // Transaction documents table for file metadata
-export const transactionDocuments = pgTable("transaction_documents", {
-	id: uuid("id").primaryKey().defaultRandom(),
-	transactionId: uuid("transaction_id").notNull().references(() => transactions.id, { onDelete: "cascade" }),
-	userId: text("user_id").notNull(), // References auth.users(id)
-	fileName: text("file_name").notNull(),
-	fileType: text("file_type").notNull(),
-	fileSize: bigint("file_size", { mode: "number" }).notNull(),
-	storagePath: text("storage_path").notNull(),
-	publicUrl: text("public_url"),
-	documentCategory: documentCategoryEnum("document_category").notNull(),
-	uploadedAt: timestamp("uploaded_at").defaultNow().notNull(),
-	updatedAt: timestamp("updated_at").defaultNow().notNull(),
-	metadata: jsonb("metadata").$type<{
-		originalName?: string;
-		uploadedFrom?: string;
-		[key: string]: any;
-	}>().default({}),
-}, (table) => ({
-	transactionIdIdx: index("idx_transaction_documents_transaction_id").on(table.transactionId),
-	userIdIdx: index("idx_transaction_documents_user_id").on(table.userId),
-	categoryIdx: index("idx_transaction_documents_category").on(table.documentCategory),
-}));
+export const transactionDocuments = pgTable(
+	"transaction_documents",
+	{
+		id: uuid("id").primaryKey().defaultRandom(),
+		transactionId: uuid("transaction_id")
+			.notNull()
+			.references(() => transactions.id, { onDelete: "cascade" }),
+		userId: text("user_id").notNull(), // References auth.users(id)
+		fileName: text("file_name").notNull(),
+		fileType: text("file_type").notNull(),
+		fileSize: bigint("file_size", { mode: "number" }).notNull(),
+		storagePath: text("storage_path").notNull(),
+		publicUrl: text("public_url"),
+		documentCategory: documentCategoryEnum("document_category").notNull(),
+		uploadedAt: timestamp("uploaded_at").defaultNow().notNull(),
+		updatedAt: timestamp("updated_at").defaultNow().notNull(),
+		metadata: jsonb("metadata")
+			.$type<{
+				originalName?: string;
+				uploadedFrom?: string;
+				[key: string]: unknown;
+			}>()
+			.default({}),
+	},
+	(table) => ({
+		transactionIdIdx: index("idx_transaction_documents_transaction_id").on(
+			table.transactionId,
+		),
+		userIdIdx: index("idx_transaction_documents_user_id").on(table.userId),
+		categoryIdx: index("idx_transaction_documents_category").on(
+			table.documentCategory,
+		),
+	}),
+);
 
 // Zod schemas for validation
 export const insertTransactionSchema = z.object({
@@ -167,7 +179,11 @@ export const insertTransactionSchema = z.object({
 	clientData: z
 		.object({
 			name: z.string().min(1, "Client name is required"),
-			email: z.string().email("Valid email is required").optional().or(z.literal("")),
+			email: z
+				.string()
+				.email("Valid email is required")
+				.optional()
+				.or(z.literal("")),
 			phone: z.string().min(1, "Phone number is required"),
 			type: z.enum(["buyer", "seller", "tenant", "landlord"]),
 			source: z.string().min(1, "Client source is required"),
@@ -292,7 +308,12 @@ export const insertDocumentSchema = z.object({
 	fileSize: z.number().max(50 * 1024 * 1024), // 50MB limit
 	storagePath: z.string(),
 	publicUrl: z.string().optional(),
-	documentCategory: z.enum(["contract", "identification", "financial", "miscellaneous"]),
+	documentCategory: z.enum([
+		"contract",
+		"identification",
+		"financial",
+		"miscellaneous",
+	]),
 	metadata: z.record(z.any()).optional(),
 });
 
@@ -305,7 +326,12 @@ export const selectDocumentSchema = z.object({
 	fileSize: z.number(),
 	storagePath: z.string(),
 	publicUrl: z.string().nullable(),
-	documentCategory: z.enum(["contract", "identification", "financial", "miscellaneous"]),
+	documentCategory: z.enum([
+		"contract",
+		"identification",
+		"financial",
+		"miscellaneous",
+	]),
 	uploadedAt: z.date(),
 	updatedAt: z.date(),
 	metadata: z.record(z.any()).nullable(),

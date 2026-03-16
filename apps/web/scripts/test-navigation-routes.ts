@@ -10,7 +10,7 @@
  * 4. All sidebar menu items lead to working pages
  */
 
-import { execSync } from "child_process";
+import { execSync } from "node:child_process";
 
 interface RouteTest {
 	path: string;
@@ -121,27 +121,23 @@ async function testRoute(route: RouteTest): Promise<boolean> {
 					`✅ ${route.description}: Status ${actualStatus} (Expected auth-protected behavior)`,
 				);
 				return true;
-			} else if (actualStatus === 404) {
+			}
+			if (actualStatus === 404) {
 				console.log(`❌ ${route.description}: 404 NOT FOUND - Route missing!`);
 				return false;
-			} else {
-				console.log(
-					`⚠️  ${route.description}: Unexpected status ${actualStatus}`,
-				);
-				return false;
 			}
-		} else {
-			// Public routes should return 200
-			if (actualStatus === route.expectedStatus) {
-				console.log(`✅ ${route.description}: Status ${actualStatus} ✓`);
-				return true;
-			} else {
-				console.log(
-					`❌ ${route.description}: Status ${actualStatus} (Expected ${route.expectedStatus})`,
-				);
-				return false;
-			}
+			console.log(`⚠️  ${route.description}: Unexpected status ${actualStatus}`);
+			return false;
 		}
+		// Public routes should return 200
+		if (actualStatus === route.expectedStatus) {
+			console.log(`✅ ${route.description}: Status ${actualStatus} ✓`);
+			return true;
+		}
+		console.log(
+			`❌ ${route.description}: Status ${actualStatus} (Expected ${route.expectedStatus})`,
+		);
+		return false;
 	} catch (error) {
 		console.log(`❌ ${route.description}: Error testing route - ${error}`);
 		return false;
@@ -174,11 +170,10 @@ async function runNavigationTests() {
 		console.log("✅ All sidebar menu items lead to valid routes");
 		console.log("✅ Proper authentication protection in place");
 		return true;
-	} else {
-		console.log("\n⚠️  SOME ROUTES NEED ATTENTION");
-		console.log("Please check the failed routes above");
-		return false;
 	}
+	console.log("\n⚠️  SOME ROUTES NEED ATTENTION");
+	console.log("Please check the failed routes above");
+	return false;
 }
 
 // Additional validation checks
@@ -207,10 +202,9 @@ async function validateImplementation() {
 					if (hasCorrectRedirect && !hasOldRedirect) {
 						console.log("✅ Admin redirect bug fixed");
 						return true;
-					} else {
-						console.log("❌ Admin redirect bug still present");
-						return false;
 					}
+					console.log("❌ Admin redirect bug still present");
+					return false;
 				} catch (error) {
 					console.log("❌ Could not verify admin redirect fix");
 					return false;

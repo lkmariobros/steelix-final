@@ -32,15 +32,15 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 
+// Issue #10 Fix: Import currency input component
+import { CurrencyInput } from "@/components/currency-input";
+// Issue #9 Fix: Import required label components
+import { RequiredFieldsNote, RequiredLabel } from "@/components/required-label";
 import {
 	type PropertyData,
 	propertySchema,
 	propertyTypeOptions,
 } from "../transaction-schema";
-// Issue #9 Fix: Import required label components
-import { RequiredLabel, RequiredFieldsNote } from "@/components/required-label";
-// Issue #10 Fix: Import currency input component
-import { CurrencyInput } from "@/components/currency-input";
 
 interface StepPropertyProps {
 	data?: PropertyData;
@@ -107,7 +107,9 @@ export function StepProperty({
 								name="address"
 								render={({ field }) => (
 									<FormItem>
-										<FormLabel><RequiredLabel>Property Address</RequiredLabel></FormLabel>
+										<FormLabel>
+											<RequiredLabel>Property Address</RequiredLabel>
+										</FormLabel>
 										<div className="flex gap-2">
 											<FormControl>
 												<Input
@@ -139,7 +141,9 @@ export function StepProperty({
 									name="propertyType"
 									render={({ field }) => (
 										<FormItem>
-											<FormLabel><RequiredLabel>Property Type</RequiredLabel></FormLabel>
+											<FormLabel>
+												<RequiredLabel>Property Type</RequiredLabel>
+											</FormLabel>
 											<Select
 												onValueChange={(value) => {
 													field.onChange(value);
@@ -171,7 +175,9 @@ export function StepProperty({
 									name="price"
 									render={({ field }) => (
 										<FormItem>
-											<FormLabel><RequiredLabel>Property Price</RequiredLabel></FormLabel>
+											<FormLabel>
+												<RequiredLabel>Property Price</RequiredLabel>
+											</FormLabel>
 											<FormControl>
 												<CurrencyInput
 													value={field.value}

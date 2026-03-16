@@ -1,5 +1,6 @@
 "use client";
 
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
 	Card,
@@ -8,17 +9,16 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { authClient } from "@/lib/auth-client";
 import { trpc } from "@/utils/trpc";
 import {
-	RiNotificationLine,
 	RiArrowRightLine,
+	RiNotificationLine,
 	RiPushpinLine,
 	RiTimeLine,
 } from "@remixicon/react";
-import { useRouter } from "next/navigation";
 import { formatDistanceToNow } from "date-fns";
+import { useRouter } from "next/navigation";
 
 interface AnnouncementWidgetProps {
 	className?: string;
@@ -28,13 +28,14 @@ export function AnnouncementWidget({ className }: AnnouncementWidgetProps) {
 	const router = useRouter();
 	const { data: session } = authClient.useSession();
 
-	const { data: announcementsData, isLoading } = trpc.calendar.listAnnouncements.useQuery(
-		{ includeExpired: false, includeInactive: false },
-		{
-			enabled: !!session,
-			refetchInterval: 60000, // Refetch every minute
-		}
-	);
+	const { data: announcementsData, isLoading } =
+		trpc.calendar.listAnnouncements.useQuery(
+			{ includeExpired: false, includeInactive: false },
+			{
+				enabled: !!session,
+				refetchInterval: 60000, // Refetch every minute
+			},
+		);
 
 	const announcements = announcementsData?.announcements || [];
 	// Show only pinned announcements or the 3 most recent
@@ -98,13 +99,15 @@ export function AnnouncementWidget({ className }: AnnouncementWidgetProps) {
 			<CardContent>
 				{isLoading ? (
 					<div className="flex flex-col items-center justify-center py-8 text-center">
-						<div className="text-muted-foreground text-sm">Loading announcements...</div>
+						<div className="text-muted-foreground text-sm">
+							Loading announcements...
+						</div>
 					</div>
 				) : displayAnnouncements.length === 0 ? (
 					<div className="flex flex-col items-center justify-center py-8 text-center">
 						<RiNotificationLine className="mb-4 size-12 text-muted-foreground" />
 						<p className="font-medium text-sm">No announcements</p>
-						<p className="text-muted-foreground text-xs mt-1">
+						<p className="mt-1 text-muted-foreground text-xs">
 							Check back later for office updates
 						</p>
 					</div>
@@ -113,24 +116,28 @@ export function AnnouncementWidget({ className }: AnnouncementWidgetProps) {
 						{displayAnnouncements.map((announcement) => (
 							<div
 								key={announcement.id}
-								className="rounded-lg border bg-muted/30 p-3 hover:bg-muted/50 transition-colors cursor-pointer"
+								className="cursor-pointer rounded-lg border bg-muted/30 p-3 transition-colors hover:bg-muted/50"
 								onClick={() => router.push("/dashboard/calendar")}
 							>
-								<div className="flex items-start justify-between gap-2 mb-2">
-									<div className="flex items-center gap-2 flex-1 min-w-0">
+								<div className="mb-2 flex items-start justify-between gap-2">
+									<div className="flex min-w-0 flex-1 items-center gap-2">
 										{announcement.isPinned && (
-											<RiPushpinLine className="size-4 text-yellow-500 shrink-0" />
+											<RiPushpinLine className="size-4 shrink-0 text-yellow-500" />
 										)}
-										<h4 className="font-medium text-sm truncate">{announcement.title}</h4>
+										<h4 className="truncate font-medium text-sm">
+											{announcement.title}
+										</h4>
 									</div>
-									<Badge className={`${getPriorityColor(announcement.priority || "normal")} shrink-0`}>
+									<Badge
+										className={`${getPriorityColor(announcement.priority || "normal")} shrink-0`}
+									>
 										{announcement.priority || "normal"}
 									</Badge>
 								</div>
-								<p className="text-muted-foreground text-xs line-clamp-2 mb-2">
+								<p className="mb-2 line-clamp-2 text-muted-foreground text-xs">
 									{announcement.content}
 								</p>
-								<div className="flex items-center gap-2 text-xs text-muted-foreground">
+								<div className="flex items-center gap-2 text-muted-foreground text-xs">
 									<RiTimeLine className="size-3" />
 									<span>{formatDate(announcement.createdAt)}</span>
 									{announcement.expiresAt && (

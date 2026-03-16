@@ -1,18 +1,13 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
-import { useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
-import { authClient } from "@/lib/auth-client";
-import { trpc } from "@/utils/trpc";
 import { AppSidebar } from "@/components/app-sidebar";
-import { Separator } from "@/components/ui/separator";
+import { HeaderActions } from "@/components/header-actions";
 import {
 	SidebarInset,
 	SidebarProvider,
 	SidebarTrigger,
 } from "@/components/sidebar";
+import { Badge } from "@/components/ui/badge";
 import {
 	Breadcrumb,
 	BreadcrumbItem,
@@ -23,23 +18,28 @@ import {
 } from "@/components/ui/breadcrumb";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
-import { HeaderActions } from "@/components/header-actions";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
+import { authClient } from "@/lib/auth-client";
+import { trpc } from "@/utils/trpc";
 import {
-	RiDashboardLine,
-	RiSearchLine,
-	RiUserLine,
-	RiPhoneLine,
-	RiInformationLine,
 	RiAttachmentLine,
+	RiCheckDoubleLine,
+	RiDashboardLine,
+	RiInformationLine,
+	RiLoader4Line,
+	RiMessageLine,
+	RiPhoneLine,
+	RiSearchLine,
 	RiSendPlaneLine,
 	RiSettings3Line,
-	RiMessageLine,
-	RiCheckDoubleLine,
-	RiLoader4Line,
+	RiUserLine,
 } from "@remixicon/react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 
 // Message interface matching API response
 interface Message {
@@ -75,16 +75,17 @@ const formatTimestamp = (timestamp: string): string => {
 				hour: "2-digit",
 				minute: "2-digit",
 			});
-		} else if (days === 1) {
-			return "Yesterday";
-		} else if (days < 7) {
-			return date.toLocaleDateString("en-US", { weekday: "short" });
-		} else {
-			return date.toLocaleDateString("en-US", {
-				month: "short",
-				day: "numeric",
-			});
 		}
+		if (days === 1) {
+			return "Yesterday";
+		}
+		if (days < 7) {
+			return date.toLocaleDateString("en-US", { weekday: "short" });
+		}
+		return date.toLocaleDateString("en-US", {
+			month: "short",
+			day: "numeric",
+		});
 	} catch {
 		return timestamp;
 	}
@@ -93,10 +94,13 @@ const formatTimestamp = (timestamp: string): string => {
 export default function WhatsAppPage() {
 	const router = useRouter();
 	const queryClient = useQueryClient();
-	const { data: session, isPending: isSessionPending } = authClient.useSession();
+	const { data: session, isPending: isSessionPending } =
+		authClient.useSession();
 	const [searchQuery, setSearchQuery] = useState("");
 	const [filter, setFilter] = useState<"all" | "unread">("all");
-	const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
+	const [selectedConversationId, setSelectedConversationId] = useState<
+		string | null
+	>(null);
 	const [messageInput, setMessageInput] = useState("");
 
 	// Fetch conversations with tRPC
@@ -134,7 +138,7 @@ export default function WhatsAppPage() {
 		isLoading: isLoadingConversation,
 		refetch: refetchConversation,
 	} = trpc.whatsapp.get.useQuery(
-		{ id: selectedConversationId! },
+		{ id: selectedConversationId ?? "" },
 		{
 			enabled: !!selectedConversationId && !!session,
 			retry: 1,
@@ -157,7 +161,9 @@ export default function WhatsAppPage() {
 	const sendMessageMutation = trpc.whatsapp.send.useMutation({
 		onMutate: async (newMessage) => {
 			// Cancel any outgoing refetches to avoid overwriting optimistic update
-			await queryClient.cancelQueries({ queryKey: [["whatsapp", "get", { id: newMessage.conversationId }]] });
+			await queryClient.cancelQueries({
+				queryKey: [["whatsapp", "get", { id: newMessage.conversationId }]],
+			});
 
 			// Snapshot the previous value
 			const previousConversation = queryClient.getQueryData([
@@ -167,7 +173,7 @@ export default function WhatsAppPage() {
 			// Optimistically update the conversation with the new message
 			queryClient.setQueryData(
 				[["whatsapp", "get", { id: newMessage.conversationId }]],
-				(old: any) => {
+				(old: { messages?: unknown[] } | undefined) => {
 					if (!old) return old;
 					const optimisticMessage = {
 						id: `temp-${Date.now()}`,
@@ -236,7 +242,7 @@ export default function WhatsAppPage() {
 				messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
 			}, 100);
 		}
-	}, [selectedConversation?.messages, sendMessageMutation.isSuccess]);
+	}, [selectedConversation?.messages]);
 
 	const handleSelectConversation = (conversationId: string) => {
 		setSelectedConversationId(conversationId);
@@ -309,7 +315,9 @@ export default function WhatsAppPage() {
 									disabled={isLoadingConversations}
 									title="Refresh conversations"
 								>
-									<RiLoader4Line className={`h-4 w-4 ${isLoadingConversations ? "animate-spin" : ""}`} />
+									<RiLoader4Line
+										className={`h-4 w-4 ${isLoadingConversations ? "animate-spin" : ""}`}
+									/>
 								</Button>
 								<Button variant="ghost" size="sm">
 									<RiSettings3Line className="h-4 w-4" />
@@ -320,7 +328,7 @@ export default function WhatsAppPage() {
 						{/* Search Bar */}
 						<div className="border-b p-3">
 							<div className="relative">
-								<RiSearchLine className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+								<RiSearchLine className="-translate-y-1/2 absolute top-1/2 left-3 size-4 text-muted-foreground" />
 								<Input
 									placeholder="Search"
 									value={searchQuery}
@@ -358,9 +366,11 @@ export default function WhatsAppPage() {
 										<RiLoader4Line className="h-6 w-6 animate-spin text-muted-foreground" />
 									</div>
 								) : conversationsError ? (
-									<div className="text-center py-12 px-4">
-										<div className="text-red-500 mb-2">Error loading conversations</div>
-										<div className="text-sm text-muted-foreground mb-4">
+									<div className="px-4 py-12 text-center">
+										<div className="mb-2 text-red-500">
+											Error loading conversations
+										</div>
+										<div className="mb-4 text-muted-foreground text-sm">
 											{conversationsError.message}
 										</div>
 										<Button
@@ -372,16 +382,17 @@ export default function WhatsAppPage() {
 										</Button>
 									</div>
 								) : conversations.length === 0 ? (
-									<div className="text-center py-12 px-4 text-muted-foreground">
+									<div className="px-4 py-12 text-center text-muted-foreground">
 										<RiMessageLine className="mx-auto mb-2 size-8" />
 										<p className="text-sm">No conversations yet</p>
-										<p className="text-xs mt-1">
+										<p className="mt-1 text-xs">
 											Messages will appear here when received
 										</p>
 									</div>
 								) : (
 									conversations.map((conversation) => (
 										<button
+											type="button"
 											key={conversation.id}
 											onClick={() => handleSelectConversation(conversation.id)}
 											className={`flex items-center gap-3 border-b p-4 text-left transition-colors hover:bg-muted/50 ${
@@ -393,23 +404,23 @@ export default function WhatsAppPage() {
 											<div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary/10">
 												<RiUserLine className="size-5 text-primary" />
 											</div>
-											<div className="flex-1 min-w-0">
+											<div className="min-w-0 flex-1">
 												<div className="flex items-center justify-between">
 													<span className="truncate font-medium">
 														{conversation.name}
 													</span>
-													<span className="shrink-0 text-xs text-muted-foreground">
+													<span className="shrink-0 text-muted-foreground text-xs">
 														{formatTimestamp(conversation.timestamp)}
 													</span>
 												</div>
 												<div className="flex items-center justify-between gap-2">
-													<span className="truncate text-sm text-muted-foreground">
+													<span className="truncate text-muted-foreground text-sm">
 														{conversation.lastMessage}
 													</span>
 													{conversation.unreadCount > 0 && (
 														<Badge
 															variant="destructive"
-															className="shrink-0 size-5 items-center justify-center rounded-full p-0 text-xs"
+															className="size-5 shrink-0 items-center justify-center rounded-full p-0 text-xs"
 														>
 															{conversation.unreadCount}
 														</Badge>
@@ -438,8 +449,10 @@ export default function WhatsAppPage() {
 											<RiUserLine className="size-5 text-primary" />
 										</div>
 										<div>
-											<div className="font-medium">{selectedConversation.name}</div>
-											<div className="text-sm text-muted-foreground">
+											<div className="font-medium">
+												{selectedConversation.name}
+											</div>
+											<div className="text-muted-foreground text-sm">
 												{selectedConversation.phone}
 											</div>
 										</div>
@@ -454,7 +467,8 @@ export default function WhatsAppPage() {
 								{/* Messages Area */}
 								<ScrollArea className="flex-1 p-4">
 									<div className="flex flex-col gap-4">
-										{selectedConversation.messages && selectedConversation.messages.length > 0 ? (
+										{selectedConversation.messages &&
+										selectedConversation.messages.length > 0 ? (
 											<>
 												{selectedConversation.messages.map((message) => (
 													<div
@@ -480,7 +494,9 @@ export default function WhatsAppPage() {
 																		: "text-muted-foreground"
 																}`}
 															>
-																<span>{formatTimestamp(message.timestamp)}</span>
+																<span>
+																	{formatTimestamp(message.timestamp)}
+																</span>
 																{message.sender === "agent" && (
 																	<>
 																		{message.read ? (
@@ -500,10 +516,10 @@ export default function WhatsAppPage() {
 												<div ref={messagesEndRef} />
 											</>
 										) : (
-											<div className="text-center py-12 text-muted-foreground">
+											<div className="py-12 text-center text-muted-foreground">
 												<RiMessageLine className="mx-auto mb-2 size-8" />
 												<p className="text-sm">No messages yet</p>
-												<p className="text-xs mt-1">Start the conversation</p>
+												<p className="mt-1 text-xs">Start the conversation</p>
 											</div>
 										)}
 									</div>
@@ -526,7 +542,9 @@ export default function WhatsAppPage() {
 										<Button
 											size="sm"
 											onClick={handleSendMessage}
-											disabled={!messageInput.trim() || sendMessageMutation.isPending}
+											disabled={
+												!messageInput.trim() || sendMessageMutation.isPending
+											}
 											className="bg-green-600 hover:bg-green-700"
 										>
 											{sendMessageMutation.isPending ? (

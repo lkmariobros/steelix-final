@@ -14,10 +14,11 @@ export function safeToFixed(value: unknown, decimals = 1): string {
 	}
 
 	// Convert to number if it's a string
-	const numValue = typeof value === "string" ? parseFloat(value) : Number(value);
+	const numValue =
+		typeof value === "string" ? Number.parseFloat(value) : Number(value);
 
 	// Check if the conversion resulted in a valid number
-	if (Number.isNaN(numValue) || typeof numValue !== 'number') {
+	if (Number.isNaN(numValue) || typeof numValue !== "number") {
 		return "0".padEnd(decimals + 2, ".0");
 	}
 
@@ -47,10 +48,11 @@ export function safeFormatCurrency(amount: unknown, currency = "USD"): string {
 	}
 
 	// Convert to number if it's a string
-	const numAmount = typeof amount === "string" ? parseFloat(amount) : Number(amount);
+	const numAmount =
+		typeof amount === "string" ? Number.parseFloat(amount) : Number(amount);
 
 	// Check if the conversion resulted in a valid number
-	if (isNaN(numAmount) || typeof numAmount !== 'number') {
+	if (Number.isNaN(numAmount) || typeof numAmount !== "number") {
 		return new Intl.NumberFormat("en-US", {
 			style: "currency",
 			currency,
@@ -75,9 +77,10 @@ export function safeToNumber(value: unknown, fallback = 0): number {
 		return fallback;
 	}
 
-	const numValue = typeof value === "string" ? parseFloat(value) : Number(value);
+	const numValue =
+		typeof value === "string" ? Number.parseFloat(value) : Number(value);
 
-	if (Number.isNaN(numValue) || typeof numValue !== 'number') {
+	if (Number.isNaN(numValue) || typeof numValue !== "number") {
 		return fallback;
 	}
 
@@ -87,7 +90,10 @@ export function safeToNumber(value: unknown, fallback = 0): number {
 /**
  * Safely calculate percentage with division by zero protection
  */
-export function safeCalculatePercentage(numerator: unknown, denominator: unknown): number {
+export function safeCalculatePercentage(
+	numerator: unknown,
+	denominator: unknown,
+): number {
 	const num = safeToNumber(numerator, 0);
 	const den = safeToNumber(denominator, 1);
 

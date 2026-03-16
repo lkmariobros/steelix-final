@@ -3,7 +3,7 @@
  * Ensures real-time updates across admin and agent dashboards
  */
 
-import { QueryClient } from "@tanstack/react-query";
+import type { QueryClient } from "@tanstack/react-query";
 
 /**
  * Invalidate all dashboard-related queries after transaction operations
@@ -11,36 +11,36 @@ import { QueryClient } from "@tanstack/react-query";
  */
 export function invalidateTransactionQueries(queryClient: QueryClient) {
 	// Agent dashboard queries
-	queryClient.invalidateQueries({ 
-		queryKey: ['dashboard', 'getFinancialOverview'] 
+	queryClient.invalidateQueries({
+		queryKey: ["dashboard", "getFinancialOverview"],
 	});
-	queryClient.invalidateQueries({ 
-		queryKey: ['dashboard', 'getSalesPipeline'] 
+	queryClient.invalidateQueries({
+		queryKey: ["dashboard", "getSalesPipeline"],
 	});
-	queryClient.invalidateQueries({ 
-		queryKey: ['dashboard', 'getTransactionStatus'] 
+	queryClient.invalidateQueries({
+		queryKey: ["dashboard", "getTransactionStatus"],
 	});
-	queryClient.invalidateQueries({ 
-		queryKey: ['dashboard', 'getRecentTransactions'] 
+	queryClient.invalidateQueries({
+		queryKey: ["dashboard", "getRecentTransactions"],
 	});
 
 	// Admin dashboard queries
-	queryClient.invalidateQueries({ 
-		queryKey: ['admin', 'getDashboardSummary'] 
+	queryClient.invalidateQueries({
+		queryKey: ["admin", "getDashboardSummary"],
 	});
-	queryClient.invalidateQueries({ 
-		queryKey: ['admin', 'getCommissionApprovalQueue'] 
+	queryClient.invalidateQueries({
+		queryKey: ["admin", "getCommissionApprovalQueue"],
 	});
-	queryClient.invalidateQueries({ 
-		queryKey: ['admin', 'getAgentPerformance'] 
+	queryClient.invalidateQueries({
+		queryKey: ["admin", "getAgentPerformance"],
 	});
-	queryClient.invalidateQueries({ 
-		queryKey: ['admin', 'getUrgentTasks'] 
+	queryClient.invalidateQueries({
+		queryKey: ["admin", "getUrgentTasks"],
 	});
 
 	// Transaction-specific queries
-	queryClient.invalidateQueries({ 
-		queryKey: ['transactions'] 
+	queryClient.invalidateQueries({
+		queryKey: ["transactions"],
 	});
 }
 
@@ -50,28 +50,28 @@ export function invalidateTransactionQueries(queryClient: QueryClient) {
  */
 export function invalidateAdminQueries(queryClient: QueryClient) {
 	// Admin-specific queries that change with approvals
-	queryClient.invalidateQueries({ 
-		queryKey: ['admin', 'getCommissionApprovalQueue'] 
+	queryClient.invalidateQueries({
+		queryKey: ["admin", "getCommissionApprovalQueue"],
 	});
-	queryClient.invalidateQueries({ 
-		queryKey: ['admin', 'getDashboardSummary'] 
+	queryClient.invalidateQueries({
+		queryKey: ["admin", "getDashboardSummary"],
 	});
-	queryClient.invalidateQueries({ 
-		queryKey: ['admin', 'getAgentPerformance'] 
+	queryClient.invalidateQueries({
+		queryKey: ["admin", "getAgentPerformance"],
 	});
-	queryClient.invalidateQueries({ 
-		queryKey: ['admin', 'getUrgentTasks'] 
+	queryClient.invalidateQueries({
+		queryKey: ["admin", "getUrgentTasks"],
 	});
 
 	// Also update agent dashboards as their transaction status changed
-	queryClient.invalidateQueries({ 
-		queryKey: ['dashboard', 'getFinancialOverview'] 
+	queryClient.invalidateQueries({
+		queryKey: ["dashboard", "getFinancialOverview"],
 	});
-	queryClient.invalidateQueries({ 
-		queryKey: ['dashboard', 'getSalesPipeline'] 
+	queryClient.invalidateQueries({
+		queryKey: ["dashboard", "getSalesPipeline"],
 	});
-	queryClient.invalidateQueries({ 
-		queryKey: ['dashboard', 'getTransactionStatus'] 
+	queryClient.invalidateQueries({
+		queryKey: ["dashboard", "getTransactionStatus"],
 	});
 }
 
@@ -81,16 +81,16 @@ export function invalidateAdminQueries(queryClient: QueryClient) {
  */
 export function invalidateAgentQueries(queryClient: QueryClient) {
 	// Agent dashboard queries
-	queryClient.invalidateQueries({ 
-		queryKey: ['dashboard'] 
+	queryClient.invalidateQueries({
+		queryKey: ["dashboard"],
 	});
-	
+
 	// Also update admin views as they aggregate agent data
-	queryClient.invalidateQueries({ 
-		queryKey: ['admin', 'getDashboardSummary'] 
+	queryClient.invalidateQueries({
+		queryKey: ["admin", "getDashboardSummary"],
 	});
-	queryClient.invalidateQueries({ 
-		queryKey: ['admin', 'getAgentPerformance'] 
+	queryClient.invalidateQueries({
+		queryKey: ["admin", "getAgentPerformance"],
 	});
 }
 
@@ -110,36 +110,38 @@ export function forceRefreshAllQueries(queryClient: QueryClient) {
 export function optimisticUpdateTransaction(
 	queryClient: QueryClient,
 	transactionId: string,
-	updates: Record<string, any>
+	updates: Record<string, unknown>,
 ) {
-	// Update commission approval queue
+	type OldQueue = {
+		transactions?: Array<{ id: string; [k: string]: unknown }>;
+	};
 	queryClient.setQueryData(
-		['admin', 'getCommissionApprovalQueue'],
-		(oldData: any) => {
+		["admin", "getCommissionApprovalQueue"],
+		(oldData: OldQueue | undefined) => {
 			if (!oldData?.transactions) return oldData;
-			
+
 			return {
 				...oldData,
-				transactions: oldData.transactions.map((transaction: any) =>
+				transactions: oldData.transactions.map((transaction) =>
 					transaction.id === transactionId
 						? { ...transaction, ...updates }
-						: transaction
+						: transaction,
 				),
 			};
-		}
+		},
 	);
 
-	// Update recent transactions
+	type TransactionItem = { id: string; [k: string]: unknown };
 	queryClient.setQueryData(
-		['dashboard', 'getRecentTransactions'],
-		(oldData: any) => {
+		["dashboard", "getRecentTransactions"],
+		(oldData: TransactionItem[] | undefined) => {
 			if (!Array.isArray(oldData)) return oldData;
-			
-			return oldData.map((transaction: any) =>
+
+			return oldData.map((transaction) =>
 				transaction.id === transactionId
 					? { ...transaction, ...updates }
-					: transaction
+					: transaction,
 			);
-		}
+		},
 	);
 }

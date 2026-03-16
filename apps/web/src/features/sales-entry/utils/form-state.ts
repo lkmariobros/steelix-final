@@ -14,7 +14,8 @@ const FORM_STORAGE_KEY = "transaction-form-draft";
 const FORM_STEP_KEY = "transaction-form-step";
 
 // Interface for serialized form data (handles Date serialization - Issue #4)
-interface SerializedFormData extends Omit<Partial<CompleteTransactionData>, 'transactionDate'> {
+interface SerializedFormData
+	extends Omit<Partial<CompleteTransactionData>, "transactionDate"> {
 	transactionDate?: string; // ISO string for localStorage
 }
 
@@ -28,11 +29,15 @@ function serializeFormData(data: Partial<CompleteTransactionData>): string {
 }
 
 // Deserialize form data from localStorage (Issue #4 fix)
-function deserializeFormData(jsonString: string): Partial<CompleteTransactionData> {
+function deserializeFormData(
+	jsonString: string,
+): Partial<CompleteTransactionData> {
 	const parsed: SerializedFormData = JSON.parse(jsonString);
 	return {
 		...parsed,
-		transactionDate: parsed.transactionDate ? new Date(parsed.transactionDate) : undefined,
+		transactionDate: parsed.transactionDate
+			? new Date(parsed.transactionDate)
+			: undefined,
 	};
 }
 
@@ -70,7 +75,10 @@ export const initialFormData: Partial<CompleteTransactionData> = {
 };
 
 // Form state hook with mode awareness (Issue #4 fix - step and date persistence)
-export function useTransactionFormState(transactionId?: string, mode?: "create" | "edit" | "resume") {
+export function useTransactionFormState(
+	transactionId?: string,
+	mode?: "create" | "edit" | "resume",
+) {
 	const [currentStep, setCurrentStep] = useState<FormStep>(1);
 	const [formData, setFormData] =
 		useState<Partial<CompleteTransactionData>>(initialFormData);
@@ -91,10 +99,13 @@ export function useTransactionFormState(transactionId?: string, mode?: "create" 
 			if (savedData) {
 				try {
 					const parsedData = deserializeFormData(savedData);
-					const parsedStep = savedStep ? (parseInt(savedStep, 10) as FormStep) : 1;
+					const parsedStep = savedStep
+						? (Number.parseInt(savedStep, 10) as FormStep)
+						: 1;
 
 					// Check if there's meaningful data to recover
-					const hasData = parsedData.marketType ||
+					const hasData =
+						parsedData.marketType ||
 						parsedData.propertyData?.address ||
 						parsedData.clientData?.name;
 
@@ -104,7 +115,7 @@ export function useTransactionFormState(transactionId?: string, mode?: "create" 
 						setShowRecoveryDialog(true);
 					}
 				} catch (error) {
-					if (process.env.NODE_ENV === 'development') {
+					if (process.env.NODE_ENV === "development") {
 						console.error("Failed to parse saved form data:", error);
 					}
 					// Clear corrupted data
@@ -179,7 +190,9 @@ export function useTransactionFormState(transactionId?: string, mode?: "create" 
 					break;
 				case 4: {
 					// Issue #1 fix: Handle unified representation type
-					const representationType = data.representationType as RepresentationType | undefined;
+					const representationType = data.representationType as
+						| RepresentationType
+						| undefined;
 					// Derive isCoBroking from representationType for backward compatibility
 					const isCoBroking = representationType === "co_broking";
 

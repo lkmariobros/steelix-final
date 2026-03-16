@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/card";
 import { CheckCircle, Clock, Eye, FileText, Plus, XCircle } from "lucide-react";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useState, Suspense } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { useTransactionModal } from "@/contexts/transaction-modal-context";
@@ -61,7 +61,8 @@ function SearchParamsHandler() {
 }
 
 function SalesPageContent() {
-	const { openCreateModal, openEditModal, openViewModal } = useTransactionModal();
+	const { openCreateModal, openEditModal, openViewModal } =
+		useTransactionModal();
 	const isClient = useClientSide();
 
 	// tRPC queries - temporarily mocked for build compatibility
@@ -158,18 +159,17 @@ function SalesPageContent() {
 		});
 	};
 
-
-
 	// Show loading state during hydration to prevent mismatch
 	if (!isClient) {
 		return (
-			<div className="container mx-auto space-y-6 py-6" suppressHydrationWarning>
+			<div
+				className="container mx-auto space-y-6 py-6"
+				suppressHydrationWarning
+			>
 				<div className="flex items-center justify-between">
 					<div>
 						<h1 className="font-bold text-3xl">Sales Transactions</h1>
-						<p className="text-muted-foreground">
-							Loading...
-						</p>
+						<p className="text-muted-foreground">Loading...</p>
 					</div>
 				</div>
 			</div>
@@ -365,7 +365,6 @@ function SalesPageContent() {
 					)}
 				</CardContent>
 			</Card>
-
 		</div>
 	);
 }

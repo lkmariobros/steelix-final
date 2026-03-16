@@ -1,17 +1,13 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { useQueryClient } from "@tanstack/react-query";
-import { authClient } from "@/lib/auth-client";
-import { trpc } from "@/utils/trpc";
 import { AppSidebar } from "@/components/app-sidebar";
-import { Separator } from "@/components/ui/separator";
+import { HeaderActions } from "@/components/header-actions";
 import {
 	SidebarInset,
 	SidebarProvider,
 	SidebarTrigger,
 } from "@/components/sidebar";
+import { Badge } from "@/components/ui/badge";
 import {
 	Breadcrumb,
 	BreadcrumbItem,
@@ -21,18 +17,7 @@ import {
 	BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import {
 	Dialog,
 	DialogContent,
@@ -41,20 +26,35 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
-import { toast } from "sonner";
-import { HeaderActions } from "@/components/header-actions";
 import {
-	RiDashboardLine,
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
+import { Textarea } from "@/components/ui/textarea";
+import { authClient } from "@/lib/auth-client";
+import { trpc } from "@/utils/trpc";
+import {
 	RiAddLine,
+	RiAlertLine,
+	RiDashboardLine,
+	RiDeleteBinLine,
+	RiEditLine,
+	RiLoader4Line,
 	RiSearchLine,
 	RiSettings3Line,
-	RiEditLine,
-	RiDeleteBinLine,
 	RiUserLine,
-	RiAlertLine,
-	RiLoader4Line,
 } from "@remixicon/react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { toast } from "sonner";
 
 // Auto-reply rule interface matching database schema
 interface AutoReplyRule {
@@ -74,16 +74,20 @@ export default function AutoReplyPage() {
 	const queryClient = useQueryClient();
 	const { data: session, isPending } = authClient.useSession();
 	const [searchQuery, setSearchQuery] = useState("");
-	const [statusFilter, setStatusFilter] = useState<"all" | "tenant" | "owner">("all");
+	const [statusFilter, setStatusFilter] = useState<"all" | "tenant" | "owner">(
+		"all",
+	);
 	const [sortBy, setSortBy] = useState<"owner" | "status">("status");
 	const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 	const [ruleToDelete, setRuleToDelete] = useState<AutoReplyRule | null>(null);
 	const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
 	const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 	const [ruleToEdit, setRuleToEdit] = useState<AutoReplyRule | null>(null);
-	
+
 	// Form state for create/edit
-	const [formTriggerType, setFormTriggerType] = useState<"contains" | "equals" | "starts_with" | "regex">("contains");
+	const [formTriggerType, setFormTriggerType] = useState<
+		"contains" | "equals" | "starts_with" | "regex"
+	>("contains");
 	const [formKeywords, setFormKeywords] = useState("");
 	const [formResponse, setFormResponse] = useState("");
 	const [formMessageOwner, setFormMessageOwner] = useState("");
@@ -98,7 +102,10 @@ export default function AutoReplyPage() {
 	} = trpc.autoReply.list.useQuery(
 		{
 			search: searchQuery || undefined,
-			status: statusFilter !== "all" ? (statusFilter as "tenant" | "owner") : undefined,
+			status:
+				statusFilter !== "all"
+					? (statusFilter as "tenant" | "owner")
+					: undefined,
 			sortBy,
 		},
 		{
@@ -185,18 +192,21 @@ export default function AutoReplyPage() {
 
 	// Handle create submit
 	const handleCreateSubmit = () => {
-		const keywords = formKeywords.split(",").map(k => k.trim()).filter(k => k.length > 0);
-		
+		const keywords = formKeywords
+			.split(",")
+			.map((k) => k.trim())
+			.filter((k) => k.length > 0);
+
 		if (keywords.length === 0) {
 			toast.error("Please provide at least one keyword");
 			return;
 		}
-		
+
 		if (!formResponse.trim()) {
 			toast.error("Please provide a response message");
 			return;
 		}
-		
+
 		if (!formMessageOwner.trim()) {
 			toast.error("Please provide a message owner name");
 			return;
@@ -217,18 +227,21 @@ export default function AutoReplyPage() {
 	const handleEditSubmit = () => {
 		if (!ruleToEdit) return;
 
-		const keywords = formKeywords.split(",").map(k => k.trim()).filter(k => k.length > 0);
-		
+		const keywords = formKeywords
+			.split(",")
+			.map((k) => k.trim())
+			.filter((k) => k.length > 0);
+
 		if (keywords.length === 0) {
 			toast.error("Please provide at least one keyword");
 			return;
 		}
-		
+
 		if (!formResponse.trim()) {
 			toast.error("Please provide a response message");
 			return;
 		}
-		
+
 		if (!formMessageOwner.trim()) {
 			toast.error("Please provide a message owner name");
 			return;
@@ -316,7 +329,7 @@ export default function AutoReplyPage() {
 					{/* Search and Filters */}
 					<div className="flex items-center gap-3">
 						<div className="relative flex-1">
-							<RiSearchLine className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+							<RiSearchLine className="-translate-y-1/2 absolute top-1/2 left-3 size-4 text-muted-foreground" />
 							<Input
 								placeholder="Search rules..."
 								value={searchQuery}
@@ -324,7 +337,12 @@ export default function AutoReplyPage() {
 								className="pl-9"
 							/>
 						</div>
-						<Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as "all" | "tenant" | "owner")}>
+						<Select
+							value={statusFilter}
+							onValueChange={(value) =>
+								setStatusFilter(value as "all" | "tenant" | "owner")
+							}
+						>
 							<SelectTrigger className="w-40">
 								<SelectValue placeholder="Status" />
 							</SelectTrigger>
@@ -334,7 +352,10 @@ export default function AutoReplyPage() {
 								<SelectItem value="tenant">Status: Tenant</SelectItem>
 							</SelectContent>
 						</Select>
-						<Select value={sortBy} onValueChange={(value) => setSortBy(value as "owner" | "status")}>
+						<Select
+							value={sortBy}
+							onValueChange={(value) => setSortBy(value as "owner" | "status")}
+						>
 							<SelectTrigger className="w-48">
 								<SelectValue placeholder="Sort" />
 							</SelectTrigger>
@@ -352,9 +373,9 @@ export default function AutoReplyPage() {
 								<RiLoader4Line className="h-8 w-8 animate-spin text-muted-foreground" />
 							</div>
 						) : rulesError ? (
-							<div className="text-center py-12">
-								<div className="text-red-500 mb-2">Error loading rules</div>
-								<div className="text-sm text-muted-foreground">
+							<div className="py-12 text-center">
+								<div className="mb-2 text-red-500">Error loading rules</div>
+								<div className="text-muted-foreground text-sm">
 									{rulesError.message}
 								</div>
 								<Button
@@ -367,110 +388,123 @@ export default function AutoReplyPage() {
 								</Button>
 							</div>
 						) : rules.length === 0 ? (
-							<div className="text-center py-12 text-muted-foreground">
-								No auto-reply rules found. Create your first rule to get started.
+							<div className="py-12 text-center text-muted-foreground">
+								No auto-reply rules found. Create your first rule to get
+								started.
 							</div>
 						) : (
 							rules.map((rule) => (
-							<Card key={rule.id} className="border-2">
-								<CardContent>
-									<div className="space-y-6">
-										{/* Message Owner - with green border outline */}
-										<div className="flex items-center justify-between border-2 border-green-500 rounded-md p-3 bg-muted/30">
-											<div className="flex items-center gap-2.5">
-												<RiUserLine className="size-5 text-foreground" />
-												<span className="text-base font-semibold text-foreground">{rule.messageOwner}</span>
+								<Card key={rule.id} className="border-2">
+									<CardContent>
+										<div className="space-y-6">
+											{/* Message Owner - with green border outline */}
+											<div className="flex items-center justify-between rounded-md border-2 border-green-500 bg-muted/30 p-3">
+												<div className="flex items-center gap-2.5">
+													<RiUserLine className="size-5 text-foreground" />
+													<span className="font-semibold text-base text-foreground">
+														{rule.messageOwner}
+													</span>
+												</div>
+												<Badge
+													variant="outline"
+													className={`font-semibold text-xs ${
+														rule.status === "owner"
+															? "border-blue-500 text-blue-600 dark:text-blue-400"
+															: "border-purple-500 text-purple-600 dark:text-purple-400"
+													}`}
+												>
+													{rule.status === "owner" ? "Owner" : "Tenant"}
+												</Badge>
 											</div>
-											<Badge
-												variant="outline"
-												className={`text-xs font-semibold ${
-													rule.status === "owner"
-														? "border-blue-500 text-blue-600 dark:text-blue-400"
-														: "border-purple-500 text-purple-600 dark:text-purple-400"
-												}`}
-											>
-												{rule.status === "owner" ? "Owner" : "Tenant"}
-											</Badge>
-										</div>
 
-										{/* Trigger */}
-										<div className="space-y-3">
-											<div className="text-sm font-bold text-foreground uppercase tracking-wider">
-												TRIGGER:
+											{/* Trigger */}
+											<div className="space-y-3">
+												<div className="font-bold text-foreground text-sm uppercase tracking-wider">
+													TRIGGER:
+												</div>
+												<div className="text-base text-foreground">
+													{rule.trigger.type === "contains" &&
+														"Message contains: "}
+													{rule.trigger.type === "equals" && "Message equals: "}
+													{rule.trigger.type === "starts_with" &&
+														"Message starts with: "}
+													{rule.trigger.type === "regex" &&
+														"Message matches regex: "}
+													<span className="font-semibold">
+														"{rule.trigger.keywords.join('" or "')}"
+													</span>
+												</div>
 											</div>
-											<div className="text-base text-foreground">
-												{rule.trigger.type === "contains" && "Message contains: "}
-												{rule.trigger.type === "equals" && "Message equals: "}
-												{rule.trigger.type === "starts_with" && "Message starts with: "}
-												{rule.trigger.type === "regex" && "Message matches regex: "}
-												<span className="font-semibold">
-													"{rule.trigger.keywords.join('" or "')}"
-												</span>
-											</div>
-										</div>
 
-										{/* Response */}
-										<div className="space-y-3">
-											<div className="text-sm font-bold text-foreground uppercase tracking-wider">
-												RESPONSE:
+											{/* Response */}
+											<div className="space-y-3">
+												<div className="font-bold text-foreground text-sm uppercase tracking-wider">
+													RESPONSE:
+												</div>
+												<div className="relative">
+													<Input
+														value={`"${rule.response}"`}
+														readOnly
+														className="cursor-default rounded-md border border-border bg-muted/60 px-4 py-3 font-normal text-base text-foreground"
+													/>
+												</div>
 											</div>
-											<div className="relative">
-												<Input
-													value={`"${rule.response}"`}
-													readOnly
-													className="bg-muted/60 border border-border rounded-md text-base py-3 px-4 font-normal text-foreground cursor-default"
-												/>
-											</div>
-										</div>
 
-										{/* Action Buttons */}
-										<div className="flex items-center gap-2 pt-4 border-t">
-											<Button
-												variant="outline"
-												size="sm"
-												onClick={() => handleEditClick(rule)}
-												className="border-blue-500 text-blue-600 hover:bg-blue-50 hover:text-blue-700 dark:text-blue-400 dark:border-blue-500/50 dark:hover:bg-blue-500/10 dark:hover:text-blue-300"
-											>
-												<RiEditLine className="mr-2 h-4 w-4" />
-												Edit
-											</Button>
-											<Button
-												variant="outline"
-												size="sm"
-												onClick={() => handleDeleteClick(rule)}
-												className="border-red-500 text-red-600 hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:border-red-500/50 dark:hover:bg-red-500/10 dark:hover:text-red-300"
-											>
-												<RiDeleteBinLine className="mr-2 h-4 w-4" />
-												Delete
-											</Button>
+											{/* Action Buttons */}
+											<div className="flex items-center gap-2 border-t pt-4">
+												<Button
+													variant="outline"
+													size="sm"
+													onClick={() => handleEditClick(rule)}
+													className="border-blue-500 text-blue-600 hover:bg-blue-50 hover:text-blue-700 dark:border-blue-500/50 dark:text-blue-400 dark:hover:bg-blue-500/10 dark:hover:text-blue-300"
+												>
+													<RiEditLine className="mr-2 h-4 w-4" />
+													Edit
+												</Button>
+												<Button
+													variant="outline"
+													size="sm"
+													onClick={() => handleDeleteClick(rule)}
+													className="border-red-500 text-red-600 hover:bg-red-50 hover:text-red-700 dark:border-red-500/50 dark:text-red-400 dark:hover:bg-red-500/10 dark:hover:text-red-300"
+												>
+													<RiDeleteBinLine className="mr-2 h-4 w-4" />
+													Delete
+												</Button>
+											</div>
 										</div>
-									</div>
-								</CardContent>
-							</Card>
+									</CardContent>
+								</Card>
 							))
 						)}
 					</div>
 
 					{/* Summary */}
 					<div className="flex items-center justify-between border-t pt-4">
-						<div className="text-sm text-muted-foreground">
-							Total Rules: <span className="font-medium">{summary.total}</span> | Owner:{" "}
-							<span className="font-medium text-blue-600 dark:text-blue-400">{summary.owner}</span> | Tenant:{" "}
-							<span className="font-medium text-purple-600 dark:text-purple-400">{summary.tenant}</span>
+						<div className="text-muted-foreground text-sm">
+							Total Rules: <span className="font-medium">{summary.total}</span>{" "}
+							| Owner:{" "}
+							<span className="font-medium text-blue-600 dark:text-blue-400">
+								{summary.owner}
+							</span>{" "}
+							| Tenant:{" "}
+							<span className="font-medium text-purple-600 dark:text-purple-400">
+								{summary.tenant}
+							</span>
 						</div>
 					</div>
 				</div>
 
 				{/* Create Rule Dialog */}
 				<Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-					<DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+					<DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[600px]">
 						<DialogHeader>
 							<DialogTitle className="flex items-center gap-2">
 								<RiAddLine className="size-5" />
 								Create Auto-Reply Rule
 							</DialogTitle>
 							<DialogDescription>
-								Create a new auto-reply rule that will automatically respond to incoming messages.
+								Create a new auto-reply rule that will automatically respond to
+								incoming messages.
 							</DialogDescription>
 						</DialogHeader>
 
@@ -478,7 +512,12 @@ export default function AutoReplyPage() {
 							{/* Trigger Type */}
 							<div className="space-y-2">
 								<Label htmlFor="trigger-type">Trigger Type *</Label>
-								<Select value={formTriggerType} onValueChange={(value) => setFormTriggerType(value as typeof formTriggerType)}>
+								<Select
+									value={formTriggerType}
+									onValueChange={(value) =>
+										setFormTriggerType(value as typeof formTriggerType)
+									}
+								>
 									<SelectTrigger id="trigger-type">
 										<SelectValue />
 									</SelectTrigger>
@@ -489,11 +528,15 @@ export default function AutoReplyPage() {
 										<SelectItem value="regex">Regex</SelectItem>
 									</SelectContent>
 								</Select>
-								<p className="text-xs text-muted-foreground">
-									{formTriggerType === "contains" && "Message contains any of the keywords"}
-									{formTriggerType === "equals" && "Message exactly equals one of the keywords"}
-									{formTriggerType === "starts_with" && "Message starts with one of the keywords"}
-									{formTriggerType === "regex" && "Message matches the regex pattern"}
+								<p className="text-muted-foreground text-xs">
+									{formTriggerType === "contains" &&
+										"Message contains any of the keywords"}
+									{formTriggerType === "equals" &&
+										"Message exactly equals one of the keywords"}
+									{formTriggerType === "starts_with" &&
+										"Message starts with one of the keywords"}
+									{formTriggerType === "regex" &&
+										"Message matches the regex pattern"}
 								</p>
 							</div>
 
@@ -506,7 +549,7 @@ export default function AutoReplyPage() {
 									onChange={(e) => setFormKeywords(e.target.value)}
 									placeholder="hello, hi, greeting"
 								/>
-								<p className="text-xs text-muted-foreground">
+								<p className="text-muted-foreground text-xs">
 									Separate multiple keywords with commas
 								</p>
 							</div>
@@ -532,7 +575,7 @@ export default function AutoReplyPage() {
 									onChange={(e) => setFormMessageOwner(e.target.value)}
 									placeholder="Agent Name"
 								/>
-								<p className="text-xs text-muted-foreground">
+								<p className="text-muted-foreground text-xs">
 									The name of the agent or user who created this rule
 								</p>
 							</div>
@@ -540,7 +583,12 @@ export default function AutoReplyPage() {
 							{/* Status */}
 							<div className="space-y-2">
 								<Label htmlFor="status">Status *</Label>
-								<Select value={formStatus} onValueChange={(value) => setFormStatus(value as typeof formStatus)}>
+								<Select
+									value={formStatus}
+									onValueChange={(value) =>
+										setFormStatus(value as typeof formStatus)
+									}
+								>
 									<SelectTrigger id="status">
 										<SelectValue />
 									</SelectTrigger>
@@ -585,7 +633,7 @@ export default function AutoReplyPage() {
 
 				{/* Edit Rule Dialog */}
 				<Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-					<DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+					<DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[600px]">
 						<DialogHeader>
 							<DialogTitle className="flex items-center gap-2">
 								<RiEditLine className="size-5" />
@@ -600,7 +648,12 @@ export default function AutoReplyPage() {
 							{/* Trigger Type */}
 							<div className="space-y-2">
 								<Label htmlFor="edit-trigger-type">Trigger Type *</Label>
-								<Select value={formTriggerType} onValueChange={(value) => setFormTriggerType(value as typeof formTriggerType)}>
+								<Select
+									value={formTriggerType}
+									onValueChange={(value) =>
+										setFormTriggerType(value as typeof formTriggerType)
+									}
+								>
 									<SelectTrigger id="edit-trigger-type">
 										<SelectValue />
 									</SelectTrigger>
@@ -611,24 +664,30 @@ export default function AutoReplyPage() {
 										<SelectItem value="regex">Regex</SelectItem>
 									</SelectContent>
 								</Select>
-								<p className="text-xs text-muted-foreground">
-									{formTriggerType === "contains" && "Message contains any of the keywords"}
-									{formTriggerType === "equals" && "Message exactly equals one of the keywords"}
-									{formTriggerType === "starts_with" && "Message starts with one of the keywords"}
-									{formTriggerType === "regex" && "Message matches the regex pattern"}
+								<p className="text-muted-foreground text-xs">
+									{formTriggerType === "contains" &&
+										"Message contains any of the keywords"}
+									{formTriggerType === "equals" &&
+										"Message exactly equals one of the keywords"}
+									{formTriggerType === "starts_with" &&
+										"Message starts with one of the keywords"}
+									{formTriggerType === "regex" &&
+										"Message matches the regex pattern"}
 								</p>
 							</div>
 
 							{/* Keywords */}
 							<div className="space-y-2">
-								<Label htmlFor="edit-keywords">Keywords * (comma-separated)</Label>
+								<Label htmlFor="edit-keywords">
+									Keywords * (comma-separated)
+								</Label>
 								<Input
 									id="edit-keywords"
 									value={formKeywords}
 									onChange={(e) => setFormKeywords(e.target.value)}
 									placeholder="hello, hi, greeting"
 								/>
-								<p className="text-xs text-muted-foreground">
+								<p className="text-muted-foreground text-xs">
 									Separate multiple keywords with commas
 								</p>
 							</div>
@@ -654,7 +713,7 @@ export default function AutoReplyPage() {
 									onChange={(e) => setFormMessageOwner(e.target.value)}
 									placeholder="Agent Name"
 								/>
-								<p className="text-xs text-muted-foreground">
+								<p className="text-muted-foreground text-xs">
 									The name of the agent or user who created this rule
 								</p>
 							</div>
@@ -662,7 +721,12 @@ export default function AutoReplyPage() {
 							{/* Status */}
 							<div className="space-y-2">
 								<Label htmlFor="edit-status">Status *</Label>
-								<Select value={formStatus} onValueChange={(value) => setFormStatus(value as typeof formStatus)}>
+								<Select
+									value={formStatus}
+									onValueChange={(value) =>
+										setFormStatus(value as typeof formStatus)
+									}
+								>
 									<SelectTrigger id="edit-status">
 										<SelectValue />
 									</SelectTrigger>
@@ -715,7 +779,8 @@ export default function AutoReplyPage() {
 								Delete Auto-Reply Rule
 							</DialogTitle>
 							<DialogDescription>
-								Are you sure you want to delete this auto-reply rule? This action cannot be undone.
+								Are you sure you want to delete this auto-reply rule? This
+								action cannot be undone.
 							</DialogDescription>
 						</DialogHeader>
 
@@ -724,16 +789,16 @@ export default function AutoReplyPage() {
 								<div className="rounded-lg border bg-muted/30 p-4">
 									<div className="space-y-4">
 										{/* Message Owner */}
-										<div className="flex items-center justify-between border-2 border-green-500 rounded-md p-3 bg-muted/30">
+										<div className="flex items-center justify-between rounded-md border-2 border-green-500 bg-muted/30 p-3">
 											<div className="flex items-center gap-2.5">
 												<RiUserLine className="size-5 text-foreground" />
-												<span className="text-base font-semibold text-foreground">
+												<span className="font-semibold text-base text-foreground">
 													{ruleToDelete.messageOwner}
 												</span>
 											</div>
 											<Badge
 												variant="outline"
-												className={`text-xs font-semibold ${
+												className={`font-semibold text-xs ${
 													ruleToDelete.status === "owner"
 														? "border-blue-500 text-blue-600 dark:text-blue-400"
 														: "border-purple-500 text-purple-600 dark:text-purple-400"
@@ -745,14 +810,18 @@ export default function AutoReplyPage() {
 
 										{/* Trigger */}
 										<div className="space-y-2">
-											<div className="text-sm font-bold text-foreground uppercase tracking-wider">
+											<div className="font-bold text-foreground text-sm uppercase tracking-wider">
 												TRIGGER:
 											</div>
 											<div className="text-base text-foreground">
-												{ruleToDelete.trigger.type === "contains" && "Message contains: "}
-												{ruleToDelete.trigger.type === "equals" && "Message equals: "}
-												{ruleToDelete.trigger.type === "starts_with" && "Message starts with: "}
-												{ruleToDelete.trigger.type === "regex" && "Message matches regex: "}
+												{ruleToDelete.trigger.type === "contains" &&
+													"Message contains: "}
+												{ruleToDelete.trigger.type === "equals" &&
+													"Message equals: "}
+												{ruleToDelete.trigger.type === "starts_with" &&
+													"Message starts with: "}
+												{ruleToDelete.trigger.type === "regex" &&
+													"Message matches regex: "}
 												<span className="font-semibold">
 													"{ruleToDelete.trigger.keywords.join('" or "')}"
 												</span>
@@ -761,10 +830,10 @@ export default function AutoReplyPage() {
 
 										{/* Response */}
 										<div className="space-y-2">
-											<div className="text-sm font-bold text-foreground uppercase tracking-wider">
+											<div className="font-bold text-foreground text-sm uppercase tracking-wider">
 												RESPONSE:
 											</div>
-											<div className="rounded-md bg-muted/60 border border-border p-3 text-sm text-foreground">
+											<div className="rounded-md border border-border bg-muted/60 p-3 text-foreground text-sm">
 												"{ruleToDelete.response}"
 											</div>
 										</div>

@@ -2,11 +2,13 @@
 
 import { AppSidebar } from "@/components/app-sidebar";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/avatar";
+import { HeaderActions } from "@/components/header-actions";
 import {
 	SidebarInset,
 	SidebarProvider,
 	SidebarTrigger,
 } from "@/components/sidebar";
+import { Badge } from "@/components/ui/badge";
 import {
 	Breadcrumb,
 	BreadcrumbItem,
@@ -26,19 +28,17 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { Badge } from "@/components/ui/badge";
-import { HeaderActions } from "@/components/header-actions";
 import { authClient } from "@/lib/auth-client";
 import { trpc } from "@/utils/trpc";
 import {
+	RiCheckLine,
 	RiDashboardLine,
+	RiLoader4Line,
 	RiSettings3Line,
 	RiUploadLine,
-	RiCheckLine,
-	RiLoader4Line,
 } from "@remixicon/react";
 import { useRouter } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 export default function AgentSettingsPage() {
@@ -46,10 +46,8 @@ export default function AgentSettingsPage() {
 	const { data: session, isPending } = authClient.useSession();
 
 	// Fetch profile data from backend
-	const { data: profileData, isLoading: isProfileLoading } = trpc.agents.getMyProfile.useQuery(
-		undefined,
-		{ enabled: !!session }
-	);
+	const { data: profileData, isLoading: isProfileLoading } =
+		trpc.agents.getMyProfile.useQuery(undefined, { enabled: !!session });
 
 	// Get utils for cache invalidation
 	const utils = trpc.useUtils();
@@ -105,7 +103,9 @@ export default function AgentSettingsPage() {
 			<div className="flex h-screen items-center justify-center">
 				<div className="text-center">
 					<RiLoader4Line className="mx-auto h-8 w-8 animate-spin text-primary" />
-					<p className="mt-2 text-muted-foreground text-sm">Loading profile...</p>
+					<p className="mt-2 text-muted-foreground text-sm">
+						Loading profile...
+					</p>
 				</div>
 			</div>
 		);
@@ -233,7 +233,9 @@ export default function AgentSettingsPage() {
 
 								{/* Account Info Section */}
 								<div className="rounded-lg border bg-muted/50 p-4">
-									<h4 className="mb-3 font-medium text-sm">Account Information</h4>
+									<h4 className="mb-3 font-medium text-sm">
+										Account Information
+									</h4>
 									<div className="grid grid-cols-2 gap-4 text-sm">
 										<div>
 											<p className="text-muted-foreground">Role</p>
@@ -244,19 +246,24 @@ export default function AgentSettingsPage() {
 										<div>
 											<p className="text-muted-foreground">Tier</p>
 											<Badge variant="secondary" className="mt-1">
-												{profileData?.agent?.agentTier?.replace("_", " ") || "Advisor"}
+												{profileData?.agent?.agentTier?.replace("_", " ") ||
+													"Advisor"}
 											</Badge>
 										</div>
 										{profileData?.team && (
 											<div>
 												<p className="text-muted-foreground">Team</p>
-												<p className="mt-1 font-medium">{profileData.team.name}</p>
+												<p className="mt-1 font-medium">
+													{profileData.team.name}
+												</p>
 											</div>
 										)}
 										{profileData?.agency && (
 											<div>
 												<p className="text-muted-foreground">Agency</p>
-												<p className="mt-1 font-medium">{profileData.agency.name}</p>
+												<p className="mt-1 font-medium">
+													{profileData.agency.name}
+												</p>
 											</div>
 										)}
 									</div>

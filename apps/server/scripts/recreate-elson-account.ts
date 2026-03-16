@@ -5,6 +5,18 @@ import { db } from "../src/db/index.js";
 const TARGET_EMAIL = "elson@devots.com.my";
 const NEW_PASSWORD = "DevOts2024!";
 
+interface UserBackupRow {
+	id: string;
+	name: string;
+	email: string;
+	role: string;
+	agent_tier: string;
+	company_commission_split: number;
+	agency_id: string | null;
+	team_id: string | null;
+	permissions: unknown;
+}
+
 console.log("🔄 RECREATING ELSON ACCOUNT");
 console.log("===========================");
 console.log(`Email: ${TARGET_EMAIL}`);
@@ -79,7 +91,7 @@ async function cleanupOldAccount(userId: string) {
 	}
 }
 
-async function createFreshAccount(userData: any) {
+async function createFreshAccount(userData: UserBackupRow) {
 	console.log("\n3️⃣ Creating fresh account...");
 
 	try {
@@ -232,11 +244,10 @@ async function testNewAccount() {
 		if (response.ok) {
 			console.log("   ✅ Authentication successful!");
 			return true;
-		} else {
-			const responseText = await response.text();
-			console.log(`   ❌ Authentication failed: ${responseText}`);
-			return false;
 		}
+		const responseText = await response.text();
+		console.log(`   ❌ Authentication failed: ${responseText}`);
+		return false;
 	} catch (error) {
 		console.error("❌ Error testing new account:", error);
 		return false;

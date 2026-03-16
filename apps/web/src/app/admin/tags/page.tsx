@@ -1,12 +1,21 @@
 "use client";
 
 import { AppSidebar } from "@/components/app-sidebar";
+import { HeaderActions } from "@/components/header-actions";
 import { Separator } from "@/components/separator";
 import {
 	SidebarInset,
 	SidebarProvider,
 	SidebarTrigger,
 } from "@/components/sidebar";
+import {
+	Table,
+	TableBody,
+	TableCell,
+	TableHead,
+	TableHeader,
+	TableRow,
+} from "@/components/table";
 import {
 	Breadcrumb,
 	BreadcrumbItem,
@@ -32,18 +41,8 @@ import {
 	DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import {
-	Table,
-	TableBody,
-	TableCell,
-	TableHead,
-	TableHeader,
-	TableRow,
-} from "@/components/table";
-import { HeaderActions } from "@/components/header-actions";
 import { authClient } from "@/lib/auth-client";
 import { trpc } from "@/utils/trpc";
-import { useQueryClient } from "@tanstack/react-query";
 import {
 	RiAddLine,
 	RiDashboardLine,
@@ -55,6 +54,7 @@ import {
 	RiSearchLine,
 	RiShieldUserLine,
 } from "@remixicon/react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -219,14 +219,11 @@ export default function AdminTagsPage() {
 		return (
 			<div className="flex h-screen items-center justify-center">
 				<div className="text-center">
-					<h1 className="text-2xl font-semibold">Access Denied</h1>
+					<h1 className="font-semibold text-2xl">Access Denied</h1>
 					<p className="mt-2 text-muted-foreground">
 						You don't have permission to access this page.
 					</p>
-					<Button
-						onClick={() => router.push("/dashboard")}
-						className="mt-4"
-					>
+					<Button onClick={() => router.push("/dashboard")} className="mt-4">
 						Go to Dashboard
 					</Button>
 				</div>
@@ -288,11 +285,15 @@ export default function AdminTagsPage() {
 					<div className="flex items-center justify-between">
 						<div>
 							<h1 className="font-semibold text-2xl">Tag Management</h1>
-							<p className="text-muted-foreground text-sm mt-1">
-								Create and manage labels for contacts that help you organize data and run automations
+							<p className="mt-1 text-muted-foreground text-sm">
+								Create and manage labels for contacts that help you organize
+								data and run automations
 							</p>
 						</div>
-						<Button onClick={handleAddClick} className="bg-green-600 hover:bg-green-700">
+						<Button
+							onClick={handleAddClick}
+							className="bg-green-600 hover:bg-green-700"
+						>
 							<RiAddLine className="mr-2 h-4 w-4" />
 							Create Tag
 						</Button>
@@ -307,9 +308,9 @@ export default function AdminTagsPage() {
 							</CardDescription>
 						</CardHeader>
 						<CardContent>
-							<div className="flex items-center gap-4 mb-6">
+							<div className="mb-6 flex items-center gap-4">
 								<div className="relative flex-1">
-									<RiSearchLine className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+									<RiSearchLine className="-translate-y-1/2 absolute top-1/2 left-3 size-4 text-muted-foreground" />
 									<Input
 										placeholder="Search tags..."
 										value={searchQuery}
@@ -326,7 +327,9 @@ export default function AdminTagsPage() {
 									onClick={() => refetchTags()}
 									disabled={isLoadingTags}
 								>
-									<RiRefreshLine className={`mr-2 h-4 w-4 ${isLoadingTags ? "animate-spin" : ""}`} />
+									<RiRefreshLine
+										className={`mr-2 h-4 w-4 ${isLoadingTags ? "animate-spin" : ""}`}
+									/>
 									Refresh
 								</Button>
 							</div>
@@ -337,9 +340,9 @@ export default function AdminTagsPage() {
 									<RiLoader4Line className="h-8 w-8 animate-spin text-muted-foreground" />
 								</div>
 							) : tagsError ? (
-								<div className="text-center py-12">
-									<div className="text-red-500 mb-2">Error loading tags</div>
-									<div className="text-sm text-muted-foreground">
+								<div className="py-12 text-center">
+									<div className="mb-2 text-red-500">Error loading tags</div>
+									<div className="text-muted-foreground text-sm">
 										{tagsError.message}
 									</div>
 									<Button
@@ -352,8 +355,10 @@ export default function AdminTagsPage() {
 									</Button>
 								</div>
 							) : tags.length === 0 ? (
-								<div className="text-center py-12 text-muted-foreground">
-									{searchQuery ? "No tags found matching your search." : "No tags yet. Click 'Create Tag' to get started."}
+								<div className="py-12 text-center text-muted-foreground">
+									{searchQuery
+										? "No tags found matching your search."
+										: "No tags yet. Click 'Create Tag' to get started."}
 								</div>
 							) : (
 								<div className="rounded-md border">
@@ -361,7 +366,10 @@ export default function AdminTagsPage() {
 										<TableHeader>
 											<TableRow>
 												<TableHead className="w-12">
-													<input type="checkbox" className="rounded border-gray-300" />
+													<input
+														type="checkbox"
+														className="rounded border-gray-300"
+													/>
 												</TableHead>
 												<TableHead>Tag Name</TableHead>
 												<TableHead>Created On</TableHead>
@@ -373,11 +381,18 @@ export default function AdminTagsPage() {
 											{tags.map((tag) => (
 												<TableRow key={tag.id}>
 													<TableCell>
-														<input type="checkbox" className="rounded border-gray-300" />
+														<input
+															type="checkbox"
+															className="rounded border-gray-300"
+														/>
 													</TableCell>
-													<TableCell className="font-medium">{tag.name}</TableCell>
+													<TableCell className="font-medium">
+														{tag.name}
+													</TableCell>
 													<TableCell>{formatDate(tag.createdAt)}</TableCell>
-													<TableCell>{tag.createdByName || "Unknown"}</TableCell>
+													<TableCell>
+														{tag.createdByName || "Unknown"}
+													</TableCell>
 													<TableCell className="text-right">
 														<div className="flex items-center justify-end gap-2">
 															<Button
@@ -391,7 +406,7 @@ export default function AdminTagsPage() {
 																variant="ghost"
 																size="sm"
 																onClick={() => handleDeleteClick(tag)}
-																className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950"
+																className="text-red-600 hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-950"
 															>
 																<RiDeleteBinLine className="h-4 w-4" />
 															</Button>
@@ -406,9 +421,14 @@ export default function AdminTagsPage() {
 
 							{/* Pagination */}
 							{tagsData && tagsData.pagination.totalPages > 1 && (
-								<div className="flex items-center justify-between mt-4">
-									<div className="text-sm text-muted-foreground">
-										Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, tagsData.pagination.total)} of {tagsData.pagination.total} tags
+								<div className="mt-4 flex items-center justify-between">
+									<div className="text-muted-foreground text-sm">
+										Showing {(currentPage - 1) * itemsPerPage + 1} to{" "}
+										{Math.min(
+											currentPage * itemsPerPage,
+											tagsData.pagination.total,
+										)}{" "}
+										of {tagsData.pagination.total} tags
 									</div>
 									<div className="flex items-center gap-2">
 										<Button
@@ -422,7 +442,11 @@ export default function AdminTagsPage() {
 										<Button
 											variant="outline"
 											size="sm"
-											onClick={() => setCurrentPage((p) => Math.min(tagsData.pagination.totalPages, p + 1))}
+											onClick={() =>
+												setCurrentPage((p) =>
+													Math.min(tagsData.pagination.totalPages, p + 1),
+												)
+											}
 											disabled={currentPage === tagsData.pagination.totalPages}
 										>
 											Next
@@ -442,15 +466,17 @@ export default function AdminTagsPage() {
 									Create New Tag
 								</DialogTitle>
 								<DialogDescription>
-									Add a new tag to the master list. This tag will be available for all agents to use.
+									Add a new tag to the master list. This tag will be available
+									for all agents to use.
 								</DialogDescription>
 							</DialogHeader>
 							<div className="space-y-4 py-4">
 								<div className="space-y-2">
-									<label className="text-sm font-medium">
+									<label htmlFor="add-tag-name" className="font-medium text-sm">
 										Tag Name <span className="text-destructive">*</span>
 									</label>
 									<Input
+										id="add-tag-name"
 										placeholder="e.g., [ads lead] breeze hill"
 										value={tagName}
 										onChange={(e) => setTagName(e.target.value)}
@@ -460,8 +486,9 @@ export default function AdminTagsPage() {
 											}
 										}}
 									/>
-									<p className="text-xs text-muted-foreground">
-										Enter a descriptive tag name that helps categorize prospects by project or source.
+									<p className="text-muted-foreground text-xs">
+										Enter a descriptive tag name that helps categorize prospects
+										by project or source.
 									</p>
 								</div>
 							</div>
@@ -506,15 +533,20 @@ export default function AdminTagsPage() {
 									Edit Tag
 								</DialogTitle>
 								<DialogDescription>
-									Update the tag name. This will update the tag for all prospects using it.
+									Update the tag name. This will update the tag for all
+									prospects using it.
 								</DialogDescription>
 							</DialogHeader>
 							<div className="space-y-4 py-4">
 								<div className="space-y-2">
-									<label className="text-sm font-medium">
+									<label
+										htmlFor="edit-tag-name"
+										className="font-medium text-sm"
+									>
 										Tag Name <span className="text-destructive">*</span>
 									</label>
 									<Input
+										id="edit-tag-name"
 										placeholder="e.g., [ads lead] breeze hill"
 										value={tagName}
 										onChange={(e) => setTagName(e.target.value)}
@@ -560,7 +592,10 @@ export default function AdminTagsPage() {
 					</Dialog>
 
 					{/* Delete Tag Dialog */}
-					<Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+					<Dialog
+						open={isDeleteDialogOpen}
+						onOpenChange={setIsDeleteDialogOpen}
+					>
 						<DialogContent className="sm:max-w-[500px]">
 							<DialogHeader>
 								<DialogTitle className="flex items-center gap-2 text-red-600 dark:text-red-400">
@@ -568,17 +603,24 @@ export default function AdminTagsPage() {
 									Delete Tag
 								</DialogTitle>
 								<DialogDescription>
-									Are you sure you want to delete this tag? This will remove the tag from all prospects that use it. This action cannot be undone.
+									Are you sure you want to delete this tag? This will remove the
+									tag from all prospects that use it. This action cannot be
+									undone.
 								</DialogDescription>
 							</DialogHeader>
 							{selectedTag && (
 								<div className="py-4">
 									<div className="rounded-lg border bg-muted/30 p-4">
 										<div className="space-y-2">
-											<div className="text-sm font-medium text-muted-foreground">Tag Name</div>
-											<div className="text-base font-semibold">{selectedTag.name}</div>
-											<div className="text-sm text-muted-foreground mt-2">
-												Created: {formatDate(selectedTag.createdAt)} by {selectedTag.createdByName || "Unknown"}
+											<div className="font-medium text-muted-foreground text-sm">
+												Tag Name
+											</div>
+											<div className="font-semibold text-base">
+												{selectedTag.name}
+											</div>
+											<div className="mt-2 text-muted-foreground text-sm">
+												Created: {formatDate(selectedTag.createdAt)} by{" "}
+												{selectedTag.createdByName || "Unknown"}
 											</div>
 										</div>
 									</div>

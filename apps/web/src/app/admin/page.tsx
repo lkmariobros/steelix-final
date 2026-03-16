@@ -1,6 +1,7 @@
 "use client";
 
 import { AppSidebar } from "@/components/app-sidebar";
+import { HeaderActions } from "@/components/header-actions";
 import { Separator } from "@/components/separator";
 import {
 	SidebarInset,
@@ -15,26 +16,25 @@ import {
 	BreadcrumbPage,
 	BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
-import { HeaderActions } from "@/components/header-actions";
 import { AdminDashboard } from "@/dashboards/admin";
 import { authClient } from "@/lib/auth-client";
 import { trpc } from "@/utils/trpc";
 import { RiDashboardLine, RiShieldUserLine } from "@remixicon/react";
 import { useRouter } from "next/navigation";
 
-
 export default function AdminDashboardPage() {
 	const router = useRouter();
 	const { data: session, isPending } = authClient.useSession();
 
 	// ✅ CORRECT tRPC query pattern with proper role checking
-	const { data: roleData, isLoading: isRoleLoading } = trpc.admin.checkAdminRole.useQuery(
-		undefined,
-		{
+	const { data: roleData, isLoading: isRoleLoading } =
+		trpc.admin.checkAdminRole.useQuery(undefined, {
 			enabled: !!session, // Only check role if user is authenticated
 			retry: false,
-		}
-	) as { data: { hasAdminAccess: boolean; role: string } | undefined; isLoading: boolean };
+		}) as {
+			data: { hasAdminAccess: boolean; role: string } | undefined;
+			isLoading: boolean;
+		};
 
 	// Show loading while checking authentication and role
 	if (isPending || isRoleLoading) {
@@ -59,18 +59,21 @@ export default function AdminDashboardPage() {
 		return (
 			<div className="flex h-screen items-center justify-center">
 				<div className="text-center">
-					<RiShieldUserLine size={48} className="mx-auto text-muted-foreground mb-4" />
-					<h1 className="text-2xl font-semibold mb-2">Access Denied</h1>
-					<p className="text-muted-foreground mb-4">
+					<RiShieldUserLine
+						size={48}
+						className="mx-auto mb-4 text-muted-foreground"
+					/>
+					<h1 className="mb-2 font-semibold text-2xl">Access Denied</h1>
+					<p className="mb-4 text-muted-foreground">
 						You don&apos;t have permission to access the admin portal.
 					</p>
-					<p className="text-muted-foreground text-sm mb-4">
-						Current role: {roleData?.role || 'Unknown'}
+					<p className="mb-4 text-muted-foreground text-sm">
+						Current role: {roleData?.role || "Unknown"}
 					</p>
 					<button
 						type="button"
-						onClick={() => router.push('/dashboard')}
-						className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
+						onClick={() => router.push("/dashboard")}
+						className="rounded-md bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90"
 					>
 						Go to Agent Dashboard
 					</button>

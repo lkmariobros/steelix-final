@@ -2,6 +2,7 @@
 
 import { TierConfigurationManager } from "@/components/admin/tier-configuration-manager";
 import { AppSidebar } from "@/components/app-sidebar";
+import { HeaderActions } from "@/components/header-actions";
 import {
 	SidebarInset,
 	SidebarProvider,
@@ -18,7 +19,6 @@ import {
 } from "@/components/ui/breadcrumb";
 import { LoadingScreen } from "@/components/ui/loading-spinner";
 import { Separator } from "@/components/ui/separator";
-import { HeaderActions } from "@/components/header-actions";
 import { authClient } from "@/lib/auth-client";
 import { trpc } from "@/utils/trpc";
 import { RiDashboardLine, RiSettings3Line } from "@remixicon/react";

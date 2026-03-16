@@ -16,7 +16,11 @@ import React from "react";
 
 // Import types and utilities
 import type { UrgentTask } from "../admin-schema";
-import { formatDateTime, getRelativeTime, getPriorityColor } from "../admin-schema";
+import {
+	formatDateTime,
+	getPriorityColor,
+	getRelativeTime,
+} from "../admin-schema";
 
 interface UrgentTasksPanelProps {
 	refreshKey?: number;

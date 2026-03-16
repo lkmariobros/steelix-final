@@ -58,10 +58,23 @@ export function AdminDashboard({ className }: AdminDashboardProps) {
 
 		// Calculate date ranges dynamically based on current date
 		const now = new Date();
-		const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-		const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+		const startOfToday = new Date(
+			now.getFullYear(),
+			now.getMonth(),
+			now.getDate(),
+		);
+		const endOfToday = new Date(
+			now.getFullYear(),
+			now.getMonth(),
+			now.getDate(),
+			23,
+			59,
+			59,
+		);
 
-		const getDateRange = (filterKey: string): { startDate?: Date; endDate?: Date } => {
+		const getDateRange = (
+			filterKey: string,
+		): { startDate?: Date; endDate?: Date } => {
 			switch (filterKey) {
 				case "today":
 					return {
@@ -88,7 +101,6 @@ export function AdminDashboard({ className }: AdminDashboardProps) {
 						startDate: new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000),
 						endDate: endOfToday,
 					};
-				case "all":
 				default:
 					return {
 						startDate: undefined,

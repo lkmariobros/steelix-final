@@ -2,28 +2,33 @@ import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../db";
 import {
+	APPROVAL_WORKFLOW_ACTIONS,
+	type ApprovalStatus,
 	type CommissionApproval,
 	type NewCommissionApproval,
 	type UpdateApprovalStatus,
-	APPROVAL_WORKFLOW_ACTIONS,
 	approvalWorkflowHistory,
 	commissionApprovals,
 	insertCommissionApprovalSchema,
 	selectCommissionApprovalSchema,
 	updateApprovalStatusSchema,
 } from "../db/schema/approvals";
-import { transactions } from "../db/schema/transactions";
 import { user } from "../db/schema/auth";
+import { transactions } from "../db/schema/transactions";
 import { adminProcedure, protectedProcedure, router } from "../lib/trpc";
 
 // Input schemas
 const listApprovalsInput = z.object({
 	limit: z.number().min(1).max(100).default(20),
 	offset: z.number().min(0).default(0),
-	status: z.enum(["pending", "approved", "rejected", "requires_revision"]).optional(),
+	status: z
+		.enum(["pending", "approved", "rejected", "requires_revision"])
+		.optional(),
 	priority: z.enum(["low", "normal", "high", "urgent"]).optional(),
 	agentId: z.string().optional(),
-	sortBy: z.enum(["submittedAt", "requestedAmount", "priority"]).default("submittedAt"),
+	sortBy: z
+		.enum(["submittedAt", "requestedAmount", "priority"])
+		.default("submittedAt"),
 	sortOrder: z.enum(["asc", "desc"]).default("desc"),
 });
 
@@ -56,8 +61,8 @@ export const approvalsRouter = router({
 				.where(
 					and(
 						eq(transactions.id, input.transactionId),
-						eq(transactions.agentId, ctx.session.user.id)
-					)
+						eq(transactions.agentId, ctx.session.user.id),
+					),
 				)
 				.limit(1);
 
@@ -102,117 +107,119 @@ export const approvalsRouter = router({
 		}),
 
 	// List approvals (admin only)
-	list: adminProcedure
-		.input(listApprovalsInput)
-		.query(async ({ input }) => {
-			const conditions = [];
+	list: adminProcedure.input(listApprovalsInput).query(async ({ input }) => {
+		const conditions = [];
 
-			if (input.status) {
-				conditions.push(eq(commissionApprovals.status, input.status));
-			}
-			if (input.priority) {
-				conditions.push(eq(commissionApprovals.priority, input.priority));
-			}
-			if (input.agentId) {
-				conditions.push(eq(commissionApprovals.agentId, input.agentId));
-			}
+		if (input.status) {
+			conditions.push(eq(commissionApprovals.status, input.status));
+		}
+		if (input.priority) {
+			conditions.push(eq(commissionApprovals.priority, input.priority));
+		}
+		if (input.agentId) {
+			conditions.push(eq(commissionApprovals.agentId, input.agentId));
+		}
 
-			// Build order by clause
-			const orderByColumn = input.sortBy === "submittedAt" 
+		// Build order by clause
+		const orderByColumn =
+			input.sortBy === "submittedAt"
 				? commissionApprovals.submittedAt
 				: input.sortBy === "requestedAmount"
-				? commissionApprovals.requestedAmount
-				: commissionApprovals.priority;
+					? commissionApprovals.requestedAmount
+					: commissionApprovals.priority;
 
-			const orderByClause = input.sortOrder === "asc" 
-				? orderByColumn 
-				: desc(orderByColumn);
+		const orderByClause =
+			input.sortOrder === "asc" ? orderByColumn : desc(orderByColumn);
 
-			// Get approvals with agent and transaction details
-			const approvalsList = await db
-				.select({
-					approval: commissionApprovals,
-					agent: {
-						id: user.id,
-						name: user.name,
-						email: user.email,
-						agentTier: user.agentTier,
-					},
-					transaction: {
-						id: transactions.id,
-						marketType: transactions.marketType,
-						transactionType: transactions.transactionType,
-						propertyData: transactions.propertyData,
-						clientData: transactions.clientData,
-					},
-				})
-				.from(commissionApprovals)
-				.leftJoin(user, eq(commissionApprovals.agentId, user.id))
-				.leftJoin(transactions, eq(commissionApprovals.transactionId, transactions.id))
-				.where(conditions.length > 0 ? and(...conditions) : undefined)
-				.orderBy(orderByClause)
-				.limit(input.limit)
-				.offset(input.offset);
+		// Get approvals with agent and transaction details
+		const approvalsList = await db
+			.select({
+				approval: commissionApprovals,
+				agent: {
+					id: user.id,
+					name: user.name,
+					email: user.email,
+					agentTier: user.agentTier,
+				},
+				transaction: {
+					id: transactions.id,
+					marketType: transactions.marketType,
+					transactionType: transactions.transactionType,
+					propertyData: transactions.propertyData,
+					clientData: transactions.clientData,
+				},
+			})
+			.from(commissionApprovals)
+			.leftJoin(user, eq(commissionApprovals.agentId, user.id))
+			.leftJoin(
+				transactions,
+				eq(commissionApprovals.transactionId, transactions.id),
+			)
+			.where(conditions.length > 0 ? and(...conditions) : undefined)
+			.orderBy(orderByClause)
+			.limit(input.limit)
+			.offset(input.offset);
 
-			// Get total count
-			const [{ count }] = await db
-				.select({ count: sql<number>`count(*)` })
-				.from(commissionApprovals)
-				.where(conditions.length > 0 ? and(...conditions) : undefined);
+		// Get total count
+		const [{ count }] = await db
+			.select({ count: sql<number>`count(*)` })
+			.from(commissionApprovals)
+			.where(conditions.length > 0 ? and(...conditions) : undefined);
 
-			return {
-				approvals: approvalsList,
-				total: count,
-				hasMore: input.offset + input.limit < count,
-			};
-		}),
+		return {
+			approvals: approvalsList,
+			total: count,
+			hasMore: input.offset + input.limit < count,
+		};
+	}),
 
 	// Get approval by ID (admin only)
-	getById: adminProcedure
-		.input(approvalIdInput)
-		.query(async ({ input }) => {
-			const [approvalData] = await db
-				.select({
-					approval: commissionApprovals,
-					agent: {
-						id: user.id,
-						name: user.name,
-						email: user.email,
-						agentTier: user.agentTier,
-						companyCommissionSplit: user.companyCommissionSplit,
-					},
-					transaction: transactions,
-				})
-				.from(commissionApprovals)
-				.leftJoin(user, eq(commissionApprovals.agentId, user.id))
-				.leftJoin(transactions, eq(commissionApprovals.transactionId, transactions.id))
-				.where(eq(commissionApprovals.id, input.id))
-				.limit(1);
+	getById: adminProcedure.input(approvalIdInput).query(async ({ input }) => {
+		const [approvalData] = await db
+			.select({
+				approval: commissionApprovals,
+				agent: {
+					id: user.id,
+					name: user.name,
+					email: user.email,
+					agentTier: user.agentTier,
+					companyCommissionSplit: user.companyCommissionSplit,
+				},
+				transaction: transactions,
+			})
+			.from(commissionApprovals)
+			.leftJoin(user, eq(commissionApprovals.agentId, user.id))
+			.leftJoin(
+				transactions,
+				eq(commissionApprovals.transactionId, transactions.id),
+			)
+			.where(eq(commissionApprovals.id, input.id))
+			.limit(1);
 
-			if (!approvalData) {
-				throw new Error("Approval not found");
-			}
+		if (!approvalData) {
+			throw new Error("Approval not found");
+		}
 
-			// Get workflow history
-			const workflowHistory = await db
-				.select({
-					history: approvalWorkflowHistory,
-					actionByUser: {
-						id: user.id,
-						name: user.name,
-						email: user.email,
-					},
-				})
-				.from(approvalWorkflowHistory)
-				.leftJoin(user, eq(approvalWorkflowHistory.actionBy, user.id))
-				.where(eq(approvalWorkflowHistory.approvalId, input.id))
-				.orderBy(desc(approvalWorkflowHistory.timestamp));
+		// Get workflow history
+		const workflowHistory = await db
+			.select({
+				history: approvalWorkflowHistory,
+				actionByUser: {
+					id: user.id,
+					name: user.name,
+					email: user.email,
+				},
+			})
+			.from(approvalWorkflowHistory)
+			.leftJoin(user, eq(approvalWorkflowHistory.actionBy, user.id))
+			.where(eq(approvalWorkflowHistory.approvalId, input.id))
+			.orderBy(desc(approvalWorkflowHistory.timestamp));
 
-			return {
-				...approvalData,
-				workflowHistory,
-			};
-		}),
+		return {
+			...approvalData,
+			workflowHistory,
+		};
+	}),
 
 	// Update approval status (admin only)
 	updateStatus: adminProcedure
@@ -230,8 +237,15 @@ export const approvalsRouter = router({
 			}
 
 			// Update approval
-			const updateData: any = {
-				status: input.status,
+			const updateData: {
+				status: ApprovalStatus;
+				reviewedBy: string;
+				reviewedAt: Date;
+				reviewNotes: string | undefined;
+				updatedAt: Date;
+				approvedAmount?: string;
+			} = {
+				status: input.status as ApprovalStatus,
 				reviewedBy: ctx.session.user.id,
 				reviewedAt: new Date(),
 				reviewNotes: input.reviewNotes,
@@ -249,11 +263,12 @@ export const approvalsRouter = router({
 				.returning();
 
 			// Log workflow history
-			const actionType = input.status === "approved" 
-				? APPROVAL_WORKFLOW_ACTIONS.APPROVE
-				: input.status === "rejected"
-				? APPROVAL_WORKFLOW_ACTIONS.REJECT
-				: APPROVAL_WORKFLOW_ACTIONS.UPDATE;
+			const actionType =
+				input.status === "approved"
+					? APPROVAL_WORKFLOW_ACTIONS.APPROVE
+					: input.status === "rejected"
+						? APPROVAL_WORKFLOW_ACTIONS.REJECT
+						: APPROVAL_WORKFLOW_ACTIONS.UPDATE;
 
 			await db.insert(approvalWorkflowHistory).values({
 				approvalId: input.id,
@@ -283,8 +298,16 @@ export const approvalsRouter = router({
 				throw new Error("Some approvals not found");
 			}
 
-			const newStatus = action === "approve" ? "approved" : "rejected";
-			const updateData: any = {
+			const newStatus: ApprovalStatus =
+				action === "approve" ? "approved" : "rejected";
+			const updateData: {
+				status: ApprovalStatus;
+				reviewedBy: string;
+				reviewedAt: Date;
+				reviewNotes: string | undefined;
+				updatedAt: Date;
+				approvedAmount?: string;
+			} = {
 				status: newStatus,
 				reviewedBy: ctx.session.user.id,
 				reviewedAt: new Date(),
@@ -304,14 +327,15 @@ export const approvalsRouter = router({
 				.returning();
 
 			// Log workflow history for each approval
-			const workflowEntries = currentApprovals.map(approval => ({
+			const workflowEntries = currentApprovals.map((approval) => ({
 				approvalId: approval.id,
 				fromStatus: approval.status,
-				toStatus: newStatus as any,
+				toStatus: newStatus as "approved" | "rejected",
 				actionBy: ctx.session.user.id,
-				actionType: action === "approve"
-					? APPROVAL_WORKFLOW_ACTIONS.APPROVE
-					: APPROVAL_WORKFLOW_ACTIONS.REJECT,
+				actionType:
+					action === "approve"
+						? APPROVAL_WORKFLOW_ACTIONS.APPROVE
+						: APPROVAL_WORKFLOW_ACTIONS.REJECT,
 				actionNotes: reviewNotes,
 			}));
 
@@ -330,10 +354,14 @@ export const approvalsRouter = router({
 			const conditions = [];
 
 			if (input.startDate) {
-				conditions.push(sql`${commissionApprovals.submittedAt} >= ${input.startDate}`);
+				conditions.push(
+					sql`${commissionApprovals.submittedAt} >= ${input.startDate}`,
+				);
 			}
 			if (input.endDate) {
-				conditions.push(sql`${commissionApprovals.submittedAt} <= ${input.endDate}`);
+				conditions.push(
+					sql`${commissionApprovals.submittedAt} <= ${input.endDate}`,
+				);
 			}
 			if (input.agentId) {
 				conditions.push(eq(commissionApprovals.agentId, input.agentId));
@@ -372,11 +400,15 @@ export const approvalsRouter = router({
 
 	// Get user's approval requests
 	myRequests: protectedProcedure
-		.input(z.object({
-			limit: z.number().min(1).max(100).default(10),
-			offset: z.number().min(0).default(0),
-			status: z.enum(["pending", "approved", "rejected", "requires_revision"]).optional(),
-		}))
+		.input(
+			z.object({
+				limit: z.number().min(1).max(100).default(10),
+				offset: z.number().min(0).default(0),
+				status: z
+					.enum(["pending", "approved", "rejected", "requires_revision"])
+					.optional(),
+			}),
+		)
 		.query(async ({ ctx, input }) => {
 			const conditions = [eq(commissionApprovals.agentId, ctx.session.user.id)];
 
@@ -396,7 +428,10 @@ export const approvalsRouter = router({
 					},
 				})
 				.from(commissionApprovals)
-				.leftJoin(transactions, eq(commissionApprovals.transactionId, transactions.id))
+				.leftJoin(
+					transactions,
+					eq(commissionApprovals.transactionId, transactions.id),
+				)
 				.where(and(...conditions))
 				.orderBy(desc(commissionApprovals.submittedAt))
 				.limit(input.limit)

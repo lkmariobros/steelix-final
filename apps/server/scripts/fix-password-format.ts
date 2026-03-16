@@ -77,7 +77,7 @@ async function fixPasswords() {
 	const currentPassword = account.password as string;
 	console.log(
 		"📋 Current password format:",
-		currentPassword.substring(0, 30) + "...",
+		`${currentPassword.substring(0, 30)}...`,
 	);
 	console.log("📏 Current length:", currentPassword.length);
 
@@ -90,7 +90,7 @@ async function fixPasswords() {
 	// Hash with Better Auth format
 	console.log("\n🔐 Hashing password with Better Auth (scrypt) format...");
 	const newHash = await hashPasswordBetterAuth(password);
-	console.log("✅ New hash:", newHash.substring(0, 40) + "...");
+	console.log("✅ New hash:", `${newHash.substring(0, 40)}...`);
 	console.log("📏 New length:", newHash.length);
 
 	// Update in database

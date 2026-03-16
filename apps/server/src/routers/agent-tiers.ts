@@ -1,17 +1,21 @@
 import { z } from "zod";
-import { adminProcedure, protectedProcedure, router } from "../lib/trpc";
+import {
+	AGENT_TIER_CONFIG,
+	type AgentTier,
+	agentTierSchema,
+} from "../db/schema/auth";
 import {
 	calculateEnhancedCommission,
-	getAgentTierInfo,
 	getAgentTierHistory,
-	promoteAgentTier,
-	validateTierRequirements,
-	getUplineInfo,
-	getLeadershipBonusPayments,
-	setAgentUpline,
+	getAgentTierInfo,
 	getDownlineAgents,
+	getLeadershipBonusPayments,
+	getUplineInfo,
+	promoteAgentTier,
+	setAgentUpline,
+	validateTierRequirements,
 } from "../lib/agent-tier-utils";
-import { agentTierSchema, AGENT_TIER_CONFIG, type AgentTier } from "../db/schema/auth";
+import { adminProcedure, protectedProcedure, router } from "../lib/trpc";
 
 /**
  * Agent tier management router for commission calculations
@@ -21,8 +25,11 @@ import { agentTierSchema, AGENT_TIER_CONFIG, type AgentTier } from "../db/schema
 // Input schemas - simplified representation type (2 options)
 const calculateCommissionInput = z.object({
 	propertyPrice: z.number().positive("Property price must be positive"),
-	commissionRate: z.number().min(0.1).max(100, "Commission rate must be between 0.1 and 100"),
-	representationType: z.enum(['direct', 'co_broking']),
+	commissionRate: z
+		.number()
+		.min(0.1)
+		.max(100, "Commission rate must be between 0.1 and 100"),
+	representationType: z.enum(["direct", "co_broking"]),
 	coBrokerSplitPercentage: z.number().min(0).max(100).optional().default(50),
 	includeLeadershipBonus: z.boolean().optional().default(true),
 });
@@ -31,10 +38,12 @@ const promoteAgentInput = z.object({
 	agentId: z.string().min(1, "Agent ID is required"),
 	newTier: agentTierSchema,
 	reason: z.string().min(1, "Reason is required"),
-	performanceMetrics: z.object({
-		monthlySales: z.number().min(0),
-		teamMembers: z.number().min(0),
-	}).optional(),
+	performanceMetrics: z
+		.object({
+			monthlySales: z.number().min(0),
+			teamMembers: z.number().min(0),
+		})
+		.optional(),
 });
 
 const validateTierInput = z.object({
@@ -63,15 +72,24 @@ export const agentTiersRouter = router({
 		.input(calculateCommissionInput)
 		.query(async ({ ctx, input }) => {
 			// Get user's tier information from enhanced session
-			const userSession = ctx.session.user as any;
-			const agentTier = (userSession.agentTier || 'advisor') as AgentTier;
-			const companyCommissionSplit = userSession.companyCommissionSplit || AGENT_TIER_CONFIG[agentTier].commissionSplit;
+			const userSession = ctx.session.user as typeof ctx.session.user & {
+				agentTier?: string;
+				companyCommissionSplit?: number;
+			};
+			const agentTier: AgentTier =
+				(userSession.agentTier as AgentTier) || "advisor";
+			const companyCommissionSplit =
+				userSession.companyCommissionSplit ??
+				AGENT_TIER_CONFIG[agentTier].commissionSplit;
 
 			// Get upline info for leadership bonus calculation
-			let uplineData: { uplineTier: AgentTier; leadershipBonusRate: number } | null = null;
+			let uplineData: {
+				uplineTier: AgentTier;
+				leadershipBonusRate: number;
+			} | null = null;
 			if (input.includeLeadershipBonus) {
 				const uplineInfo = await getUplineInfo(ctx.session.user.id);
-				if (uplineInfo && uplineInfo.uplineTier) {
+				if (uplineInfo?.uplineTier) {
 					uplineData = {
 						uplineTier: uplineInfo.uplineTier,
 						leadershipBonusRate: uplineInfo.leadershipBonusRate,
@@ -86,23 +104,28 @@ export const agentTiersRouter = router({
 				agentTier,
 				companyCommissionSplit,
 				input.coBrokerSplitPercentage,
-				uplineData
+				uplineData,
 			);
 		}),
 
 	// Calculate commission for specific agent (admin only)
 	calculateCommissionForAgent: adminProcedure
-		.input(calculateCommissionInput.extend({
-			agentId: z.string(),
-		}))
+		.input(
+			calculateCommissionInput.extend({
+				agentId: z.string(),
+			}),
+		)
 		.query(async ({ input }) => {
 			const agentInfo = await getAgentTierInfo(input.agentId);
 
 			// Get upline info for leadership bonus calculation
-			let uplineData: { uplineTier: AgentTier; leadershipBonusRate: number } | null = null;
+			let uplineData: {
+				uplineTier: AgentTier;
+				leadershipBonusRate: number;
+			} | null = null;
 			if (input.includeLeadershipBonus) {
 				const uplineInfo = await getUplineInfo(input.agentId);
-				if (uplineInfo && uplineInfo.uplineTier) {
+				if (uplineInfo?.uplineTier) {
 					uplineData = {
 						uplineTier: uplineInfo.uplineTier,
 						leadershipBonusRate: uplineInfo.leadershipBonusRate,
@@ -114,10 +137,12 @@ export const agentTiersRouter = router({
 				input.propertyPrice,
 				input.commissionRate,
 				input.representationType,
-				(agentInfo.agentTier || 'advisor') as AgentTier,
-				agentInfo.companyCommissionSplit || AGENT_TIER_CONFIG[(agentInfo.agentTier || 'advisor') as AgentTier].commissionSplit,
+				(agentInfo.agentTier || "advisor") as AgentTier,
+				agentInfo.companyCommissionSplit ||
+					AGENT_TIER_CONFIG[(agentInfo.agentTier || "advisor") as AgentTier]
+						.commissionSplit,
 				input.coBrokerSplitPercentage,
-				uplineData
+				uplineData,
 			);
 		}),
 
@@ -131,11 +156,11 @@ export const agentTiersRouter = router({
 		.input(validateTierInput)
 		.query(async ({ ctx, input }) => {
 			const agentInfo = await getAgentTierInfo(ctx.session.user.id);
-			
+
 			return validateTierRequirements(
-				(agentInfo.agentTier || 'advisor') as AgentTier,
+				(agentInfo.agentTier || "advisor") as AgentTier,
 				input.targetTier,
-				input.performanceMetrics
+				input.performanceMetrics,
 			);
 		}),
 
@@ -148,7 +173,7 @@ export const agentTiersRouter = router({
 				input.newTier,
 				ctx.session.user.id,
 				input.reason,
-				input.performanceMetrics
+				input.performanceMetrics,
 			);
 		}),
 
@@ -166,22 +191,35 @@ export const agentTiersRouter = router({
 
 	// Get commission preview for transaction with leadership bonus
 	getCommissionPreview: protectedProcedure
-		.input(z.object({
-			propertyPrice: z.number().positive(),
-			commissionType: z.enum(['percentage', 'fixed']),
-			commissionValue: z.number().positive(),
-			representationType: z.enum(['direct', 'co_broking']),
-			coBrokerSplitPercentage: z.number().min(0).max(100).optional().default(50),
-			includeLeadershipBonus: z.boolean().optional().default(true),
-		}))
+		.input(
+			z.object({
+				propertyPrice: z.number().positive(),
+				commissionType: z.enum(["percentage", "fixed"]),
+				commissionValue: z.number().positive(),
+				representationType: z.enum(["direct", "co_broking"]),
+				coBrokerSplitPercentage: z
+					.number()
+					.min(0)
+					.max(100)
+					.optional()
+					.default(50),
+				includeLeadershipBonus: z.boolean().optional().default(true),
+			}),
+		)
 		.query(async ({ ctx, input }) => {
-			const userSession = ctx.session.user as any;
-			const agentTier = (userSession.agentTier || 'advisor') as AgentTier;
-			const companyCommissionSplit = userSession.companyCommissionSplit || AGENT_TIER_CONFIG[agentTier].commissionSplit;
+			const userSession = ctx.session.user as typeof ctx.session.user & {
+				agentTier?: string;
+				companyCommissionSplit?: number;
+			};
+			const agentTier: AgentTier =
+				(userSession.agentTier as AgentTier) || "advisor";
+			const companyCommissionSplit =
+				userSession.companyCommissionSplit ??
+				AGENT_TIER_CONFIG[agentTier].commissionSplit;
 
 			// Calculate commission rate
 			let commissionRate: number;
-			if (input.commissionType === 'percentage') {
+			if (input.commissionType === "percentage") {
 				commissionRate = input.commissionValue;
 			} else {
 				// Convert fixed amount to percentage
@@ -190,10 +228,13 @@ export const agentTiersRouter = router({
 
 			// Get upline info for leadership bonus
 			let uplineInfo: Awaited<ReturnType<typeof getUplineInfo>> = null;
-			let uplineData: { uplineTier: AgentTier; leadershipBonusRate: number } | null = null;
+			let uplineData: {
+				uplineTier: AgentTier;
+				leadershipBonusRate: number;
+			} | null = null;
 			if (input.includeLeadershipBonus) {
 				uplineInfo = await getUplineInfo(ctx.session.user.id);
-				if (uplineInfo && uplineInfo.uplineTier) {
+				if (uplineInfo?.uplineTier) {
 					uplineData = {
 						uplineTier: uplineInfo.uplineTier,
 						leadershipBonusRate: uplineInfo.leadershipBonusRate,
@@ -208,7 +249,7 @@ export const agentTiersRouter = router({
 				agentTier,
 				companyCommissionSplit,
 				input.coBrokerSplitPercentage,
-				uplineData
+				uplineData,
 			);
 
 			return {
@@ -221,20 +262,24 @@ export const agentTiersRouter = router({
 					description: AGENT_TIER_CONFIG[agentTier].description,
 					leadershipBonusRate: AGENT_TIER_CONFIG[agentTier].leadershipBonusRate,
 				},
-				uplineInfo: uplineInfo ? {
-					uplineName: uplineInfo.uplineName,
-					uplineTier: uplineInfo.uplineTier,
-					bonusRate: uplineInfo.leadershipBonusRate,
-				} : null,
+				uplineInfo: uplineInfo
+					? {
+							uplineName: uplineInfo.uplineName,
+							uplineTier: uplineInfo.uplineTier,
+							bonusRate: uplineInfo.leadershipBonusRate,
+						}
+					: null,
 			};
 		}),
 
 	// Get all agents with tier information (admin only)
 	getAllAgentsWithTiers: adminProcedure
-		.input(z.object({
-			limit: z.number().min(1).max(100).default(50),
-			offset: z.number().min(0).default(0),
-		}))
+		.input(
+			z.object({
+				limit: z.number().min(1).max(100).default(50),
+				offset: z.number().min(0).default(0),
+			}),
+		)
 		.query(async ({ input }) => {
 			const { db } = await import("../db");
 			const { user } = await import("../db/schema/auth");
@@ -256,21 +301,26 @@ export const agentTiersRouter = router({
 				.offset(input.offset)
 				.orderBy(user.createdAt);
 
-			return agents.map(agent => ({
+			return agents.map((agent) => ({
 				...agent,
-				tierConfig: AGENT_TIER_CONFIG[(agent.agentTier || 'advisor') as AgentTier],
+				tierConfig:
+					AGENT_TIER_CONFIG[(agent.agentTier || "advisor") as AgentTier],
 			}));
 		}),
 
 	// Bulk tier update (admin only) - for future use
 	bulkUpdateTiers: adminProcedure
-		.input(z.object({
-			updates: z.array(z.object({
-				agentId: z.string(),
-				newTier: agentTierSchema,
-				reason: z.string(),
-			})),
-		}))
+		.input(
+			z.object({
+				updates: z.array(
+					z.object({
+						agentId: z.string(),
+						newTier: agentTierSchema,
+						reason: z.string(),
+					}),
+				),
+			}),
+		)
 		.mutation(async ({ ctx, input }) => {
 			const results = [];
 
@@ -279,7 +329,7 @@ export const agentTiersRouter = router({
 					update.agentId,
 					update.newTier,
 					ctx.session.user.id,
-					update.reason
+					update.reason,
 				);
 				results.push({ agentId: update.agentId, ...result });
 			}
@@ -306,12 +356,18 @@ export const agentTiersRouter = router({
 
 	// Set agent's upline (admin only)
 	setAgentUpline: adminProcedure
-		.input(z.object({
-			agentId: z.string().min(1, "Agent ID is required"),
-			recruitedBy: z.string().min(1, "Recruiter ID is required"),
-		}))
+		.input(
+			z.object({
+				agentId: z.string().min(1, "Agent ID is required"),
+				recruitedBy: z.string().min(1, "Recruiter ID is required"),
+			}),
+		)
 		.mutation(async ({ ctx, input }) => {
-			return await setAgentUpline(input.agentId, input.recruitedBy, ctx.session.user.id);
+			return await setAgentUpline(
+				input.agentId,
+				input.recruitedBy,
+				ctx.session.user.id,
+			);
 		}),
 
 	// Get agent's upline (admin only)
@@ -342,12 +398,18 @@ export const agentTiersRouter = router({
 		const agentInfo = await getAgentTierInfo(ctx.session.user.id);
 
 		const totalPending = payments
-			.filter(p => p.status === 'pending')
-			.reduce((sum, p) => sum + parseFloat(p.leadershipBonusAmount || '0'), 0);
+			.filter((p) => p.status === "pending")
+			.reduce(
+				(sum, p) => sum + Number.parseFloat(p.leadershipBonusAmount || "0"),
+				0,
+			);
 
 		const totalPaid = payments
-			.filter(p => p.status === 'paid')
-			.reduce((sum, p) => sum + parseFloat(p.leadershipBonusAmount || '0'), 0);
+			.filter((p) => p.status === "paid")
+			.reduce(
+				(sum, p) => sum + Number.parseFloat(p.leadershipBonusAmount || "0"),
+				0,
+			);
 
 		return {
 			currentTier: agentInfo.agentTier,

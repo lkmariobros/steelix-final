@@ -198,8 +198,10 @@ export function formatCurrency(amount: number): string {
 	}).format(amount);
 }
 
-export function formatPercentage(value: number | string | null | undefined): string {
-	const n = typeof value === "string" ? parseFloat(value) : value ?? 0;
+export function formatPercentage(
+	value: number | string | null | undefined,
+): string {
+	const n = typeof value === "string" ? Number.parseFloat(value) : (value ?? 0);
 	if (!Number.isFinite(n)) return "0.0%";
 	return `${n.toFixed(1)}%`;
 }

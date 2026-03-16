@@ -9,6 +9,7 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@/components/dialog";
+import { HeaderActions } from "@/components/header-actions";
 import { Separator } from "@/components/separator";
 import {
 	SidebarInset,
@@ -39,7 +40,6 @@ import {
 	SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { HeaderActions } from "@/components/header-actions";
 import { authClient } from "@/lib/auth-client";
 import { trpc } from "@/utils/trpc";
 import {
@@ -112,40 +112,57 @@ export default function AdminApprovalsPage() {
 	const {
 		data: approvalsData,
 		isLoading: isLoadingApprovals,
-		refetch: refetchApprovals
-	} = trpc.admin.getCommissionApprovalQueue.useQuery({
-		limit: pageSize,
-		offset: page * pageSize,
-		status: statusFilter === "all" ? undefined : statusFilter as "submitted" | "under_review",
-	}, {
-		enabled: !!session && !!roleData?.hasAdminAccess,
-		refetchOnWindowFocus: false,
-		staleTime: 30000,
-	});
+		refetch: refetchApprovals,
+	} = trpc.admin.getCommissionApprovalQueue.useQuery(
+		{
+			limit: pageSize,
+			offset: page * pageSize,
+			status:
+				statusFilter === "all"
+					? undefined
+					: (statusFilter as "submitted" | "under_review"),
+		},
+		{
+			enabled: !!session && !!roleData?.hasAdminAccess,
+			refetchOnWindowFocus: false,
+			staleTime: 30000,
+		},
+	);
 
 	// Get dashboard stats for the summary cards
-	const { data: dashboardStats, isLoading: isLoadingStats } = trpc.admin.getDashboardSummary.useQuery({}, {
-		enabled: !!session && !!roleData?.hasAdminAccess,
-	});
+	const { data: dashboardStats, isLoading: isLoadingStats } =
+		trpc.admin.getDashboardSummary.useQuery(
+			{},
+			{
+				enabled: !!session && !!roleData?.hasAdminAccess,
+			},
+		);
 
 	// Mutation for approving/rejecting commissions
-	const processApprovalMutation = trpc.admin.processCommissionApproval.useMutation({
-		onSuccess: (data, variables) => {
-			const actionText = variables.action === "approve" ? "approved" : "rejected";
-			toast.success(`Transaction ${actionText} successfully`);
+	const processApprovalMutation =
+		trpc.admin.processCommissionApproval.useMutation({
+			onSuccess: (data, variables) => {
+				const actionText =
+					variables.action === "approve" ? "approved" : "rejected";
+				toast.success(`Transaction ${actionText} successfully`);
 
-			// Invalidate relevant queries
-			queryClient.invalidateQueries({ queryKey: [["admin", "getCommissionApprovalQueue"]] });
-			queryClient.invalidateQueries({ queryKey: [["admin", "getDashboardSummary"]] });
+				// Invalidate relevant queries
+				queryClient.invalidateQueries({
+					queryKey: [["admin", "getCommissionApprovalQueue"]],
+				});
+				queryClient.invalidateQueries({
+					queryKey: [["admin", "getDashboardSummary"]],
+				});
 
-			closeDialog();
-		},
-		onError: (error, variables) => {
-			const actionText = variables.action === "approve" ? "approve" : "reject";
-			toast.error(`Failed to ${actionText} transaction: ${error.message}`);
-			setDialogState((prev) => ({ ...prev, isSubmitting: false }));
-		},
-	});
+				closeDialog();
+			},
+			onError: (error, variables) => {
+				const actionText =
+					variables.action === "approve" ? "approve" : "reject";
+				toast.error(`Failed to ${actionText} transaction: ${error.message}`);
+				setDialogState((prev) => ({ ...prev, isSubmitting: false }));
+			},
+		});
 
 	// Get utils for invalidation after mutations
 	const utils = trpc.useUtils();
@@ -269,7 +286,7 @@ export default function AdminApprovalsPage() {
 	// Format currency
 	const formatCurrency = (amount: string | number | null) => {
 		if (!amount) return "$0.00";
-		const num = typeof amount === "string" ? parseFloat(amount) : amount;
+		const num = typeof amount === "string" ? Number.parseFloat(amount) : amount;
 		return new Intl.NumberFormat("en-US", {
 			style: "currency",
 			currency: "USD",
@@ -336,10 +353,13 @@ export default function AdminApprovalsPage() {
 						{/* Approval Controls */}
 						<div className="flex items-center gap-2">
 							{/* Status Filter */}
-							<Select value={statusFilter} onValueChange={(value) => {
-								setStatusFilter(value);
-								setPage(0); // Reset to first page when filter changes
-							}}>
+							<Select
+								value={statusFilter}
+								onValueChange={(value) => {
+									setStatusFilter(value);
+									setPage(0); // Reset to first page when filter changes
+								}}
+							>
 								<SelectTrigger className="w-40">
 									<SelectValue placeholder="Filter by status" />
 								</SelectTrigger>
@@ -369,8 +389,8 @@ export default function AdminApprovalsPage() {
 							<CardContent>
 								{isLoadingStats ? (
 									<div className="space-y-2">
-										<div className="h-8 w-16 bg-muted animate-pulse rounded" />
-										<div className="h-3 w-24 bg-muted animate-pulse rounded" />
+										<div className="h-8 w-16 animate-pulse rounded bg-muted" />
+										<div className="h-3 w-24 animate-pulse rounded bg-muted" />
 									</div>
 								) : (
 									<>
@@ -394,17 +414,15 @@ export default function AdminApprovalsPage() {
 							<CardContent>
 								{isLoadingStats ? (
 									<div className="space-y-2">
-										<div className="h-8 w-16 bg-muted animate-pulse rounded" />
-										<div className="h-3 w-24 bg-muted animate-pulse rounded" />
+										<div className="h-8 w-16 animate-pulse rounded bg-muted" />
+										<div className="h-3 w-24 animate-pulse rounded bg-muted" />
 									</div>
 								) : (
 									<>
 										<div className="font-bold text-2xl">
 											{dashboardStats?.totalTransactions || 0}
 										</div>
-										<p className="text-muted-foreground text-xs">
-											All time
-										</p>
+										<p className="text-muted-foreground text-xs">All time</p>
 									</>
 								)}
 							</CardContent>
@@ -419,13 +437,15 @@ export default function AdminApprovalsPage() {
 							<CardContent>
 								{isLoadingStats ? (
 									<div className="space-y-2">
-										<div className="h-8 w-20 bg-muted animate-pulse rounded" />
-										<div className="h-3 w-24 bg-muted animate-pulse rounded" />
+										<div className="h-8 w-20 animate-pulse rounded bg-muted" />
+										<div className="h-3 w-24 animate-pulse rounded bg-muted" />
 									</div>
 								) : (
 									<>
 										<div className="font-bold text-2xl">
-											{formatCurrency(Number(dashboardStats?.totalCommissionValue) || 0)}
+											{formatCurrency(
+												Number(dashboardStats?.totalCommissionValue) || 0,
+											)}
 										</div>
 										<p className="text-muted-foreground text-xs">
 											All transactions
@@ -436,23 +456,23 @@ export default function AdminApprovalsPage() {
 						</Card>
 						<Card>
 							<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-								<CardTitle className="font-medium text-sm">
-									Approved
-								</CardTitle>
+								<CardTitle className="font-medium text-sm">Approved</CardTitle>
 								<RiCheckboxCircleLine className="h-4 w-4 text-muted-foreground" />
 							</CardHeader>
 							<CardContent>
 								{isLoadingStats ? (
 									<div className="space-y-2">
-										<div className="h-8 w-20 bg-muted animate-pulse rounded" />
-										<div className="h-3 w-24 bg-muted animate-pulse rounded" />
+										<div className="h-8 w-20 animate-pulse rounded bg-muted" />
+										<div className="h-3 w-24 animate-pulse rounded bg-muted" />
 									</div>
 								) : (
 									<>
 										<div className="font-bold text-2xl">
 											{dashboardStats?.approvedTransactions || 0}
 										</div>
-										<p className="text-muted-foreground text-xs">Transactions approved</p>
+										<p className="text-muted-foreground text-xs">
+											Transactions approved
+										</p>
 									</>
 								)}
 							</CardContent>
@@ -470,54 +490,69 @@ export default function AdminApprovalsPage() {
 						<CardContent>
 							{isLoadingApprovals ? (
 								<div className="space-y-4">
-									{Array.from({ length: 3 }).map((_, i) => (
-										<div key={i} className="flex items-center justify-between p-4 border rounded-lg">
+									{Array.from({ length: 3 }, (_, i) => (
+										<div
+											key={`skeleton-${i}`}
+											className="flex items-center justify-between rounded-lg border p-4"
+										>
 											<div className="space-y-2">
-												<div className="h-4 w-32 bg-muted animate-pulse rounded" />
-												<div className="h-3 w-48 bg-muted animate-pulse rounded" />
+												<div className="h-4 w-32 animate-pulse rounded bg-muted" />
+												<div className="h-3 w-48 animate-pulse rounded bg-muted" />
 											</div>
 											<div className="flex gap-2">
-												<div className="h-8 w-20 bg-muted animate-pulse rounded" />
-												<div className="h-8 w-20 bg-muted animate-pulse rounded" />
+												<div className="h-8 w-20 animate-pulse rounded bg-muted" />
+												<div className="h-8 w-20 animate-pulse rounded bg-muted" />
 											</div>
 										</div>
 									))}
 								</div>
-							) : approvalsData?.transactions && approvalsData.transactions.length > 0 ? (
+							) : approvalsData?.transactions &&
+								approvalsData.transactions.length > 0 ? (
 								<div className="space-y-4">
 									{approvalsData.transactions.map((transaction) => (
-										<div key={transaction.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors">
+										<div
+											key={transaction.id}
+											className="flex items-center justify-between rounded-lg border p-4 transition-colors hover:bg-muted/50"
+										>
 											<div className="space-y-1">
 												<div className="flex items-center gap-2">
 													<span className="font-medium">
-														{transaction.agentName || 'Unknown Agent'}
+														{transaction.agentName || "Unknown Agent"}
 													</span>
-													<span className={`px-2 py-1 text-xs rounded-full ${
-														transaction.status === 'submitted' ? 'bg-yellow-100 text-yellow-800' :
-														transaction.status === 'under_review' ? 'bg-blue-100 text-blue-800' :
-														'bg-gray-100 text-gray-800'
-													}`}>
-														{transaction.status?.replace('_', ' ') || 'pending'}
+													<span
+														className={`rounded-full px-2 py-1 text-xs ${
+															transaction.status === "submitted"
+																? "bg-yellow-100 text-yellow-800"
+																: transaction.status === "under_review"
+																	? "bg-blue-100 text-blue-800"
+																	: "bg-gray-100 text-gray-800"
+														}`}
+													>
+														{transaction.status?.replace("_", " ") || "pending"}
 													</span>
-													<span className="px-2 py-1 text-xs rounded-full bg-purple-100 text-purple-800">
+													<span className="rounded-full bg-purple-100 px-2 py-1 text-purple-800 text-xs">
 														{transaction.transactionType}
 													</span>
 												</div>
-												<p className="text-sm text-muted-foreground">
-													{formatCurrency(transaction.commissionAmount)} commission
-													{transaction.submittedAt && ` • ${formatDate(transaction.submittedAt)}`}
+												<p className="text-muted-foreground text-sm">
+													{formatCurrency(transaction.commissionAmount)}{" "}
+													commission
+													{transaction.submittedAt &&
+														` • ${formatDate(transaction.submittedAt)}`}
 												</p>
-												<p className="text-sm text-muted-foreground">
-													Client: {transaction.clientData?.name || 'Unknown'} •
-													Property: {transaction.propertyData?.address || 'N/A'}
+												<p className="text-muted-foreground text-sm">
+													Client: {transaction.clientData?.name || "Unknown"} •
+													Property: {transaction.propertyData?.address || "N/A"}
 												</p>
 											</div>
 											<div className="flex gap-2">
 												<Button
 													size="sm"
 													variant="outline"
-													className="text-green-600 hover:text-green-700 hover:bg-green-50"
-													onClick={() => handleApprovalAction(transaction, "approve")}
+													className="text-green-600 hover:bg-green-50 hover:text-green-700"
+													onClick={() =>
+														handleApprovalAction(transaction, "approve")
+													}
 												>
 													<RiCheckLine className="mr-1 h-4 w-4" />
 													Approve
@@ -525,8 +560,10 @@ export default function AdminApprovalsPage() {
 												<Button
 													size="sm"
 													variant="outline"
-													className="text-red-600 hover:text-red-700 hover:bg-red-50"
-													onClick={() => handleApprovalAction(transaction, "reject")}
+													className="text-red-600 hover:bg-red-50 hover:text-red-700"
+													onClick={() =>
+														handleApprovalAction(transaction, "reject")
+													}
 												>
 													<RiCloseLine className="mr-1 h-4 w-4" />
 													Reject
@@ -537,9 +574,14 @@ export default function AdminApprovalsPage() {
 
 									{/* Pagination Controls */}
 									{(approvalsData.totalCount > pageSize || page > 0) && (
-										<div className="flex items-center justify-between pt-4 border-t">
-											<p className="text-sm text-muted-foreground">
-												Showing {page * pageSize + 1} to {Math.min((page + 1) * pageSize, approvalsData.totalCount)} of {approvalsData.totalCount} transactions
+										<div className="flex items-center justify-between border-t pt-4">
+											<p className="text-muted-foreground text-sm">
+												Showing {page * pageSize + 1} to{" "}
+												{Math.min(
+													(page + 1) * pageSize,
+													approvalsData.totalCount,
+												)}{" "}
+												of {approvalsData.totalCount} transactions
 											</p>
 											<div className="flex gap-2">
 												<Button
@@ -572,7 +614,8 @@ export default function AdminApprovalsPage() {
 										No Pending Approvals
 									</h3>
 									<p className="mb-4 text-muted-foreground">
-										All commission requests have been processed. New requests will appear here.
+										All commission requests have been processed. New requests
+										will appear here.
 									</p>
 									<Button variant="outline" onClick={handleRefresh}>
 										<RiRefreshLine className="mr-2 h-4 w-4" />
@@ -589,16 +632,27 @@ export default function AdminApprovalsPage() {
 					<DialogContent>
 						<DialogHeader>
 							<DialogTitle>
-								{dialogState.action === "approve" ? "Approve" : "Reject"} Commission
+								{dialogState.action === "approve" ? "Approve" : "Reject"}{" "}
+								Commission
 							</DialogTitle>
 							<DialogDescription>
 								{dialogState.transaction && (
 									<>
-										{dialogState.action === "approve" ? "Approve" : "Reject"} commission for{" "}
-										<strong>{dialogState.transaction.clientData?.name || "Unknown Client"}</strong>{" "}
-										by <strong>{dialogState.transaction.agentName || "Unknown Agent"}</strong>
+										{dialogState.action === "approve" ? "Approve" : "Reject"}{" "}
+										commission for{" "}
+										<strong>
+											{dialogState.transaction.clientData?.name ||
+												"Unknown Client"}
+										</strong>{" "}
+										by{" "}
+										<strong>
+											{dialogState.transaction.agentName || "Unknown Agent"}
+										</strong>
 										<br />
-										Commission Amount: <strong>{formatCurrency(dialogState.transaction.commissionAmount)}</strong>
+										Commission Amount:{" "}
+										<strong>
+											{formatCurrency(dialogState.transaction.commissionAmount)}
+										</strong>
 									</>
 								)}
 							</DialogDescription>
@@ -644,7 +698,8 @@ export default function AdminApprovalsPage() {
 								onClick={submitApprovalDecision}
 								disabled={
 									dialogState.isSubmitting ||
-									(dialogState.action === "reject" && !dialogState.reviewNotes.trim())
+									(dialogState.action === "reject" &&
+										!dialogState.reviewNotes.trim())
 								}
 								className={
 									dialogState.action === "approve"

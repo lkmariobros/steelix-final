@@ -1,11 +1,13 @@
 "use client";
 
 import { AppSidebar } from "@/components/app-sidebar";
+import { HeaderActions } from "@/components/header-actions";
 import {
 	SidebarInset,
 	SidebarProvider,
 	SidebarTrigger,
 } from "@/components/sidebar";
+import { AccessDenied } from "@/components/ui/access-denied";
 import {
 	Breadcrumb,
 	BreadcrumbItem,
@@ -21,16 +23,11 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@/components/ui/card";
+import { LoadingScreen } from "@/components/ui/loading-spinner";
 import { Separator } from "@/components/ui/separator";
-import { HeaderActions } from "@/components/header-actions";
 import { authClient } from "@/lib/auth-client";
 import { trpc } from "@/utils/trpc";
-import { LoadingScreen } from "@/components/ui/loading-spinner";
-import { AccessDenied } from "@/components/ui/access-denied";
-import {
-	RiDashboardLine,
-	RiSettings3Line,
-} from "@remixicon/react";
+import { RiDashboardLine, RiSettings3Line } from "@remixicon/react";
 import { useRouter } from "next/navigation";
 
 export default function AdminSettingsPage() {
@@ -38,13 +35,11 @@ export default function AdminSettingsPage() {
 	const { data: session, isPending } = authClient.useSession();
 
 	// Admin role checking
-	const { data: roleData, isLoading: isRoleLoading } = trpc.admin.checkAdminRole.useQuery(
-		undefined,
-		{
+	const { data: roleData, isLoading: isRoleLoading } =
+		trpc.admin.checkAdminRole.useQuery(undefined, {
 			enabled: !!session,
-			retry: false
-		}
-	);
+			retry: false,
+		});
 
 	// Show loading while checking authentication and role
 	if (isPending || isRoleLoading) {
@@ -63,7 +58,7 @@ export default function AdminSettingsPage() {
 			<AccessDenied
 				title="Access Denied"
 				message="You don't have permission to access admin settings."
-				userRole={roleData?.role || 'Unknown'}
+				userRole={roleData?.role || "Unknown"}
 				redirectPath="/dashboard"
 				redirectLabel="Go to Agent Dashboard"
 			/>
@@ -129,15 +124,21 @@ export default function AdminSettingsPage() {
 								<div className="grid grid-cols-2 gap-4 text-sm">
 									<div className="rounded-lg border bg-muted/50 p-3">
 										<p className="text-muted-foreground">Admin User</p>
-										<p className="mt-1 font-medium">{session?.user?.name || "Unknown"}</p>
+										<p className="mt-1 font-medium">
+											{session?.user?.name || "Unknown"}
+										</p>
 									</div>
 									<div className="rounded-lg border bg-muted/50 p-3">
 										<p className="text-muted-foreground">Role</p>
-										<p className="mt-1 font-medium capitalize">{roleData?.role || "Admin"}</p>
+										<p className="mt-1 font-medium capitalize">
+											{roleData?.role || "Admin"}
+										</p>
 									</div>
 									<div className="rounded-lg border bg-muted/50 p-3">
 										<p className="text-muted-foreground">Email</p>
-										<p className="mt-1 font-medium">{session?.user?.email || "Unknown"}</p>
+										<p className="mt-1 font-medium">
+											{session?.user?.email || "Unknown"}
+										</p>
 									</div>
 									<div className="rounded-lg border bg-muted/50 p-3">
 										<p className="text-muted-foreground">Session Status</p>
@@ -145,8 +146,9 @@ export default function AdminSettingsPage() {
 									</div>
 								</div>
 								<p className="mt-4 text-muted-foreground text-xs">
-									For advanced system configuration (database settings, security policies, etc.),
-									please contact your system administrator or modify environment variables directly.
+									For advanced system configuration (database settings, security
+									policies, etc.), please contact your system administrator or
+									modify environment variables directly.
 								</p>
 							</CardContent>
 						</Card>

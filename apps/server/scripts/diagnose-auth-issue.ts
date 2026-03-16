@@ -1,10 +1,10 @@
-import { db } from "../src/db/index.js";
 import { sql } from "drizzle-orm";
+import { db } from "../src/db/index.js";
 
 async function diagnoseAuthIssue() {
 	try {
 		console.log("🔍 Diagnosing authentication inconsistency...");
-		
+
 		// Check both accounts in detail
 		const users = await db.execute(sql`
 			SELECT 
@@ -21,7 +21,7 @@ async function diagnoseAuthIssue() {
 			WHERE u.email IN ('josephkwantum@gmail.com', 'lktarod@gmail.com')
 			ORDER BY u.email
 		`);
-		
+
 		console.log("\n👥 Account Comparison:");
 		users.rows?.forEach((user, index) => {
 			console.log(`\n${index + 1}. ${user.email}:`);
@@ -33,7 +33,7 @@ async function diagnoseAuthIssue() {
 			console.log(`   📅 Created: ${user.created_at}`);
 			console.log(`   🔄 Updated: ${user.updated_at}`);
 		});
-		
+
 		// Check account records (passwords)
 		const accounts = await db.execute(sql`
 			SELECT 
@@ -49,7 +49,7 @@ async function diagnoseAuthIssue() {
 			WHERE u.email IN ('josephkwantum@gmail.com', 'lktarod@gmail.com')
 			ORDER BY u.email
 		`);
-		
+
 		console.log("\n🔐 Account Records:");
 		accounts.rows?.forEach((account, index) => {
 			console.log(`\n${index + 1}. ${account.email}:`);
@@ -59,7 +59,7 @@ async function diagnoseAuthIssue() {
 			console.log(`   📅 Account Created: ${account.created_at}`);
 			console.log(`   🔄 Account Updated: ${account.updated_at}`);
 		});
-		
+
 		// Check active sessions
 		const sessions = await db.execute(sql`
 			SELECT 
@@ -73,7 +73,7 @@ async function diagnoseAuthIssue() {
 			AND s.expires_at > NOW()
 			ORDER BY u.email, s.created_at DESC
 		`);
-		
+
 		console.log("\n🎫 Active Sessions:");
 		if (sessions.rows?.length === 0) {
 			console.log("   No active sessions for these accounts");
@@ -84,7 +84,6 @@ async function diagnoseAuthIssue() {
 				console.log(`   ⏰ Expires: ${session.expires_at}`);
 			});
 		}
-		
 	} catch (error) {
 		console.error("❌ Error diagnosing auth issue:", error);
 		throw error;

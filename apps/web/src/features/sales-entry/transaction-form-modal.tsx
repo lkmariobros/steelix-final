@@ -1,7 +1,10 @@
 "use client";
 
+import {
+	EnhancedModal,
+	UnsavedChangesDialog,
+} from "@/components/enhanced-modal";
 import { useCallback, useState } from "react";
-import { EnhancedModal, UnsavedChangesDialog } from "@/components/enhanced-modal";
 import { TransactionForm } from "./transaction-form";
 
 interface TransactionFormModalProps {

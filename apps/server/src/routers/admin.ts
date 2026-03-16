@@ -2,15 +2,15 @@ import { and, avg, count, desc, eq, isNull, sql, sum } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../db";
 import {
-	agencies,
-	teams,
-	user,
-	tierCommissionConfig,
-	tierConfigChangeLog,
-	leadershipBonusPayments,
-	agentTierSchema,
 	AGENT_TIER_CONFIG,
 	type AgentTier,
+	agencies,
+	agentTierSchema,
+	leadershipBonusPayments,
+	teams,
+	tierCommissionConfig,
+	tierConfigChangeLog,
+	user,
 } from "../db/schema/auth";
 import { transactions } from "../db/schema/transactions";
 import { adminProcedure, protectedProcedure, router } from "../lib/trpc";
@@ -409,7 +409,7 @@ export const adminRouter = router({
 			}));
 		}
 
-		return configs.map(config => ({
+		return configs.map((config) => ({
 			...config,
 			isDefault: false,
 		}));
@@ -417,18 +417,20 @@ export const adminRouter = router({
 
 	// Update tier configuration
 	updateTierConfiguration: adminProcedure
-		.input(z.object({
-			tier: agentTierSchema,
-			commissionSplit: z.number().min(0).max(100),
-			leadershipBonusRate: z.number().min(0).max(100),
-			requirements: z.object({
-				monthlySales: z.number().min(0),
-				teamMembers: z.number().min(0),
+		.input(
+			z.object({
+				tier: agentTierSchema,
+				commissionSplit: z.number().min(0).max(100),
+				leadershipBonusRate: z.number().min(0).max(100),
+				requirements: z.object({
+					monthlySales: z.number().min(0),
+					teamMembers: z.number().min(0),
+				}),
+				displayName: z.string().min(1),
+				description: z.string().optional(),
+				changeReason: z.string().min(1, "Change reason is required"),
 			}),
-			displayName: z.string().min(1),
-			description: z.string().optional(),
-			changeReason: z.string().min(1, "Change reason is required"),
-		}))
+		)
 		.mutation(async ({ ctx, input }) => {
 			const { tier, changeReason, ...configData } = input;
 
@@ -436,14 +438,16 @@ export const adminRouter = router({
 			const [existingConfig] = await db
 				.select()
 				.from(tierCommissionConfig)
-				.where(and(
-					eq(tierCommissionConfig.tier, tier),
-					eq(tierCommissionConfig.isActive, true)
-				))
+				.where(
+					and(
+						eq(tierCommissionConfig.tier, tier),
+						eq(tierCommissionConfig.isActive, true),
+					),
+				)
 				.limit(1);
 
 			let configId: string;
-			let oldValues: any = null;
+			let oldValues: Record<string, unknown> | null = null;
 
 			if (existingConfig) {
 				// Update existing config
@@ -485,7 +489,7 @@ export const adminRouter = router({
 			await db.insert(tierConfigChangeLog).values({
 				configId,
 				tier,
-				changeType: existingConfig ? 'update' : 'create',
+				changeType: existingConfig ? "update" : "create",
 				oldValues: oldValues ? JSON.stringify(oldValues) : null,
 				newValues: JSON.stringify(configData),
 				changedBy: ctx.session.user.id,
@@ -497,10 +501,12 @@ export const adminRouter = router({
 
 	// Get tier configuration change history
 	getTierConfigHistory: adminProcedure
-		.input(z.object({
-			tier: agentTierSchema.optional(),
-			limit: z.number().min(1).max(100).default(50),
-		}))
+		.input(
+			z.object({
+				tier: agentTierSchema.optional(),
+				limit: z.number().min(1).max(100).default(50),
+			}),
+		)
 		.query(async ({ input }) => {
 			const conditions = [];
 			if (input.tier) {
@@ -530,11 +536,13 @@ export const adminRouter = router({
 
 	// Get all leadership bonus payments (admin overview)
 	getAllLeadershipBonusPayments: adminProcedure
-		.input(z.object({
-			status: z.enum(['pending', 'paid', 'cancelled']).optional(),
-			limit: z.number().min(1).max(100).default(50),
-			offset: z.number().min(0).default(0),
-		}))
+		.input(
+			z.object({
+				status: z.enum(["pending", "paid", "cancelled"]).optional(),
+				limit: z.number().min(1).max(100).default(50),
+				offset: z.number().min(0).default(0),
+			}),
+		)
 		.query(async ({ input }) => {
 			const conditions = [];
 			if (input.status) {
@@ -548,7 +556,8 @@ export const adminRouter = router({
 					downlineAgentId: leadershipBonusPayments.downlineAgentId,
 					uplineAgentId: leadershipBonusPayments.uplineAgentId,
 					uplineTier: leadershipBonusPayments.uplineTier,
-					originalCommissionAmount: leadershipBonusPayments.originalCommissionAmount,
+					originalCommissionAmount:
+						leadershipBonusPayments.originalCommissionAmount,
 					companyShareAmount: leadershipBonusPayments.companyShareAmount,
 					leadershipBonusRate: leadershipBonusPayments.leadershipBonusRate,
 					leadershipBonusAmount: leadershipBonusPayments.leadershipBonusAmount,
@@ -577,14 +586,16 @@ export const adminRouter = router({
 
 	// Mark leadership bonus as paid
 	markLeadershipBonusPaid: adminProcedure
-		.input(z.object({
-			paymentId: z.string().uuid(),
-		}))
+		.input(
+			z.object({
+				paymentId: z.string().uuid(),
+			}),
+		)
 		.mutation(async ({ input }) => {
 			const [updated] = await db
 				.update(leadershipBonusPayments)
 				.set({
-					status: 'paid',
+					status: "paid",
 					paidAt: new Date(),
 					updatedAt: new Date(),
 				})
@@ -603,27 +614,31 @@ export const adminRouter = router({
 		const [pendingStats] = await db
 			.select({
 				count: count(),
-				total: sum(sql`CAST(${leadershipBonusPayments.leadershipBonusAmount} AS DECIMAL)`),
+				total: sum(
+					sql`CAST(${leadershipBonusPayments.leadershipBonusAmount} AS DECIMAL)`,
+				),
 			})
 			.from(leadershipBonusPayments)
-			.where(eq(leadershipBonusPayments.status, 'pending'));
+			.where(eq(leadershipBonusPayments.status, "pending"));
 
 		const [paidStats] = await db
 			.select({
 				count: count(),
-				total: sum(sql`CAST(${leadershipBonusPayments.leadershipBonusAmount} AS DECIMAL)`),
+				total: sum(
+					sql`CAST(${leadershipBonusPayments.leadershipBonusAmount} AS DECIMAL)`,
+				),
 			})
 			.from(leadershipBonusPayments)
-			.where(eq(leadershipBonusPayments.status, 'paid'));
+			.where(eq(leadershipBonusPayments.status, "paid"));
 
 		return {
 			pending: {
 				count: pendingStats.count || 0,
-				total: parseFloat(String(pendingStats.total || 0)),
+				total: Number.parseFloat(String(pendingStats.total || 0)),
 			},
 			paid: {
 				count: paidStats.count || 0,
-				total: parseFloat(String(paidStats.total || 0)),
+				total: Number.parseFloat(String(paidStats.total || 0)),
 			},
 		};
 	}),

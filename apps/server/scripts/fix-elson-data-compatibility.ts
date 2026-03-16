@@ -40,7 +40,7 @@ async function compareUserData() {
 		}
 
 		console.log("✅ User data comparison:");
-		result.rows.forEach((user) => {
+		for (const user of result.rows) {
 			const status = user.email === TARGET_EMAIL ? "❌ FAILING" : "✅ WORKING";
 			console.log(`\n${status} - ${user.email}:`);
 			console.log(`   Name: ${user.name} (${user.name_status})`);
@@ -57,7 +57,7 @@ async function compareUserData() {
 			console.log(`   Permissions: ${user.permissions || "NULL"}`);
 			console.log(`   Created: ${user.created_at}`);
 			console.log(`   Updated: ${user.updated_at}`);
-		});
+		}
 
 		return result.rows;
 	} catch (error) {
@@ -150,19 +150,20 @@ async function testAfterNormalization() {
 				"❌ Still getting 500 error - issue is not in user data fields",
 			);
 			return false;
-		} else if (response.status === 401) {
+		}
+		if (response.status === 401) {
 			console.log(
 				"✅ Now getting 401 error - Better Auth is processing the user correctly!",
 			);
 			console.log("   The 500 error is fixed, just need to verify password");
 			return true;
-		} else if (response.status === 200) {
+		}
+		if (response.status === 200) {
 			console.log("🎉 Authentication successful!");
 			return true;
-		} else {
-			console.log(`⚠️ Unexpected response: ${response.status}`);
-			return false;
 		}
+		console.log(`⚠️ Unexpected response: ${response.status}`);
+		return false;
 	} catch (error) {
 		console.error("❌ Error testing auth:", error);
 		return false;
@@ -204,10 +205,11 @@ async function tryDifferentPasswords() {
 			if (response.status === 200) {
 				console.log(`✅ SUCCESS! Password "${password}" works!`);
 				return password;
-			} else if (response.status === 401) {
-				console.log(`   ❌ Invalid password`);
+			}
+			if (response.status === 401) {
+				console.log("   ❌ Invalid password");
 			} else if (response.status === 500) {
-				console.log(`   💥 500 error - still broken`);
+				console.log("   💥 500 error - still broken");
 			}
 		} catch (error) {
 			console.log(`   ❌ Error: ${error.message}`);
@@ -255,7 +257,7 @@ async function main() {
 
 		if (workingPassword) {
 			console.log("\n🎉 COMPLETE SUCCESS!");
-			console.log(`Elson can now log in with:`);
+			console.log("Elson can now log in with:");
 			console.log(`   Email: ${TARGET_EMAIL}`);
 			console.log(`   Password: ${workingPassword}`);
 			console.log("\nTry logging in from the frontend!");

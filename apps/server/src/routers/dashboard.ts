@@ -66,19 +66,23 @@ export const dashboardRouter = router({
 				.orderBy(sql`TO_CHAR(${transactions.transactionDate}, 'YYYY-MM')`);
 
 			// Convert string values to numbers
-			const overview = rawCommissionData[0] ? {
-				totalCommission: Number(rawCommissionData[0].totalCommission) || 0,
-				completedDeals: Number(rawCommissionData[0].completedDeals) || 0,
-				pendingCommission: Number(rawCommissionData[0].pendingCommission) || 0,
-				averageDealValue: Number(rawCommissionData[0].averageDealValue) || 0,
-			} : {
-				totalCommission: 0,
-				completedDeals: 0,
-				pendingCommission: 0,
-				averageDealValue: 0,
-			};
+			const overview = rawCommissionData[0]
+				? {
+						totalCommission: Number(rawCommissionData[0].totalCommission) || 0,
+						completedDeals: Number(rawCommissionData[0].completedDeals) || 0,
+						pendingCommission:
+							Number(rawCommissionData[0].pendingCommission) || 0,
+						averageDealValue:
+							Number(rawCommissionData[0].averageDealValue) || 0,
+					}
+				: {
+						totalCommission: 0,
+						completedDeals: 0,
+						pendingCommission: 0,
+						averageDealValue: 0,
+					};
 
-			const monthlyTrend = rawMonthlyTrend.map(item => ({
+			const monthlyTrend = rawMonthlyTrend.map((item) => ({
 				month: item.month,
 				commission: Number(item.commission) || 0,
 				deals: Number(item.deals) || 0,
@@ -112,7 +116,7 @@ export const dashboardRouter = router({
 			.groupBy(transactions.status);
 
 		// Convert string values to numbers (PostgreSQL returns strings for aggregates)
-		const pipelineData = rawPipelineData.map(item => ({
+		const pipelineData = rawPipelineData.map((item) => ({
 			status: item.status,
 			count: Number(item.count) || 0,
 			totalValue: Number(item.totalValue) || 0,
@@ -161,7 +165,7 @@ export const dashboardRouter = router({
 			.orderBy(sql`COUNT(*) DESC`);
 
 		// Convert string values to numbers (PostgreSQL returns strings for aggregates)
-		const statusData = rawStatusData.map(item => ({
+		const statusData = rawStatusData.map((item) => ({
 			status: item.status,
 			count: Number(item.count) || 0,
 			percentage: Number(item.percentage) || 0,
@@ -323,13 +327,11 @@ export const dashboardRouter = router({
 			.leftJoin(transactions, eq(user.id, transactions.agentId))
 			.where(eq(user.teamId, userInfo[0].teamId))
 			.groupBy(user.id, user.name, user.image)
-			.orderBy(
-				sql`COALESCE(SUM(${transactions.commissionAmount}), 0) DESC`,
-			)
+			.orderBy(sql`COALESCE(SUM(${transactions.commissionAmount}), 0) DESC`)
 			.limit(10);
 
 		// Convert string values to numbers
-		const leaderboard = rawLeaderboard.map(item => ({
+		const leaderboard = rawLeaderboard.map((item) => ({
 			agentId: item.agentId,
 			agentName: item.agentName,
 			agentImage: item.agentImage,

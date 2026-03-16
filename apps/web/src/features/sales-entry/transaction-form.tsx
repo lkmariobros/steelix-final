@@ -12,15 +12,15 @@ import {
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useClientSide } from "@/hooks/use-client-side";
+import { useDocumentUpload } from "@/hooks/use-document-upload"; // Issue #3 Fix
+import { invalidateTransactionQueries } from "@/lib/query-invalidation";
+import { trpc } from "@/utils/trpc";
+import { useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
 import { CheckCircle, Circle, Loader2, Save } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { useClientSide } from "@/hooks/use-client-side";
-import { useDocumentUpload } from "@/hooks/use-document-upload"; // Issue #3 Fix
-import { trpc } from "@/utils/trpc";
-import { useQueryClient } from "@tanstack/react-query";
-import { invalidateTransactionQueries } from "@/lib/query-invalidation";
 
 import { type FormStep, stepConfig } from "./transaction-schema";
 import {
@@ -73,7 +73,8 @@ export function TransactionForm({
 	const isClient = useClientSide();
 
 	// Issue #3 Fix: Use document upload hook for temp document migration
-	const { migrateDocuments, tempDocuments, clearTempDocuments } = useDocumentUpload(transactionId);
+	const { migrateDocuments, tempDocuments, clearTempDocuments } =
+		useDocumentUpload(transactionId);
 
 	// ✅ REAL tRPC mutations for comprehensive transaction data flow
 	const createTransaction = trpc.transactions.create.useMutation({
@@ -119,9 +120,12 @@ export function TransactionForm({
 	}, [hasUnsavedChanges, onUnsavedChanges]);
 
 	// Handle step data updates
-	const handleStepUpdate = useCallback((step: FormStep, data: Record<string, unknown>) => {
-		updateStepData(step, data);
-	}, [updateStepData]);
+	const handleStepUpdate = useCallback(
+		(step: FormStep, data: Record<string, unknown>) => {
+			updateStepData(step, data);
+		},
+		[updateStepData],
+	);
 
 	// Handle save draft
 	const handleSaveDraft = useCallback(async () => {
@@ -152,7 +156,13 @@ export function TransactionForm({
 		} finally {
 			setIsSaving(false);
 		}
-	}, [transactionId, formData, updateTransaction, createTransaction, clearAutoSave]);
+	}, [
+		transactionId,
+		formData,
+		updateTransaction,
+		createTransaction,
+		clearAutoSave,
+	]);
 
 	// Clean form data for submission
 	const prepareFormDataForSubmission = useCallback((data: typeof formData) => {
@@ -166,7 +176,9 @@ export function TransactionForm({
 			// If co-broking is enabled, validate required fields
 			const { agentName, agencyName, contactInfo } = cleanedData.coBrokingData;
 			if (!agentName?.trim() || !agencyName?.trim() || !contactInfo?.trim()) {
-				throw new Error("Please complete all co-broking fields: Agent Name, Agency Name, and Contact Info are required.");
+				throw new Error(
+					"Please complete all co-broking fields: Agent Name, Agency Name, and Contact Info are required.",
+				);
 			}
 		}
 
@@ -180,7 +192,11 @@ export function TransactionForm({
 			let finalTransactionId = transactionId;
 
 			// Validate form data before submission
-			if (!formData.marketType || !formData.transactionType || !formData.transactionDate) {
+			if (
+				!formData.marketType ||
+				!formData.transactionType ||
+				!formData.transactionDate
+			) {
 				toast.error("Please complete all required fields");
 				return;
 			}
@@ -195,7 +211,8 @@ export function TransactionForm({
 					...cleanedFormData,
 				});
 			} else {
-				const newTransaction = await createTransaction.mutateAsync(cleanedFormData);
+				const newTransaction =
+					await createTransaction.mutateAsync(cleanedFormData);
 				finalTransactionId = newTransaction.id;
 			}
 
@@ -218,7 +235,20 @@ export function TransactionForm({
 		} finally {
 			setIsLoading(false);
 		}
-	}, [transactionId, formData, updateTransaction, createTransaction, submitTransaction, clearAutoSave, clearTempDocuments, migrateDocuments, tempDocuments, onSubmit, setIsLoading, prepareFormDataForSubmission]);
+	}, [
+		transactionId,
+		formData,
+		updateTransaction,
+		createTransaction,
+		submitTransaction,
+		clearAutoSave,
+		clearTempDocuments,
+		migrateDocuments,
+		tempDocuments,
+		onSubmit,
+		setIsLoading,
+		prepareFormDataForSubmission,
+	]);
 
 	// Handle cancel
 	const handleCancel = useCallback(() => {
@@ -301,7 +331,11 @@ export function TransactionForm({
 			case 6:
 				return (
 					<StepDocuments
-						data={{ documents: formData.documents, notes: formData.notes, transactionId }}
+						data={{
+							documents: formData.documents,
+							notes: formData.notes,
+							transactionId,
+						}}
 						onUpdate={(data) => handleStepUpdate(6, data)}
 						onNext={goToNextStep}
 						onPrevious={goToPreviousStep}
@@ -384,7 +418,7 @@ export function TransactionForm({
 					<Tabs value={currentStep.toString()} className="w-full">
 						{/* Issue #5 Fix: Mobile-friendly step navigation */}
 						{/* Desktop: Full tabs */}
-						<TabsList className="hidden md:grid w-full grid-cols-7">
+						<TabsList className="hidden w-full grid-cols-7 md:grid">
 							{stepConfig.map(({ step, title }) => (
 								<TabsTrigger
 									key={step}
@@ -407,7 +441,7 @@ export function TransactionForm({
 						</TabsList>
 						{/* Mobile: Compact step indicators with touch-friendly targets */}
 						<div className="md:hidden">
-							<div className="flex items-center justify-between mb-4">
+							<div className="mb-4 flex items-center justify-between">
 								{stepConfig.map(({ step }) => {
 									const isCompleted = completedSteps.includes(step as FormStep);
 									const isCurrent = step === currentStep;
@@ -418,19 +452,17 @@ export function TransactionForm({
 											type="button"
 											onClick={() => isAccessible && goToStep(step as FormStep)}
 											disabled={!isAccessible}
-											className={`
-												flex items-center justify-center w-10 h-10 rounded-full text-sm font-medium
-												transition-all duration-200 touch-manipulation
-												${isCurrent
-													? 'bg-primary text-primary-foreground ring-2 ring-primary ring-offset-2'
+											className={`flex h-10 w-10 items-center justify-center rounded-full font-medium text-sm transition-all duration-200 touch-manipulation${
+												isCurrent
+													? "bg-primary text-primary-foreground ring-2 ring-primary ring-offset-2"
 													: isCompleted
-														? 'bg-green-500 text-white'
+														? "bg-green-500 text-white"
 														: isAccessible
-															? 'bg-muted text-muted-foreground hover:bg-muted/80'
-															: 'bg-muted/50 text-muted-foreground/50 cursor-not-allowed'
-												}
+															? "bg-muted text-muted-foreground hover:bg-muted/80"
+															: "cursor-not-allowed bg-muted/50 text-muted-foreground/50"
+											}
 											`}
-											aria-label={`Step ${step}: ${stepConfig[step - 1].title}${isCompleted ? ' (completed)' : ''}`}
+											aria-label={`Step ${step}: ${stepConfig[step - 1].title}${isCompleted ? " (completed)" : ""}`}
 										>
 											{isCompleted && !isCurrent ? (
 												<CheckCircle className="h-5 w-5" />
@@ -442,7 +474,7 @@ export function TransactionForm({
 								})}
 							</div>
 							{/* Mobile step title display */}
-							<div className="text-center text-sm text-muted-foreground">
+							<div className="text-center text-muted-foreground text-sm">
 								{stepConfig[currentStep - 1].title}
 							</div>
 						</div>
@@ -459,7 +491,7 @@ export function TransactionForm({
 										exit={{ opacity: 0, x: -20 }}
 										transition={{
 											duration: 0.3,
-											ease: [0.16, 1, 0.3, 1]
+											ease: [0.16, 1, 0.3, 1],
 										}}
 									>
 										{renderStepContent()}

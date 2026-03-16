@@ -1,14 +1,14 @@
-import { and, desc, eq, ilike, or, sql, isNull } from "drizzle-orm";
+import { and, desc, eq, ilike, isNull, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../db";
 import {
-	whatsappConversations,
-	whatsappMessages,
 	type InsertWhatsappMessage,
 	insertWhatsappMessageSchema,
+	whatsappConversations,
+	whatsappMessages,
 } from "../db/schema/whatsapp";
-import { protectedProcedure, router } from "../lib/trpc";
 import { getKapsoClient } from "../lib/kapso";
+import { protectedProcedure, router } from "../lib/trpc";
 
 // List conversations input schema
 const listConversationsInput = z.object({
@@ -48,12 +48,13 @@ export const whatsappRouter = router({
 				console.log("🔍 WhatsApp list query - agentId:", agentId);
 
 				// Build where conditions
+				const assignedOrUnassigned = or(
+					eq(whatsappConversations.assignedAgentId, agentId),
+					isNull(whatsappConversations.assignedAgentId),
+				);
 				const conditions = [
 					// Only show conversations assigned to this agent or unassigned
-					or(
-						eq(whatsappConversations.assignedAgentId, agentId),
-						isNull(whatsappConversations.assignedAgentId),
-					)!,
+					assignedOrUnassigned ?? sql`false`,
 				];
 
 				console.log("🔍 WhatsApp list query - conditions:", conditions.length);
@@ -70,10 +71,10 @@ export const whatsappRouter = router({
 					}
 				}
 
-			// Unread filter
-			if (filter === "unread") {
-				conditions.push(sql`${whatsappConversations.unreadCount} != '0'`);
-			}
+				// Unread filter
+				if (filter === "unread") {
+					conditions.push(sql`${whatsappConversations.unreadCount} != '0'`);
+				}
 
 				// Get paginated results
 				const offset = (page - 1) * limit;
@@ -85,7 +86,10 @@ export const whatsappRouter = router({
 					.limit(limit)
 					.offset(offset);
 
-				console.log("🔍 WhatsApp list query - found conversations:", conversations.length);
+				console.log(
+					"🔍 WhatsApp list query - found conversations:",
+					conversations.length,
+				);
 				if (conversations.length > 0) {
 					console.log("🔍 First conversation:", {
 						id: conversations[0].id,
@@ -106,7 +110,8 @@ export const whatsappRouter = router({
 						phone: conv.contactPhone,
 						lastMessage: conv.lastMessage || "",
 						unreadCount: Number(conv.unreadCount) || 0,
-						timestamp: conv.lastMessageAt?.toISOString() || conv.createdAt.toISOString(),
+						timestamp:
+							conv.lastMessageAt?.toISOString() || conv.createdAt.toISOString(),
 					})),
 					pagination: {
 						total,
@@ -122,59 +127,60 @@ export const whatsappRouter = router({
 		}),
 
 	// Get a single conversation with messages
-	get: protectedProcedure.input(getConversationInput).query(async ({ input, ctx }) => {
-		const { id } = input;
-		const agentId = ctx.session.user.id;
+	get: protectedProcedure
+		.input(getConversationInput)
+		.query(async ({ input, ctx }) => {
+			const { id } = input;
+			const agentId = ctx.session.user.id;
 
-		const [conversation] = await db
-			.select()
-			.from(whatsappConversations)
-			.where(
-				and(
-					eq(whatsappConversations.id, id),
-					or(
-						eq(whatsappConversations.assignedAgentId, agentId),
-						isNull(whatsappConversations.assignedAgentId),
-					)!,
-				),
-			)
-			.limit(1);
+			const assignedOrUnassigned = or(
+				eq(whatsappConversations.assignedAgentId, agentId),
+				isNull(whatsappConversations.assignedAgentId),
+			);
+			const [conversation] = await db
+				.select()
+				.from(whatsappConversations)
+				.where(
+					and(
+						eq(whatsappConversations.id, id),
+						assignedOrUnassigned ?? sql`false`,
+					),
+				)
+				.limit(1);
 
-		if (!conversation) {
-			throw new Error("Conversation not found");
-		}
+			if (!conversation) {
+				throw new Error("Conversation not found");
+			}
 
-		// Get messages for this conversation
-		const messages = await db
-			.select()
-			.from(whatsappMessages)
-			.where(eq(whatsappMessages.conversationId, id))
-			.orderBy(desc(whatsappMessages.sentAt))
-			.limit(100);
+			// Get messages for this conversation
+			const messages = await db
+				.select()
+				.from(whatsappMessages)
+				.where(eq(whatsappMessages.conversationId, id))
+				.orderBy(desc(whatsappMessages.sentAt))
+				.limit(100);
 
-		// Mark conversation as read (reset unread count)
-		if (Number(conversation.unreadCount) > 0) {
-			await db
-				.update(whatsappConversations)
-				.set({ unreadCount: "0", updatedAt: new Date() })
-				.where(eq(whatsappConversations.id, id));
-		}
+			// Mark conversation as read (reset unread count)
+			if (Number(conversation.unreadCount) > 0) {
+				await db
+					.update(whatsappConversations)
+					.set({ unreadCount: "0", updatedAt: new Date() })
+					.where(eq(whatsappConversations.id, id));
+			}
 
-		return {
-			id: conversation.id,
-			name: conversation.contactName || conversation.contactPhone,
-			phone: conversation.contactPhone,
-			messages: messages
-				.reverse()
-				.map((msg) => ({
+			return {
+				id: conversation.id,
+				name: conversation.contactName || conversation.contactPhone,
+				phone: conversation.contactPhone,
+				messages: messages.reverse().map((msg) => ({
 					id: msg.id,
 					text: msg.content,
 					timestamp: msg.sentAt.toISOString(),
 					sender: msg.direction === "inbound" ? "user" : "agent",
 					read: msg.status === "read" || msg.status === "delivered",
 				})),
-		};
-	}),
+			};
+		}),
 
 	// Send a message
 	send: protectedProcedure
@@ -185,16 +191,17 @@ export const whatsappRouter = router({
 				const agentId = ctx.session.user.id;
 
 				// Verify conversation exists and is accessible
+				const assignedOrUnassigned = or(
+					eq(whatsappConversations.assignedAgentId, agentId),
+					isNull(whatsappConversations.assignedAgentId),
+				);
 				const [conversation] = await db
 					.select()
 					.from(whatsappConversations)
 					.where(
 						and(
 							eq(whatsappConversations.id, conversationId),
-							or(
-								eq(whatsappConversations.assignedAgentId, agentId),
-								isNull(whatsappConversations.assignedAgentId),
-							)!,
+							assignedOrUnassigned ?? sql`false`,
 						),
 					)
 					.limit(1);
@@ -215,7 +222,9 @@ export const whatsappRouter = router({
 				const kapsoClient = getKapsoClient();
 				if (!kapsoClient) {
 					console.error("❌ Kapso client not configured - cannot send message");
-					throw new Error("Kapso client not configured. Please check KAPSO_API_KEY and KAPSO_PHONE_NUMBER_ID environment variables.");
+					throw new Error(
+						"Kapso client not configured. Please check KAPSO_API_KEY and KAPSO_PHONE_NUMBER_ID environment variables.",
+					);
 				}
 
 				// Normalize phone number to E.164 format (required by WhatsApp)
@@ -243,7 +252,9 @@ export const whatsappRouter = router({
 					success: sendResult.success,
 					messageId: sendResult.messageId,
 					error: sendResult.error,
-					raw: sendResult.raw ? JSON.stringify(sendResult.raw).substring(0, 300) : "none",
+					raw: sendResult.raw
+						? JSON.stringify(sendResult.raw).substring(0, 300)
+						: "none",
 				});
 
 				// CRITICAL: Only proceed if message was successfully sent
@@ -255,41 +266,55 @@ export const whatsappRouter = router({
 					});
 
 					// Handle specific WhatsApp Business API errors with user-friendly messages
-					const errorCode = sendResult.raw?.error?.code;
+					const errorCode = (
+						sendResult.raw as { error?: { code?: number } } | undefined
+					)?.error?.code;
 					const errorMessage = sendResult.error || "Failed to send message";
 
-					if (errorCode === 131037 || errorMessage.includes("display name approval")) {
+					if (
+						errorCode === 131037 ||
+						errorMessage.includes("display name approval")
+					) {
 						throw new Error(
 							"Your WhatsApp Business account display name needs to be approved by WhatsApp before you can send messages. " +
-							"Please complete the display name approval process in your Meta Business Manager. " +
-							"Once approved, you'll be able to send messages to customers."
+								"Please complete the display name approval process in your Meta Business Manager. " +
+								"Once approved, you'll be able to send messages to customers.",
 						);
 					}
 
-					if (errorCode === 131047 || errorMessage.includes("message template")) {
+					if (
+						errorCode === 131047 ||
+						errorMessage.includes("message template")
+					) {
 						throw new Error(
 							"This message requires a pre-approved template. " +
-							"For messages outside the 24-hour window, please use approved message templates."
+								"For messages outside the 24-hour window, please use approved message templates.",
 						);
 					}
 
 					if (errorCode === 131026 || errorMessage.includes("24 hour")) {
 						throw new Error(
 							"Cannot send message: More than 24 hours have passed since the customer's last message. " +
-							"Please use an approved message template to initiate the conversation."
+								"Please use an approved message template to initiate the conversation.",
 						);
 					}
 
 					// Generic error
-					throw new Error(errorMessage || "Failed to send message via Kapso API. Message was NOT sent and will NOT be saved.");
+					throw new Error(
+						errorMessage ||
+							"Failed to send message via Kapso API. Message was NOT sent and will NOT be saved.",
+					);
 				}
 
 				// Warn if no messageId (but don't fail - some APIs might not return it immediately)
 				if (!sendResult.messageId) {
-					console.warn("⚠️ Message sent but no messageId returned from Kapso. This might indicate an issue:", {
-						raw: sendResult.raw,
-						phoneNumber,
-					});
+					console.warn(
+						"⚠️ Message sent but no messageId returned from Kapso. This might indicate an issue:",
+						{
+							raw: sendResult.raw,
+							phoneNumber,
+						},
+					);
 				}
 
 				console.log("💾 Saving sent message to database:", {
@@ -340,7 +365,7 @@ export const whatsappRouter = router({
 						read: false,
 					},
 				};
-			} catch (error: any) {
+			} catch (error: unknown) {
 				console.error("❌ WhatsApp send error:", error);
 				throw error;
 			}

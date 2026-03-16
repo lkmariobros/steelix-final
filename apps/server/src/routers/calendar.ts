@@ -1,26 +1,35 @@
-import { and, desc, eq, gte, isNull, lte, or } from "drizzle-orm";
+import { and, desc, eq, gte, isNull, lte, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../db";
-import {
-	type InsertCalendarEvent,
-	type InsertAnnouncement,
-	type UpdateCalendarEvent,
-	type UpdateAnnouncement,
-	calendarEvents,
-	announcements,
-	insertCalendarEventSchema,
-	updateCalendarEventSchema,
-	insertAnnouncementSchema,
-	updateAnnouncementSchema,
-} from "../db/schema/calendar";
 import { user } from "../db/schema/auth";
+import {
+	type InsertAnnouncement,
+	type InsertCalendarEvent,
+	type UpdateAnnouncement,
+	type UpdateCalendarEvent,
+	announcements,
+	calendarEvents,
+	insertAnnouncementSchema,
+	insertCalendarEventSchema,
+	updateAnnouncementSchema,
+	updateCalendarEventSchema,
+} from "../db/schema/calendar";
 import { protectedProcedure, router } from "../lib/trpc";
 
 // List calendar events input schema
 const listEventsInput = z.object({
 	startDate: z.date().optional(), // Filter events from this date
 	endDate: z.date().optional(), // Filter events until this date
-	eventType: z.enum(["meeting", "training", "announcement", "holiday", "deadline", "other"]).optional(),
+	eventType: z
+		.enum([
+			"meeting",
+			"training",
+			"announcement",
+			"holiday",
+			"deadline",
+			"other",
+		])
+		.optional(),
 	includeInactive: z.boolean().default(false),
 });
 
@@ -64,55 +73,56 @@ const deleteAnnouncementInput = z.object({
 
 export const calendarRouter = router({
 	// List calendar events
-	listEvents: protectedProcedure.input(listEventsInput).query(async ({ input, ctx }) => {
-		const { startDate, endDate, eventType, includeInactive } = input;
-		const agentId = ctx.session.user.id;
+	listEvents: protectedProcedure
+		.input(listEventsInput)
+		.query(async ({ input, ctx }) => {
+			const { startDate, endDate, eventType, includeInactive } = input;
+			const agentId = ctx.session.user.id;
 
-		const conditions = [];
+			const conditions = [];
 
-		// Show active events only (unless admin wants to see all)
-		if (!includeInactive) {
-			conditions.push(eq(calendarEvents.isActive, true));
-		}
+			// Show active events only (unless admin wants to see all)
+			if (!includeInactive) {
+				conditions.push(eq(calendarEvents.isActive, true));
+			}
 
-		// Filter by date range
-		if (startDate) {
-			conditions.push(gte(calendarEvents.startDate, startDate));
-		}
-		if (endDate) {
-			conditions.push(lte(calendarEvents.startDate, endDate));
-		}
+			// Filter by date range
+			if (startDate) {
+				conditions.push(gte(calendarEvents.startDate, startDate));
+			}
+			if (endDate) {
+				conditions.push(lte(calendarEvents.startDate, endDate));
+			}
 
-		// Filter by event type
-		if (eventType) {
-			conditions.push(eq(calendarEvents.eventType, eventType));
-		}
+			// Filter by event type
+			if (eventType) {
+				conditions.push(eq(calendarEvents.eventType, eventType));
+			}
 
-		// Show events assigned to this agent OR events assigned to all agents (null)
-		conditions.push(
-			or(
+			// Show events assigned to this agent OR events assigned to all agents (null)
+			const assignedOrUnassigned = or(
 				eq(calendarEvents.assignedToAgentId, agentId),
-				isNull(calendarEvents.assignedToAgentId)
-			)!
-		);
+				isNull(calendarEvents.assignedToAgentId),
+			);
+			conditions.push(assignedOrUnassigned ?? sql`false`);
 
-		const events = await db
-			.select({
-				event: calendarEvents,
-				createdByName: user.name,
-			})
-			.from(calendarEvents)
-			.leftJoin(user, eq(calendarEvents.createdBy, user.id))
-			.where(and(...conditions))
-			.orderBy(calendarEvents.startDate);
+			const events = await db
+				.select({
+					event: calendarEvents,
+					createdByName: user.name,
+				})
+				.from(calendarEvents)
+				.leftJoin(user, eq(calendarEvents.createdBy, user.id))
+				.where(and(...conditions))
+				.orderBy(calendarEvents.startDate);
 
-		return {
-			events: events.map((e) => ({
-				...e.event,
-				createdByName: e.createdByName || "Unknown",
-			})),
-		};
-	}),
+			return {
+				events: events.map((e) => ({
+					...e.event,
+					createdByName: e.createdByName || "Unknown",
+				})),
+			};
+		}),
 
 	// Get upcoming events (next 7 days by default)
 	upcomingEvents: protectedProcedure
@@ -138,9 +148,9 @@ export const calendarRouter = router({
 						lte(calendarEvents.startDate, futureDate),
 						or(
 							eq(calendarEvents.assignedToAgentId, agentId),
-							isNull(calendarEvents.assignedToAgentId)
-						)!
-					)
+							isNull(calendarEvents.assignedToAgentId),
+						) ?? sql`false`,
+					),
 				)
 				.orderBy(calendarEvents.startDate)
 				.limit(10);
@@ -154,37 +164,39 @@ export const calendarRouter = router({
 		}),
 
 	// Get single event
-	getEvent: protectedProcedure.input(getEventInput).query(async ({ input, ctx }) => {
-		const { id } = input;
-		const agentId = ctx.session.user.id;
+	getEvent: protectedProcedure
+		.input(getEventInput)
+		.query(async ({ input, ctx }) => {
+			const { id } = input;
+			const agentId = ctx.session.user.id;
 
-		const [result] = await db
-			.select({
-				event: calendarEvents,
-				createdByName: user.name,
-			})
-			.from(calendarEvents)
-			.leftJoin(user, eq(calendarEvents.createdBy, user.id))
-			.where(
-				and(
-					eq(calendarEvents.id, id),
-					or(
-						eq(calendarEvents.assignedToAgentId, agentId),
-						isNull(calendarEvents.assignedToAgentId)
-					)!
+			const [result] = await db
+				.select({
+					event: calendarEvents,
+					createdByName: user.name,
+				})
+				.from(calendarEvents)
+				.leftJoin(user, eq(calendarEvents.createdBy, user.id))
+				.where(
+					and(
+						eq(calendarEvents.id, id),
+						or(
+							eq(calendarEvents.assignedToAgentId, agentId),
+							isNull(calendarEvents.assignedToAgentId),
+						) ?? sql`false`,
+					),
 				)
-			)
-			.limit(1);
+				.limit(1);
 
-		if (!result) {
-			throw new Error("Event not found");
-		}
+			if (!result) {
+				throw new Error("Event not found");
+			}
 
-		return {
-			...result.event,
-			createdByName: result.createdByName || "Unknown",
-		};
-	}),
+			return {
+				...result.event,
+				createdByName: result.createdByName || "Unknown",
+			};
+		}),
 
 	// Create event (admin only)
 	createEvent: protectedProcedure
@@ -219,17 +231,25 @@ export const calendarRouter = router({
 					.returning();
 
 				return created;
-			} catch (error: any) {
+			} catch (error: unknown) {
+				const err = error as {
+					message?: string;
+					cause?: { message?: string };
+					issues?: Array<{ path: (string | number)[]; message: string }>;
+				};
 				console.error("❌ Error creating calendar event:", error);
 				console.error("❌ Input received:", JSON.stringify(input, null, 2));
-				const errorMessage = error?.message || error?.cause?.message || String(error);
-				
+				const errorMessage =
+					err?.message ?? err?.cause?.message ?? String(error);
+
 				// Check for validation errors
-				if (error?.issues) {
-					const validationErrors = error.issues.map((i: any) => `${i.path.join(".")}: ${i.message}`).join(", ");
+				if (err?.issues) {
+					const validationErrors = err.issues
+						.map((i) => `${i.path.join(".")}: ${i.message}`)
+						.join(", ");
 					throw new Error(`Validation error: ${validationErrors}`);
 				}
-				
+
 				throw new Error(errorMessage || "Failed to create calendar event");
 			}
 		}),
@@ -303,12 +323,11 @@ export const calendarRouter = router({
 			}
 
 			if (!includeExpired) {
-				conditions.push(
-					or(
-						isNull(announcements.expiresAt),
-						gte(announcements.expiresAt, now)
-					)!
+				const notExpired = or(
+					isNull(announcements.expiresAt),
+					gte(announcements.expiresAt, now),
 				);
+				conditions.push(notExpired ?? sql`false`);
 			}
 
 			const results = await db

@@ -1,17 +1,17 @@
 import { and, desc, eq, ilike, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../db";
+import { user } from "../db/schema/auth";
 import {
-	crmTags,
-	prospectTags,
 	type InsertCrmTag,
 	type SelectCrmTag,
 	type UpdateCrmTag,
+	crmTags,
 	insertCrmTagSchema,
+	prospectTags,
 	selectCrmTagSchema,
 	updateCrmTagSchema,
 } from "../db/schema/crm";
-import { user } from "../db/schema/auth";
 import { adminProcedure, protectedProcedure, router } from "../lib/trpc";
 
 // List tags input schema
@@ -115,81 +115,87 @@ export const tagsRouter = router({
 	}),
 
 	// Create a new tag (admin only)
-	create: adminProcedure.input(createTagInput).mutation(async ({ input, ctx }) => {
-		const adminId = ctx.session.user.id;
+	create: adminProcedure
+		.input(createTagInput)
+		.mutation(async ({ input, ctx }) => {
+			const adminId = ctx.session.user.id;
 
-		// Check if tag with same name already exists
-		const [existing] = await db
-			.select()
-			.from(crmTags)
-			.where(eq(crmTags.name, input.name))
-			.limit(1);
-
-		if (existing) {
-			throw new Error("Tag with this name already exists");
-		}
-
-		const [created] = await db
-			.insert(crmTags)
-			.values({ ...input, createdBy: adminId })
-			.returning();
-
-		return selectCrmTagSchema.parse(created);
-	}),
-
-	// Update an existing tag (admin only)
-	update: adminProcedure.input(updateTagInput).mutation(async ({ input, ctx }) => {
-		const { id, ...updateData } = input;
-
-		const [existing] = await db
-			.select()
-			.from(crmTags)
-			.where(eq(crmTags.id, id))
-			.limit(1);
-
-		if (!existing) {
-			throw new Error("Tag not found");
-		}
-
-		// If name is being updated, check for duplicates
-		if (updateData.name && updateData.name !== existing.name) {
-			const [duplicate] = await db
+			// Check if tag with same name already exists
+			const [existing] = await db
 				.select()
 				.from(crmTags)
-				.where(eq(crmTags.name, updateData.name))
+				.where(eq(crmTags.name, input.name))
 				.limit(1);
 
-			if (duplicate) {
+			if (existing) {
 				throw new Error("Tag with this name already exists");
 			}
-		}
 
-		const [updated] = await db
-			.update(crmTags)
-			.set({ ...updateData, updatedAt: new Date() })
-			.where(eq(crmTags.id, id))
-			.returning();
+			const [created] = await db
+				.insert(crmTags)
+				.values({ ...input, createdBy: adminId })
+				.returning();
 
-		return selectCrmTagSchema.parse(updated);
-	}),
+			return selectCrmTagSchema.parse(created);
+		}),
+
+	// Update an existing tag (admin only)
+	update: adminProcedure
+		.input(updateTagInput)
+		.mutation(async ({ input, ctx }) => {
+			const { id, ...updateData } = input;
+
+			const [existing] = await db
+				.select()
+				.from(crmTags)
+				.where(eq(crmTags.id, id))
+				.limit(1);
+
+			if (!existing) {
+				throw new Error("Tag not found");
+			}
+
+			// If name is being updated, check for duplicates
+			if (updateData.name && updateData.name !== existing.name) {
+				const [duplicate] = await db
+					.select()
+					.from(crmTags)
+					.where(eq(crmTags.name, updateData.name))
+					.limit(1);
+
+				if (duplicate) {
+					throw new Error("Tag with this name already exists");
+				}
+			}
+
+			const [updated] = await db
+				.update(crmTags)
+				.set({ ...updateData, updatedAt: new Date() })
+				.where(eq(crmTags.id, id))
+				.returning();
+
+			return selectCrmTagSchema.parse(updated);
+		}),
 
 	// Delete a tag (admin only)
-	delete: adminProcedure.input(deleteTagInput).mutation(async ({ input, ctx }) => {
-		const { id } = input;
+	delete: adminProcedure
+		.input(deleteTagInput)
+		.mutation(async ({ input, ctx }) => {
+			const { id } = input;
 
-		const [existing] = await db
-			.select()
-			.from(crmTags)
-			.where(eq(crmTags.id, id))
-			.limit(1);
+			const [existing] = await db
+				.select()
+				.from(crmTags)
+				.where(eq(crmTags.id, id))
+				.limit(1);
 
-		if (!existing) {
-			throw new Error("Tag not found");
-		}
+			if (!existing) {
+				throw new Error("Tag not found");
+			}
 
-		// Delete tag (cascade will remove all prospect_tags relationships)
-		await db.delete(crmTags).where(eq(crmTags.id, id));
+			// Delete tag (cascade will remove all prospect_tags relationships)
+			await db.delete(crmTags).where(eq(crmTags.id, id));
 
-		return { success: true, id };
-	}),
+			return { success: true, id };
+		}),
 });

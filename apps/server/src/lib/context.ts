@@ -1,8 +1,14 @@
-import type { Context as HonoContext } from "hono";
+import type { InferSelectModel } from "drizzle-orm";
 import { eq } from "drizzle-orm";
-import { auth } from "./auth";
+import type { Context as HonoContext } from "hono";
 import { db } from "../db";
 import { user } from "../db/schema/auth";
+import { auth } from "./auth";
+
+type UserWithTier = Pick<
+	InferSelectModel<typeof user>,
+	"agentTier" | "companyCommissionSplit" | "agencyId" | "teamId" | "role"
+>;
 
 export type CreateContextOptions = {
 	context: HonoContext;
@@ -36,7 +42,7 @@ export async function createContext({ context }: CreateContextOptions) {
 	if (session?.user) {
 		const MAX_DB_RETRIES = 3;
 		const INITIAL_RETRY_DELAY = 100; // ms
-		
+
 		for (let attempt = 0; attempt < MAX_DB_RETRIES; attempt++) {
 			try {
 				// Fetch latest tier and commission split from database with timeout
@@ -57,39 +63,50 @@ export async function createContext({ context }: CreateContextOptions) {
 					setTimeout(() => reject(new Error("Database query timeout")), 30000);
 				});
 
-				const [userWithTier] = await Promise.race([queryPromise, timeoutPromise]) as any[];
+				const [userWithTier] = (await Promise.race([
+					queryPromise,
+					timeoutPromise,
+				])) as [UserWithTier | undefined];
 
 				if (userWithTier) {
 					// Enhance session user with tier information
-					(session.user as any).agentTier = userWithTier.agentTier;
-					(session.user as any).companyCommissionSplit = userWithTier.companyCommissionSplit;
-					(session.user as any).agencyId = userWithTier.agencyId;
-					(session.user as any).teamId = userWithTier.teamId;
-					(session.user as any).role = userWithTier.role;
+					const u = session.user as typeof session.user & UserWithTier;
+					u.agentTier = userWithTier.agentTier;
+					u.companyCommissionSplit = userWithTier.companyCommissionSplit;
+					u.agencyId = userWithTier.agencyId;
+					u.teamId = userWithTier.teamId;
+					u.role = userWithTier.role;
 				}
 				break; // Success, exit retry loop
-			} catch (error: any) {
-				const isRetryable = 
-					error?.message?.includes("timeout") ||
-					error?.message?.includes("Connection terminated") ||
-					error?.message?.includes("MaxClientsInSessionMode") ||
-					error?.code === "XX000" ||
-					error?.code === "57P01"; // Admin shutdown
+			} catch (error: unknown) {
+				const err = error as { message?: string; code?: string };
+				const isRetryable =
+					err?.message?.includes("timeout") ||
+					err?.message?.includes("Connection terminated") ||
+					err?.message?.includes("MaxClientsInSessionMode") ||
+					err?.code === "XX000" ||
+					err?.code === "57P01"; // Admin shutdown
 
 				if (isRetryable && attempt < MAX_DB_RETRIES - 1) {
-					const waitTime = INITIAL_RETRY_DELAY * Math.pow(2, attempt);
-					console.warn(`⚠️ Database query failed, retrying in ${waitTime}ms... (attempt ${attempt + 1}/${MAX_DB_RETRIES})`, {
-						error: error?.message || error,
-						code: error?.code,
-					});
-					await new Promise(resolve => setTimeout(resolve, waitTime));
+					const waitTime = INITIAL_RETRY_DELAY * 2 ** attempt;
+					console.warn(
+						`⚠️ Database query failed, retrying in ${waitTime}ms... (attempt ${attempt + 1}/${MAX_DB_RETRIES})`,
+						{
+							error: err?.message ?? String(error),
+							code: err?.code,
+						},
+					);
+					await new Promise((resolve) => setTimeout(resolve, waitTime));
 				} else {
 					// Log error but don't break authentication - use cached/default values
-					console.error("❌ Error fetching agent tier information after retries:", {
-						error: error?.message || error,
-						code: error?.code,
-						attempts: attempt + 1,
-					});
+					console.error(
+						"❌ Error fetching agent tier information after retries:",
+						{
+							error: err?.message ?? String(error),
+							code: err?.code,
+							attempts: attempt + 1,
+						},
+					);
 					// Continue without tier info - session will still work
 					break;
 				}

@@ -46,7 +46,7 @@ export const transactionStatusSchema = z.array(
 		count: z.number(),
 		percentage: z.union([z.number(), z.string()]).transform((val) => {
 			// Convert string percentages to numbers for type safety
-			return typeof val === "string" ? parseFloat(val) || 0 : val;
+			return typeof val === "string" ? Number.parseFloat(val) || 0 : val;
 		}),
 	}),
 );
@@ -201,17 +201,19 @@ export function formatCurrency(amount: number): string {
 	}).format(amount);
 }
 
-export function formatPercentage(value: number | string | null | undefined): string {
+export function formatPercentage(
+	value: number | string | null | undefined,
+): string {
 	// Handle null, undefined, or invalid values
 	if (value === null || value === undefined) {
 		return "0.0%";
 	}
 
 	// Convert to number if it's a string
-	const numValue = typeof value === "string" ? parseFloat(value) : value;
+	const numValue = typeof value === "string" ? Number.parseFloat(value) : value;
 
 	// Check if the conversion resulted in a valid number
-	if (Number.isNaN(numValue) || typeof numValue !== 'number') {
+	if (Number.isNaN(numValue) || typeof numValue !== "number") {
 		return "0.0%";
 	}
 

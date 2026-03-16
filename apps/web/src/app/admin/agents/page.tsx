@@ -1,6 +1,7 @@
 "use client";
 
 import { AppSidebar } from "@/components/app-sidebar";
+import { HeaderActions } from "@/components/header-actions";
 import { Separator } from "@/components/separator";
 import {
 	SidebarInset,
@@ -30,7 +31,6 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
-import { HeaderActions } from "@/components/header-actions";
 import { authClient } from "@/lib/auth-client";
 import { trpc } from "@/utils/trpc";
 import {
@@ -47,9 +47,9 @@ import { useState } from "react";
 
 // Agent Tier Management Components
 import {
-	TierBadge,
 	AgentManagementDialog,
 	AgentViewModal,
+	TierBadge,
 	TierDashboardWidget,
 } from "@/components/agent-tier";
 import type { AgentTier } from "@/lib/agent-tier-config";
@@ -105,21 +105,30 @@ export default function AdminAgentsPage() {
 	const {
 		data: agentsData,
 		isLoading: isLoadingAgents,
-		refetch: refetchAgents
-	} = trpc.agents.list.useQuery({
-		limit: 20,
-		offset: 0,
-		role: statusFilter === "all" ? undefined : (statusFilter === "active" ? "agent" : undefined),
-		sortBy: "name",
-		sortOrder: "asc",
-	}, {
-		enabled: !!session && !!roleData?.hasAdminAccess,
-	});
+		refetch: refetchAgents,
+	} = trpc.agents.list.useQuery(
+		{
+			limit: 20,
+			offset: 0,
+			role:
+				statusFilter === "all"
+					? undefined
+					: statusFilter === "active"
+						? "agent"
+						: undefined,
+			sortBy: "name",
+			sortOrder: "asc",
+		},
+		{
+			enabled: !!session && !!roleData?.hasAdminAccess,
+		},
+	);
 
 	// Get agent statistics
-	const { data: agentStats, isLoading: isLoadingStats } = trpc.agents.getStats.useQuery(undefined, {
-		enabled: !!session && !!roleData?.hasAdminAccess,
-	});
+	const { data: agentStats, isLoading: isLoadingStats } =
+		trpc.agents.getStats.useQuery(undefined, {
+			enabled: !!session && !!roleData?.hasAdminAccess,
+		});
 
 	// Get utils for invalidation after mutations
 	const utils = trpc.useUtils();
@@ -172,10 +181,7 @@ export default function AdminAgentsPage() {
 
 	// Handle refresh
 	const handleRefresh = async () => {
-		await Promise.all([
-			refetchAgents(),
-			utils.agents.getStats.invalidate(),
-		]);
+		await Promise.all([refetchAgents(), utils.agents.getStats.invalidate()]);
 	};
 
 	return (
@@ -259,8 +265,8 @@ export default function AdminAgentsPage() {
 							<CardContent>
 								{isLoadingStats ? (
 									<div className="space-y-2">
-										<div className="h-8 w-16 bg-muted animate-pulse rounded" />
-										<div className="h-3 w-24 bg-muted animate-pulse rounded" />
+										<div className="h-8 w-16 animate-pulse rounded bg-muted" />
+										<div className="h-3 w-24 animate-pulse rounded bg-muted" />
 									</div>
 								) : (
 									<>
@@ -284,8 +290,8 @@ export default function AdminAgentsPage() {
 							<CardContent>
 								{isLoadingStats ? (
 									<div className="space-y-2">
-										<div className="h-8 w-16 bg-muted animate-pulse rounded" />
-										<div className="h-3 w-24 bg-muted animate-pulse rounded" />
+										<div className="h-8 w-16 animate-pulse rounded bg-muted" />
+										<div className="h-3 w-24 animate-pulse rounded bg-muted" />
 									</div>
 								) : (
 									<>
@@ -293,10 +299,9 @@ export default function AdminAgentsPage() {
 											{agentStats?.activeAgents || 0}
 										</div>
 										<p className="text-muted-foreground text-xs">
-											{agentStats?.totalAgents ?
-												`${Math.round((agentStats.activeAgents / agentStats.totalAgents) * 100)}% active rate` :
-												'Active agents'
-											}
+											{agentStats?.totalAgents
+												? `${Math.round((agentStats.activeAgents / agentStats.totalAgents) * 100)}% active rate`
+												: "Active agents"}
 										</p>
 									</>
 								)}
@@ -312,31 +317,31 @@ export default function AdminAgentsPage() {
 							<CardContent>
 								{isLoadingStats ? (
 									<div className="space-y-2">
-										<div className="h-8 w-16 bg-muted animate-pulse rounded" />
-										<div className="h-3 w-24 bg-muted animate-pulse rounded" />
+										<div className="h-8 w-16 animate-pulse rounded bg-muted" />
+										<div className="h-3 w-24 animate-pulse rounded bg-muted" />
 									</div>
 								) : (
 									<>
 										<div className="font-bold text-2xl">
 											{agentStats?.teamLeads || 0}
 										</div>
-										<p className="text-muted-foreground text-xs">Leadership roles</p>
+										<p className="text-muted-foreground text-xs">
+											Leadership roles
+										</p>
 									</>
 								)}
 							</CardContent>
 						</Card>
 						<Card>
 							<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-								<CardTitle className="font-medium text-sm">
-									Admins
-								</CardTitle>
+								<CardTitle className="font-medium text-sm">Admins</CardTitle>
 								<RiTeamLine className="h-4 w-4 text-muted-foreground" />
 							</CardHeader>
 							<CardContent>
 								{isLoadingStats ? (
 									<div className="space-y-2">
-										<div className="h-8 w-16 bg-muted animate-pulse rounded" />
-										<div className="h-3 w-24 bg-muted animate-pulse rounded" />
+										<div className="h-8 w-16 animate-pulse rounded bg-muted" />
+										<div className="h-3 w-24 animate-pulse rounded bg-muted" />
 									</div>
 								) : (
 									<>
@@ -356,121 +361,142 @@ export default function AdminAgentsPage() {
 
 						{/* Agent Management Interface */}
 						<Card className="lg:col-span-2">
-						<CardHeader>
-							<CardTitle>Agent Directory</CardTitle>
-							<CardDescription>
-								Manage agent accounts, roles, permissions, and performance
-								tracking
-							</CardDescription>
-						</CardHeader>
-						<CardContent>
-							{isLoadingAgents ? (
-								<div className="space-y-4">
-									{Array.from({ length: 5 }).map((_, i) => (
-										<div key={i} className="flex items-center justify-between p-4 border rounded-lg">
-											<div className="flex items-center gap-3">
-												<div className="h-10 w-10 bg-muted animate-pulse rounded-full" />
-												<div className="space-y-2">
-													<div className="h-4 w-32 bg-muted animate-pulse rounded" />
-													<div className="h-3 w-48 bg-muted animate-pulse rounded" />
-												</div>
-											</div>
-											<div className="flex gap-2">
-												<div className="h-8 w-20 bg-muted animate-pulse rounded" />
-												<div className="h-8 w-20 bg-muted animate-pulse rounded" />
-											</div>
-										</div>
-									))}
-								</div>
-							) : agentsData?.agents && agentsData.agents.length > 0 ? (
-								<div className="space-y-4">
-									{agentsData.agents.map((agentItem) => (
-										<div key={agentItem.agent.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors">
-											<div className="flex items-center gap-3">
-												<div className="h-10 w-10 bg-primary/10 rounded-full flex items-center justify-center">
-													<RiUserLine className="h-5 w-5 text-primary" />
-												</div>
-												<div className="space-y-1">
-													<div className="flex items-center gap-2">
-														<span className="font-medium">{agentItem.agent.name}</span>
-														<span className={`px-2 py-1 text-xs rounded-full ${
-															agentItem.agent.role === 'admin' ? 'bg-red-100 text-red-800' :
-															agentItem.agent.role === 'team_lead' ? 'bg-blue-100 text-blue-800' :
-															'bg-green-100 text-green-800'
-														}`}>
-															{agentItem.agent.role}
-														</span>
-														{agentItem.agent.agentTier && (
-															<TierBadge
-																tier={agentItem.agent.agentTier as AgentTier}
-																size="sm"
-																showIcon={true}
-															/>
-														)}
+							<CardHeader>
+								<CardTitle>Agent Directory</CardTitle>
+								<CardDescription>
+									Manage agent accounts, roles, permissions, and performance
+									tracking
+								</CardDescription>
+							</CardHeader>
+							<CardContent>
+								{isLoadingAgents ? (
+									<div className="space-y-4">
+										{Array.from({ length: 5 }, (_, i) => (
+											<div
+												key={`skeleton-${i}`}
+												className="flex items-center justify-between rounded-lg border p-4"
+											>
+												<div className="flex items-center gap-3">
+													<div className="h-10 w-10 animate-pulse rounded-full bg-muted" />
+													<div className="space-y-2">
+														<div className="h-4 w-32 animate-pulse rounded bg-muted" />
+														<div className="h-3 w-48 animate-pulse rounded bg-muted" />
 													</div>
-													<p className="text-sm text-muted-foreground">
-														{agentItem.agent.email}
-														{agentItem.agent.createdAt && ` • Joined ${new Date(agentItem.agent.createdAt).toLocaleDateString()}`}
-													</p>
+												</div>
+												<div className="flex gap-2">
+													<div className="h-8 w-20 animate-pulse rounded bg-muted" />
+													<div className="h-8 w-20 animate-pulse rounded bg-muted" />
 												</div>
 											</div>
-											<div className="flex gap-2">
+										))}
+									</div>
+								) : agentsData?.agents && agentsData.agents.length > 0 ? (
+									<div className="space-y-4">
+										{agentsData.agents.map((agentItem) => (
+											<div
+												key={agentItem.agent.id}
+												className="flex items-center justify-between rounded-lg border p-4 transition-colors hover:bg-muted/50"
+											>
+												<div className="flex items-center gap-3">
+													<div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
+														<RiUserLine className="h-5 w-5 text-primary" />
+													</div>
+													<div className="space-y-1">
+														<div className="flex items-center gap-2">
+															<span className="font-medium">
+																{agentItem.agent.name}
+															</span>
+															<span
+																className={`rounded-full px-2 py-1 text-xs ${
+																	agentItem.agent.role === "admin"
+																		? "bg-red-100 text-red-800"
+																		: agentItem.agent.role === "team_lead"
+																			? "bg-blue-100 text-blue-800"
+																			: "bg-green-100 text-green-800"
+																}`}
+															>
+																{agentItem.agent.role}
+															</span>
+															{agentItem.agent.agentTier && (
+																<TierBadge
+																	tier={agentItem.agent.agentTier as AgentTier}
+																	size="sm"
+																	showIcon={true}
+																/>
+															)}
+														</div>
+														<p className="text-muted-foreground text-sm">
+															{agentItem.agent.email}
+															{agentItem.agent.createdAt &&
+																` • Joined ${new Date(agentItem.agent.createdAt).toLocaleDateString()}`}
+														</p>
+													</div>
+												</div>
+												<div className="flex gap-2">
+													<Button
+														size="sm"
+														variant="outline"
+														onClick={() =>
+															handleManageAgent(agentItem.agent as AgentData)
+														}
+													>
+														<RiSettings3Line className="mr-1 h-4 w-4" />
+														Manage
+													</Button>
+													<Button
+														size="sm"
+														variant="outline"
+														onClick={() =>
+															handleViewAgent(agentItem.agent as AgentData)
+														}
+													>
+														<RiUserLine className="mr-1 h-4 w-4" />
+														View
+													</Button>
+												</div>
+											</div>
+										))}
+										{agentsData.hasMore && (
+											<div className="pt-4 text-center">
 												<Button
-													size="sm"
 													variant="outline"
-													onClick={() => handleManageAgent(agentItem.agent as AgentData)}
+													onClick={() => {
+														// TODO: Implement pagination
+													}}
 												>
-													<RiSettings3Line className="mr-1 h-4 w-4" />
-													Manage
-												</Button>
-												<Button
-													size="sm"
-													variant="outline"
-													onClick={() => handleViewAgent(agentItem.agent as AgentData)}
-												>
-													<RiUserLine className="mr-1 h-4 w-4" />
-													View
+													Load More
 												</Button>
 											</div>
-										</div>
-									))}
-									{agentsData.hasMore && (
-										<div className="text-center pt-4">
-											<Button variant="outline" onClick={() => {
-												// TODO: Implement pagination
-											}}>
-												Load More
+										)}
+									</div>
+								) : (
+									<div className="py-8 text-center">
+										<RiTeamLine
+											size={48}
+											className="mx-auto mb-4 text-muted-foreground"
+										/>
+										<h3 className="mb-2 font-semibold text-lg">
+											No Agents Found
+										</h3>
+										<p className="mb-4 text-muted-foreground">
+											No agents match the current filter criteria. Try adjusting
+											your filters.
+										</p>
+										<div className="flex justify-center gap-2">
+											<Button variant="outline" onClick={handleRefresh}>
+												<RiRefreshLine className="mr-2 h-4 w-4" />
+												Refresh
+											</Button>
+											<Button>
+												<RiAddLine className="mr-2 h-4 w-4" />
+												Add New Agent
 											</Button>
 										</div>
-									)}
-								</div>
-							) : (
-								<div className="py-8 text-center">
-									<RiTeamLine
-										size={48}
-										className="mx-auto mb-4 text-muted-foreground"
-									/>
-									<h3 className="mb-2 font-semibold text-lg">
-										No Agents Found
-									</h3>
-									<p className="mb-4 text-muted-foreground">
-										No agents match the current filter criteria. Try adjusting your filters.
-									</p>
-									<div className="flex justify-center gap-2">
-										<Button variant="outline" onClick={handleRefresh}>
-											<RiRefreshLine className="mr-2 h-4 w-4" />
-											Refresh
-										</Button>
-										<Button>
-											<RiAddLine className="mr-2 h-4 w-4" />
-											Add New Agent
-										</Button>
 									</div>
-								</div>
-							)}
-						</CardContent>
-					</Card>
-				</div>
+								)}
+							</CardContent>
+						</Card>
+					</div>
 				</div>
 			</SidebarInset>
 
@@ -481,7 +507,7 @@ export default function AdminAgentsPage() {
 					onOpenChange={setIsManageDialogOpen}
 					agent={{
 						id: selectedAgent.id,
-						name: selectedAgent.name || 'Unknown',
+						name: selectedAgent.name || "Unknown",
 						email: selectedAgent.email,
 						agentTier: (selectedAgent.agentTier as AgentTier) || null,
 						role: selectedAgent.role,

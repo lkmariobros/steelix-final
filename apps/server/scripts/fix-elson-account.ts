@@ -49,8 +49,8 @@ async function clearOldSessions(userId: string) {
         DELETE FROM "session" WHERE user_id = ${userId}
       `);
 
-			console.log(`✅ Cleared all sessions for user`);
-			console.log(`   This will force a fresh login`);
+			console.log("✅ Cleared all sessions for user");
+			console.log("   This will force a fresh login");
 		} else {
 			console.log("   No sessions to clear");
 		}
@@ -137,11 +137,10 @@ async function testDirectAuth() {
 			}
 
 			return true;
-		} else {
-			const responseText = await response.text();
-			console.log(`❌ Authentication failed: ${responseText}`);
-			return false;
 		}
+		const responseText = await response.text();
+		console.log(`❌ Authentication failed: ${responseText}`);
+		return false;
 	} catch (error) {
 		console.error("❌ Error testing auth:", error);
 		return false;
@@ -168,7 +167,7 @@ async function main() {
 
 		console.log("\n📊 RESULTS:");
 		console.log("===========");
-		console.log(`User found: ✅`);
+		console.log("User found: ✅");
 		console.log(`Sessions cleared: ${sessionsCleaned ? "✅" : "❌"}`);
 		console.log(`Account integrity: ${accountOk ? "✅" : "❌"}`);
 		console.log(`Authentication: ${authWorks ? "✅" : "❌"}`);

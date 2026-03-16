@@ -1,5 +1,5 @@
 {
-  "buildCommand": "cd ../.. && bun run build --filter=web",
-  "installCommand": "cd ../.. && bun install",
-  "framework": "nextjs"
+	"buildCommand": "cd ../.. && bun run build --filter=web",
+	"installCommand": "cd ../.. && bun install",
+	"framework": "nextjs"
 }

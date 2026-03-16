@@ -102,8 +102,12 @@ export const autoReplyRouter = router({
 
 				// Calculate summary stats
 				const totalRules = sortedResults.length;
-				const ownerRules = sortedResults.filter((r) => r.status === "owner").length;
-				const tenantRules = sortedResults.filter((r) => r.status === "tenant").length;
+				const ownerRules = sortedResults.filter(
+					(r) => r.status === "owner",
+				).length;
+				const tenantRules = sortedResults.filter(
+					(r) => r.status === "tenant",
+				).length;
 
 				return {
 					rules: sortedResults.map((r) => selectAutoReplyRuleSchema.parse(r)),
@@ -129,7 +133,9 @@ export const autoReplyRouter = router({
 			const [rule] = await db
 				.select()
 				.from(autoReplyRules)
-				.where(and(eq(autoReplyRules.id, id), eq(autoReplyRules.agentId, agentId)))
+				.where(
+					and(eq(autoReplyRules.id, id), eq(autoReplyRules.agentId, agentId)),
+				)
 				.limit(1);
 
 			if (!rule) {
@@ -174,7 +180,9 @@ export const autoReplyRouter = router({
 			const [existing] = await db
 				.select()
 				.from(autoReplyRules)
-				.where(and(eq(autoReplyRules.id, id), eq(autoReplyRules.agentId, agentId)))
+				.where(
+					and(eq(autoReplyRules.id, id), eq(autoReplyRules.agentId, agentId)),
+				)
 				.limit(1);
 
 			if (!existing) {
@@ -204,7 +212,9 @@ export const autoReplyRouter = router({
 			const [existing] = await db
 				.select()
 				.from(autoReplyRules)
-				.where(and(eq(autoReplyRules.id, id), eq(autoReplyRules.agentId, agentId)))
+				.where(
+					and(eq(autoReplyRules.id, id), eq(autoReplyRules.agentId, agentId)),
+				)
 				.limit(1);
 
 			if (!existing) {

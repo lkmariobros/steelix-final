@@ -1,6 +1,7 @@
 "use client";
 
 import { AppSidebar } from "@/components/app-sidebar";
+import { HeaderActions } from "@/components/header-actions";
 import { Separator } from "@/components/separator";
 import {
 	SidebarInset,
@@ -15,7 +16,6 @@ import {
 	BreadcrumbPage,
 	BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
-import { HeaderActions } from "@/components/header-actions";
 import { AgentDashboard } from "@/dashboards/agent";
 import { RiDashboardLine } from "@remixicon/react";
 

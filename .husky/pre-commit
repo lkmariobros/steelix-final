@@ -1,9 +1,9 @@
 # Run lint-staged for formatting and linting
 lint-staged
 
-# Run TypeScript type checking
+# Run TypeScript type checking (per-app to avoid turbo exit code 5)
 echo "🔍 Checking TypeScript types..."
-bun run check-types
+bun run check-types:ci
 
 # If type check fails, prevent commit
 if [ $? -ne 0 ]; then

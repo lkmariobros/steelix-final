@@ -1,5 +1,5 @@
-import { db } from "../src/db/index.js";
 import { sql } from "drizzle-orm";
+import { db } from "../src/db/index.js";
 
 async function runMigration() {
 	try {
@@ -46,9 +46,8 @@ async function runMigration() {
 				WHEN duplicate_column THEN null;
 			END $$;
 		`);
-		
-		console.log("✅ Agent tier migration completed successfully!");
 
+		console.log("✅ Agent tier migration completed successfully!");
 	} catch (error) {
 		console.error("❌ Migration failed:", error);
 		throw error;

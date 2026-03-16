@@ -1,7 +1,6 @@
 "use client";
 
 import { format } from "date-fns";
-import { useState } from "react";
 import {
 	ArrowLeft,
 	Building,
@@ -14,6 +13,7 @@ import {
 	Send,
 	User,
 } from "lucide-react";
+import { useState } from "react";
 
 import { Badge } from "@/components/badge";
 import { Button } from "@/components/ui/button";
@@ -26,7 +26,10 @@ import {
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 // Issue #7 Fix: Import validation summary dialog
-import { ValidationSummaryDialog, type ValidationError } from "@/components/validation-summary-dialog";
+import {
+	type ValidationError,
+	ValidationSummaryDialog,
+} from "@/components/validation-summary-dialog";
 
 import {
 	type CompleteTransactionData,
@@ -59,7 +62,9 @@ export function StepReview({
 }: StepReviewProps) {
 	// Issue #7 Fix: Validation dialog state
 	const [showValidationDialog, setShowValidationDialog] = useState(false);
-	const [validationErrors, setValidationErrors] = useState<ValidationError[]>([]);
+	const [validationErrors, setValidationErrors] = useState<ValidationError[]>(
+		[],
+	);
 
 	// Helper function to get option label
 	const getOptionLabel = (
@@ -71,7 +76,11 @@ export function StepReview({
 
 	// Issue #2 Fix: Helper to get representation type label
 	const getRepresentationLabel = (type: RepresentationType | undefined) => {
-		return representationTypeOptions.find((opt) => opt.value === type)?.label || type || "Own Client";
+		return (
+			representationTypeOptions.find((opt) => opt.value === type)?.label ||
+			type ||
+			"Own Client"
+		);
 	};
 
 	// Issue #7 Fix: Validate all form data before submission
@@ -80,45 +89,111 @@ export function StepReview({
 
 		// Step 1: Transaction Details
 		if (!data.marketType) {
-			errors.push({ step: 1, stepTitle: "Transaction Details", field: "Market Type", message: "Please select a market type", severity: "error" });
+			errors.push({
+				step: 1,
+				stepTitle: "Transaction Details",
+				field: "Market Type",
+				message: "Please select a market type",
+				severity: "error",
+			});
 		}
 		if (!data.transactionType) {
-			errors.push({ step: 1, stepTitle: "Transaction Details", field: "Transaction Type", message: "Please select a transaction type", severity: "error" });
+			errors.push({
+				step: 1,
+				stepTitle: "Transaction Details",
+				field: "Transaction Type",
+				message: "Please select a transaction type",
+				severity: "error",
+			});
 		}
 		if (!data.transactionDate) {
-			errors.push({ step: 1, stepTitle: "Transaction Details", field: "Transaction Date", message: "Please select a transaction date", severity: "error" });
+			errors.push({
+				step: 1,
+				stepTitle: "Transaction Details",
+				field: "Transaction Date",
+				message: "Please select a transaction date",
+				severity: "error",
+			});
 		}
 
 		// Step 2: Property Details
 		if (!data.propertyData?.address) {
-			errors.push({ step: 2, stepTitle: "Property Details", field: "Address", message: "Property address is required", severity: "error" });
+			errors.push({
+				step: 2,
+				stepTitle: "Property Details",
+				field: "Address",
+				message: "Property address is required",
+				severity: "error",
+			});
 		}
 		if (!data.propertyData?.price || data.propertyData.price <= 0) {
-			errors.push({ step: 2, stepTitle: "Property Details", field: "Price", message: "Property price must be greater than 0", severity: "error" });
+			errors.push({
+				step: 2,
+				stepTitle: "Property Details",
+				field: "Price",
+				message: "Property price must be greater than 0",
+				severity: "error",
+			});
 		}
 		if (!data.propertyData?.propertyType) {
-			errors.push({ step: 2, stepTitle: "Property Details", field: "Property Type", message: "Please select a property type", severity: "error" });
+			errors.push({
+				step: 2,
+				stepTitle: "Property Details",
+				field: "Property Type",
+				message: "Please select a property type",
+				severity: "error",
+			});
 		}
 
 		// Step 3: Client Information
 		if (!data.clientData?.name) {
-			errors.push({ step: 3, stepTitle: "Client Information", field: "Client Name", message: "Client name is required", severity: "error" });
+			errors.push({
+				step: 3,
+				stepTitle: "Client Information",
+				field: "Client Name",
+				message: "Client name is required",
+				severity: "error",
+			});
 		}
 		if (!data.clientData?.email) {
-			errors.push({ step: 3, stepTitle: "Client Information", field: "Email", message: "Client email is required", severity: "error" });
+			errors.push({
+				step: 3,
+				stepTitle: "Client Information",
+				field: "Email",
+				message: "Client email is required",
+				severity: "error",
+			});
 		}
 		if (!data.clientData?.phone) {
-			errors.push({ step: 3, stepTitle: "Client Information", field: "Phone", message: "Client phone is required", severity: "error" });
+			errors.push({
+				step: 3,
+				stepTitle: "Client Information",
+				field: "Phone",
+				message: "Client phone is required",
+				severity: "error",
+			});
 		}
 
 		// Step 5: Commission
 		if (!data.commissionValue || data.commissionValue <= 0) {
-			errors.push({ step: 5, stepTitle: "Commission", field: "Commission Value", message: "Commission value must be greater than 0", severity: "error" });
+			errors.push({
+				step: 5,
+				stepTitle: "Commission",
+				field: "Commission Value",
+				message: "Commission value must be greater than 0",
+				severity: "error",
+			});
 		}
 
 		// Warnings (non-blocking)
 		if (!data.notes) {
-			errors.push({ step: 6, stepTitle: "Documents & Notes", field: "Notes", message: "Consider adding notes for this transaction", severity: "warning" });
+			errors.push({
+				step: 6,
+				stepTitle: "Documents & Notes",
+				field: "Notes",
+				message: "Consider adding notes for this transaction",
+				severity: "warning",
+			});
 		}
 
 		return errors;
@@ -127,7 +202,7 @@ export function StepReview({
 	// Issue #7 Fix: Handle submit with validation
 	const handleSubmitWithValidation = () => {
 		const errors = validateFormData();
-		const criticalErrors = errors.filter(e => e.severity === "error");
+		const criticalErrors = errors.filter((e) => e.severity === "error");
 
 		if (criticalErrors.length > 0) {
 			setValidationErrors(errors);
@@ -143,7 +218,7 @@ export function StepReview({
 	const SectionHeader = ({
 		icon: Icon,
 		title,
-		step
+		step,
 	}: {
 		icon: React.ComponentType<{ className?: string }>;
 		title: string;
@@ -182,7 +257,11 @@ export function StepReview({
 				<CardContent className="space-y-6">
 					{/* Transaction Initiation */}
 					<div className="space-y-3">
-						<SectionHeader icon={Calendar} title="Transaction Details" step={1} />
+						<SectionHeader
+							icon={Calendar}
+							title="Transaction Details"
+							step={1}
+						/>
 						<div className="grid grid-cols-1 gap-4 rounded-lg bg-muted/50 p-4 md:grid-cols-3">
 							<div>
 								<p className="text-muted-foreground text-sm">Market Type</p>
@@ -215,7 +294,11 @@ export function StepReview({
 
 					{/* Property Information */}
 					<div className="space-y-3">
-						<SectionHeader icon={MapPin} title="Property Information" step={2} />
+						<SectionHeader
+							icon={MapPin}
+							title="Property Information"
+							step={2}
+						/>
 						<div className="space-y-3 rounded-lg bg-muted/50 p-4">
 							<div>
 								<p className="text-muted-foreground text-sm">Address</p>
@@ -311,11 +394,17 @@ export function StepReview({
 
 					{/* Representation & Co-Broking Information - Issue #1 Fix */}
 					<div className="space-y-3">
-						<SectionHeader icon={Building} title="Representation & Co-Broking" step={4} />
+						<SectionHeader
+							icon={Building}
+							title="Representation & Co-Broking"
+							step={4}
+						/>
 						<div className="rounded-lg bg-muted/50 p-4">
 							{/* Issue #1 Fix: Show unified representation type */}
 							<div className="mb-3">
-								<p className="text-muted-foreground text-sm">Representation Type</p>
+								<p className="text-muted-foreground text-sm">
+									Representation Type
+								</p>
 								<Badge variant="secondary" className="mt-1">
 									{getRepresentationLabel(data.representationType)}
 								</Badge>
@@ -323,10 +412,12 @@ export function StepReview({
 
 							{data.representationType === "co_broking" ? (
 								<div className="space-y-3 border-t pt-3">
-									<p className="text-sm font-medium">Co-Broker Details</p>
+									<p className="font-medium text-sm">Co-Broker Details</p>
 									<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
 										<div>
-											<p className="text-muted-foreground text-sm">Agent Name</p>
+											<p className="text-muted-foreground text-sm">
+												Agent Name
+											</p>
 											<p className="font-medium">
 												{data.coBrokingData?.agentName || "Not provided"}
 											</p>
@@ -353,9 +444,12 @@ export function StepReview({
 										</div>
 									</div>
 									<div>
-										<p className="text-muted-foreground text-sm">Commission Split</p>
+										<p className="text-muted-foreground text-sm">
+											Commission Split
+										</p>
 										<p className="font-medium">
-											Your share: {100 - (data.coBrokingData?.commissionSplit || 50)}% /
+											Your share:{" "}
+											{100 - (data.coBrokingData?.commissionSplit || 50)}% /
 											Co-broker: {data.coBrokingData?.commissionSplit || 50}%
 										</p>
 									</div>
@@ -363,7 +457,8 @@ export function StepReview({
 							) : (
 								<div className="border-t pt-3 text-center text-muted-foreground">
 									<p className="text-sm">
-										Direct representation - you receive your full agent share of the commission.
+										Direct representation - you receive your full agent share of
+										the commission.
 									</p>
 								</div>
 							)}

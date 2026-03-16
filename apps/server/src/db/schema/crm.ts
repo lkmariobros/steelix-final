@@ -56,10 +56,7 @@ export const pipelineStageEnum = pgEnum("pipeline_stage", [
 ]);
 
 // Lead type enum (company vs personal)
-export const leadTypeEnum = pgEnum("lead_type", [
-	"personal",
-	"company",
-]);
+export const leadTypeEnum = pgEnum("lead_type", ["personal", "company"]);
 
 // Prospects table
 export const prospects = pgTable(
@@ -87,7 +84,9 @@ export const prospects = pgTable(
 		nextContact: timestamp("next_contact"),
 		// Track which agent created/manages this prospect
 		// If leadType is "company" and agentId is null, it's an unclaimed company lead
-		agentId: text("agent_id").references(() => user.id, { onDelete: "cascade" }),
+		agentId: text("agent_id").references(() => user.id, {
+			onDelete: "cascade",
+		}),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 		updatedAt: timestamp("updated_at").defaultNow().notNull(),
 	},
@@ -170,7 +169,9 @@ export const prospectTags = pgTable(
 
 // Zod schemas for validation
 export const prospectTypeSchema = z.enum(["tenant", "buyer"]);
-export const propertyTypeSchema = z.string().min(1, "Property name is required"); // Free text validation
+export const propertyTypeSchema = z
+	.string()
+	.min(1, "Property name is required"); // Free text validation
 export const prospectStatusSchema = z.enum(["active", "inactive", "pending"]);
 export const pipelineStageSchema = z.enum([
 	"new_lead",

@@ -6,17 +6,19 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { trpc } from "@/utils/trpc";
 
 // Simple utility functions to avoid import issues
-const formatPercentage = (value: number | string | null | undefined): string => {
+const formatPercentage = (
+	value: number | string | null | undefined,
+): string => {
 	// Handle null, undefined, or invalid values
 	if (value === null || value === undefined) {
 		return "0.0%";
 	}
 
 	// Convert to number if it's a string
-	const numValue = typeof value === "string" ? parseFloat(value) : value;
+	const numValue = typeof value === "string" ? Number.parseFloat(value) : value;
 
 	// Check if the conversion resulted in a valid number
-	if (Number.isNaN(numValue) || typeof numValue !== 'number') {
+	if (Number.isNaN(numValue) || typeof numValue !== "number") {
 		return "0.0%";
 	}
 

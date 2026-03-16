@@ -13,7 +13,9 @@ interface UseKeyboardNavigationOptions {
 	stopPropagation?: boolean;
 }
 
-export function useKeyboardNavigation(options: UseKeyboardNavigationOptions = {}) {
+export function useKeyboardNavigation(
+	options: UseKeyboardNavigationOptions = {},
+) {
 	const {
 		onEnter,
 		onSpace,
@@ -90,7 +92,7 @@ export function useKeyboardNavigation(options: UseKeyboardNavigationOptions = {}
 			onArrowRight,
 			preventDefault,
 			stopPropagation,
-		]
+		],
 	);
 
 	return { handleKeyDown };
@@ -102,11 +104,11 @@ export function useFocusManagement() {
 
 	const focusFirst = useCallback(() => {
 		if (!containerRef.current) return;
-		
+
 		const focusableElements = containerRef.current.querySelectorAll(
-			'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+			'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
 		);
-		
+
 		const firstElement = focusableElements[0] as HTMLElement;
 		if (firstElement) {
 			firstElement.focus();
@@ -115,12 +117,14 @@ export function useFocusManagement() {
 
 	const focusLast = useCallback(() => {
 		if (!containerRef.current) return;
-		
+
 		const focusableElements = containerRef.current.querySelectorAll(
-			'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+			'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
 		);
-		
-		const lastElement = focusableElements[focusableElements.length - 1] as HTMLElement;
+
+		const lastElement = focusableElements[
+			focusableElements.length - 1
+		] as HTMLElement;
 		if (lastElement) {
 			lastElement.focus();
 		}
@@ -130,11 +134,13 @@ export function useFocusManagement() {
 		if (event.key !== "Tab" || !containerRef.current) return;
 
 		const focusableElements = containerRef.current.querySelectorAll(
-			'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+			'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
 		);
 
 		const firstElement = focusableElements[0] as HTMLElement;
-		const lastElement = focusableElements[focusableElements.length - 1] as HTMLElement;
+		const lastElement = focusableElements[
+			focusableElements.length - 1
+		] as HTMLElement;
 
 		if (event.shiftKey) {
 			if (document.activeElement === firstElement) {

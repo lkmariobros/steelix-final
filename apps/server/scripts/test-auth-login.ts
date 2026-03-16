@@ -48,7 +48,7 @@ async function testLogin() {
 		// 3. Test password comparison
 		const storedPassword = account.password as string;
 		console.log("\n🔐 Testing password comparison...");
-		console.log("   Stored hash:", storedPassword.substring(0, 20) + "...");
+		console.log("   Stored hash:", `${storedPassword.substring(0, 20)}...`);
 		console.log(
 			"   Hash type:",
 			storedPassword.startsWith("$2a")
@@ -64,7 +64,7 @@ async function testLogin() {
 		if (!isMatch) {
 			console.log("\n⚠️ Password doesn't match! Re-hashing...");
 			const newHash = await bcrypt.hash(password, 10);
-			console.log("   New hash:", newHash.substring(0, 20) + "...");
+			console.log("   New hash:", `${newHash.substring(0, 20)}...`);
 
 			// Update password
 			await db.execute(sql`

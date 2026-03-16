@@ -1,17 +1,17 @@
-import { and, desc, eq, gte, lte, sql, inArray } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../db";
-import {
-	reports,
-	performanceMetrics,
-	insertReportSchema,
-	selectReportSchema,
-	REPORT_EXPIRY_DAYS,
-	PERFORMANCE_PERIODS,
-} from "../db/schema/reports";
-import { user, agencies, teams } from "../db/schema/auth";
-import { transactions } from "../db/schema/transactions";
 import { commissionApprovals } from "../db/schema/approvals";
+import { agencies, teams, user } from "../db/schema/auth";
+import {
+	PERFORMANCE_PERIODS,
+	REPORT_EXPIRY_DAYS,
+	insertReportSchema,
+	performanceMetrics,
+	reports,
+	selectReportSchema,
+} from "../db/schema/reports";
+import { transactions } from "../db/schema/transactions";
 import { adminProcedure, protectedProcedure, router } from "../lib/trpc";
 
 // Input schemas
@@ -22,8 +22,19 @@ const generateReportInput = insertReportSchema.extend({
 const listReportsInput = z.object({
 	limit: z.number().min(1).max(100).default(20),
 	offset: z.number().min(0).default(0),
-	type: z.enum(["performance", "financial", "agent_activity", "transaction_summary", "commission_analysis", "custom"]).optional(),
-	status: z.enum(["pending", "generating", "completed", "failed", "scheduled"]).optional(),
+	type: z
+		.enum([
+			"performance",
+			"financial",
+			"agent_activity",
+			"transaction_summary",
+			"commission_analysis",
+			"custom",
+		])
+		.optional(),
+	status: z
+		.enum(["pending", "generating", "completed", "failed", "scheduled"])
+		.optional(),
 	generatedBy: z.string().optional(),
 	sortBy: z.enum(["createdAt", "generatedAt", "name"]).default("createdAt"),
 	sortOrder: z.enum(["asc", "desc"]).default("desc"),
@@ -41,7 +52,9 @@ const dashboardStatsInput = z.object({
 });
 
 const performanceAnalyticsInput = z.object({
-	periodType: z.enum(["daily", "weekly", "monthly", "quarterly", "yearly"]).default("monthly"),
+	periodType: z
+		.enum(["daily", "weekly", "monthly", "quarterly", "yearly"])
+		.default("monthly"),
 	startDate: z.coerce.date(),
 	endDate: z.coerce.date(),
 	agentIds: z.array(z.string()).optional(),
@@ -73,25 +86,45 @@ export const reportsRouter = router({
 			const newReport = {
 				...reportData,
 				generatedBy: ctx.session.user.id,
-				status: generateNow ? "generating" as const : "scheduled" as const,
+				status: generateNow ? ("generating" as const) : ("scheduled" as const),
 				expiresAt,
 			};
 
-			const [report] = await db
-				.insert(reports)
-				.values(newReport)
-				.returning();
+			const [report] = await db.insert(reports).values(newReport).returning();
 
 			if (generateNow) {
 				// In a real implementation, this would trigger background job
 				// For now, we'll generate basic report data immediately
-				const reportData = await generateReportData(report.id, report.type, report.filters, report.startDate, report.endDate);
-				
+				const reportData = await generateReportData(
+					report.id,
+					report.type,
+					report.filters ?? {},
+					report.startDate,
+					report.endDate,
+				);
+
 				const [updatedReport] = await db
 					.update(reports)
 					.set({
 						status: "completed",
-						data: reportData,
+						data: reportData as {
+							summary: {
+								totalTransactions: number;
+								totalCommission: number;
+								averageCommission: number;
+								topPerformers: Array<{
+									agentId: string;
+									agentName: string;
+									transactions: number;
+									commission: number;
+								}>;
+							};
+							details: unknown[];
+							charts: Array<{ type: string; title: string; data: unknown[] }>;
+							generatedAt: string;
+							reportType: string;
+							dateRange: { start: string; end: string };
+						},
 						generatedAt: new Date(),
 						updatedAt: new Date(),
 					})
@@ -105,83 +138,79 @@ export const reportsRouter = router({
 		}),
 
 	// List reports (admin only)
-	list: adminProcedure
-		.input(listReportsInput)
-		.query(async ({ input }) => {
-			const conditions = [];
+	list: adminProcedure.input(listReportsInput).query(async ({ input }) => {
+		const conditions = [];
 
-			if (input.type) {
-				conditions.push(eq(reports.type, input.type));
-			}
-			if (input.status) {
-				conditions.push(eq(reports.status, input.status));
-			}
-			if (input.generatedBy) {
-				conditions.push(eq(reports.generatedBy, input.generatedBy));
-			}
+		if (input.type) {
+			conditions.push(eq(reports.type, input.type));
+		}
+		if (input.status) {
+			conditions.push(eq(reports.status, input.status));
+		}
+		if (input.generatedBy) {
+			conditions.push(eq(reports.generatedBy, input.generatedBy));
+		}
 
-			const orderByColumn = input.sortBy === "createdAt" 
+		const orderByColumn =
+			input.sortBy === "createdAt"
 				? reports.createdAt
 				: input.sortBy === "generatedAt"
-				? reports.generatedAt
-				: reports.name;
+					? reports.generatedAt
+					: reports.name;
 
-			const orderByClause = input.sortOrder === "asc" 
-				? orderByColumn 
-				: desc(orderByColumn);
+		const orderByClause =
+			input.sortOrder === "asc" ? orderByColumn : desc(orderByColumn);
 
-			const reportsList = await db
-				.select({
-					report: reports,
-					generatedByUser: {
-						id: user.id,
-						name: user.name,
-						email: user.email,
-					},
-				})
-				.from(reports)
-				.leftJoin(user, eq(reports.generatedBy, user.id))
-				.where(conditions.length > 0 ? and(...conditions) : undefined)
-				.orderBy(orderByClause)
-				.limit(input.limit)
-				.offset(input.offset);
+		const reportsList = await db
+			.select({
+				report: reports,
+				generatedByUser: {
+					id: user.id,
+					name: user.name,
+					email: user.email,
+				},
+			})
+			.from(reports)
+			.leftJoin(user, eq(reports.generatedBy, user.id))
+			.where(conditions.length > 0 ? and(...conditions) : undefined)
+			.orderBy(orderByClause)
+			.limit(input.limit)
+			.offset(input.offset);
 
-			const [{ count }] = await db
-				.select({ count: sql<number>`count(*)` })
-				.from(reports)
-				.where(conditions.length > 0 ? and(...conditions) : undefined);
+		const [{ count }] = await db
+			.select({ count: sql<number>`count(*)` })
+			.from(reports)
+			.where(conditions.length > 0 ? and(...conditions) : undefined);
 
-			return {
-				reports: reportsList,
-				total: count,
-				hasMore: input.offset + input.limit < count,
-			};
-		}),
+		return {
+			reports: reportsList,
+			total: count,
+			hasMore: input.offset + input.limit < count,
+		};
+	}),
 
 	// Get report by ID (admin only)
-	getById: adminProcedure
-		.input(reportIdInput)
-		.query(async ({ input }) => {
-			const [reportData] = await db
-				.select({
-					report: reports,
-					generatedByUser: {
-						id: user.id,
-						name: user.name,
-						email: user.email,
-					},
-				})
-				.from(reports)
-				.leftJoin(user, eq(reports.generatedBy, user.id))
-				.where(eq(reports.id, input.id))
-				.limit(1);
+	getById: adminProcedure.input(reportIdInput).query(async ({ input }) => {
+		const [reportData] = await db
+			.select({
+				report: reports,
+				generatedByUser: {
+					id: user.id,
+					name: user.name,
+					email: user.email,
+				},
+			})
+			.from(reports)
+			.leftJoin(user, eq(reports.generatedBy, user.id))
+			.where(eq(reports.id, input.id))
+			.limit(1);
 
-			if (!reportData) {
-				throw new Error("Report not found");
-			}
+		if (!reportData) {
+			throw new Error("Report not found");
+		}
 
-			return reportData;
-		}),
+		return reportData;
+	}),
 
 	// Get dashboard statistics (admin only)
 	getDashboardStats: adminProcedure
@@ -223,7 +252,9 @@ export const reportsRouter = router({
 					.leftJoin(user, eq(transactions.agentId, user.id))
 					.where(and(...conditions, ...userConditions));
 			} else {
-				transactionStatsQuery.where(conditions.length > 0 ? and(...conditions) : undefined);
+				transactionStatsQuery.where(
+					conditions.length > 0 ? and(...conditions) : undefined,
+				);
 			}
 
 			const [transactionStats] = await transactionStatsQuery;
@@ -231,10 +262,14 @@ export const reportsRouter = router({
 			// Get approval statistics - FIXED: Properly define approvalConditions
 			const approvalConditions = [];
 			if (input.startDate) {
-				approvalConditions.push(gte(commissionApprovals.submittedAt, input.startDate));
+				approvalConditions.push(
+					gte(commissionApprovals.submittedAt, input.startDate),
+				);
 			}
 			if (input.endDate) {
-				approvalConditions.push(lte(commissionApprovals.submittedAt, input.endDate));
+				approvalConditions.push(
+					lte(commissionApprovals.submittedAt, input.endDate),
+				);
 			}
 
 			const approvalStatsQuery = db
@@ -253,7 +288,11 @@ export const reportsRouter = router({
 					.leftJoin(user, eq(commissionApprovals.agentId, user.id))
 					.where(and(...approvalConditions, ...userConditions));
 			} else {
-				approvalStatsQuery.where(approvalConditions.length > 0 ? and(...approvalConditions) : undefined);
+				approvalStatsQuery.where(
+					approvalConditions.length > 0
+						? and(...approvalConditions)
+						: undefined,
+				);
 			}
 
 			const [approvalStats] = await approvalStatsQuery;
@@ -291,8 +330,8 @@ export const reportsRouter = router({
 					and(
 						eq(performanceMetrics.periodType, "monthly"),
 						gte(performanceMetrics.periodStart, thirtyDaysAgo),
-						...(userConditions.length > 0 ? userConditions : [])
-					)
+						...(userConditions.length > 0 ? userConditions : []),
+					),
 				)
 				.orderBy(desc(performanceMetrics.totalCommission))
 				.limit(10);
@@ -322,7 +361,7 @@ export const reportsRouter = router({
 			}
 
 			// If team or agency filters are provided, join with user table
-			let query = db
+			const query = db
 				.select({
 					metrics: performanceMetrics,
 					agent: {
@@ -357,44 +396,68 @@ export const reportsRouter = router({
 				.orderBy(desc(performanceMetrics.periodStart));
 
 			// Aggregate data by period
-			const aggregatedData = performanceData.reduce((acc, item) => {
-				const periodKey = item.metrics.periodStart.toISOString().split('T')[0];
-				if (!acc[periodKey]) {
-					acc[periodKey] = {
-						period: periodKey,
-						totalTransactions: 0,
-						totalCommission: 0,
-						averageCommission: 0,
-						agentCount: 0,
-						agents: [],
-					};
-				}
+			const aggregatedData = performanceData.reduce(
+				(acc, item) => {
+					const periodKey = item.metrics.periodStart
+						.toISOString()
+						.split("T")[0];
+					if (!acc[periodKey]) {
+						acc[periodKey] = {
+							period: periodKey,
+							totalTransactions: 0,
+							totalCommission: 0,
+							averageCommission: 0,
+							agentCount: 0,
+							agents: [],
+						};
+					}
 
-				acc[periodKey].totalTransactions += item.metrics.totalTransactions;
-				acc[periodKey].totalCommission += parseFloat(item.metrics.totalCommission);
-				acc[periodKey].agentCount += 1;
-				acc[periodKey].agents.push({
-					...item.agent,
-					metrics: item.metrics,
-					team: item.team,
-					agency: item.agency,
-				});
+					acc[periodKey].totalTransactions += item.metrics.totalTransactions;
+					acc[periodKey].totalCommission += Number.parseFloat(
+						item.metrics.totalCommission,
+					);
+					acc[periodKey].agentCount += 1;
+					acc[periodKey].agents.push({
+						...item.agent,
+						metrics: item.metrics,
+						team: item.team,
+						agency: item.agency,
+					});
 
-				return acc;
-			}, {} as Record<string, any>);
+					return acc;
+				},
+				{} as Record<
+					string,
+					{
+						period: string;
+						totalCommission: number;
+						totalTransactions: number;
+						agentCount: number;
+						averageCommission?: number;
+						agents: unknown[];
+					}
+				>,
+			);
 
 			// Calculate averages
-			Object.values(aggregatedData).forEach((period: any) => {
+			for (const period of Object.values(aggregatedData)) {
 				period.averageCommission = period.totalCommission / period.agentCount;
-			});
+			}
 
 			return {
 				periods: Object.values(aggregatedData),
 				summary: {
 					totalPeriods: Object.keys(aggregatedData).length,
-					totalAgents: new Set(performanceData.map(p => p.metrics.agentId)).size,
-					overallCommission: Object.values(aggregatedData).reduce((sum: number, p: any) => sum + p.totalCommission, 0),
-					overallTransactions: Object.values(aggregatedData).reduce((sum: number, p: any) => sum + p.totalTransactions, 0),
+					totalAgents: new Set(performanceData.map((p) => p.metrics.agentId))
+						.size,
+					overallCommission: Object.values(aggregatedData).reduce(
+						(sum, p) => sum + p.totalCommission,
+						0,
+					),
+					overallTransactions: Object.values(aggregatedData).reduce(
+						(sum, p) => sum + p.totalTransactions,
+						0,
+					),
 				},
 			};
 		}),
@@ -412,18 +475,25 @@ export const reportsRouter = router({
 				conditions.push(eq(transactions.marketType, input.marketType));
 			}
 			if (input.transactionType) {
-				conditions.push(eq(transactions.transactionType, input.transactionType));
+				conditions.push(
+					eq(transactions.transactionType, input.transactionType),
+				);
 			}
 			if (input.agentIds && input.agentIds.length > 0) {
 				conditions.push(inArray(transactions.agentId, input.agentIds));
 			}
 
 			// Build date truncation based on groupBy
-			const dateTrunc = input.groupBy === "day" ? "day"
-				: input.groupBy === "week" ? "week"
-				: input.groupBy === "month" ? "month"
-				: input.groupBy === "quarter" ? "quarter"
-				: "year";
+			const dateTrunc =
+				input.groupBy === "day"
+					? "day"
+					: input.groupBy === "week"
+						? "week"
+						: input.groupBy === "month"
+							? "month"
+							: input.groupBy === "quarter"
+								? "quarter"
+								: "year";
 
 			const analyticsData = await db
 				.select({
@@ -457,28 +527,46 @@ export const reportsRouter = router({
 				timeSeriesData: analyticsData,
 				statusBreakdown,
 				summary: {
-					totalTransactions: analyticsData.reduce((sum, item) => sum + item.totalTransactions, 0),
-					totalCommission: analyticsData.reduce((sum, item) => sum + (item.totalCommission || 0), 0),
-					averageCommission: analyticsData.reduce((sum, item) => sum + (item.averageCommission || 0), 0) / analyticsData.length,
-					completionRate: analyticsData.reduce((sum, item) => sum + item.completedTransactions, 0) / 
-						analyticsData.reduce((sum, item) => sum + item.totalTransactions, 0) * 100,
+					totalTransactions: analyticsData.reduce(
+						(sum, item) => sum + item.totalTransactions,
+						0,
+					),
+					totalCommission: analyticsData.reduce(
+						(sum, item) => sum + (item.totalCommission || 0),
+						0,
+					),
+					averageCommission:
+						analyticsData.reduce(
+							(sum, item) => sum + (item.averageCommission || 0),
+							0,
+						) / analyticsData.length,
+					completionRate:
+						(analyticsData.reduce(
+							(sum, item) => sum + item.completedTransactions,
+							0,
+						) /
+							analyticsData.reduce(
+								(sum, item) => sum + item.totalTransactions,
+								0,
+							)) *
+						100,
 				},
 			};
 		}),
 
 	// Get co-broking reports (admin only)
 	getCoBrokingReports: adminProcedure
-		.input(z.object({
-			startDate: z.coerce.date().optional(),
-			endDate: z.coerce.date().optional(),
-			agencyName: z.string().optional(),
-			limit: z.number().min(1).max(100).default(50),
-			offset: z.number().min(0).default(0),
-		}))
+		.input(
+			z.object({
+				startDate: z.coerce.date().optional(),
+				endDate: z.coerce.date().optional(),
+				agencyName: z.string().optional(),
+				limit: z.number().min(1).max(100).default(50),
+				offset: z.number().min(0).default(0),
+			}),
+		)
 		.query(async ({ input }) => {
-			const conditions = [
-				eq(transactions.isCoBroking, true),
-			];
+			const conditions = [eq(transactions.isCoBroking, true)];
 
 			if (input.startDate) {
 				conditions.push(gte(transactions.createdAt, input.startDate));
@@ -512,10 +600,13 @@ export const reportsRouter = router({
 				.offset(input.offset);
 
 			// Filter by agency name if provided (post-query filter since it's in JSONB)
-			const filteredTransactions = input.agencyName
-				? coBrokingTransactions.filter(t =>
-					t.coBrokingData?.agencyName?.toLowerCase().includes(input.agencyName!.toLowerCase())
-				)
+			const agencyNameFilter = input.agencyName;
+			const filteredTransactions = agencyNameFilter
+				? coBrokingTransactions.filter((t) =>
+						t.coBrokingData?.agencyName
+							?.toLowerCase()
+							.includes(agencyNameFilter.toLowerCase()),
+					)
 				: coBrokingTransactions;
 
 			// Get total count
@@ -525,45 +616,77 @@ export const reportsRouter = router({
 				.where(and(...conditions));
 
 			// Aggregate by partner agency
-			const agencyAggregation = filteredTransactions.reduce((acc, t) => {
-				const agencyName = t.coBrokingData?.agencyName || 'Unknown Agency';
-				if (!acc[agencyName]) {
-					acc[agencyName] = {
-						agencyName,
-						totalDeals: 0,
-						totalCommission: 0,
-						averageSplit: 0,
-						agents: new Set<string>(),
-						transactions: [],
-					};
-				}
-				acc[agencyName].totalDeals += 1;
-				acc[agencyName].totalCommission += parseFloat(t.commissionAmount || '0');
-				acc[agencyName].averageSplit += t.coBrokingData?.commissionSplit || 0;
-				acc[agencyName].agents.add(t.coBrokingData?.agentName || 'Unknown');
-				acc[agencyName].transactions.push(t);
-				return acc;
-			}, {} as Record<string, any>);
+			const agencyAggregation = filteredTransactions.reduce(
+				(acc, t) => {
+					const agencyName = t.coBrokingData?.agencyName || "Unknown Agency";
+					if (!acc[agencyName]) {
+						acc[agencyName] = {
+							agencyName,
+							totalDeals: 0,
+							totalCommission: 0,
+							averageSplit: 0,
+							agents: new Set<string>(),
+							transactions: [],
+						};
+					}
+					acc[agencyName].totalDeals += 1;
+					acc[agencyName].totalCommission += Number.parseFloat(
+						t.commissionAmount || "0",
+					);
+					acc[agencyName].averageSplit += t.coBrokingData?.commissionSplit || 0;
+					acc[agencyName].agents.add(t.coBrokingData?.agentName || "Unknown");
+					acc[agencyName].transactions.push(t);
+					return acc;
+				},
+				{} as Record<
+					string,
+					{
+						agencyName: string;
+						totalDeals: number;
+						totalCommission: number;
+						averageSplit: number;
+						agents: Set<string>;
+						transactions: unknown[];
+					}
+				>,
+			);
 
 			// Calculate averages and convert Sets to arrays
-			const partnerAgencies = Object.values(agencyAggregation).map((agency: any) => ({
-				...agency,
-				averageSplit: agency.averageSplit / agency.totalDeals,
-				agents: Array.from(agency.agents),
-				agentCount: agency.agents.size,
-			}));
+			const partnerAgencies = Object.values(agencyAggregation).map(
+				(agency: {
+					totalDeals: number;
+					totalCommission: number;
+					averageSplit: number;
+					agents: Set<string>;
+					transactions: unknown[];
+				}) => ({
+					...agency,
+					averageSplit: agency.averageSplit / agency.totalDeals,
+					agents: Array.from(agency.agents),
+					agentCount: agency.agents.size,
+				}),
+			);
 
 			// Summary stats
 			const summary = {
 				totalCoBrokingDeals: filteredTransactions.length,
-				totalCoBrokingCommission: filteredTransactions.reduce((sum, t) => sum + parseFloat(t.commissionAmount || '0'), 0),
+				totalCoBrokingCommission: filteredTransactions.reduce(
+					(sum, t) => sum + Number.parseFloat(t.commissionAmount || "0"),
+					0,
+				),
 				uniquePartnerAgencies: partnerAgencies.length,
-				averageCommissionSplit: filteredTransactions.reduce((sum, t) => sum + (t.coBrokingData?.commissionSplit || 0), 0) / filteredTransactions.length || 0,
+				averageCommissionSplit:
+					filteredTransactions.reduce(
+						(sum, t) => sum + (t.coBrokingData?.commissionSplit || 0),
+						0,
+					) / filteredTransactions.length || 0,
 			};
 
 			return {
 				transactions: filteredTransactions,
-				partnerAgencies: partnerAgencies.sort((a, b) => b.totalDeals - a.totalDeals),
+				partnerAgencies: partnerAgencies.sort(
+					(a, b) => b.totalDeals - a.totalDeals,
+				),
 				summary,
 				totalCount,
 				hasMore: input.offset + input.limit < totalCount,
@@ -572,14 +695,18 @@ export const reportsRouter = router({
 
 	// Get client data with transaction history (admin only)
 	getClientData: adminProcedure
-		.input(z.object({
-			startDate: z.coerce.date().optional(),
-			endDate: z.coerce.date().optional(),
-			clientType: z.enum(['buyer', 'seller', 'tenant', 'landlord']).optional(),
-			searchQuery: z.string().optional(),
-			limit: z.number().min(1).max(100).default(50),
-			offset: z.number().min(0).default(0),
-		}))
+		.input(
+			z.object({
+				startDate: z.coerce.date().optional(),
+				endDate: z.coerce.date().optional(),
+				clientType: z
+					.enum(["buyer", "seller", "tenant", "landlord"])
+					.optional(),
+				searchQuery: z.string().optional(),
+				limit: z.number().min(1).max(100).default(50),
+				offset: z.number().min(0).default(0),
+			}),
+		)
 		.query(async ({ input }) => {
 			const conditions = [];
 
@@ -611,69 +738,98 @@ export const reportsRouter = router({
 				.orderBy(desc(transactions.createdAt));
 
 			// Filter by client type and search query
-			let filteredTransactions = transactionsWithClients.filter(t => t.clientData !== null);
+			let filteredTransactions = transactionsWithClients.filter(
+				(t) => t.clientData !== null,
+			);
 
 			if (input.clientType) {
-				filteredTransactions = filteredTransactions.filter(t =>
-					t.clientData?.type === input.clientType
+				filteredTransactions = filteredTransactions.filter(
+					(t) => t.clientData?.type === input.clientType,
 				);
 			}
 
 			if (input.searchQuery) {
 				const query = input.searchQuery.toLowerCase();
-				filteredTransactions = filteredTransactions.filter(t =>
-					t.clientData?.name?.toLowerCase().includes(query) ||
-					t.clientData?.email?.toLowerCase().includes(query) ||
-					t.clientData?.phone?.includes(query)
+				filteredTransactions = filteredTransactions.filter(
+					(t) =>
+						t.clientData?.name?.toLowerCase().includes(query) ||
+						t.clientData?.email?.toLowerCase().includes(query) ||
+						t.clientData?.phone?.includes(query),
 				);
 			}
 
 			// Group by client (using email as unique identifier)
-			const clientMap = filteredTransactions.reduce((acc, t) => {
-				const clientEmail = t.clientData?.email || 'unknown';
-				if (!acc[clientEmail]) {
-					acc[clientEmail] = {
-						client: t.clientData,
-						transactions: [],
-						totalValue: 0,
-						firstTransaction: t.createdAt,
-						lastTransaction: t.createdAt,
-					};
-				}
-				acc[clientEmail].transactions.push({
-					id: t.id,
-					agentName: t.agentName,
-					propertyAddress: t.propertyData?.address,
-					propertyPrice: t.propertyData?.price,
-					commissionAmount: t.commissionAmount,
-					transactionType: t.transactionType,
-					status: t.status,
-					transactionDate: t.transactionDate,
-				});
-				acc[clientEmail].totalValue += parseFloat(t.commissionAmount || '0');
-				if (t.createdAt < acc[clientEmail].firstTransaction) {
-					acc[clientEmail].firstTransaction = t.createdAt;
-				}
-				if (t.createdAt > acc[clientEmail].lastTransaction) {
-					acc[clientEmail].lastTransaction = t.createdAt;
-				}
-				return acc;
-			}, {} as Record<string, any>);
+			const clientMap = filteredTransactions.reduce(
+				(acc, t) => {
+					const clientEmail = t.clientData?.email || "unknown";
+					if (!acc[clientEmail]) {
+						acc[clientEmail] = {
+							client: t.clientData,
+							transactions: [],
+							totalValue: 0,
+							firstTransaction: t.createdAt,
+							lastTransaction: t.createdAt,
+						};
+					}
+					acc[clientEmail].transactions.push({
+						id: t.id,
+						agentName: t.agentName,
+						propertyAddress: t.propertyData?.address,
+						propertyPrice: t.propertyData?.price,
+						commissionAmount: t.commissionAmount,
+						transactionType: t.transactionType,
+						status: t.status,
+						transactionDate: t.transactionDate,
+					});
+					acc[clientEmail].totalValue += Number.parseFloat(
+						t.commissionAmount || "0",
+					);
+					if (t.createdAt < acc[clientEmail].firstTransaction) {
+						acc[clientEmail].firstTransaction = t.createdAt;
+					}
+					if (t.createdAt > acc[clientEmail].lastTransaction) {
+						acc[clientEmail].lastTransaction = t.createdAt;
+					}
+					return acc;
+				},
+				{} as Record<
+					string,
+					{
+						client: (typeof filteredTransactions)[number]["clientData"];
+						transactions: Array<{
+							id: string;
+							agentName: string | null;
+							propertyAddress: string | undefined;
+							propertyPrice: string | number | undefined;
+							commissionAmount: string | null;
+							transactionType: string | null;
+							status: string | null;
+							transactionDate: Date | null;
+						}>;
+						totalValue: number;
+						firstTransaction: Date;
+						lastTransaction: Date;
+					}
+				>,
+			);
 
 			const clients = Object.values(clientMap)
 				.sort((a, b) => b.totalValue - a.totalValue)
 				.slice(input.offset, input.offset + input.limit);
 
 			// Summary by client type
-			const clientTypeSummary = filteredTransactions.reduce((acc, t) => {
-				const type = t.clientData?.type || 'unknown';
-				if (!acc[type]) {
-					acc[type] = { count: 0, totalValue: 0 };
-				}
-				acc[type].count += 1;
-				acc[type].totalValue += parseFloat(t.commissionAmount || '0');
-				return acc;
-			}, {} as Record<string, { count: number; totalValue: number }>);
+			const clientTypeSummary = filteredTransactions.reduce(
+				(acc, t) => {
+					const type = t.clientData?.type || "unknown";
+					if (!acc[type]) {
+						acc[type] = { count: 0, totalValue: 0 };
+					}
+					acc[type].count += 1;
+					acc[type].totalValue += Number.parseFloat(t.commissionAmount || "0");
+					return acc;
+				},
+				{} as Record<string, { count: number; totalValue: number }>,
+			);
 
 			return {
 				clients,
@@ -684,36 +840,40 @@ export const reportsRouter = router({
 		}),
 
 	// Delete report (admin only)
-	delete: adminProcedure
-		.input(reportIdInput)
-		.mutation(async ({ input }) => {
-			const [deletedReport] = await db
-				.delete(reports)
-				.where(eq(reports.id, input.id))
-				.returning();
+	delete: adminProcedure.input(reportIdInput).mutation(async ({ input }) => {
+		const [deletedReport] = await db
+			.delete(reports)
+			.where(eq(reports.id, input.id))
+			.returning();
 
-			if (!deletedReport) {
-				throw new Error("Report not found");
-			}
+		if (!deletedReport) {
+			throw new Error("Report not found");
+		}
 
-			return { success: true };
-		}),
+		return { success: true };
+	}),
 });
 
 // Helper function to generate report data
-async function generateReportData(reportId: string, type: string, filters: any, startDate: Date, endDate: Date) {
+async function generateReportData(
+	reportId: string,
+	type: string,
+	filters: Record<string, unknown>,
+	startDate: Date,
+	endDate: Date,
+) {
 	// This is a simplified implementation
 	// In a real application, this would be much more comprehensive
-	
+
 	const summary = {
 		totalTransactions: 0,
 		totalCommission: 0,
 		averageCommission: 0,
-		topPerformers: [],
+		topPerformers: [] as unknown[],
 	};
 
-	const details: any[] = [];
-	const charts: any[] = [];
+	const details: unknown[] = [];
+	const charts: Array<{ type: string; title: string; data: unknown[] }> = [];
 
 	// Add basic chart structure
 	charts.push({

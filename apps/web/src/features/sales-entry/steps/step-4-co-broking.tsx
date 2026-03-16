@@ -1,7 +1,17 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { AlertTriangle, ArrowLeft, ArrowRight, Building, Mail, Percent, Phone, User, Users } from "lucide-react";
+import {
+	AlertTriangle,
+	ArrowLeft,
+	ArrowRight,
+	Building,
+	Mail,
+	Percent,
+	Phone,
+	User,
+	Users,
+} from "lucide-react";
 import { useForm } from "react-hook-form";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -32,7 +42,7 @@ import {
 	type CoBrokingData,
 	type RepresentationType,
 	createCoBrokingSchema,
-	representationTypeOptions
+	representationTypeOptions,
 } from "../transaction-schema";
 
 // Props for representation step - now includes market type for context-aware display
@@ -136,7 +146,7 @@ export function StepCoBroking({
 								name="representationType"
 								render={({ field }) => (
 									<FormItem className="space-y-4">
-										<FormLabel className="text-base font-medium">
+										<FormLabel className="font-medium text-base">
 											Select your representation type
 										</FormLabel>
 										<FormControl>
@@ -163,13 +173,12 @@ export function StepCoBroking({
 																<p className="font-medium leading-none">
 																	{option.label}
 																</p>
-																<p className="text-sm text-muted-foreground">
+																<p className="text-muted-foreground text-sm">
 																	{option.value === "direct"
 																		? getDirectRepresentationContext()
-																		: option.description
-																	}
+																		: option.description}
 																</p>
-																<p className="text-xs text-muted-foreground/80 mt-1">
+																<p className="mt-1 text-muted-foreground/80 text-xs">
 																	{option.commissionInfo}
 																</p>
 															</div>
@@ -322,77 +331,88 @@ export function StepCoBroking({
 																		field.onChange(Number(e.target.value));
 																		handleFormChange();
 																	}}
-															/>
-															<span className="text-sm text-muted-foreground">% to co-broker</span>
-														</div>
-														{/* Visual Split Indicator (Issue #6 fix) */}
-														<div className="space-y-2">
-															<div className="flex justify-between text-sm">
-																<span>Your share: {yourSplit}%</span>
-																<span>Co-broker share: {coBrokerSplit}%</span>
+																/>
+																<span className="text-muted-foreground text-sm">
+																	% to co-broker
+																</span>
 															</div>
-															<Progress value={yourSplit} className="h-2" />
+															{/* Visual Split Indicator (Issue #6 fix) */}
+															<div className="space-y-2">
+																<div className="flex justify-between text-sm">
+																	<span>Your share: {yourSplit}%</span>
+																	<span>Co-broker share: {coBrokerSplit}%</span>
+																</div>
+																<Progress value={yourSplit} className="h-2" />
+															</div>
 														</div>
-													</div>
-												</FormControl>
-												<FormDescription>
-													Percentage of commission going to the co-broking agent
-												</FormDescription>
-												<FormMessage />
-											</FormItem>
-										)}
-									/>
-								</div>
+													</FormControl>
+													<FormDescription>
+														Percentage of commission going to the co-broking
+														agent
+													</FormDescription>
+													<FormMessage />
+												</FormItem>
+											)}
+										/>
+									</div>
 
-								{/* Co-Broking Summary */}
-								{watchedValues.coBrokingData?.agentName &&
-									watchedValues.coBrokingData?.agencyName && (
-										<Card className="bg-muted/50">
-											<CardHeader>
-												<CardTitle className="flex items-center gap-2 text-lg">
-													<Building className="h-5 w-5" />
-													Co-Broking Summary
-												</CardTitle>
-											</CardHeader>
-											<CardContent className="space-y-2">
-												<div className="flex justify-between">
-													<span className="text-muted-foreground">Agent:</span>
-													<span className="font-medium">
-														{watchedValues.coBrokingData.agentName}
-													</span>
-												</div>
-												<div className="flex justify-between">
-													<span className="text-muted-foreground">Agency:</span>
-													<span className="font-medium">
-														{watchedValues.coBrokingData.agencyName}
-													</span>
-												</div>
-												{watchedValues.coBrokingData.agentPhone && (
+									{/* Co-Broking Summary */}
+									{watchedValues.coBrokingData?.agentName &&
+										watchedValues.coBrokingData?.agencyName && (
+											<Card className="bg-muted/50">
+												<CardHeader>
+													<CardTitle className="flex items-center gap-2 text-lg">
+														<Building className="h-5 w-5" />
+														Co-Broking Summary
+													</CardTitle>
+												</CardHeader>
+												<CardContent className="space-y-2">
 													<div className="flex justify-between">
-														<span className="text-muted-foreground">Phone:</span>
+														<span className="text-muted-foreground">
+															Agent:
+														</span>
 														<span className="font-medium">
-															{watchedValues.coBrokingData.agentPhone}
+															{watchedValues.coBrokingData.agentName}
 														</span>
 													</div>
-												)}
-												{watchedValues.coBrokingData.agentEmail && (
 													<div className="flex justify-between">
-														<span className="text-muted-foreground">Email:</span>
+														<span className="text-muted-foreground">
+															Agency:
+														</span>
 														<span className="font-medium">
-															{watchedValues.coBrokingData.agentEmail}
+															{watchedValues.coBrokingData.agencyName}
 														</span>
 													</div>
-												)}
-												<Separator className="my-2" />
-												<div className="flex justify-between font-medium">
-													<span>Commission Split:</span>
-													<span>
-														You: {yourSplit}% / Co-broker: {coBrokerSplit}%
-													</span>
-												</div>
-											</CardContent>
-										</Card>
-									)}
+													{watchedValues.coBrokingData.agentPhone && (
+														<div className="flex justify-between">
+															<span className="text-muted-foreground">
+																Phone:
+															</span>
+															<span className="font-medium">
+																{watchedValues.coBrokingData.agentPhone}
+															</span>
+														</div>
+													)}
+													{watchedValues.coBrokingData.agentEmail && (
+														<div className="flex justify-between">
+															<span className="text-muted-foreground">
+																Email:
+															</span>
+															<span className="font-medium">
+																{watchedValues.coBrokingData.agentEmail}
+															</span>
+														</div>
+													)}
+													<Separator className="my-2" />
+													<div className="flex justify-between font-medium">
+														<span>Commission Split:</span>
+														<span>
+															You: {yourSplit}% / Co-broker: {coBrokerSplit}%
+														</span>
+													</div>
+												</CardContent>
+											</Card>
+										)}
 								</>
 							)}
 
@@ -406,8 +426,9 @@ export function StepCoBroking({
 											<p className="text-sm">
 												{getDirectRepresentationContext()}
 											</p>
-											<p className="text-sm mt-2">
-												You will receive your full agent share of the commission.
+											<p className="mt-2 text-sm">
+												You will receive your full agent share of the
+												commission.
 											</p>
 										</div>
 									</CardContent>
@@ -425,10 +446,7 @@ export function StepCoBroking({
 									<ArrowLeft className="h-4 w-4" />
 									Back to Client
 								</Button>
-								<Button
-									type="submit"
-									className="flex items-center gap-2"
-								>
+								<Button type="submit" className="flex items-center gap-2">
 									Continue to Commission
 									<ArrowRight className="h-4 w-4" />
 								</Button>

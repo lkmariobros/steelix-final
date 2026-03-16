@@ -133,7 +133,7 @@ async function verifyConfiguration() {
 			),
 		};
 
-		console.log(`   CORS Headers:`, corsHeaders);
+		console.log("   CORS Headers:", corsHeaders);
 
 		if (response.status === 204 && corsHeaders["Access-Control-Allow-Origin"]) {
 			results.crossOriginWorking = true;
@@ -148,10 +148,10 @@ async function verifyConfiguration() {
 	// Summary
 	console.log("\n📊 VERIFICATION RESULTS:");
 	console.log("=".repeat(50));
-	Object.entries(results).forEach(([key, value]) => {
+	for (const [key, value] of Object.entries(results)) {
 		const status = value ? "✅" : "❌";
 		console.log(`${status} ${key}: ${value}`);
-	});
+	}
 
 	// Recommendations
 	console.log("\n🎯 RECOMMENDATIONS:");

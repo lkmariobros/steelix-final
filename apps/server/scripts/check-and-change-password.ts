@@ -34,7 +34,7 @@ async function checkUserExists() {
 		}
 
 		const user = userResult.rows[0];
-		console.log(`✅ User found!`);
+		console.log("✅ User found!");
 		console.log(`   ID: ${user.id}`);
 		console.log(`   Name: ${user.name}`);
 		console.log(`   Email: ${user.email}`);
@@ -189,7 +189,7 @@ async function main() {
 			console.log("==============================");
 			console.log(`✅ Password changed for: ${TARGET_EMAIL}`);
 			console.log(`🔑 New password: ${NEW_PASSWORD}`);
-			console.log(`📧 Email verified: Yes`);
+			console.log("📧 Email verified: Yes");
 			console.log("\n🚀 The user can now log in with:");
 			console.log(`   Email: ${TARGET_EMAIL}`);
 			console.log(`   Password: ${NEW_PASSWORD}`);

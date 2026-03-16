@@ -30,27 +30,31 @@ const useRelativeTime = (date: Date): string => {
 
 			if (diffInHours < 1) {
 				return "Just now";
-			} else if (diffInHours < 24) {
+			}
+			if (diffInHours < 24) {
 				return `${diffInHours}h ago`;
-			} else if (diffInHours < 168) {
+			}
+			if (diffInHours < 168) {
 				// 7 days
 				const days = Math.floor(diffInHours / 24);
 				return `${days}d ago`;
-			} else {
-				return date.toLocaleDateString("en-US", {
-					month: "short",
-					day: "numeric",
-					year: "numeric",
-				});
 			}
+			return date.toLocaleDateString("en-US", {
+				month: "short",
+				day: "numeric",
+				year: "numeric",
+			});
 		};
 
 		setRelativeTime(calculateRelativeTime());
 
 		// Only update every hour to prevent excessive re-renders
-		const interval = setInterval(() => {
-			setRelativeTime(calculateRelativeTime());
-		}, 60 * 60 * 1000); // Update every hour
+		const interval = setInterval(
+			() => {
+				setRelativeTime(calculateRelativeTime());
+			},
+			60 * 60 * 1000,
+		); // Update every hour
 
 		return () => clearInterval(interval);
 	}, [date]);

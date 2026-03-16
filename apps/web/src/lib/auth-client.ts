@@ -4,11 +4,11 @@ import { createAuthClient } from "better-auth/react";
 // The /api/auth proxy forwards requests to the backend server
 const getBaseURL = () => {
 	// On client-side, use relative URL to go through Next.js proxy
-	if (typeof window !== 'undefined') {
-		return ''; // Empty string means relative to current origin
+	if (typeof window !== "undefined") {
+		return ""; // Empty string means relative to current origin
 	}
 	// On server-side (SSR), use the full backend URL
-	return process.env.NEXT_PUBLIC_SERVER_URL || '';
+	return process.env.NEXT_PUBLIC_SERVER_URL || "";
 };
 
 export const authClient = createAuthClient({
@@ -24,7 +24,7 @@ export const authClient = createAuthClient({
 			});
 		},
 		onSuccess: (context) => {
-			if (process.env.NODE_ENV === 'development') {
+			if (process.env.NODE_ENV === "development") {
 				console.log("Better Auth Success:", {
 					request: context.request,
 					response: context.response,

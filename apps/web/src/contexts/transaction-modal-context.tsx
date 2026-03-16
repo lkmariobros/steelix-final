@@ -1,6 +1,12 @@
 "use client";
 
-import { createContext, useContext, useState, useCallback, type ReactNode } from "react";
+import {
+	type ReactNode,
+	createContext,
+	useCallback,
+	useContext,
+	useState,
+} from "react";
 
 export type TransactionModalMode = "create" | "edit" | "view" | "resume";
 
@@ -15,11 +21,11 @@ interface TransactionModalContextType {
 	isOpen: boolean;
 	mode: TransactionModalMode;
 	transactionId?: string;
-	
+
 	// Actions
 	openModal: (mode: TransactionModalMode, transactionId?: string) => void;
 	closeModal: () => void;
-	
+
 	// Convenience methods
 	openCreateModal: () => void;
 	openEditModal: (transactionId: string) => void;
@@ -27,13 +33,17 @@ interface TransactionModalContextType {
 	openResumeModal: () => void;
 }
 
-const TransactionModalContext = createContext<TransactionModalContextType | undefined>(undefined);
+const TransactionModalContext = createContext<
+	TransactionModalContextType | undefined
+>(undefined);
 
 interface TransactionModalProviderProps {
 	children: ReactNode;
 }
 
-export function TransactionModalProvider({ children }: TransactionModalProviderProps) {
+export function TransactionModalProvider({
+	children,
+}: TransactionModalProviderProps) {
 	const [state, setState] = useState<TransactionModalState>({
 		isOpen: false,
 		mode: "create",
@@ -41,16 +51,19 @@ export function TransactionModalProvider({ children }: TransactionModalProviderP
 	});
 
 	// ✅ Wrap in useCallback to prevent recreation
-	const openModal = useCallback((mode: TransactionModalMode, transactionId?: string) => {
-		setState({
-			isOpen: true,
-			mode,
-			transactionId,
-		});
-	}, []);
+	const openModal = useCallback(
+		(mode: TransactionModalMode, transactionId?: string) => {
+			setState({
+				isOpen: true,
+				mode,
+				transactionId,
+			});
+		},
+		[],
+	);
 
 	const closeModal = useCallback(() => {
-		setState(prev => ({
+		setState((prev) => ({
 			...prev,
 			isOpen: false,
 		}));
@@ -58,8 +71,14 @@ export function TransactionModalProvider({ children }: TransactionModalProviderP
 
 	// ✅ Wrap convenience methods too
 	const openCreateModal = useCallback(() => openModal("create"), [openModal]);
-	const openEditModal = useCallback((transactionId: string) => openModal("edit", transactionId), [openModal]);
-	const openViewModal = useCallback((transactionId: string) => openModal("view", transactionId), [openModal]);
+	const openEditModal = useCallback(
+		(transactionId: string) => openModal("edit", transactionId),
+		[openModal],
+	);
+	const openViewModal = useCallback(
+		(transactionId: string) => openModal("view", transactionId),
+		[openModal],
+	);
 	const openResumeModal = useCallback(() => openModal("resume"), [openModal]);
 
 	const contextValue: TransactionModalContextType = {
@@ -67,11 +86,11 @@ export function TransactionModalProvider({ children }: TransactionModalProviderP
 		isOpen: state.isOpen,
 		mode: state.mode,
 		transactionId: state.transactionId,
-		
+
 		// Actions
 		openModal,
 		closeModal,
-		
+
 		// Convenience methods
 		openCreateModal,
 		openEditModal,
@@ -89,14 +108,17 @@ export function TransactionModalProvider({ children }: TransactionModalProviderP
 export function useTransactionModal() {
 	const context = useContext(TransactionModalContext);
 	if (context === undefined) {
-		throw new Error("useTransactionModal must be used within a TransactionModalProvider");
+		throw new Error(
+			"useTransactionModal must be used within a TransactionModalProvider",
+		);
 	}
 	return context;
 }
 
 // Hook for components that just need to trigger the modal (lightweight)
 export function useTransactionModalActions() {
-	const { openCreateModal, openEditModal, openViewModal } = useTransactionModal();
+	const { openCreateModal, openEditModal, openViewModal } =
+		useTransactionModal();
 	return {
 		openCreateModal,
 		openEditModal,

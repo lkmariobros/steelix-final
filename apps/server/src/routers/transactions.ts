@@ -8,8 +8,11 @@ import {
 	selectTransactionSchema,
 	transactions,
 } from "../db/schema/transactions";
+import {
+	calculateEnhancedCommission,
+	logCommissionAudit,
+} from "../lib/agent-tier-utils";
 import { protectedProcedure, router } from "../lib/trpc";
-import { calculateEnhancedCommission, logCommissionAudit } from "../lib/agent-tier-utils";
 
 // Base transaction input schema (without validation)
 // All fields are optional to support draft saving with partial data
@@ -31,7 +34,11 @@ const baseTransactionInput = z.object({
 	clientData: z
 		.object({
 			name: z.string().min(1, "Client name is required"),
-			email: z.string().email("Valid email is required").optional().or(z.literal("")),
+			email: z
+				.string()
+				.email("Valid email is required")
+				.optional()
+				.or(z.literal("")),
 			phone: z.string().min(1, "Phone number is required"),
 			type: z.enum(["buyer", "seller", "tenant", "landlord"]),
 			source: z.string().min(1, "Client source is required"),
@@ -72,71 +79,83 @@ const baseTransactionInput = z.object({
 });
 
 // Input schemas with Primary Market → Sale validation and Co-broking validation
-const createTransactionInput = baseTransactionInput.refine(
-	(data: any) => {
-		// Primary market transactions must be sales
-		if (data.marketType === "primary") {
-			return data.transactionType === "sale";
-		}
-		return true;
-	},
-	{
-		message: "Primary market transactions must be sales",
-		path: ["transactionType"],
-	}
-).refine(
-	(data: any) => {
-		// If co-broking is enabled, validate required fields
-		if (data.isCoBroking && data.coBrokingData) {
-			const { agentName, agencyName, contactInfo } = data.coBrokingData;
-			return (
-				agentName && agentName.trim().length > 0 &&
-				agencyName && agencyName.trim().length > 0 &&
-				contactInfo && contactInfo.trim().length > 0
-			);
-		}
-		// If co-broking is disabled, it's valid
-		return true;
-	},
-	{
-		message: "Co-broking fields are required when co-broking is enabled",
-		path: ["coBrokingData"],
-	}
-);
+const createTransactionInput = baseTransactionInput
+	.refine(
+		(data: z.infer<typeof baseTransactionInput>) => {
+			// Primary market transactions must be sales
+			if (data.marketType === "primary") {
+				return data.transactionType === "sale";
+			}
+			return true;
+		},
+		{
+			message: "Primary market transactions must be sales",
+			path: ["transactionType"],
+		},
+	)
+	.refine(
+		(data) => {
+			// If co-broking is enabled, validate required fields
+			if ("isCoBroking" in data && data.isCoBroking && data.coBrokingData) {
+				const { agentName, agencyName, contactInfo } = data.coBrokingData;
+				return (
+					agentName &&
+					agentName.trim().length > 0 &&
+					agencyName &&
+					agencyName.trim().length > 0 &&
+					contactInfo &&
+					contactInfo.trim().length > 0
+				);
+			}
+			// If co-broking is disabled, it's valid
+			return true;
+		},
+		{
+			message: "Co-broking fields are required when co-broking is enabled",
+			path: ["coBrokingData"],
+		},
+	);
 
-const updateTransactionInput = baseTransactionInput.partial().extend({
-	id: z.string().uuid(),
-}).refine(
-	(data: any) => {
-		// Primary market transactions must be sales (only validate if both fields are present)
-		if (data.marketType === "primary" && data.transactionType) {
-			return data.transactionType === "sale";
-		}
-		return true;
-	},
-	{
-		message: "Primary market transactions must be sales",
-		path: ["transactionType"],
-	}
-).refine(
-	(data: any) => {
-		// If co-broking is enabled, validate required fields
-		if (data.isCoBroking && data.coBrokingData) {
-			const { agentName, agencyName, contactInfo } = data.coBrokingData;
-			return (
-				agentName && agentName.trim().length > 0 &&
-				agencyName && agencyName.trim().length > 0 &&
-				contactInfo && contactInfo.trim().length > 0
-			);
-		}
-		// If co-broking is disabled, it's valid
-		return true;
-	},
-	{
-		message: "Co-broking fields are required when co-broking is enabled",
-		path: ["coBrokingData"],
-	}
-);
+const updateTransactionInput = baseTransactionInput
+	.partial()
+	.extend({
+		id: z.string().uuid(),
+	})
+	.refine(
+		(data) => {
+			// Primary market transactions must be sales (only validate if both fields are present)
+			if (data.marketType === "primary" && data.transactionType) {
+				return data.transactionType === "sale";
+			}
+			return true;
+		},
+		{
+			message: "Primary market transactions must be sales",
+			path: ["transactionType"],
+		},
+	)
+	.refine(
+		(data) => {
+			// If co-broking is enabled, validate required fields
+			if ("isCoBroking" in data && data.isCoBroking && data.coBrokingData) {
+				const { agentName, agencyName, contactInfo } = data.coBrokingData;
+				return (
+					agentName &&
+					agentName.trim().length > 0 &&
+					agencyName &&
+					agencyName.trim().length > 0 &&
+					contactInfo &&
+					contactInfo.trim().length > 0
+				);
+			}
+			// If co-broking is disabled, it's valid
+			return true;
+		},
+		{
+			message: "Co-broking fields are required when co-broking is enabled",
+			path: ["coBrokingData"],
+		},
+	);
 
 const transactionIdInput = z.object({
 	id: z.string().uuid(),
@@ -401,13 +420,18 @@ export const transactionsRouter = router({
 		.input(enhancedCommissionInput)
 		.query(async ({ ctx, input }) => {
 			// Get user's tier information from enhanced session
-			const userSession = ctx.session.user as any;
-			const agentTier = (userSession.agentTier || 'advisor') as any;
-			const companyCommissionSplit = userSession.companyCommissionSplit || 60;
+			const userSession = ctx.session.user as typeof ctx.session.user & {
+				agentTier?: string;
+				companyCommissionSplit?: number;
+			};
+			type AgentTier = import("../db/schema/auth").AgentTier;
+			const agentTier: AgentTier =
+				(userSession.agentTier as AgentTier) || "advisor";
+			const companyCommissionSplit = userSession.companyCommissionSplit ?? 60;
 
 			// Calculate commission rate
 			let commissionRate: number;
-			if (input.commissionType === 'percentage') {
+			if (input.commissionType === "percentage") {
 				commissionRate = input.commissionValue;
 			} else {
 				// Convert fixed amount to percentage
@@ -420,7 +444,7 @@ export const transactionsRouter = router({
 				input.representationType,
 				agentTier,
 				companyCommissionSplit,
-				input.coBrokerSplitPercentage
+				input.coBrokerSplitPercentage,
 			);
 
 			return {
@@ -436,35 +460,52 @@ export const transactionsRouter = router({
 
 	// Create transaction with enhanced commission calculation
 	createWithEnhancedCommission: protectedProcedure
-		.input(baseTransactionInput.extend({
-			representationType: z.enum(["direct", "co_broking"]).default("direct"),
-			coBrokerSplitPercentage: z.number().min(0).max(100).optional().default(50),
-		}).refine(
-			(data: any) => {
-				// Primary market transactions must be sales
-				if (data.marketType === "primary") {
-					return data.transactionType === "sale";
-				}
-				return true;
-			},
-			{
-				message: "Primary market transactions must be sales",
-				path: ["transactionType"],
-			}
-		))
+		.input(
+			baseTransactionInput
+				.extend({
+					representationType: z
+						.enum(["direct", "co_broking"])
+						.default("direct"),
+					coBrokerSplitPercentage: z
+						.number()
+						.min(0)
+						.max(100)
+						.optional()
+						.default(50),
+				})
+				.refine(
+					(data: z.infer<typeof baseTransactionInput>) => {
+						// Primary market transactions must be sales
+						if (data.marketType === "primary") {
+							return data.transactionType === "sale";
+						}
+						return true;
+					},
+					{
+						message: "Primary market transactions must be sales",
+						path: ["transactionType"],
+					},
+				),
+		)
 		.mutation(async ({ ctx, input }) => {
 			// Get user's tier information
-			const userSession = ctx.session.user as any;
-			const agentTier = (userSession.agentTier || 'advisor') as any;
-			const companyCommissionSplit = userSession.companyCommissionSplit || 60;
+			const userSession = ctx.session.user as typeof ctx.session.user & {
+				agentTier?: string;
+				companyCommissionSplit?: number;
+			};
+			type AgentTier = import("../db/schema/auth").AgentTier;
+			const agentTier: AgentTier =
+				(userSession.agentTier as AgentTier) || "advisor";
+			const companyCommissionSplit = userSession.companyCommissionSplit ?? 60;
 
 			// Calculate enhanced commission
 			let commissionRate: number;
 			const commissionValue = input.commissionValue ?? 0;
-			if (input.commissionType === 'percentage') {
+			if (input.commissionType === "percentage") {
 				commissionRate = commissionValue;
 			} else {
-				commissionRate = (commissionValue / (input.propertyData?.price || 1)) * 100;
+				commissionRate =
+					(commissionValue / (input.propertyData?.price || 1)) * 100;
 			}
 
 			const commissionBreakdown = calculateEnhancedCommission(
@@ -473,7 +514,7 @@ export const transactionsRouter = router({
 				input.representationType,
 				agentTier,
 				companyCommissionSplit,
-				input.coBrokerSplitPercentage
+				input.coBrokerSplitPercentage,
 			);
 
 			const newTransaction = {
@@ -499,10 +540,10 @@ export const transactionsRouter = router({
 			await logCommissionAudit(
 				transaction.id,
 				ctx.session.user.id,
-				null, // No old values for new transaction
-				commissionBreakdown,
+				{}, // No old values for new transaction
+				commissionBreakdown as unknown as Record<string, unknown>,
 				ctx.session.user.id,
-				"Transaction created with enhanced commission calculation"
+				"Transaction created with enhanced commission calculation",
 			);
 
 			return {

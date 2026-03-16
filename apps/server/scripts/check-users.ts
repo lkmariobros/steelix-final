@@ -1,10 +1,10 @@
-import { db } from "../src/db/index.js";
 import { sql } from "drizzle-orm";
+import { db } from "../src/db/index.js";
 
 async function checkUsers() {
 	try {
 		console.log("🔍 Checking existing users...");
-		
+
 		// Get user information (without passwords for security)
 		const users = await db.execute(sql`
 			SELECT 
@@ -19,7 +19,7 @@ async function checkUsers() {
 			FROM "user" 
 			ORDER BY created_at
 		`);
-		
+
 		console.log("👥 Found users:");
 		users.rows?.forEach((user, index) => {
 			console.log(`\n${index + 1}. User Details:`);
@@ -31,7 +31,7 @@ async function checkUsers() {
 			console.log(`   💰 Commission Split: ${user.company_commission_split}%`);
 			console.log(`   📅 Created: ${user.created_at}`);
 		});
-		
+
 		// Check account table structure first
 		const accountColumns = await db.execute(sql`
 			SELECT column_name, data_type
@@ -41,13 +41,17 @@ async function checkUsers() {
 			ORDER BY column_name
 		`);
 
-		console.log(`\n🔐 Account table columns:`);
-		accountColumns.rows?.forEach(c => console.log(`   ${c.column_name} (${c.data_type})`));
+		console.log("\n🔐 Account table columns:");
+		for (const c of accountColumns.rows ?? []) {
+			console.log(`   ${c.column_name} (${c.data_type})`);
+		}
 
 		// Check if there are any account records
-		const accounts = await db.execute(sql`SELECT COUNT(*) as count FROM "account"`);
+		const accounts = await db.execute(
+			sql`SELECT COUNT(*) as count FROM "account"`,
+		);
 		console.log(`\n🔐 Found ${accounts.rows?.[0]?.count || 0} account records`);
-		
+
 		// Check sessions
 		const sessions = await db.execute(sql`
 			SELECT 
@@ -57,9 +61,8 @@ async function checkUsers() {
 			FROM "session"
 			WHERE expires_at > NOW()
 		`);
-		
+
 		console.log(`\n🎫 Found ${sessions.rows?.length || 0} active sessions`);
-		
 	} catch (error) {
 		console.error("❌ Error checking users:", error);
 		throw error;

@@ -64,9 +64,7 @@ export const whatsappConversations = pgTable(
 		assignedAgentIdIdx: index("idx_whatsapp_conv_assigned_agent_id").on(
 			table.assignedAgentId,
 		),
-		prospectIdIdx: index("idx_whatsapp_conv_prospect_id").on(
-			table.prospectId,
-		),
+		prospectIdIdx: index("idx_whatsapp_conv_prospect_id").on(table.prospectId),
 	}),
 );
 
@@ -87,7 +85,9 @@ export const whatsappMessages = pgTable(
 		direction: messageDirectionEnum("direction").notNull(),
 		status: messageStatusEnum("status").default("pending").notNull(),
 		// Track which agent sent/received (for outbound, it's the agent; for inbound, it's null)
-		agentId: text("agent_id").references(() => user.id, { onDelete: "set null" }),
+		agentId: text("agent_id").references(() => user.id, {
+			onDelete: "set null",
+		}),
 		// Auto-reply tracking
 		isAutoReply: boolean("is_auto_reply").default(false).notNull(),
 		autoReplyRuleId: uuid("auto_reply_rule_id"), // References auto_reply_rules.id

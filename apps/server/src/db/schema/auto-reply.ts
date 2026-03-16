@@ -28,10 +28,12 @@ export const autoReplyRules = pgTable(
 	{
 		id: uuid("id").primaryKey().defaultRandom(),
 		// Trigger configuration stored as JSONB
-		trigger: jsonb("trigger").$type<{
-			type: "contains" | "equals" | "starts_with" | "regex";
-			keywords: string[];
-		}>().notNull(),
+		trigger: jsonb("trigger")
+			.$type<{
+				type: "contains" | "equals" | "starts_with" | "regex";
+				keywords: string[];
+			}>()
+			.notNull(),
 		response: text("response").notNull(),
 		messageOwner: text("message_owner").notNull(), // Agent/user name who created this rule
 		status: userStatusEnum("status").notNull(), // User status: tenant or owner
@@ -88,7 +90,9 @@ export const userStatusSchema = z.enum(["tenant", "owner"]);
 
 export const triggerSchema = z.object({
 	type: triggerTypeSchema,
-	keywords: z.array(z.string().min(1)).min(1, "At least one keyword is required"),
+	keywords: z
+		.array(z.string().min(1))
+		.min(1, "At least one keyword is required"),
 });
 
 export const insertAutoReplyRuleSchema = z.object({
@@ -110,9 +114,11 @@ export const selectAutoReplyRuleSchema = z.object({
 	updatedAt: z.string().datetime().or(z.date()),
 });
 
-export const updateAutoReplyRuleSchema = insertAutoReplyRuleSchema.partial().extend({
-	id: z.string(),
-});
+export const updateAutoReplyRuleSchema = insertAutoReplyRuleSchema
+	.partial()
+	.extend({
+		id: z.string(),
+	});
 
 // TypeScript types
 export type TriggerType = z.infer<typeof triggerTypeSchema>;

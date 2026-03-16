@@ -1,12 +1,12 @@
 /**
  * Auto-Reply Rule Execution Engine
- * 
+ *
  * This module processes incoming messages and executes matching auto-reply rules.
  */
 
+import { and, eq } from "drizzle-orm";
 import { db } from "../db";
 import { autoReplyRules } from "../db/schema/auto-reply";
-import { eq, and } from "drizzle-orm";
 import { getKapsoClient } from "./kapso";
 
 interface MessageToProcess {
@@ -129,11 +129,12 @@ export async function processAutoReply(
 
 		// No matching rule found
 		return { matched: false };
-	} catch (error: any) {
+	} catch (error: unknown) {
 		console.error("❌ Auto-reply processing error:", error);
 		return {
 			matched: false,
-			error: error.message || "Failed to process auto-reply",
+			error:
+				error instanceof Error ? error.message : "Failed to process auto-reply",
 		};
 	}
 }

@@ -1,12 +1,22 @@
 "use client";
 
 import { AppSidebar } from "@/components/app-sidebar";
+import { HeaderActions } from "@/components/header-actions";
 import { Separator } from "@/components/separator";
 import {
 	SidebarInset,
 	SidebarProvider,
 	SidebarTrigger,
 } from "@/components/sidebar";
+import {
+	Table,
+	TableBody,
+	TableCell,
+	TableHead,
+	TableHeader,
+	TableRow,
+} from "@/components/table";
+import { Badge } from "@/components/ui/badge";
 import {
 	Breadcrumb,
 	BreadcrumbItem,
@@ -15,7 +25,6 @@ import {
 	BreadcrumbPage,
 	BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
 	Card,
@@ -32,16 +41,7 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
-import {
-	Table,
-	TableBody,
-	TableCell,
-	TableHead,
-	TableHeader,
-	TableRow,
-} from "@/components/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { HeaderActions } from "@/components/header-actions";
 import { authClient } from "@/lib/auth-client";
 import { trpc } from "@/utils/trpc";
 import {
@@ -57,7 +57,7 @@ import {
 	RiUserLine,
 } from "@remixicon/react";
 import { useRouter } from "next/navigation";
-import { useState, useMemo, useCallback } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 export default function AdminReportsPage() {
 	const router = useRouter();
@@ -73,10 +73,14 @@ export default function AdminReportsPage() {
 	// Memoize date calculations to prevent infinite query loops
 	const dateRange = useMemo(() => {
 		const endDate = new Date();
-		const startDate = timeRange === '7d' ? new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) :
-						  timeRange === '30d' ? new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) :
-						  timeRange === '90d' ? new Date(Date.now() - 90 * 24 * 60 * 60 * 1000) :
-						  new Date(Date.now() - 365 * 24 * 60 * 60 * 1000);
+		const startDate =
+			timeRange === "7d"
+				? new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+				: timeRange === "30d"
+					? new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+					: timeRange === "90d"
+						? new Date(Date.now() - 90 * 24 * 60 * 60 * 1000)
+						: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000);
 		return { startDate, endDate };
 	}, [timeRange]);
 
@@ -91,118 +95,154 @@ export default function AdminReportsPage() {
 		};
 
 	// Get dashboard statistics
-	const { data: dashboardStats, isLoading: isLoadingStats } = trpc.reports.getDashboardStats.useQuery({
-		startDate: dateRange.startDate,
-		endDate: dateRange.endDate,
-	}, {
-		enabled: !!session && !!roleData?.hasAdminAccess,
-		staleTime: 5 * 60 * 1000,
-		refetchOnWindowFocus: false,
-	});
+	const { data: dashboardStats, isLoading: isLoadingStats } =
+		trpc.reports.getDashboardStats.useQuery(
+			{
+				startDate: dateRange.startDate,
+				endDate: dateRange.endDate,
+			},
+			{
+				enabled: !!session && !!roleData?.hasAdminAccess,
+				staleTime: 5 * 60 * 1000,
+				refetchOnWindowFocus: false,
+			},
+		);
 
 	// Get performance analytics
-	const { data: performanceAnalytics, isLoading: isLoadingPerformance } = trpc.reports.getPerformanceAnalytics.useQuery({
-		periodType: 'monthly',
-		startDate: dateRange.startDate,
-		endDate: dateRange.endDate,
-	}, {
-		enabled: !!session && !!roleData?.hasAdminAccess,
-		staleTime: 5 * 60 * 1000,
-		refetchOnWindowFocus: false,
-	});
+	const { data: performanceAnalytics, isLoading: isLoadingPerformance } =
+		trpc.reports.getPerformanceAnalytics.useQuery(
+			{
+				periodType: "monthly",
+				startDate: dateRange.startDate,
+				endDate: dateRange.endDate,
+			},
+			{
+				enabled: !!session && !!roleData?.hasAdminAccess,
+				staleTime: 5 * 60 * 1000,
+				refetchOnWindowFocus: false,
+			},
+		);
 
 	// Get co-broking reports
-	const { data: coBrokingData, isLoading: isLoadingCoBroking } = trpc.reports.getCoBrokingReports.useQuery({
-		startDate: dateRange.startDate,
-		endDate: dateRange.endDate,
-		agencyName: agencySearch || undefined,
-	}, {
-		enabled: !!session && !!roleData?.hasAdminAccess && activeTab === 'co-broking',
-		staleTime: 5 * 60 * 1000,
-		refetchOnWindowFocus: false,
-	});
+	const { data: coBrokingData, isLoading: isLoadingCoBroking } =
+		trpc.reports.getCoBrokingReports.useQuery(
+			{
+				startDate: dateRange.startDate,
+				endDate: dateRange.endDate,
+				agencyName: agencySearch || undefined,
+			},
+			{
+				enabled:
+					!!session && !!roleData?.hasAdminAccess && activeTab === "co-broking",
+				staleTime: 5 * 60 * 1000,
+				refetchOnWindowFocus: false,
+			},
+		);
 
 	// Get client data
-	const { data: clientData, isLoading: isLoadingClients } = trpc.reports.getClientData.useQuery({
-		startDate: dateRange.startDate,
-		endDate: dateRange.endDate,
-		clientType: clientTypeFilter !== 'all' ? clientTypeFilter as any : undefined,
-		searchQuery: searchQuery || undefined,
-	}, {
-		enabled: !!session && !!roleData?.hasAdminAccess && activeTab === 'clients',
-		staleTime: 5 * 60 * 1000,
-		refetchOnWindowFocus: false,
-	});
+	const { data: clientData, isLoading: isLoadingClients } =
+		trpc.reports.getClientData.useQuery(
+			{
+				startDate: dateRange.startDate,
+				endDate: dateRange.endDate,
+				clientType:
+					clientTypeFilter !== "all"
+						? ((clientTypeFilter === "owner" ? "buyer" : clientTypeFilter) as
+								| "buyer"
+								| "seller"
+								| "tenant"
+								| "landlord")
+						: undefined,
+				searchQuery: searchQuery || undefined,
+			},
+			{
+				enabled:
+					!!session && !!roleData?.hasAdminAccess && activeTab === "clients",
+				staleTime: 5 * 60 * 1000,
+				refetchOnWindowFocus: false,
+			},
+		);
 
 	// Get utils for invalidation after mutations
 	const utils = trpc.useUtils();
 
 	// CSV Export function
-	const exportToCSV = useCallback((data: any[], filename: string) => {
-		if (!data || data.length === 0) return;
+	const exportToCSV = useCallback(
+		(data: Record<string, unknown>[], filename: string) => {
+			if (!data || data.length === 0) return;
 
-		const headers = Object.keys(data[0]);
-		const csvContent = [
-			headers.join(','),
-			...data.map(row =>
-				headers.map(header => {
-					const value = row[header];
-					if (value === null || value === undefined) return '';
-					if (typeof value === 'object') return `"${JSON.stringify(value).replace(/"/g, '""')}"`;
-					if (typeof value === 'string' && (value.includes(',') || value.includes('"'))) {
-						return `"${value.replace(/"/g, '""')}"`;
-					}
-					return value;
-				}).join(',')
-			)
-		].join('\n');
+			const headers = Object.keys(data[0] as Record<string, unknown>);
+			const csvContent = [
+				headers.join(","),
+				...data.map((row) =>
+					headers
+						.map((header) => {
+							const value = (row as Record<string, unknown>)[header];
+							if (value === null || value === undefined) return "";
+							if (typeof value === "object")
+								return `"${JSON.stringify(value).replace(/"/g, '""')}"`;
+							if (
+								typeof value === "string" &&
+								(value.includes(",") || value.includes('"'))
+							) {
+								return `"${value.replace(/"/g, '""')}"`;
+							}
+							return String(value);
+						})
+						.join(","),
+				),
+			].join("\n");
 
-		const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-		const link = document.createElement('a');
-		link.href = URL.createObjectURL(blob);
-		link.download = `${filename}_${new Date().toISOString().split('T')[0]}.csv`;
-		link.click();
-	}, []);
+			const blob = new Blob([csvContent], {
+				type: "text/csv;charset=utf-8;",
+			});
+			const link = document.createElement("a");
+			link.href = URL.createObjectURL(blob);
+			link.download = `${filename}_${new Date().toISOString().split("T")[0]}.csv`;
+			link.click();
+		},
+		[],
+	);
 
 	// Export handlers
 	const handleExportCoBroking = useCallback(() => {
 		if (!coBrokingData?.transactions) return;
-		const exportData = coBrokingData.transactions.map(t => ({
+		const exportData = coBrokingData.transactions.map((t) => ({
 			transactionId: t.id,
 			ourAgent: t.agentName,
-			partnerAgentName: t.coBrokingData?.agentName || '',
-			partnerAgencyName: t.coBrokingData?.agencyName || '',
-			partnerContact: t.coBrokingData?.contactInfo || '',
+			partnerAgentName: t.coBrokingData?.agentName || "",
+			partnerAgencyName: t.coBrokingData?.agencyName || "",
+			partnerContact: t.coBrokingData?.contactInfo || "",
 			commissionSplit: t.coBrokingData?.commissionSplit || 0,
-			propertyAddress: t.propertyData?.address || '',
+			propertyAddress: t.propertyData?.address || "",
 			commissionAmount: t.commissionAmount,
 			transactionType: t.transactionType,
 			status: t.status,
 			transactionDate: t.transactionDate,
 		}));
-		exportToCSV(exportData, 'co_broking_report');
+		exportToCSV(exportData, "co_broking_report");
 	}, [coBrokingData, exportToCSV]);
 
 	const handleExportClients = useCallback(() => {
 		if (!clientData?.clients) return;
-		const exportData = clientData.clients.flatMap((c: any) =>
-			c.transactions.map((t: any) => ({
-				clientName: c.client?.name || '',
-				clientEmail: c.client?.email || '',
-				clientPhone: c.client?.phone || '',
-				clientType: c.client?.type || '',
-				clientSource: c.client?.source || '',
+		const exportData = clientData.clients.flatMap((c) =>
+			c.transactions.map((t) => ({
+				clientName: c.client?.name || "",
+				clientEmail: c.client?.email || "",
+				clientPhone: c.client?.phone || "",
+				clientType: c.client?.type || "",
+				clientSource: c.client?.source || "",
 				transactionId: t.id,
 				agentName: t.agentName,
-				propertyAddress: t.propertyAddress || '',
-				propertyPrice: t.propertyPrice || '',
+				propertyAddress: t.propertyAddress || "",
+				propertyPrice: t.propertyPrice || "",
 				commissionAmount: t.commissionAmount,
 				transactionType: t.transactionType,
 				status: t.status,
 				transactionDate: t.transactionDate,
-			}))
+			})),
 		);
-		exportToCSV(exportData, 'client_export');
+		exportToCSV(exportData, "client_export");
 	}, [clientData, exportToCSV]);
 
 	// Show loading while checking authentication and role
@@ -303,7 +343,8 @@ export default function AdminReportsPage() {
 								Reports & Analytics
 							</h1>
 							<p className="text-muted-foreground text-sm">
-								Business intelligence, co-broking reports, and client management.
+								Business intelligence, co-broking reports, and client
+								management.
 							</p>
 						</div>
 
@@ -330,8 +371,12 @@ export default function AdminReportsPage() {
 					</div>
 
 					{/* Main Tabs Interface */}
-					<Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-						<TabsList className="grid w-full grid-cols-3 lg:w-auto lg:inline-flex">
+					<Tabs
+						value={activeTab}
+						onValueChange={setActiveTab}
+						className="space-y-4"
+					>
+						<TabsList className="grid w-full grid-cols-3 lg:inline-flex lg:w-auto">
 							<TabsTrigger value="analytics" className="gap-2">
 								<RiBarChartLine className="size-4" />
 								<span className="hidden sm:inline">Analytics</span>
@@ -352,42 +397,53 @@ export default function AdminReportsPage() {
 							<div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
 								<Card>
 									<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-										<CardTitle className="font-medium text-sm">Total Revenue</CardTitle>
+										<CardTitle className="font-medium text-sm">
+											Total Revenue
+										</CardTitle>
 										<RiBarChartLine className="h-4 w-4 text-muted-foreground" />
 									</CardHeader>
 									<CardContent>
 										{isLoadingStats ? (
 											<div className="space-y-2">
-												<div className="h-8 w-24 bg-muted animate-pulse rounded" />
-												<div className="h-3 w-32 bg-muted animate-pulse rounded" />
+												<div className="h-8 w-24 animate-pulse rounded bg-muted" />
+												<div className="h-3 w-32 animate-pulse rounded bg-muted" />
 											</div>
 										) : (
 											<>
 												<div className="font-bold text-2xl">
-													${(dashboardStats?.transactions?.totalCommission || 0).toLocaleString()}
+													$
+													{(
+														dashboardStats?.transactions?.totalCommission || 0
+													).toLocaleString()}
 												</div>
-												<p className="text-muted-foreground text-xs">Total commission value</p>
+												<p className="text-muted-foreground text-xs">
+													Total commission value
+												</p>
 											</>
 										)}
 									</CardContent>
 								</Card>
 								<Card>
 									<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-										<CardTitle className="font-medium text-sm">Transactions</CardTitle>
+										<CardTitle className="font-medium text-sm">
+											Transactions
+										</CardTitle>
 										<RiFileTextLine className="h-4 w-4 text-muted-foreground" />
 									</CardHeader>
 									<CardContent>
 										{isLoadingStats ? (
 											<div className="space-y-2">
-												<div className="h-8 w-16 bg-muted animate-pulse rounded" />
-												<div className="h-3 w-24 bg-muted animate-pulse rounded" />
+												<div className="h-8 w-16 animate-pulse rounded bg-muted" />
+												<div className="h-3 w-24 animate-pulse rounded bg-muted" />
 											</div>
 										) : (
 											<>
 												<div className="font-bold text-2xl">
 													{dashboardStats?.transactions?.totalTransactions || 0}
 												</div>
-												<p className="text-muted-foreground text-xs">Total transactions</p>
+												<p className="text-muted-foreground text-xs">
+													Total transactions
+												</p>
 											</>
 										)}
 									</CardContent>
@@ -399,36 +455,45 @@ export default function AdminReportsPage() {
 									<CardContent>
 										{isLoadingStats ? (
 											<div className="space-y-2">
-												<div className="h-8 w-20 bg-muted animate-pulse rounded" />
-												<div className="h-3 w-24 bg-muted animate-pulse rounded" />
+												<div className="h-8 w-20 animate-pulse rounded bg-muted" />
+												<div className="h-3 w-24 animate-pulse rounded bg-muted" />
 											</div>
 										) : (
 											<>
 												<div className="font-bold text-2xl">
-													${(dashboardStats?.transactions?.averageCommission || 0).toLocaleString()}
+													$
+													{(
+														dashboardStats?.transactions?.averageCommission || 0
+													).toLocaleString()}
 												</div>
-												<p className="text-muted-foreground text-xs">Average per transaction</p>
+												<p className="text-muted-foreground text-xs">
+													Average per transaction
+												</p>
 											</>
 										)}
 									</CardContent>
 								</Card>
 								<Card>
 									<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-										<CardTitle className="font-medium text-sm">Active Agents</CardTitle>
+										<CardTitle className="font-medium text-sm">
+											Active Agents
+										</CardTitle>
 										<RiGroupLine className="h-4 w-4 text-muted-foreground" />
 									</CardHeader>
 									<CardContent>
 										{isLoadingStats ? (
 											<div className="space-y-2">
-												<div className="h-8 w-16 bg-muted animate-pulse rounded" />
-												<div className="h-3 w-24 bg-muted animate-pulse rounded" />
+												<div className="h-8 w-16 animate-pulse rounded bg-muted" />
+												<div className="h-3 w-24 animate-pulse rounded bg-muted" />
 											</div>
 										) : (
 											<>
 												<div className="font-bold text-2xl">
 													{dashboardStats?.agents?.totalAgents || 0}
 												</div>
-												<p className="text-muted-foreground text-xs">Active agents</p>
+												<p className="text-muted-foreground text-xs">
+													Active agents
+												</p>
 											</>
 										)}
 									</CardContent>
@@ -439,77 +504,130 @@ export default function AdminReportsPage() {
 							<Card>
 								<CardHeader>
 									<CardTitle>Performance Analytics</CardTitle>
-									<CardDescription>Agent performance and top performers overview</CardDescription>
+									<CardDescription>
+										Agent performance and top performers overview
+									</CardDescription>
 								</CardHeader>
 								<CardContent>
 									{isLoadingPerformance ? (
 										<div className="space-y-6">
 											<div className="space-y-2">
-												<div className="h-4 w-32 bg-muted animate-pulse rounded" />
-												<div className="h-32 w-full bg-muted animate-pulse rounded" />
+												<div className="h-4 w-32 animate-pulse rounded bg-muted" />
+												<div className="h-32 w-full animate-pulse rounded bg-muted" />
 											</div>
 										</div>
-									) : performanceAnalytics && performanceAnalytics.periods && performanceAnalytics.periods.length > 0 ? (
+									) : performanceAnalytics?.periods &&
+										performanceAnalytics.periods.length > 0 ? (
 										<div className="space-y-6">
 											<div>
-												<h4 className="font-medium mb-3">Performance Overview</h4>
+												<h4 className="mb-3 font-medium">
+													Performance Overview
+												</h4>
 												<div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-													{performanceAnalytics.periods.slice(0, 6).map((metric: any, index: number) => (
-														<div key={index} className="p-4 border rounded-lg">
-															<div className="flex items-center justify-between mb-2">
-																<span className="text-sm font-medium">Period Performance</span>
-																<span className="text-xs text-muted-foreground">
-																	{metric.periodStart ? new Date(metric.periodStart).toLocaleDateString() : 'N/A'}
-																</span>
-															</div>
-															<div className="space-y-1">
-																<div className="text-lg font-semibold">
-																	${Number(metric.totalCommissionEarned || 0).toLocaleString()}
+													{performanceAnalytics.periods
+														.slice(0, 6)
+														.map((metric, idx) => (
+															<div
+																key={
+																	("periodStart" in metric
+																		? String(metric.periodStart)
+																		: metric.period) ?? idx
+																}
+																className="rounded-lg border p-4"
+															>
+																<div className="mb-2 flex items-center justify-between">
+																	<span className="font-medium text-sm">
+																		Period Performance
+																	</span>
+																	<span className="text-muted-foreground text-xs">
+																		{"periodStart" in metric &&
+																		metric.periodStart
+																			? new Date(
+																					metric.periodStart as string,
+																				).toLocaleDateString()
+																			: (metric.period ?? "N/A")}
+																	</span>
 																</div>
-																<div className="text-sm text-muted-foreground">
-																	{metric.transactionCount || 0} transactions
+																<div className="space-y-1">
+																	<div className="font-semibold text-lg">
+																		$
+																		{Number(
+																			("totalCommissionEarned" in metric
+																				? metric.totalCommissionEarned
+																				: metric.totalCommission) || 0,
+																		).toLocaleString()}
+																	</div>
+																	<div className="text-muted-foreground text-sm">
+																		{Number(
+																			"transactionCount" in metric
+																				? metric.transactionCount
+																				: metric.totalTransactions || 0,
+																		)}{" "}
+																		transactions
+																	</div>
 																</div>
 															</div>
-														</div>
-													))}
+														))}
 												</div>
 											</div>
 
 											<div>
-												<h4 className="font-medium mb-3">Top Performers</h4>
+												<h4 className="mb-3 font-medium">Top Performers</h4>
 												<div className="space-y-2">
-													{dashboardStats?.topPerformers?.slice(0, 5).map((performer: any, index: number) => (
-														<div key={index} className="flex items-center justify-between p-3 border rounded-lg">
-															<div className="flex items-center gap-3">
-																<div className="h-8 w-8 bg-primary/10 rounded-full flex items-center justify-center">
-																	<span className="text-sm font-medium text-primary">{index + 1}</span>
+													{dashboardStats?.topPerformers
+														?.slice(0, 5)
+														.map((performer, idx) => (
+															<div
+																key={performer.agentId ?? idx}
+																className="flex items-center justify-between rounded-lg border p-3"
+															>
+																<div className="flex items-center gap-3">
+																	<div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10">
+																		<span className="font-medium text-primary text-sm">
+																			{idx + 1}
+																		</span>
+																	</div>
+																	<div>
+																		<div className="font-medium">
+																			{performer.agentName}
+																		</div>
+																		<div className="text-muted-foreground text-sm">
+																			{performer.totalTransactions} transactions
+																		</div>
+																	</div>
 																</div>
-																<div>
-																	<div className="font-medium">{performer.agentName}</div>
-																	<div className="text-sm text-muted-foreground">
-																		{performer.totalTransactions} transactions
+																<div className="text-right">
+																	<div className="font-semibold">
+																		$
+																		{Number(
+																			performer.totalCommission || 0,
+																		).toLocaleString()}
+																	</div>
+																	<div className="text-muted-foreground text-sm">
+																		Commission earned
 																	</div>
 																</div>
 															</div>
-															<div className="text-right">
-																<div className="font-semibold">
-																	${Number(performer.totalCommission || 0).toLocaleString()}
-																</div>
-																<div className="text-sm text-muted-foreground">Commission earned</div>
-															</div>
-														</div>
-													)) || (
-														<p className="text-muted-foreground text-center py-4">No performance data available</p>
+														)) || (
+														<p className="py-4 text-center text-muted-foreground">
+															No performance data available
+														</p>
 													)}
 												</div>
 											</div>
 										</div>
 									) : (
 										<div className="py-8 text-center">
-											<RiBarChartLine size={48} className="mx-auto mb-4 text-muted-foreground" />
-											<h3 className="mb-2 font-semibold text-lg">No Analytics Data</h3>
+											<RiBarChartLine
+												size={48}
+												className="mx-auto mb-4 text-muted-foreground"
+											/>
+											<h3 className="mb-2 font-semibold text-lg">
+												No Analytics Data
+											</h3>
 											<p className="mb-4 text-muted-foreground">
-												No analytics data available for the selected time period.
+												No analytics data available for the selected time
+												period.
 											</p>
 											<Button variant="outline" onClick={handleRefresh}>
 												<RiRefreshLine className="mr-2 h-4 w-4" />
@@ -532,18 +650,24 @@ export default function AdminReportsPage() {
 												<RiShakeHandsLine className="size-5" />
 												Co-Broking Reports
 											</CardTitle>
-											<CardDescription>Track co-broking transactions with external agencies</CardDescription>
+											<CardDescription>
+												Track co-broking transactions with external agencies
+											</CardDescription>
 										</div>
-										<Button variant="outline" onClick={handleExportCoBroking} disabled={!coBrokingData?.transactions?.length}>
+										<Button
+											variant="outline"
+											onClick={handleExportCoBroking}
+											disabled={!coBrokingData?.transactions?.length}
+										>
 											<RiDownloadLine className="mr-2 h-4 w-4" />
 											Export CSV
 										</Button>
 									</div>
 								</CardHeader>
 								<CardContent>
-									<div className="flex flex-wrap gap-3 mb-4">
-										<div className="relative flex-1 min-w-[200px]">
-											<RiSearchLine className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+									<div className="mb-4 flex flex-wrap gap-3">
+										<div className="relative min-w-[200px] flex-1">
+											<RiSearchLine className="-translate-y-1/2 absolute top-1/2 left-3 h-4 w-4 text-muted-foreground" />
 											<Input
 												placeholder="Search by agency name..."
 												value={agencySearch}
@@ -556,10 +680,14 @@ export default function AdminReportsPage() {
 									{isLoadingCoBroking ? (
 										<div className="space-y-3">
 											{[1, 2, 3].map((i) => (
-												<div key={i} className="h-16 bg-muted animate-pulse rounded" />
+												<div
+													key={i}
+													className="h-16 animate-pulse rounded bg-muted"
+												/>
 											))}
 										</div>
-									) : coBrokingData?.transactions && coBrokingData.transactions.length > 0 ? (
+									) : coBrokingData?.transactions &&
+										coBrokingData.transactions.length > 0 ? (
 										<div className="rounded-md border">
 											<Table>
 												<TableHeader>
@@ -568,28 +696,47 @@ export default function AdminReportsPage() {
 														<TableHead>Partner Agency</TableHead>
 														<TableHead>Partner Agent</TableHead>
 														<TableHead>Property</TableHead>
-														<TableHead className="text-right">Split %</TableHead>
-														<TableHead className="text-right">Commission</TableHead>
+														<TableHead className="text-right">
+															Split %
+														</TableHead>
+														<TableHead className="text-right">
+															Commission
+														</TableHead>
 														<TableHead>Status</TableHead>
 													</TableRow>
 												</TableHeader>
 												<TableBody>
-													{coBrokingData.transactions.map((t: any) => (
+													{coBrokingData.transactions.map((t) => (
 														<TableRow key={t.id}>
-															<TableCell className="font-medium">{t.agentName}</TableCell>
-															<TableCell>{t.coBrokingData?.agencyName || '-'}</TableCell>
-															<TableCell>{t.coBrokingData?.agentName || '-'}</TableCell>
+															<TableCell className="font-medium">
+																{t.agentName}
+															</TableCell>
+															<TableCell>
+																{t.coBrokingData?.agencyName || "-"}
+															</TableCell>
+															<TableCell>
+																{t.coBrokingData?.agentName || "-"}
+															</TableCell>
 															<TableCell className="max-w-[200px] truncate">
-																{t.propertyData?.address || '-'}
+																{t.propertyData?.address || "-"}
 															</TableCell>
 															<TableCell className="text-right">
 																{t.coBrokingData?.commissionSplit || 0}%
 															</TableCell>
 															<TableCell className="text-right font-medium">
-																${Number(t.commissionAmount || 0).toLocaleString()}
+																$
+																{Number(
+																	t.commissionAmount || 0,
+																).toLocaleString()}
 															</TableCell>
 															<TableCell>
-																<Badge variant={t.status === 'completed' ? 'default' : 'secondary'}>
+																<Badge
+																	variant={
+																		t.status === "completed"
+																			? "default"
+																			: "secondary"
+																	}
+																>
 																	{t.status}
 																</Badge>
 															</TableCell>
@@ -600,30 +747,49 @@ export default function AdminReportsPage() {
 										</div>
 									) : (
 										<div className="py-8 text-center">
-											<RiShakeHandsLine size={48} className="mx-auto mb-4 text-muted-foreground" />
-											<h3 className="mb-2 font-semibold text-lg">No Co-Broking Transactions</h3>
+											<RiShakeHandsLine
+												size={48}
+												className="mx-auto mb-4 text-muted-foreground"
+											/>
+											<h3 className="mb-2 font-semibold text-lg">
+												No Co-Broking Transactions
+											</h3>
 											<p className="text-muted-foreground">
-												No co-broking transactions found for the selected period.
+												No co-broking transactions found for the selected
+												period.
 											</p>
 										</div>
 									)}
 
 									{/* Summary Stats */}
 									{coBrokingData?.summary && (
-										<div className="grid gap-4 mt-4 md:grid-cols-3">
-											<div className="p-4 border rounded-lg">
-												<div className="text-sm text-muted-foreground">Total Co-Broking Deals</div>
-												<div className="text-2xl font-bold">{coBrokingData.summary.totalCoBrokingDeals}</div>
-											</div>
-											<div className="p-4 border rounded-lg">
-												<div className="text-sm text-muted-foreground">Total Commission</div>
-												<div className="text-2xl font-bold">
-													${Number(coBrokingData.summary.totalCoBrokingCommission || 0).toLocaleString()}
+										<div className="mt-4 grid gap-4 md:grid-cols-3">
+											<div className="rounded-lg border p-4">
+												<div className="text-muted-foreground text-sm">
+													Total Co-Broking Deals
+												</div>
+												<div className="font-bold text-2xl">
+													{coBrokingData.summary.totalCoBrokingDeals}
 												</div>
 											</div>
-											<div className="p-4 border rounded-lg">
-												<div className="text-sm text-muted-foreground">Partner Agencies</div>
-												<div className="text-2xl font-bold">{coBrokingData.summary.uniquePartnerAgencies}</div>
+											<div className="rounded-lg border p-4">
+												<div className="text-muted-foreground text-sm">
+													Total Commission
+												</div>
+												<div className="font-bold text-2xl">
+													$
+													{Number(
+														coBrokingData.summary.totalCoBrokingCommission || 0,
+													).toLocaleString()}
+												</div>
+											</div>
+											<div className="rounded-lg border p-4">
+												<div className="text-muted-foreground text-sm">
+													Partner Agencies
+												</div>
+												<div className="font-bold text-2xl">
+													{coBrokingData.summary.uniquePartnerAgencies}
+												</div>
 											</div>
 										</div>
 									)}
@@ -641,9 +807,15 @@ export default function AdminReportsPage() {
 												<RiUserLine className="size-5" />
 												Client Export
 											</CardTitle>
-											<CardDescription>Export client data with transaction history</CardDescription>
+											<CardDescription>
+												Export client data with transaction history
+											</CardDescription>
 										</div>
-										<Button variant="outline" onClick={handleExportClients} disabled={!clientData?.clients?.length}>
+										<Button
+											variant="outline"
+											onClick={handleExportClients}
+											disabled={!clientData?.clients?.length}
+										>
 											<RiDownloadLine className="mr-2 h-4 w-4" />
 											Export CSV
 										</Button>
@@ -651,9 +823,9 @@ export default function AdminReportsPage() {
 								</CardHeader>
 								<CardContent>
 									{/* Filters */}
-									<div className="flex flex-wrap gap-3 mb-4">
-										<div className="relative flex-1 min-w-[200px]">
-											<RiSearchLine className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+									<div className="mb-4 flex flex-wrap gap-3">
+										<div className="relative min-w-[200px] flex-1">
+											<RiSearchLine className="-translate-y-1/2 absolute top-1/2 left-3 h-4 w-4 text-muted-foreground" />
 											<Input
 												placeholder="Search clients..."
 												value={searchQuery}
@@ -661,7 +833,10 @@ export default function AdminReportsPage() {
 												className="pl-9"
 											/>
 										</div>
-										<Select value={clientTypeFilter} onValueChange={setClientTypeFilter}>
+										<Select
+											value={clientTypeFilter}
+											onValueChange={setClientTypeFilter}
+										>
 											<SelectTrigger className="w-40">
 												<SelectValue placeholder="Client type" />
 											</SelectTrigger>
@@ -678,7 +853,10 @@ export default function AdminReportsPage() {
 									{isLoadingClients ? (
 										<div className="space-y-3">
 											{[1, 2, 3].map((i) => (
-												<div key={i} className="h-16 bg-muted animate-pulse rounded" />
+												<div
+													key={i}
+													className="h-16 animate-pulse rounded bg-muted"
+												/>
 											))}
 										</div>
 									) : clientData?.clients && clientData.clients.length > 0 ? (
@@ -691,23 +869,46 @@ export default function AdminReportsPage() {
 														<TableHead>Phone</TableHead>
 														<TableHead>Type</TableHead>
 														<TableHead>Source</TableHead>
-														<TableHead className="text-right">Transactions</TableHead>
-														<TableHead className="text-right">Total Value</TableHead>
+														<TableHead className="text-right">
+															Transactions
+														</TableHead>
+														<TableHead className="text-right">
+															Total Value
+														</TableHead>
 													</TableRow>
 												</TableHeader>
 												<TableBody>
-													{clientData.clients.map((c: any) => (
-														<TableRow key={c.client?.id || c.client?.email}>
-															<TableCell className="font-medium">{c.client?.name || '-'}</TableCell>
-															<TableCell>{c.client?.email || '-'}</TableCell>
-															<TableCell>{c.client?.phone || '-'}</TableCell>
-															<TableCell>
-																<Badge variant="outline">{c.client?.type || '-'}</Badge>
+													{clientData.clients.map((c) => (
+														<TableRow
+															key={
+																c.client?.email ??
+																c.transactions?.[0]?.id ??
+																String(Math.random())
+															}
+														>
+															<TableCell className="font-medium">
+																{c.client?.name || "-"}
 															</TableCell>
-															<TableCell>{c.client?.source || '-'}</TableCell>
-															<TableCell className="text-right">{c.transactions?.length || 0}</TableCell>
+															<TableCell>{c.client?.email || "-"}</TableCell>
+															<TableCell>{c.client?.phone || "-"}</TableCell>
+															<TableCell>
+																<Badge variant="outline">
+																	{c.client?.type || "-"}
+																</Badge>
+															</TableCell>
+															<TableCell>{c.client?.source || "-"}</TableCell>
+															<TableCell className="text-right">
+																{c.transactions?.length || 0}
+															</TableCell>
 															<TableCell className="text-right font-medium">
-																${c.transactions?.reduce((sum: number, t: any) => sum + Number(t.commissionAmount || 0), 0).toLocaleString()}
+																$
+																{c.transactions
+																	?.reduce(
+																		(sum, t) =>
+																			sum + Number(t.commissionAmount || 0),
+																		0,
+																	)
+																	.toLocaleString()}
 															</TableCell>
 														</TableRow>
 													))}
@@ -716,8 +917,13 @@ export default function AdminReportsPage() {
 										</div>
 									) : (
 										<div className="py-8 text-center">
-											<RiUserLine size={48} className="mx-auto mb-4 text-muted-foreground" />
-											<h3 className="mb-2 font-semibold text-lg">No Clients Found</h3>
+											<RiUserLine
+												size={48}
+												className="mx-auto mb-4 text-muted-foreground"
+											/>
+											<h3 className="mb-2 font-semibold text-lg">
+												No Clients Found
+											</h3>
 											<p className="text-muted-foreground">
 												No clients found matching your search criteria.
 											</p>
@@ -726,23 +932,39 @@ export default function AdminReportsPage() {
 
 									{/* Summary Stats */}
 									{clientData?.clientTypeSummary && (
-										<div className="grid gap-4 mt-4 md:grid-cols-4">
-											<div className="p-4 border rounded-lg">
-												<div className="text-sm text-muted-foreground">Total Clients</div>
-												<div className="text-2xl font-bold">{clientData.totalClients}</div>
+										<div className="mt-4 grid gap-4 md:grid-cols-4">
+											<div className="rounded-lg border p-4">
+												<div className="text-muted-foreground text-sm">
+													Total Clients
+												</div>
+												<div className="font-bold text-2xl">
+													{clientData.totalClients}
+												</div>
 											</div>
-											<div className="p-4 border rounded-lg">
-												<div className="text-sm text-muted-foreground">Buyers</div>
-												<div className="text-2xl font-bold">{clientData.clientTypeSummary?.buyer?.count || 0}</div>
+											<div className="rounded-lg border p-4">
+												<div className="text-muted-foreground text-sm">
+													Buyers
+												</div>
+												<div className="font-bold text-2xl">
+													{clientData.clientTypeSummary?.buyer?.count || 0}
+												</div>
 											</div>
-											<div className="p-4 border rounded-lg">
-												<div className="text-sm text-muted-foreground">Sellers</div>
-												<div className="text-2xl font-bold">{clientData.clientTypeSummary?.seller?.count || 0}</div>
+											<div className="rounded-lg border p-4">
+												<div className="text-muted-foreground text-sm">
+													Sellers
+												</div>
+												<div className="font-bold text-2xl">
+													{clientData.clientTypeSummary?.seller?.count || 0}
+												</div>
 											</div>
-											<div className="p-4 border rounded-lg">
-												<div className="text-sm text-muted-foreground">Tenants/Landlords</div>
-												<div className="text-2xl font-bold">
-													{(clientData.clientTypeSummary?.tenant?.count || 0) + (clientData.clientTypeSummary?.landlord?.count || 0)}
+											<div className="rounded-lg border p-4">
+												<div className="text-muted-foreground text-sm">
+													Tenants/Landlords
+												</div>
+												<div className="font-bold text-2xl">
+													{(clientData.clientTypeSummary?.tenant?.count || 0) +
+														(clientData.clientTypeSummary?.landlord?.count ||
+															0)}
 												</div>
 											</div>
 										</div>

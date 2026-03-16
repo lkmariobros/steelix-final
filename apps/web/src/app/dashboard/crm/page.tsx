@@ -1,21 +1,15 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-import { toast } from "sonner";
-import { useQueryClient } from "@tanstack/react-query";
-import { authClient } from "@/lib/auth-client";
-import { trpc } from "@/utils/trpc";
 import { AppSidebar } from "@/components/app-sidebar";
-import { Separator } from "@/components/ui/separator";
+import { KanbanBoard, type PipelineStage } from "@/components/crm-kanban-board";
+import { HeaderActions } from "@/components/header-actions";
 import {
 	SidebarInset,
 	SidebarProvider,
 	SidebarTrigger,
 } from "@/components/sidebar";
+import { TagSelector } from "@/components/tag-selector";
+import { Badge } from "@/components/ui/badge";
 import {
 	Breadcrumb,
 	BreadcrumbItem,
@@ -25,14 +19,7 @@ import {
 	BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from "@/components/ui/select";
+import { Card, CardContent } from "@/components/ui/card";
 import {
 	Dialog,
 	DialogContent,
@@ -50,29 +37,42 @@ import {
 	FormLabel,
 	FormMessage,
 } from "@/components/ui/form";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { HeaderActions } from "@/components/header-actions";
+import { Input } from "@/components/ui/input";
 import {
-	RiDashboardLine,
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
+import { authClient } from "@/lib/auth-client";
+import { trpc } from "@/utils/trpc";
+import { zodResolver } from "@hookform/resolvers/zod";
+import {
 	RiAddLine,
-	RiSearchLine,
-	RiUserLine,
-	RiMailLine,
-	RiPhoneLine,
-	RiMapPinLine,
-	RiPriceTagLine,
+	RiAlertLine,
 	RiCalendarLine,
-	RiMessageLine,
+	RiDashboardLine,
+	RiDeleteBinLine,
 	RiEyeLine,
+	RiHomeLine,
 	RiLinksLine,
 	RiLoader4Line,
-	RiHomeLine,
-	RiDeleteBinLine,
-	RiAlertLine,
+	RiMailLine,
+	RiMapPinLine,
+	RiMessageLine,
+	RiPhoneLine,
+	RiPriceTagLine,
+	RiSearchLine,
+	RiUserLine,
 } from "@remixicon/react";
-import { KanbanBoard, type PipelineStage } from "@/components/crm-kanban-board";
-import { TagSelector } from "@/components/tag-selector";
+import { useQueryClient } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { useForm } from "react-hook-form";
+import { toast } from "sonner";
+import { z } from "zod";
 
 // Pipeline stages for Kanban board
 type LeadType = "personal" | "company";
@@ -130,18 +130,21 @@ const prospectFormSchema = z.object({
 	status: z.enum(["active", "inactive", "pending"], {
 		required_error: "Please select a status",
 	}),
-	stage: z.enum([
-		"new_lead",
-		"follow_up_in_progress",
-		"no_pick_reply",
-		"follow_up_for_appointment",
-		"potential_lead",
-		"consider_seen",
-		"appointment_made",
-		"reject_project",
-		"booking_made",
-		"spam_fake_lead",
-	]).default("new_lead").optional(),
+	stage: z
+		.enum([
+			"new_lead",
+			"follow_up_in_progress",
+			"no_pick_reply",
+			"follow_up_for_appointment",
+			"potential_lead",
+			"consider_seen",
+			"appointment_made",
+			"reject_project",
+			"booking_made",
+			"spam_fake_lead",
+		])
+		.default("new_lead")
+		.optional(),
 	leadType: z.enum(["personal", "company"]).default("personal").optional(),
 	tagIds: z.array(z.string().uuid()).optional(),
 });
@@ -150,23 +153,25 @@ type ProspectFormValues = z.infer<typeof prospectFormSchema>;
 
 // Helper function to format date for display
 // Handle both Date objects and date strings from API
-const formatContactDate = (date: Date | string | null | undefined): string | undefined => {
+const formatContactDate = (
+	date: Date | string | null | undefined,
+): string | undefined => {
 	if (!date) return undefined;
-	
+
 	// Convert string to Date if needed
-	const dateObj = typeof date === 'string' ? new Date(date) : date;
-	
+	const dateObj = typeof date === "string" ? new Date(date) : date;
+
 	// Check if date is valid
-	if (isNaN(dateObj.getTime())) return undefined;
-	
+	if (Number.isNaN(dateObj.getTime())) return undefined;
+
 	const now = new Date();
 	const diffMs = now.getTime() - dateObj.getTime();
 	const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-	
+
 	if (diffDays === 0) return "Today";
 	if (diffDays === 1) return "1 day ago";
 	if (diffDays < 7) return `${diffDays} days ago`;
-	
+
 	// For future dates
 	if (diffMs < 0) {
 		const futureDays = Math.abs(diffDays);
@@ -174,16 +179,18 @@ const formatContactDate = (date: Date | string | null | undefined): string | und
 		if (futureDays === 1) return "Tomorrow";
 		return `In ${futureDays} days`;
 	}
-	
+
 	return dateObj.toLocaleDateString();
 };
 
 type ViewMode = "list" | "kanban";
+type LeadsTab = "my" | "company";
 
 export default function CRMPage() {
 	const router = useRouter();
 	const queryClient = useQueryClient();
 	const { data: session, isPending } = authClient.useSession();
+	const [activeTab, setActiveTab] = useState<LeadsTab>("my"); // My Leads | Company Leads
 	const [viewMode, setViewMode] = useState<ViewMode>("list"); // New: View mode toggle
 	const [searchQuery, setSearchQuery] = useState("");
 	const [typeFilter, setTypeFilter] = useState("all");
@@ -194,11 +201,17 @@ export default function CRMPage() {
 	const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
 	const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 	const [isStagePromptOpen, setIsStagePromptOpen] = useState(false);
-	const [stagePromptProspect, setStagePromptProspect] = useState<Prospect | null>(null);
+	const [stagePromptProspect, setStagePromptProspect] =
+		useState<Prospect | null>(null);
 	const [stagePromptMessage, setStagePromptMessage] = useState("");
-	const [stagePromptTargetStage, setStagePromptTargetStage] = useState<PipelineStage | null>(null);
-	const [selectedProspect, setSelectedProspect] = useState<Prospect | null>(null);
-	const [prospectToDelete, setProspectToDelete] = useState<Prospect | null>(null);
+	const [stagePromptTargetStage, setStagePromptTargetStage] =
+		useState<PipelineStage | null>(null);
+	const [selectedProspect, setSelectedProspect] = useState<Prospect | null>(
+		null,
+	);
+	const [prospectToDelete, setProspectToDelete] = useState<Prospect | null>(
+		null,
+	);
 	const itemsPerPage = 10;
 
 	// Projects (admin-managed developer projects) for dropdown selection
@@ -216,13 +229,15 @@ export default function CRMPage() {
 	} = trpc.crm.list.useQuery(
 		{
 			search: searchQuery || undefined,
-			type: typeFilter !== "all" ? (typeFilter as "tenant" | "buyer") : undefined,
+			type:
+				typeFilter !== "all" ? (typeFilter as "tenant" | "buyer") : undefined,
 			property: propertyFilter !== "all" ? propertyFilter : undefined,
 			status:
 				statusFilter !== "all"
 					? (statusFilter as "active" | "inactive" | "pending")
 					: undefined,
-			includeCompanyLeads: viewMode === "kanban",
+			leadType: activeTab === "company" ? "company" : undefined,
+			includeCompanyLeads: activeTab === "company",
 			page: currentPage,
 			limit: viewMode === "kanban" ? 1000 : itemsPerPage,
 		},
@@ -247,6 +262,7 @@ export default function CRMPage() {
 			type: "buyer",
 			property: "",
 			status: "active",
+			leadType: "personal",
 		},
 	});
 
@@ -283,7 +299,16 @@ export default function CRMPage() {
 	});
 
 	const handleAddProspect = () => {
-		form.reset();
+		form.reset({
+			name: "",
+			email: "",
+			phone: "",
+			source: "",
+			type: "buyer",
+			property: "",
+			status: "active",
+			leadType: activeTab === "company" ? "company" : "personal",
+		});
 		setIsAddDialogOpen(true);
 	};
 
@@ -294,7 +319,7 @@ export default function CRMPage() {
 	const handleMessage = (prospect: Prospect) => {
 		// TODO: Open WhatsApp message
 		console.log("Message prospect:", prospect);
-		
+
 		// Show micro-prompt to move to Follow Up In Progress stage
 		if (prospect.stage === "new_lead") {
 			setStagePromptProspect(prospect);
@@ -307,7 +332,7 @@ export default function CRMPage() {
 	const handleCall = (prospect: Prospect) => {
 		// TODO: Initiate call
 		console.log("Call prospect:", prospect);
-		
+
 		// Show micro-prompt based on current stage
 		if (prospect.stage === "new_lead") {
 			setStagePromptProspect(prospect);
@@ -323,10 +348,7 @@ export default function CRMPage() {
 	};
 
 	// Fetch notes for selected prospect
-	const {
-		data: notesData,
-		refetch: refetchNotes,
-	} = trpc.crm.getNotes.useQuery(
+	const { data: notesData, refetch: refetchNotes } = trpc.crm.getNotes.useQuery(
 		{ id: selectedProspect?.id || "" },
 		{
 			enabled: !!selectedProspect?.id && isViewDialogOpen,
@@ -388,17 +410,24 @@ export default function CRMPage() {
 			const previousData = queryClient.getQueryData([["crm", "list"]]);
 
 			// Optimistically update the cache - move prospect to new stage immediately
-			queryClient.setQueryData([["crm", "list"]], (old: any) => {
-				if (!old?.prospects) return old;
-				return {
-					...old,
-					prospects: old.prospects.map((p: Prospect) =>
-						p.id === variables.id
-							? { ...p, stage: variables.stage, updatedAt: new Date().toISOString() }
-							: p
-					),
-				};
-			});
+			queryClient.setQueryData(
+				[["crm", "list"]],
+				(old: { prospects?: Prospect[] } | undefined) => {
+					if (!old?.prospects) return old;
+					return {
+						...old,
+						prospects: old.prospects.map((p) =>
+							p.id === variables.id
+								? {
+										...p,
+										stage: variables.stage,
+										updatedAt: new Date().toISOString(),
+									}
+								: p,
+						),
+					};
+				},
+			);
 
 			// Return context with the snapshotted value for rollback
 			return { previousData };
@@ -503,13 +532,47 @@ export default function CRMPage() {
 					</div>
 				</header>
 				<div className="flex flex-1 flex-col gap-4 py-4 lg:gap-6 lg:py-6">
-					{/* Page Header */}
-					<div className="flex items-center justify-between">
-						<h1 className="font-semibold text-2xl">CRM - Prospect Management</h1>
+					{/* Page Header with My Leads / Company Leads tabs */}
+					<div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+						<div className="flex items-center gap-4">
+							<h1 className="font-semibold text-2xl">
+								CRM - Prospect Management
+							</h1>
+							{/* My Leads | Company Leads tabs */}
+							<div
+								className="flex items-center gap-1 rounded-md border bg-muted/50 p-1"
+								role="tablist"
+								aria-label="Lead type"
+							>
+								<Button
+									type="button"
+									role="tab"
+									aria-selected={activeTab === "my"}
+									variant={activeTab === "my" ? "default" : "ghost"}
+									size="sm"
+									onClick={() => setActiveTab("my")}
+									className="h-8"
+								>
+									My Leads
+								</Button>
+								<Button
+									type="button"
+									role="tab"
+									aria-selected={activeTab === "company"}
+									variant={activeTab === "company" ? "default" : "ghost"}
+									size="sm"
+									onClick={() => setActiveTab("company")}
+									className="h-8"
+								>
+									Company Leads
+								</Button>
+							</div>
+						</div>
 						<div className="flex items-center gap-3">
 							{/* View Toggle */}
-							<div className="flex items-center gap-1 border rounded-md p-1 bg-muted/50">
+							<div className="flex items-center gap-1 rounded-md border bg-muted/50 p-1">
 								<Button
+									type="button"
 									variant={viewMode === "list" ? "default" : "ghost"}
 									size="sm"
 									onClick={() => setViewMode("list")}
@@ -518,6 +581,7 @@ export default function CRMPage() {
 									List View
 								</Button>
 								<Button
+									type="button"
 									variant={viewMode === "kanban" ? "default" : "ghost"}
 									size="sm"
 									onClick={() => setViewMode("kanban")}
@@ -526,7 +590,12 @@ export default function CRMPage() {
 									Kanban View
 								</Button>
 							</div>
-							<Button onClick={handleAddProspect} size="sm" className="bg-green-600 hover:bg-green-700">
+							<Button
+								type="button"
+								onClick={handleAddProspect}
+								size="sm"
+								className="bg-green-600 hover:bg-green-700"
+							>
 								<RiAddLine className="mr-2 h-4 w-4" />
 								Add
 							</Button>
@@ -547,7 +616,10 @@ export default function CRMPage() {
 							</DialogHeader>
 
 							<Form {...form}>
-								<form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+								<form
+									onSubmit={form.handleSubmit(onSubmit)}
+									className="space-y-4"
+								>
 									{/* Name */}
 									<FormField
 										control={form.control}
@@ -558,10 +630,7 @@ export default function CRMPage() {
 													Full Name <span className="text-destructive">*</span>
 												</FormLabel>
 												<FormControl>
-													<Input
-														placeholder="John Smith"
-														{...field}
-													/>
+													<Input placeholder="John Smith" {...field} />
 												</FormControl>
 												<FormMessage />
 											</FormItem>
@@ -575,7 +644,8 @@ export default function CRMPage() {
 										render={({ field }) => (
 											<FormItem>
 												<FormLabel>
-													Email Address <span className="text-destructive">*</span>
+													Email Address{" "}
+													<span className="text-destructive">*</span>
 												</FormLabel>
 												<FormControl>
 													<Input
@@ -596,13 +666,11 @@ export default function CRMPage() {
 										render={({ field }) => (
 											<FormItem>
 												<FormLabel>
-													Phone Number <span className="text-destructive">*</span>
+													Phone Number{" "}
+													<span className="text-destructive">*</span>
 												</FormLabel>
 												<FormControl>
-													<Input
-														placeholder="+65 9123 4567"
-														{...field}
-													/>
+													<Input placeholder="+65 9123 4567" {...field} />
 												</FormControl>
 												<FormMessage />
 											</FormItem>
@@ -629,7 +697,9 @@ export default function CRMPage() {
 													</FormControl>
 													<SelectContent>
 														<SelectItem value="Website">Website</SelectItem>
-														<SelectItem value="Social Media">Social Media</SelectItem>
+														<SelectItem value="Social Media">
+															Social Media
+														</SelectItem>
 														<SelectItem value="Referral">Referral</SelectItem>
 														<SelectItem value="Walk-in">Walk-in</SelectItem>
 														<SelectItem value="Other">Other</SelectItem>
@@ -669,27 +739,28 @@ export default function CRMPage() {
 											)}
 										/>
 
-									<FormField
-										control={form.control}
-										name="property"
-										render={({ field }) => (
-											<FormItem>
-												<FormLabel>
-													Property <span className="text-destructive">*</span>
-												</FormLabel>
-												<FormControl>
-													<Input
-														{...field}
-														placeholder="Enter property name (e.g., Breeze Hill, Marina Bay Residences)"
-													/>
-												</FormControl>
-												<FormDescription>
-													Enter the property name. Tags can be used to categorize properties in the database.
-												</FormDescription>
-												<FormMessage />
-											</FormItem>
-										)}
-									/>
+										<FormField
+											control={form.control}
+											name="property"
+											render={({ field }) => (
+												<FormItem>
+													<FormLabel>
+														Property <span className="text-destructive">*</span>
+													</FormLabel>
+													<FormControl>
+														<Input
+															{...field}
+															placeholder="Enter property name (e.g., Breeze Hill, Marina Bay Residences)"
+														/>
+													</FormControl>
+													<FormDescription>
+														Enter the property name. Tags can be used to
+														categorize properties in the database.
+													</FormDescription>
+													<FormMessage />
+												</FormItem>
+											)}
+										/>
 									</div>
 
 									{/* Developer Project (admin-managed) */}
@@ -700,7 +771,11 @@ export default function CRMPage() {
 											<FormItem>
 												<FormLabel>Developer Project</FormLabel>
 												<Select
-													onValueChange={(value) => field.onChange(value === "__none__" ? undefined : value)}
+													onValueChange={(value) =>
+														field.onChange(
+															value === "__none__" ? undefined : value,
+														)
+													}
 													value={field.value ?? "__none__"}
 												>
 													<FormControl>
@@ -710,15 +785,19 @@ export default function CRMPage() {
 													</FormControl>
 													<SelectContent>
 														<SelectItem value="__none__">None</SelectItem>
-														{(projectsData || []).map((p: any) => (
-															<SelectItem key={p.id} value={p.id}>
-																{p.name}
-															</SelectItem>
-														))}
+														{(projectsData || []).map(
+															(p: { id: string; name: string }) => (
+																<SelectItem key={p.id} value={p.id}>
+																	{p.name}
+																</SelectItem>
+															),
+														)}
 													</SelectContent>
 												</Select>
 												<FormDescription>
-													Optional: choose a developer project defined by admin. For agent-defined project names, use the Property field or tags.
+													Optional: choose a developer project defined by admin.
+													For agent-defined project names, use the Property
+													field or tags.
 												</FormDescription>
 												<FormMessage />
 											</FormItem>
@@ -760,9 +839,7 @@ export default function CRMPage() {
 										name="tagIds"
 										render={({ field }) => (
 											<FormItem>
-												<FormLabel>
-													Tags
-												</FormLabel>
+												<FormLabel>Tags</FormLabel>
 												<FormControl>
 													<TagSelector
 														value={field.value || []}
@@ -771,8 +848,9 @@ export default function CRMPage() {
 													/>
 												</FormControl>
 												<FormMessage />
-												<p className="text-xs text-muted-foreground">
-													Select tags from the master list to categorize this prospect by project.
+												<p className="text-muted-foreground text-xs">
+													Select tags from the master list to categorize this
+													prospect by project.
 												</p>
 											</FormItem>
 										)}
@@ -787,7 +865,11 @@ export default function CRMPage() {
 										>
 											Cancel
 										</Button>
-										<Button type="submit" disabled={createProspectMutation.isPending} className="bg-green-600 hover:bg-green-700">
+										<Button
+											type="submit"
+											disabled={createProspectMutation.isPending}
+											className="bg-green-600 hover:bg-green-700"
+										>
 											{createProspectMutation.isPending ? (
 												<>
 													<RiLoader4Line className="mr-2 h-4 w-4 animate-spin" />
@@ -823,26 +905,28 @@ export default function CRMPage() {
 								<div className="space-y-6 py-4">
 									{/* Name Section */}
 									<div className="space-y-2" style={{ marginBottom: "15px" }}>
-										<div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+										<div className="flex items-center gap-2 font-medium text-muted-foreground text-sm">
 											<RiUserLine className="size-4" />
 											Full Name
 										</div>
-										<div className="text-base font-semibold">
+										<div className="font-semibold text-base">
 											{selectedProspect.name}
 										</div>
 									</div>
 
 									{/* Contact Information */}
 									<div className="space-y-3" style={{ marginBottom: "15px" }}>
-										<div className="text-sm font-medium text-muted-foreground">
+										<div className="font-medium text-muted-foreground text-sm">
 											Contact Information
 										</div>
 										<div className="space-y-3 rounded-lg border bg-muted/30 p-4">
 											<div className="flex items-center gap-3">
 												<RiMailLine className="size-4 text-muted-foreground" />
 												<div className="flex-1">
-													<div className="text-xs text-muted-foreground">Email</div>
-													<div className="text-sm font-medium">
+													<div className="text-muted-foreground text-xs">
+														Email
+													</div>
+													<div className="font-medium text-sm">
 														{selectedProspect.email}
 													</div>
 												</div>
@@ -850,8 +934,10 @@ export default function CRMPage() {
 											<div className="flex items-center gap-3">
 												<RiPhoneLine className="size-4 text-muted-foreground" />
 												<div className="flex-1">
-													<div className="text-xs text-muted-foreground">Phone</div>
-													<div className="text-sm font-medium">
+													<div className="text-muted-foreground text-xs">
+														Phone
+													</div>
+													<div className="font-medium text-sm">
 														{selectedProspect.phone}
 													</div>
 												</div>
@@ -861,21 +947,21 @@ export default function CRMPage() {
 
 									{/* Prospect Details */}
 									<div className="space-y-3" style={{ marginBottom: "15px" }}>
-										<div className="text-sm font-medium text-muted-foreground">
+										<div className="font-medium text-muted-foreground text-sm">
 											Prospect Details
 										</div>
 										<div className="space-y-3 rounded-lg border bg-muted/30 p-4">
 											<div className="flex items-center justify-between">
-												<div className="flex items-center gap-2 text-sm text-muted-foreground">
+												<div className="flex items-center gap-2 text-muted-foreground text-sm">
 													<RiMapPinLine className="size-4" />
 													Source
 												</div>
-												<div className="text-sm font-medium">
+												<div className="font-medium text-sm">
 													{selectedProspect.source}
 												</div>
 											</div>
 											<div className="flex items-center justify-between">
-												<div className="flex items-center gap-2 text-sm text-muted-foreground">
+												<div className="flex items-center gap-2 text-muted-foreground text-sm">
 													<RiPriceTagLine className="size-4" />
 													Type
 												</div>
@@ -885,42 +971,55 @@ export default function CRMPage() {
 														: "Owner"}
 												</Badge>
 											</div>
-											{(selectedProspect.tagNames && selectedProspect.tagNames.length > 0) || (selectedProspect.tags && selectedProspect.tags.trim()) ? (
+											{(selectedProspect.tagNames &&
+												selectedProspect.tagNames.length > 0) ||
+											selectedProspect.tags?.trim() ? (
 												<div className="flex items-center justify-between">
-													<div className="flex items-center gap-2 text-sm text-muted-foreground">
+													<div className="flex items-center gap-2 text-muted-foreground text-sm">
 														<RiPriceTagLine className="size-4" />
 														Tags
 													</div>
 													<div className="flex flex-wrap gap-2">
-														{selectedProspect.tagNames && selectedProspect.tagNames.length > 0
+														{selectedProspect.tagNames &&
+														selectedProspect.tagNames.length > 0
 															? selectedProspect.tagNames.map((tag, idx) => (
-																	<Badge key={idx} variant="secondary" className="text-xs">
+																	<Badge
+																		key={idx}
+																		variant="secondary"
+																		className="text-xs"
+																	>
 																		{tag}
 																	</Badge>
 																))
 															: selectedProspect.tags
-																? selectedProspect.tags.split(",").map((tag, idx) => (
-																		<Badge key={idx} variant="secondary" className="text-xs">
-																			{tag.trim()}
-																		</Badge>
-																	))
+																? selectedProspect.tags
+																		.split(",")
+																		.map((tag, idx) => (
+																			<Badge
+																				key={idx}
+																				variant="secondary"
+																				className="text-xs"
+																			>
+																				{tag.trim()}
+																			</Badge>
+																		))
 																: null}
 													</div>
 												</div>
 											) : null}
 											{selectedProspect.agentName && (
 												<div className="flex items-center justify-between">
-													<div className="flex items-center gap-2 text-sm text-muted-foreground">
+													<div className="flex items-center gap-2 text-muted-foreground text-sm">
 														<RiUserLine className="size-4" />
 														Owner
 													</div>
-													<div className="text-sm font-medium">
+													<div className="font-medium text-sm">
 														{selectedProspect.agentName}
 													</div>
 												</div>
 											)}
 											<div className="flex items-center justify-between">
-												<div className="flex items-center gap-2 text-sm text-muted-foreground">
+												<div className="flex items-center gap-2 text-muted-foreground text-sm">
 													<RiPriceTagLine className="size-4" />
 													Status
 												</div>
@@ -938,21 +1037,21 @@ export default function CRMPage() {
 												</Badge>
 											</div>
 											<div className="flex items-center justify-between">
-												<div className="flex items-center gap-2 text-sm text-muted-foreground">
+												<div className="flex items-center gap-2 text-muted-foreground text-sm">
 													<RiHomeLine className="size-4" />
 													Property
 												</div>
-												<div className="text-sm font-medium">
+												<div className="font-medium text-sm">
 													{selectedProspect.property || "Not specified"}
 												</div>
 											</div>
 											{selectedProspect.projectName && (
 												<div className="flex items-center justify-between">
-													<div className="flex items-center gap-2 text-sm text-muted-foreground">
+													<div className="flex items-center gap-2 text-muted-foreground text-sm">
 														<RiHomeLine className="size-4" />
 														Developer Project
 													</div>
-													<div className="text-sm font-medium">
+													<div className="font-medium text-sm">
 														{selectedProspect.projectName}
 													</div>
 												</div>
@@ -961,9 +1060,10 @@ export default function CRMPage() {
 									</div>
 
 									{/* Contact History */}
-									{(selectedProspect.lastContact || selectedProspect.nextContact) && (
+									{(selectedProspect.lastContact ||
+										selectedProspect.nextContact) && (
 										<div className="space-y-3">
-											<div className="text-sm font-medium text-muted-foreground">
+											<div className="font-medium text-muted-foreground text-sm">
 												Contact History
 											</div>
 											<div className="space-y-2 rounded-lg border bg-muted/30 p-4">
@@ -971,11 +1071,13 @@ export default function CRMPage() {
 													<div className="flex items-center gap-3">
 														<RiCalendarLine className="size-4 text-muted-foreground" />
 														<div className="flex-1">
-															<div className="text-xs text-muted-foreground">
+															<div className="text-muted-foreground text-xs">
 																Last Contact
 															</div>
-															<div className="text-sm font-medium">
-																{formatContactDate(selectedProspect.lastContact)}
+															<div className="font-medium text-sm">
+																{formatContactDate(
+																	selectedProspect.lastContact,
+																)}
 															</div>
 														</div>
 													</div>
@@ -984,11 +1086,13 @@ export default function CRMPage() {
 													<div className="flex items-center gap-3">
 														<RiCalendarLine className="size-4 text-muted-foreground" />
 														<div className="flex-1">
-															<div className="text-xs text-muted-foreground">
+															<div className="text-muted-foreground text-xs">
 																Next Contact
 															</div>
-															<div className="text-sm font-medium">
-																{formatContactDate(selectedProspect.nextContact)}
+															<div className="font-medium text-sm">
+																{formatContactDate(
+																	selectedProspect.nextContact,
+																)}
 															</div>
 														</div>
 													</div>
@@ -999,36 +1103,49 @@ export default function CRMPage() {
 
 									{/* Notes Timeline */}
 									<div className="space-y-3">
-										<div className="text-sm font-medium text-muted-foreground">
+										<div className="font-medium text-muted-foreground text-sm">
 											Notes & Timeline
 										</div>
-										<div className="space-y-3 rounded-lg border bg-muted/30 p-4 max-h-64 overflow-y-auto" style={{ height: "100px" }}>
+										<div
+											className="max-h-64 space-y-3 overflow-y-auto rounded-lg border bg-muted/30 p-4"
+											style={{ height: "100px" }}
+										>
 											{notes.length === 0 ? (
-												<div className="text-sm text-muted-foreground text-center py-4">
+												<div className="py-4 text-center text-muted-foreground text-sm">
 													No notes yet. Add a note to track interactions.
 												</div>
 											) : (
 												notes.map((note) => {
 													const noteDate = new Date(note.createdAt);
 													// Format date with GMT timezone (e.g., "Dec 23, 2025 04:45 PM (GMT +08)")
-													const formattedDate = noteDate.toLocaleString("en-US", {
-														month: "short",
-														day: "numeric",
-														year: "numeric",
-														hour: "2-digit",
-														minute: "2-digit",
-														hour12: true,
-													});
+													const formattedDate = noteDate.toLocaleString(
+														"en-US",
+														{
+															month: "short",
+															day: "numeric",
+															year: "numeric",
+															hour: "2-digit",
+															minute: "2-digit",
+															hour12: true,
+														},
+													);
 													// Get GMT offset
 													const gmtOffset = -noteDate.getTimezoneOffset() / 60;
 													const gmtSign = gmtOffset >= 0 ? "+" : "";
 													const gmtString = `(GMT ${gmtSign}${gmtOffset.toString().padStart(2, "0")})`;
 
 													return (
-														<div key={note.id} className="border-b last:border-0 pb-3 last:pb-0 space-y-1">
-															<div className="text-sm text-foreground">{note.content}</div>
-															<div className="flex items-center gap-2 text-xs text-muted-foreground">
-																<span>{formattedDate} {gmtString}</span>
+														<div
+															key={note.id}
+															className="space-y-1 border-b pb-3 last:border-0 last:pb-0"
+														>
+															<div className="text-foreground text-sm">
+																{note.content}
+															</div>
+															<div className="flex items-center gap-2 text-muted-foreground text-xs">
+																<span>
+																	{formattedDate} {gmtString}
+																</span>
 																{note.agentName && (
 																	<>
 																		<span>•</span>
@@ -1057,7 +1174,9 @@ export default function CRMPage() {
 											<Button
 												size="sm"
 												onClick={handleAddNote}
-												disabled={!newNoteContent.trim() || addNoteMutation.isPending}
+												disabled={
+													!newNoteContent.trim() || addNoteMutation.isPending
+												}
 											>
 												{addNoteMutation.isPending ? (
 													<RiLoader4Line className="h-4 w-4 animate-spin" />
@@ -1101,21 +1220,28 @@ export default function CRMPage() {
 									<RiAlertLine className="size-5 text-blue-600 dark:text-blue-400" />
 									Update Stage?
 								</DialogTitle>
-								<DialogDescription>
-									{stagePromptMessage}
-								</DialogDescription>
+								<DialogDescription>{stagePromptMessage}</DialogDescription>
 							</DialogHeader>
 							{stagePromptProspect && (
 								<div className="py-2">
-									<div className="text-sm text-muted-foreground">
-										Prospect: <span className="font-semibold text-foreground">{stagePromptProspect.name}</span>
+									<div className="text-muted-foreground text-sm">
+										Prospect:{" "}
+										<span className="font-semibold text-foreground">
+											{stagePromptProspect.name}
+										</span>
 									</div>
-									<div className="text-sm text-muted-foreground mt-1">
-										Current: <span className="font-semibold text-foreground capitalize">{stagePromptProspect.stage.replace(/_/g, " ")}</span>
+									<div className="mt-1 text-muted-foreground text-sm">
+										Current:{" "}
+										<span className="font-semibold text-foreground capitalize">
+											{stagePromptProspect.stage.replace(/_/g, " ")}
+										</span>
 									</div>
 									{stagePromptTargetStage && (
-										<div className="text-sm text-muted-foreground mt-1">
-											New: <span className="font-semibold text-foreground capitalize">{stagePromptTargetStage.replace(/_/g, " ")}</span>
+										<div className="mt-1 text-muted-foreground text-sm">
+											New:{" "}
+											<span className="font-semibold text-foreground capitalize">
+												{stagePromptTargetStage.replace(/_/g, " ")}
+											</span>
 										</div>
 									)}
 								</div>
@@ -1147,7 +1273,10 @@ export default function CRMPage() {
 					</Dialog>
 
 					{/* Delete Confirmation Dialog */}
-					<Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+					<Dialog
+						open={isDeleteDialogOpen}
+						onOpenChange={setIsDeleteDialogOpen}
+					>
 						<DialogContent className="sm:max-w-[500px]">
 							<DialogHeader>
 								<DialogTitle className="flex items-center gap-2 text-red-600 dark:text-red-400">
@@ -1155,7 +1284,8 @@ export default function CRMPage() {
 									Delete Prospect
 								</DialogTitle>
 								<DialogDescription>
-									Are you sure you want to delete this prospect? This action cannot be undone.
+									Are you sure you want to delete this prospect? This action
+									cannot be undone.
 								</DialogDescription>
 							</DialogHeader>
 
@@ -1165,13 +1295,15 @@ export default function CRMPage() {
 										<div className="space-y-2">
 											<div className="flex items-center gap-2">
 												<RiUserLine className="size-4 text-muted-foreground" />
-												<span className="font-medium">{prospectToDelete.name}</span>
+												<span className="font-medium">
+													{prospectToDelete.name}
+												</span>
 											</div>
-											<div className="flex items-center gap-2 text-sm text-muted-foreground">
+											<div className="flex items-center gap-2 text-muted-foreground text-sm">
 												<RiMailLine className="size-4" />
 												<span>{prospectToDelete.email}</span>
 											</div>
-											<div className="flex items-center gap-2 text-sm text-muted-foreground">
+											<div className="flex items-center gap-2 text-muted-foreground text-sm">
 												<RiPhoneLine className="size-4" />
 												<span>{prospectToDelete.phone}</span>
 											</div>
@@ -1216,7 +1348,7 @@ export default function CRMPage() {
 					{/* Search and Filters */}
 					<div className="flex items-center gap-3">
 						<div className="relative flex-1">
-							<RiSearchLine className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+							<RiSearchLine className="-translate-y-1/2 absolute top-1/2 left-3 size-4 text-muted-foreground" />
 							<Input
 								placeholder="Search prospects..."
 								value={searchQuery}
@@ -1266,9 +1398,11 @@ export default function CRMPage() {
 									<RiLoader4Line className="h-8 w-8 animate-spin text-muted-foreground" />
 								</div>
 							) : prospectsError ? (
-								<div className="text-center py-12">
-									<div className="text-red-500 mb-2">Error loading prospects</div>
-									<div className="text-sm text-muted-foreground">
+								<div className="py-12 text-center">
+									<div className="mb-2 text-red-500">
+										Error loading prospects
+									</div>
+									<div className="text-muted-foreground text-sm">
 										{prospectsError.message}
 									</div>
 									<Button
@@ -1298,9 +1432,11 @@ export default function CRMPage() {
 									<RiLoader4Line className="h-8 w-8 animate-spin text-muted-foreground" />
 								</div>
 							) : prospectsError ? (
-								<div className="col-span-full text-center py-12">
-									<div className="text-red-500 mb-2">Error loading prospects</div>
-									<div className="text-sm text-muted-foreground">
+								<div className="col-span-full py-12 text-center">
+									<div className="mb-2 text-red-500">
+										Error loading prospects
+									</div>
+									<div className="text-muted-foreground text-sm">
 										{prospectsError.message}
 									</div>
 									<Button
@@ -1313,7 +1449,7 @@ export default function CRMPage() {
 									</Button>
 								</div>
 							) : prospects.length === 0 ? (
-								<div className="col-span-full text-center py-12 text-muted-foreground">
+								<div className="col-span-full py-12 text-center text-muted-foreground">
 									No prospects found. Click "Add Prospect" to get started.
 								</div>
 							) : (
@@ -1329,7 +1465,7 @@ export default function CRMPage() {
 													</div>
 
 													{/* Contact Info */}
-													<div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+													<div className="flex flex-wrap items-center gap-4 text-muted-foreground text-sm">
 														<div className="flex items-center gap-2">
 															<RiMailLine className="size-4" />
 															<span>{prospect.email}</span>
@@ -1341,17 +1477,27 @@ export default function CRMPage() {
 													</div>
 
 													{/* Tags */}
-													{(prospect.tagNames && prospect.tagNames.length > 0) || (prospect.tags && prospect.tags.trim()) ? (
+													{(prospect.tagNames &&
+														prospect.tagNames.length > 0) ||
+													prospect.tags?.trim() ? (
 														<div className="flex flex-wrap items-center gap-2">
 															{prospect.tagNames && prospect.tagNames.length > 0
 																? prospect.tagNames.map((tag, idx) => (
-																		<Badge key={idx} variant="secondary" className="text-xs">
+																		<Badge
+																			key={idx}
+																			variant="secondary"
+																			className="text-xs"
+																		>
 																			{tag}
 																		</Badge>
 																	))
 																: prospect.tags
 																	? prospect.tags.split(",").map((tag, idx) => (
-																			<Badge key={idx} variant="secondary" className="text-xs">
+																			<Badge
+																				key={idx}
+																				variant="secondary"
+																				className="text-xs"
+																			>
 																				{tag.trim()}
 																			</Badge>
 																		))
@@ -1372,7 +1518,8 @@ export default function CRMPage() {
 															<Badge variant="outline" className="capitalize">
 																{prospect.type === "tenant"
 																	? "Tenant"
-																	: "Owner"} | {prospect.status}
+																	: "Owner"}{" "}
+																| {prospect.status}
 															</Badge>
 														</div>
 														<div className="flex items-center gap-2">
@@ -1401,7 +1548,8 @@ export default function CRMPage() {
 															<div className="flex items-center gap-2">
 																<RiCalendarLine className="size-4 text-muted-foreground" />
 																<span className="text-muted-foreground">
-																	Last: {formatContactDate(prospect.lastContact)}
+																	Last:{" "}
+																	{formatContactDate(prospect.lastContact)}
 																</span>
 															</div>
 														)}
@@ -1409,7 +1557,8 @@ export default function CRMPage() {
 															<div className="flex items-center gap-2">
 																<RiCalendarLine className="size-4 text-muted-foreground" />
 																<span className="text-muted-foreground">
-																	Next: {formatContactDate(prospect.nextContact)}
+																	Next:{" "}
+																	{formatContactDate(prospect.nextContact)}
 																</span>
 															</div>
 														)}
@@ -1431,7 +1580,7 @@ export default function CRMPage() {
 														variant="outline"
 														size="sm"
 														onClick={() => handleView(prospect)}
-														style={{color: "#5858ff"}}
+														style={{ color: "#5858ff" }}
 														className="cursor-pointer border-blue-500/50 text-blue-600 hover:bg-blue-500/10 hover:text-blue-700 dark:text-blue-400 dark:hover:bg-blue-500/20 dark:hover:text-blue-300"
 													>
 														<RiEyeLine className="mr-2 h-4 w-4" />
@@ -1441,7 +1590,7 @@ export default function CRMPage() {
 														variant="outline"
 														size="sm"
 														onClick={() => handleDeleteClick(prospect)}
-														className="border-red-500/50 text-red-600 hover:bg-red-500/10 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-500/20 dark:hover:text-red-300 cursor-pointer"
+														className="cursor-pointer border-red-500/50 text-red-600 hover:bg-red-500/10 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-500/20 dark:hover:text-red-300"
 													>
 														<RiDeleteBinLine className="mr-2 h-4 w-4" />
 														Delete
@@ -1451,23 +1600,28 @@ export default function CRMPage() {
 										</CardContent>
 									</Card>
 								))
-							)
-						}
-					</div>
+							)}
+						</div>
 					)}
 
 					{/* Pagination - Only show in List View */}
 					{viewMode === "list" && totalPages > 0 && (
 						<div className="flex items-center justify-between">
-							<div className="text-sm text-muted-foreground">
-								Showing {((currentPage - 1) * itemsPerPage) + 1}-{Math.min(currentPage * itemsPerPage, prospectsData?.pagination.total || 0)} of{" "}
-								{prospectsData?.pagination.total || 0} prospects
+							<div className="text-muted-foreground text-sm">
+								Showing {(currentPage - 1) * itemsPerPage + 1}-
+								{Math.min(
+									currentPage * itemsPerPage,
+									prospectsData?.pagination.total || 0,
+								)}{" "}
+								of {prospectsData?.pagination.total || 0} prospects
 							</div>
 							<div className="flex items-center gap-2">
 								<Button
 									variant="outline"
 									size="sm"
-									onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+									onClick={() =>
+										setCurrentPage((prev) => Math.max(1, prev - 1))
+									}
 									disabled={currentPage === 1}
 								>
 									&lt; Prev
@@ -1490,4 +1644,3 @@ export default function CRMPage() {
 		</SidebarProvider>
 	);
 }
-

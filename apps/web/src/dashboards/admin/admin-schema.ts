@@ -203,17 +203,19 @@ export function formatCurrency(amount: number | string | null): string {
 	}).format(numAmount);
 }
 
-export function formatPercentage(value: number | string | null | undefined): string {
+export function formatPercentage(
+	value: number | string | null | undefined,
+): string {
 	// Handle null, undefined, or invalid values
 	if (value === null || value === undefined) {
 		return "0.0%";
 	}
 
 	// Convert to number if it's a string
-	const numValue = typeof value === "string" ? parseFloat(value) : value;
+	const numValue = typeof value === "string" ? Number.parseFloat(value) : value;
 
 	// Check if the conversion resulted in a valid number
-	if (isNaN(numValue) || typeof numValue !== 'number') {
+	if (Number.isNaN(numValue) || typeof numValue !== "number") {
 		return "0.0%";
 	}
 
@@ -257,7 +259,7 @@ export function getDaysAgo(date: Date | string | null): number {
 
 	try {
 		const dateObj = typeof date === "string" ? new Date(date) : date;
-		if (isNaN(dateObj.getTime())) return 0;
+		if (Number.isNaN(dateObj.getTime())) return 0;
 
 		const now = new Date();
 		const diffTime = Math.abs(now.getTime() - dateObj.getTime());
@@ -273,7 +275,7 @@ export function getRelativeTime(date: Date | string | null): string {
 
 	try {
 		const dateObj = typeof date === "string" ? new Date(date) : date;
-		if (isNaN(dateObj.getTime())) return "Invalid date";
+		if (Number.isNaN(dateObj.getTime())) return "Invalid date";
 
 		const now = new Date();
 		const diffMs = now.getTime() - dateObj.getTime();
@@ -286,17 +288,20 @@ export function getRelativeTime(date: Date | string | null): string {
 
 		if (diffSeconds < 60) {
 			return "Just now";
-		} else if (diffMinutes < 60) {
-			return diffMinutes === 1 ? "1 minute ago" : `${diffMinutes} minutes ago`;
-		} else if (diffHours < 24) {
-			return diffHours === 1 ? "1 hour ago" : `${diffHours} hours ago`;
-		} else if (diffDays < 7) {
-			return diffDays === 1 ? "1 day ago" : `${diffDays} days ago`;
-		} else if (diffWeeks < 4) {
-			return diffWeeks === 1 ? "1 week ago" : `${diffWeeks} weeks ago`;
-		} else {
-			return diffMonths === 1 ? "1 month ago" : `${diffMonths} months ago`;
 		}
+		if (diffMinutes < 60) {
+			return diffMinutes === 1 ? "1 minute ago" : `${diffMinutes} minutes ago`;
+		}
+		if (diffHours < 24) {
+			return diffHours === 1 ? "1 hour ago" : `${diffHours} hours ago`;
+		}
+		if (diffDays < 7) {
+			return diffDays === 1 ? "1 day ago" : `${diffDays} days ago`;
+		}
+		if (diffWeeks < 4) {
+			return diffWeeks === 1 ? "1 week ago" : `${diffWeeks} weeks ago`;
+		}
+		return diffMonths === 1 ? "1 month ago" : `${diffMonths} months ago`;
 	} catch {
 		return "Unknown";
 	}

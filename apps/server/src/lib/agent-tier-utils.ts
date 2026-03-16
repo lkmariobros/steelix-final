@@ -1,13 +1,13 @@
 import { eq } from "drizzle-orm";
 import { db } from "../db";
 import {
-	user,
+	AGENT_TIER_CONFIG,
+	type AgentTier,
 	agentTierHistory,
 	commissionAuditLog,
 	leadershipBonusPayments,
 	tierCommissionConfig,
-	type AgentTier,
-	AGENT_TIER_CONFIG
+	user,
 } from "../db/schema/auth";
 
 /**
@@ -24,7 +24,7 @@ export interface TierPromotionResult {
 }
 
 // Simplified representation type - 2 options only
-export type RepresentationType = 'direct' | 'co_broking';
+export type RepresentationType = "direct" | "co_broking";
 
 // Leadership bonus calculation result
 export interface LeadershipBonusInfo {
@@ -161,8 +161,8 @@ export function calculateEnhancedCommission(
 	representationType: RepresentationType,
 	agentTier: AgentTier,
 	companyCommissionSplit: number,
-	coBrokerSplitPercentage: number = 50,
-	uplineInfo?: { uplineTier: AgentTier; leadershipBonusRate: number } | null
+	coBrokerSplitPercentage = 50,
+	uplineInfo?: { uplineTier: AgentTier; leadershipBonusRate: number } | null,
 ): CommissionBreakdown {
 	// Input validation
 	if (propertyPrice <= 0) {
@@ -182,8 +182,9 @@ export function calculateEnhancedCommission(
 	let agentCommissionShare: number;
 	let coBrokerShare: number | undefined;
 
-	if (representationType === 'co_broking') {
-		agentCommissionShare = totalCommission * ((100 - coBrokerSplitPercentage) / 100);
+	if (representationType === "co_broking") {
+		agentCommissionShare =
+			totalCommission * ((100 - coBrokerSplitPercentage) / 100);
 		coBrokerShare = totalCommission * (coBrokerSplitPercentage / 100);
 	} else {
 		agentCommissionShare = totalCommission;
@@ -231,7 +232,7 @@ export function calculateEnhancedCommission(
 			agentEarnings,
 			leadershipBonus: leadershipBonus?.bonusAmount,
 			companyShare: Math.round(companyNetShare * 100) / 100,
-		}
+		},
 	};
 }
 
@@ -243,18 +244,24 @@ export async function promoteAgentTier(
 	newTier: AgentTier,
 	promotedBy: string,
 	reason: string,
-	performanceMetrics?: Record<string, any>
+	performanceMetrics?: Record<string, unknown>,
 ): Promise<TierPromotionResult> {
 	try {
 		// Get current agent info
 		const currentAgent = await getAgentTierInfo(agentId);
 		const previousTier = currentAgent.agentTier;
-		
+
 		// Validate tier progression (optional business rule)
-		const tierOrder: AgentTier[] = ['advisor', 'sales_leader', 'team_leader', 'group_leader', 'supreme_leader'];
+		const tierOrder: AgentTier[] = [
+			"advisor",
+			"sales_leader",
+			"team_leader",
+			"group_leader",
+			"supreme_leader",
+		];
 		const currentIndex = previousTier ? tierOrder.indexOf(previousTier) : -1;
 		const newIndex = tierOrder.indexOf(newTier);
-		
+
 		if (currentIndex >= 0 && newIndex < currentIndex) {
 			return {
 				success: false,
@@ -288,7 +295,9 @@ export async function promoteAgentTier(
 			effectiveDate,
 			promotedBy,
 			reason,
-			performanceMetrics: performanceMetrics ? JSON.stringify(performanceMetrics) : null,
+			performanceMetrics: performanceMetrics
+				? JSON.stringify(performanceMetrics)
+				: null,
 		});
 
 		return {
@@ -303,7 +312,7 @@ export async function promoteAgentTier(
 			previousTier: null,
 			newTier,
 			effectiveDate: new Date(),
-			error: error instanceof Error ? error.message : 'Unknown error occurred',
+			error: error instanceof Error ? error.message : "Unknown error occurred",
 		};
 	}
 }
@@ -334,12 +343,12 @@ export async function getAgentTierHistory(agentId: string) {
 export async function logCommissionAudit(
 	transactionId: string,
 	agentId: string,
-	oldValues: any,
-	newValues: any,
+	oldValues: Record<string, unknown>,
+	newValues: Record<string, unknown>,
 	changedBy: string,
 	changeReason: string,
 	ipAddress?: string,
-	userAgent?: string
+	userAgent?: string,
 ) {
 	await db.insert(commissionAuditLog).values({
 		transactionId,
@@ -362,20 +371,20 @@ export function validateTierRequirements(
 	performanceMetrics: {
 		monthlySales: number;
 		teamMembers: number;
-	}
+	},
 ): { eligible: boolean; missingRequirements: string[] } {
 	const requirements = AGENT_TIER_CONFIG[targetTier].requirements;
 	const missingRequirements: string[] = [];
 
 	if (performanceMetrics.monthlySales < requirements.monthlySales) {
 		missingRequirements.push(
-			`Need ${requirements.monthlySales} monthly sales (current: ${performanceMetrics.monthlySales})`
+			`Need ${requirements.monthlySales} monthly sales (current: ${performanceMetrics.monthlySales})`,
 		);
 	}
 
 	if (performanceMetrics.teamMembers < requirements.teamMembers) {
 		missingRequirements.push(
-			`Need ${requirements.teamMembers} team members (current: ${performanceMetrics.teamMembers})`
+			`Need ${requirements.teamMembers} team members (current: ${performanceMetrics.teamMembers})`,
 		);
 	}
 
@@ -396,7 +405,7 @@ export async function createLeadershipBonusPayment(
 	originalCommissionAmount: number,
 	companyShareAmount: number,
 	leadershipBonusRate: number,
-	leadershipBonusAmount: number
+	leadershipBonusAmount: number,
 ) {
 	const [payment] = await db
 		.insert(leadershipBonusPayments)
@@ -409,7 +418,7 @@ export async function createLeadershipBonusPayment(
 			companyShareAmount: companyShareAmount.toFixed(2),
 			leadershipBonusRate,
 			leadershipBonusAmount: leadershipBonusAmount.toFixed(2),
-			status: 'pending',
+			status: "pending",
 		})
 		.returning();
 
@@ -426,7 +435,8 @@ export async function getLeadershipBonusPayments(uplineAgentId: string) {
 			transactionId: leadershipBonusPayments.transactionId,
 			downlineAgentId: leadershipBonusPayments.downlineAgentId,
 			uplineTier: leadershipBonusPayments.uplineTier,
-			originalCommissionAmount: leadershipBonusPayments.originalCommissionAmount,
+			originalCommissionAmount:
+				leadershipBonusPayments.originalCommissionAmount,
 			companyShareAmount: leadershipBonusPayments.companyShareAmount,
 			leadershipBonusRate: leadershipBonusPayments.leadershipBonusRate,
 			leadershipBonusAmount: leadershipBonusPayments.leadershipBonusAmount,
@@ -445,7 +455,7 @@ export async function getLeadershipBonusPayments(uplineAgentId: string) {
 export async function setAgentUpline(
 	agentId: string,
 	recruitedBy: string,
-	setBy: string
+	setBy: string,
 ): Promise<{ success: boolean; error?: string }> {
 	try {
 		// Validate that the recruiter exists and is not the same as the agent

@@ -13,10 +13,10 @@ import {
 
 import React from "react";
 
+import { safeToFixed } from "@/utils/number-formatting";
 // Import types and utilities
 import type { DateRangeFilter } from "../admin-schema";
 import { formatCurrency } from "../admin-schema";
-import { safeToFixed } from "@/utils/number-formatting";
 
 interface DashboardSummaryProps {
 	dateRange?: DateRangeFilter;
@@ -71,8 +71,8 @@ export function DashboardSummary({
 				</CardHeader>
 				<CardContent>
 					<div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-						{Array.from({ length: 4 }).map((_, i) => (
-							<div key={i} className="space-y-2">
+						{Array.from({ length: 4 }, (_, i) => (
+							<div key={`skeleton-${i}`} className="space-y-2">
 								<Skeleton className="h-4 w-24" />
 								<Skeleton className="h-8 w-16" />
 								<Skeleton className="h-3 w-20" />
@@ -121,13 +121,20 @@ export function DashboardSummary({
 	}
 
 	// Calculate derived metrics with safe number conversion
-	const approvalRate = summaryData.totalTransactions > 0
-		? Number(((summaryData.approvedTransactions / summaryData.totalTransactions) * 100))
-		: 0;
+	const approvalRate =
+		summaryData.totalTransactions > 0
+			? Number(
+					(summaryData.approvedTransactions / summaryData.totalTransactions) *
+						100,
+				)
+			: 0;
 
-	const pendingRate = summaryData.totalTransactions > 0
-		? Number(((summaryData.pendingApprovals / summaryData.totalTransactions) * 100))
-		: 0;
+	const pendingRate =
+		summaryData.totalTransactions > 0
+			? Number(
+					(summaryData.pendingApprovals / summaryData.totalTransactions) * 100,
+				)
+			: 0;
 
 	// Determine trends (simplified - in real app you'd compare with previous period)
 	const totalTransactionsTrend =
@@ -226,7 +233,10 @@ export function DashboardSummary({
 											: "text-red-600 dark:text-red-400"
 								}`}
 							>
-								{typeof approvalRate === 'number' ? approvalRate.toFixed(1) : '0.0'}%
+								{typeof approvalRate === "number"
+									? approvalRate.toFixed(1)
+									: "0.0"}
+								%
 							</span>
 						</div>
 						<div className="mt-2 h-2 rounded-full bg-muted">
@@ -257,7 +267,10 @@ export function DashboardSummary({
 											: "text-red-600 dark:text-red-400"
 								}`}
 							>
-								{typeof pendingRate === 'number' ? pendingRate.toFixed(1) : '0.0'}%
+								{typeof pendingRate === "number"
+									? pendingRate.toFixed(1)
+									: "0.0"}
+								%
 							</span>
 						</div>
 						<div className="mt-2 h-2 rounded-full bg-muted">

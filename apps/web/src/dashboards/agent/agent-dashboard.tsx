@@ -14,20 +14,20 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
+import { useTransactionModalActions } from "@/contexts/transaction-modal-context";
 import {
 	RiCalendarLine,
 	RiRefreshLine,
 	RiSettings3Line,
 } from "@remixicon/react";
 import { useEffect, useState } from "react";
-import { useTransactionModalActions } from "@/contexts/transaction-modal-context";
 
 // Import dashboard widgets
 import { FinancialOverview } from "./components/financial-overview";
+import { LeadershipBonusWidget } from "./components/leadership-bonus-widget";
 import { RecentTransactions } from "./components/recent-transactions";
 import { TeamLeaderboard } from "./components/team-leaderboard";
 import { TransactionOverview } from "./components/transaction-overview";
-import { LeadershipBonusWidget } from "./components/leadership-bonus-widget";
 
 interface AgentDashboardProps {
 	className?: string;

@@ -21,12 +21,15 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
+import {
+	invalidateAdminQueries,
+	optimisticUpdateTransaction,
+} from "@/lib/query-invalidation";
 import { trpc } from "@/utils/trpc";
 import { RiCheckLine, RiCloseLine, RiTimeLine } from "@remixicon/react";
 import { useQueryClient } from "@tanstack/react-query";
 import React, { useState } from "react";
 import { toast } from "sonner";
-import { invalidateAdminQueries, optimisticUpdateTransaction } from "@/lib/query-invalidation";
 
 // Import types and utilities
 import type { CommissionApproval, DateRangeFilter } from "../admin-schema";
@@ -86,35 +89,39 @@ export function CommissionApprovalQueue({
 	);
 
 	// ✅ REAL tRPC mutation with comprehensive query invalidation
-	const processApprovalMutation = trpc.admin.processCommissionApproval.useMutation({
-		onMutate: async (variables) => {
-			// Optimistic update for immediate UI feedback
-			const statusUpdate = variables.action === "approve" ? "approved" : "rejected";
-			optimisticUpdateTransaction(queryClient, variables.transactionId, {
-				status: statusUpdate,
-				reviewNotes: variables.reviewNotes,
-			});
-		},
-		onSuccess: (data, variables) => {
-			const actionText = variables.action === "approve" ? "approved" : "rejected";
-			toast.success(`Transaction ${actionText} successfully`);
+	const processApprovalMutation =
+		trpc.admin.processCommissionApproval.useMutation({
+			onMutate: async (variables) => {
+				// Optimistic update for immediate UI feedback
+				const statusUpdate =
+					variables.action === "approve" ? "approved" : "rejected";
+				optimisticUpdateTransaction(queryClient, variables.transactionId, {
+					status: statusUpdate,
+					reviewNotes: variables.reviewNotes,
+				});
+			},
+			onSuccess: (data, variables) => {
+				const actionText =
+					variables.action === "approve" ? "approved" : "rejected";
+				toast.success(`Transaction ${actionText} successfully`);
 
-			// Comprehensive query invalidation for real-time updates
-			invalidateAdminQueries(queryClient);
+				// Comprehensive query invalidation for real-time updates
+				invalidateAdminQueries(queryClient);
 
-			closeDialog();
-		},
-		onError: (error, variables) => {
-			console.error("Commission approval error:", error);
-			const actionText = variables.action === "approve" ? "approve" : "reject";
-			toast.error(`Failed to ${actionText} transaction`);
+				closeDialog();
+			},
+			onError: (error, variables) => {
+				console.error("Commission approval error:", error);
+				const actionText =
+					variables.action === "approve" ? "approve" : "reject";
+				toast.error(`Failed to ${actionText} transaction`);
 
-			// Revert optimistic update on error
-			invalidateAdminQueries(queryClient);
+				// Revert optimistic update on error
+				invalidateAdminQueries(queryClient);
 
-			setDialogState((prev) => ({ ...prev, isSubmitting: false }));
-		},
-	});
+				setDialogState((prev) => ({ ...prev, isSubmitting: false }));
+			},
+		});
 
 	// Refetch when refreshKey changes
 	React.useEffect(() => {

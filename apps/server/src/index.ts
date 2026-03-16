@@ -1,12 +1,13 @@
 import "dotenv/config";
 import { trpcServer } from "@hono/trpc-server";
+import type { Context } from "hono";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
+import { db } from "./db";
 import { auth } from "./lib/auth";
 import { createContext } from "./lib/context";
 import { appRouter } from "./routers/index";
-import { db } from "./db";
 
 const app = new Hono();
 
@@ -16,7 +17,7 @@ app.onError((err, c) => {
 	console.error("❌ Error stack:", err.stack);
 	console.error("❌ Request path:", c.req.path);
 	console.error("❌ Request method:", c.req.method);
-	
+
 	return c.json(
 		{
 			error: "Internal server error",
@@ -42,7 +43,7 @@ app.use(
 			"https://steelix-final-mx4or73lk-lkmariobros-projects.vercel.app",
 			// Add branch-specific URLs
 			"https://steelix-final-web-git-admin-typescript-errors-solved-lkmariobros-projects.vercel.app",
-			...(process.env.CORS_ORIGIN?.split(',') || []),
+			...(process.env.CORS_ORIGIN?.split(",") || []),
 		],
 		allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
 		allowHeaders: [
@@ -63,20 +64,26 @@ app.use(
 app.all("/api/auth/*", async (c) => {
 	console.log(`🔐 Auth request: ${c.req.method} ${c.req.url}`);
 	console.log(`🔐 Auth path: ${c.req.path}`);
-	console.log("🔐 Auth headers:", Object.fromEntries(c.req.raw.headers.entries()));
+	console.log(
+		"🔐 Auth headers:",
+		Object.fromEntries(c.req.raw.headers.entries()),
+	);
 
 	try {
 		// Create a new Request object with the correct URL structure
 		const url = new URL(c.req.url);
-		const authPath = url.pathname.replace('/api/auth', '');
+		const authPath = url.pathname.replace("/api/auth", "");
 		console.log(`🔐 Extracted auth path: ${authPath}`);
 
 		// Get request body for logging
 		let bodyText = "";
-		if (c.req.method !== 'GET' && c.req.method !== 'HEAD') {
+		if (c.req.method !== "GET" && c.req.method !== "HEAD") {
 			try {
 				bodyText = await c.req.text();
-				console.log("🔐 Auth request body:", bodyText ? `${bodyText.substring(0, 100)}...` : "(empty)");
+				console.log(
+					"🔐 Auth request body:",
+					bodyText ? `${bodyText.substring(0, 100)}...` : "(empty)",
+				);
 			} catch (e) {
 				console.log("🔐 Could not read body:", e);
 			}
@@ -91,16 +98,24 @@ app.all("/api/auth/*", async (c) => {
 
 		console.log("🔐 Calling auth.handler...");
 		const result = await auth.handler(authRequest);
-		console.log("🔐 Auth handler result:", result ? `Response received (status: ${result.status})` : "No response");
+		console.log(
+			"🔐 Auth handler result:",
+			result ? `Response received (status: ${result.status})` : "No response",
+		);
 
 		if (!result) {
-			console.log("⚠️ Auth handler returned null/undefined - creating 404 response");
-			return c.json({
-				error: "Auth endpoint not found",
-				path: c.req.path,
-				authPath: authPath,
-				availableEndpoints: ['/session', '/sign-in', '/sign-up', '/sign-out']
-			}, 404);
+			console.log(
+				"⚠️ Auth handler returned null/undefined - creating 404 response",
+			);
+			return c.json(
+				{
+					error: "Auth endpoint not found",
+					path: c.req.path,
+					authPath: authPath,
+					availableEndpoints: ["/session", "/sign-in", "/sign-up", "/sign-out"],
+				},
+				404,
+			);
 		}
 
 		// Log response body for debugging
@@ -117,8 +132,17 @@ app.all("/api/auth/*", async (c) => {
 		return result;
 	} catch (error) {
 		console.error("❌ Auth handler error:", error);
-		console.error("❌ Error stack:", error instanceof Error ? error.stack : "No stack");
-		return c.json({ error: "Auth handler failed", details: error instanceof Error ? error.message : String(error) }, 500);
+		console.error(
+			"❌ Error stack:",
+			error instanceof Error ? error.stack : "No stack",
+		);
+		return c.json(
+			{
+				error: "Auth handler failed",
+				details: error instanceof Error ? error.message : String(error),
+			},
+			500,
+		);
 	}
 });
 
@@ -130,7 +154,13 @@ app.all("/auth/*", async (c) => {
 		return result || c.json({ error: "Auth endpoint not found" }, 404);
 	} catch (error) {
 		console.error("❌ Fallback auth handler error:", error);
-		return c.json({ error: "Auth handler failed", details: error instanceof Error ? error.message : String(error) }, 500);
+		return c.json(
+			{
+				error: "Auth handler failed",
+				details: error instanceof Error ? error.message : String(error),
+			},
+			500,
+		);
 	}
 });
 
@@ -167,7 +197,7 @@ app.get("/ping", (c) => c.text("pong"));
 
 // Kapso WhatsApp Webhook - receives incoming messages from Kapso
 // Support multiple webhook paths that Kapso might use
-const handleKapsoWebhookRequest = async (c: any) => {
+const handleKapsoWebhookRequest = async (c: Context) => {
 	try {
 		const body = await c.req.json();
 		console.log("📨 Kapso webhook received at:", c.req.path);
@@ -180,20 +210,18 @@ const handleKapsoWebhookRequest = async (c: any) => {
 		if (result.success) {
 			console.log("✅ Webhook processed successfully");
 			return c.json({ success: true, message: "Webhook processed" }, 200);
-		} else {
-			console.error("❌ Webhook processing failed:", result.error);
-			return c.json(
-				{ success: false, error: result.error },
-				result.statusCode || 400,
-			);
 		}
-	} catch (error: any) {
-		console.error("❌ Kapso webhook error:", error);
-		console.error("❌ Error stack:", error.stack);
+		console.error("❌ Webhook processing failed:", result.error);
 		return c.json(
-			{ success: false, error: error.message || "Webhook processing failed" },
-			500,
+			{ success: false, error: result.error },
+			(result.statusCode || 400) as 200 | 400 | 500,
 		);
+	} catch (error: unknown) {
+		const msg =
+			error instanceof Error ? error.message : "Webhook processing failed";
+		console.error("❌ Kapso webhook error:", error);
+		if (error instanceof Error) console.error("❌ Error stack:", error.stack);
+		return c.json({ success: false, error: msg }, 500);
 	}
 };
 
@@ -207,7 +235,7 @@ app.post("/webhook/kapso/whatsapp", handleKapsoWebhookRequest);
 app.post("/test/send-first-message", async (c) => {
 	try {
 		const { phoneNumber, message } = await c.req.json();
-		
+
 		if (!phoneNumber) {
 			return c.json({ error: "phoneNumber is required" }, 400);
 		}
@@ -227,10 +255,12 @@ app.post("/test/send-first-message", async (c) => {
 		if (!formattedPhone.startsWith("+")) {
 			formattedPhone = `+${formattedPhone}`;
 		}
-		const messageText = message || "Hello! This is a test message from your WhatsApp Business account. You can now reply to this message.";
+		const messageText =
+			message ||
+			"Hello! This is a test message from your WhatsApp Business account. You can now reply to this message.";
 
 		console.log(`📤 Sending first message to ${formattedPhone}...`);
-		
+
 		const result = await kapsoClient.sendMessage({
 			to: formattedPhone,
 			message: messageText,
@@ -243,16 +273,24 @@ app.post("/test/send-first-message", async (c) => {
 				messageId: result.messageId,
 				note: "The recipient can now reply to this message within 24 hours.",
 			});
-		} else {
-			return c.json({
+		}
+		return c.json(
+			{
 				success: false,
 				error: result.error || "Failed to send message",
-			}, 500);
-		}
-	} catch (error: any) {
+			},
+			500,
+		);
+	} catch (error: unknown) {
 		console.error("❌ Test send message error:", error);
 		return c.json(
-			{ success: false, error: error.message || "Failed to send test message" },
+			{
+				success: false,
+				error:
+					error instanceof Error
+						? error.message
+						: "Failed to send test message",
+			},
 			500,
 		);
 	}
@@ -262,18 +300,17 @@ app.post("/test/send-first-message", async (c) => {
 app.get("/debug/whatsapp-conversations", async (c) => {
 	try {
 		const { db } = await import("./db");
-		const { whatsappConversations, whatsappMessages } = await import("./db/schema/whatsapp");
-		
+		const { whatsappConversations, whatsappMessages } = await import(
+			"./db/schema/whatsapp"
+		);
+
 		const allConversations = await db
 			.select()
 			.from(whatsappConversations)
 			.limit(20);
-		
-		const allMessages = await db
-			.select()
-			.from(whatsappMessages)
-			.limit(20);
-		
+
+		const allMessages = await db.select().from(whatsappMessages).limit(20);
+
 		return c.json({
 			conversationsCount: allConversations.length,
 			conversations: allConversations.map((conv) => ({
@@ -297,9 +334,17 @@ app.get("/debug/whatsapp-conversations", async (c) => {
 				sentAt: msg.sentAt,
 			})),
 		});
-	} catch (error: any) {
+	} catch (error: unknown) {
 		console.error("❌ Error in /debug/whatsapp-conversations:", error);
-		return c.json({ error: error.message || "Failed to fetch conversations" }, 500);
+		return c.json(
+			{
+				error:
+					error instanceof Error
+						? error.message
+						: "Failed to fetch conversations",
+			},
+			500,
+		);
 	}
 });
 
@@ -310,15 +355,18 @@ app.get("/test/kapso-connection", async (c) => {
 		const kapsoClient = getKapsoClient();
 
 		if (!kapsoClient) {
-			return c.json({ 
-				error: "Kapso client not configured",
-				hint: "Check KAPSO_API_KEY in .env file"
-			}, 500);
+			return c.json(
+				{
+					error: "Kapso client not configured",
+					hint: "Check KAPSO_API_KEY in .env file",
+				},
+				500,
+			);
 		}
 
 		// Get the API URL being used
 		const apiUrl = process.env.KAPSO_API_URL || "https://api.kapso.ai";
-		
+
 		// Test different endpoints (Kapso uses /meta/whatsapp/v24.0 as base)
 		const testEndpoints = [
 			`${apiUrl}/meta/whatsapp/v24.0/messages`,
@@ -336,7 +384,7 @@ app.get("/test/kapso-connection", async (c) => {
 				const response = await fetch(endpoint, {
 					method: "GET",
 					headers: {
-						"Authorization": `Bearer ${process.env.KAPSO_API_KEY}`,
+						Authorization: `Bearer ${process.env.KAPSO_API_KEY}`,
 					},
 				});
 				results.push({
@@ -345,12 +393,13 @@ app.get("/test/kapso-connection", async (c) => {
 					statusText: response.statusText,
 					reachable: true,
 				});
-			} catch (error: any) {
+			} catch (error: unknown) {
+				const e = error as { message?: string; code?: string };
 				results.push({
 					endpoint,
 					reachable: false,
-					error: error.message,
-					code: error.code,
+					error: e?.message,
+					code: e?.code,
 				});
 			}
 		}
@@ -360,12 +409,17 @@ app.get("/test/kapso-connection", async (c) => {
 			apiKeySet: !!process.env.KAPSO_API_KEY,
 			apiKeyLength: process.env.KAPSO_API_KEY?.length || 0,
 			testResults: results,
-			recommendation: "Check your Kapso dashboard for the correct API URL and update KAPSO_API_URL in .env",
+			recommendation:
+				"Check your Kapso dashboard for the correct API URL and update KAPSO_API_URL in .env",
 		});
-	} catch (error: any) {
-		return c.json({
-			error: error.message || "Failed to test connection",
-		}, 500);
+	} catch (error: unknown) {
+		return c.json(
+			{
+				error:
+					error instanceof Error ? error.message : "Failed to test connection",
+			},
+			500,
+		);
 	}
 });
 
@@ -379,15 +433,15 @@ app.get("/debug/auth-config", (c) => {
 
 	return c.json({
 		betterAuthUrl: process.env.BETTER_AUTH_URL,
-		corsOrigins: process.env.CORS_ORIGIN?.split(',') || [],
+		corsOrigins: process.env.CORS_ORIGIN?.split(",") || [],
 		hasSecret: !!process.env.BETTER_AUTH_SECRET,
 		hasDatabaseUrl: !!process.env.DATABASE_URL,
 		nodeEnv: process.env.NODE_ENV,
 		authInitialized: !!auth,
-		authHandlerExists: typeof auth?.handler === 'function',
+		authHandlerExists: typeof auth?.handler === "function",
 		authObjectType: typeof auth,
 		authHandlerType: typeof auth?.handler,
-		timestamp: new Date().toISOString()
+		timestamp: new Date().toISOString(),
 	});
 });
 
@@ -395,29 +449,37 @@ app.get("/debug/auth-config", (c) => {
 app.get("/debug/auth-session", async (c) => {
 	try {
 		console.log("🔍 Debug: Testing auth session directly");
-		console.log("🔍 Request headers:", Object.fromEntries(c.req.raw.headers.entries()));
+		console.log(
+			"🔍 Request headers:",
+			Object.fromEntries(c.req.raw.headers.entries()),
+		);
 
 		// Try to get session using Better Auth
 		const session = await auth.api.getSession({
-			headers: c.req.raw.headers
+			headers: c.req.raw.headers,
 		});
 
 		return c.json({
 			hasSession: !!session,
-			session: session ? {
-				userId: session.user?.id,
-				userEmail: session.user?.email,
-				sessionId: session.session?.id
-			} : null,
-			timestamp: new Date().toISOString()
+			session: session
+				? {
+						userId: session.user?.id,
+						userEmail: session.user?.email,
+						sessionId: session.session?.id,
+					}
+				: null,
+			timestamp: new Date().toISOString(),
 		});
 	} catch (error) {
 		console.error("❌ Debug auth session error:", error);
-		return c.json({
-			error: "Failed to get session",
-			details: error instanceof Error ? error.message : String(error),
-			timestamp: new Date().toISOString()
-		}, 500);
+		return c.json(
+			{
+				error: "Failed to get session",
+				details: error instanceof Error ? error.message : String(error),
+				timestamp: new Date().toISOString(),
+			},
+			500,
+		);
 	}
 });
 
@@ -427,15 +489,15 @@ app.get("/debug/test-auth-session", async (c) => {
 		console.log("🧪 Manual test: Creating auth session request");
 
 		// Create a manual request to the auth session endpoint
-		const sessionUrl = `${process.env.BETTER_AUTH_URL || 'http://localhost:8080'}/api/auth/session`;
+		const sessionUrl = `${process.env.BETTER_AUTH_URL || "http://localhost:8080"}/api/auth/session`;
 		console.log("🧪 Session URL:", sessionUrl);
 
 		const response = await fetch(sessionUrl, {
-			method: 'GET',
+			method: "GET",
 			headers: {
-				'Content-Type': 'application/json',
-				'Cookie': c.req.header('Cookie') || '',
-			}
+				"Content-Type": "application/json",
+				Cookie: c.req.header("Cookie") || "",
+			},
 		});
 
 		console.log("🧪 Session response status:", response.status);
@@ -447,15 +509,18 @@ app.get("/debug/test-auth-session", async (c) => {
 			status: response.status,
 			headers: Object.fromEntries(response.headers.entries()),
 			body: responseText,
-			timestamp: new Date().toISOString()
+			timestamp: new Date().toISOString(),
 		});
 	} catch (error) {
 		console.error("❌ Manual auth session test error:", error);
-		return c.json({
-			error: "Failed to test auth session",
-			details: error instanceof Error ? error.message : String(error),
-			timestamp: new Date().toISOString()
-		}, 500);
+		return c.json(
+			{
+				error: "Failed to test auth session",
+				details: error instanceof Error ? error.message : String(error),
+				timestamp: new Date().toISOString(),
+			},
+			500,
+		);
 	}
 });
 
@@ -467,14 +532,17 @@ app.get("/debug/db-test", async (c) => {
 		return c.json({
 			status: "success",
 			dbConnected: true,
-			testQuery: result
+			testQuery: result,
 		});
 	} catch (error) {
-		return c.json({
-			status: "error",
-			dbConnected: false,
-			error: error instanceof Error ? error.message : String(error)
-		}, 500);
+		return c.json(
+			{
+				status: "error",
+				dbConnected: false,
+				error: error instanceof Error ? error.message : String(error),
+			},
+			500,
+		);
 	}
 });
 
@@ -488,32 +556,37 @@ app.get("/debug/session-test", async (c) => {
 		});
 		return c.json({
 			hasSession: !!session,
-			session: session ? {
-				userId: session.user.id,
-				email: session.user.email,
-				name: session.user.name
-			} : null,
-			cookies: c.req.header('cookie') || 'No cookies',
-			headers: Object.fromEntries(c.req.raw.headers.entries())
+			session: session
+				? {
+						userId: session.user.id,
+						email: session.user.email,
+						name: session.user.name,
+					}
+				: null,
+			cookies: c.req.header("cookie") || "No cookies",
+			headers: Object.fromEntries(c.req.raw.headers.entries()),
 		});
 	} catch (error) {
-		return c.json({
-			error: error instanceof Error ? error.message : String(error),
-			hasSession: false
-		}, 500);
+		return c.json(
+			{
+				error: error instanceof Error ? error.message : String(error),
+				hasSession: false,
+			},
+			500,
+		);
 	}
 });
 
 const port = process.env.PORT || 8080;
 
 // Add global error handlers to prevent crashes
-process.on('unhandledRejection', (reason, promise) => {
-	console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
+process.on("unhandledRejection", (reason, promise) => {
+	console.error("❌ Unhandled Rejection at:", promise, "reason:", reason);
 	// Don't exit - log and continue
 });
 
-process.on('uncaughtException', (error) => {
-	console.error('❌ Uncaught Exception:', error);
+process.on("uncaughtException", (error) => {
+	console.error("❌ Uncaught Exception:", error);
 	// Don't exit - log and continue (server should keep running)
 });
 
@@ -528,16 +601,17 @@ console.log(`   - BETTER_AUTH_URL: ${process.env.BETTER_AUTH_URL}`);
 
 // Detect runtime environment
 const isBunRuntime = typeof globalThis.Bun !== "undefined";
-const isProduction = process.env.NODE_ENV === "production" || process.env.RAILWAY_ENVIRONMENT;
+const isProduction =
+	process.env.NODE_ENV === "production" || process.env.RAILWAY_ENVIRONMENT;
 
 if (isBunRuntime) {
 	// For development with Bun runtime
 	// Store server reference globally to handle hot reload
-	const globalServer = globalThis as unknown as { 
+	const globalServer = globalThis as unknown as {
 		server?: ReturnType<typeof Bun.serve>;
 		serverStopping?: boolean;
 	};
-	
+
 	// Helper function to check if port is available
 	const checkPortAvailable = async (port: number): Promise<boolean> => {
 		try {
@@ -559,20 +633,20 @@ if (isBunRuntime) {
 			console.log("🔄 Stopping existing server for hot reload...");
 			globalServer.serverStopping = true;
 			globalServer.server.stop(true); // Force stop immediately
-			delete globalServer.server;
+			globalServer.server = undefined;
 			// Wait longer for port to be released
-			await new Promise(resolve => setTimeout(resolve, 1000));
+			await new Promise((resolve) => setTimeout(resolve, 1000));
 			globalServer.serverStopping = false;
 		} catch (error) {
 			console.warn("⚠️ Error stopping existing server:", error);
 			globalServer.serverStopping = false;
 		}
-	}						
+	}
 
 	// Start server with retry logic for hot reload
 	let retryCount = 0;
 	const MAX_RETRIES = 15; // Increased to 15 retries (7.5 seconds total)
-	
+
 	const startServer = async () => {
 		if (globalServer.serverStopping) {
 			// Wait a bit and retry
@@ -584,62 +658,80 @@ if (isBunRuntime) {
 		const portAvailable = await checkPortAvailable(Number(port));
 		if (!portAvailable && retryCount < MAX_RETRIES) {
 			retryCount++;
-			console.warn(`⚠️ Port ${port} is still in use, waiting... (${retryCount}/${MAX_RETRIES})`);
+			console.warn(
+				`⚠️ Port ${port} is still in use, waiting... (${retryCount}/${MAX_RETRIES})`,
+			);
 			setTimeout(startServer, 500);
 			return;
 		}
 
-	try {
-		const server = Bun.serve({
-			fetch: app.fetch,
-			port: Number(port),
+		try {
+			const server = Bun.serve({
+				fetch: app.fetch,
+				port: Number(port),
 				hostname: "127.0.0.1", // Use 127.0.0.1 for better Windows compatibility
 				idleTimeout: 60, // 60 seconds timeout for long-running queries (default is 10s)
-		});
+			});
 
 			// Store server reference for hot reload
 			globalServer.server = server;
 			retryCount = 0; // Reset retry count on success
 
-		console.log(`✅ Development server started successfully on port ${port}`);
-		console.log(`🌐 Server accessible at http://localhost:${port}`);
-		console.log("🔥 Hot reload enabled");
+			console.log(`✅ Development server started successfully on port ${port}`);
+			console.log(`🌐 Server accessible at http://localhost:${port}`);
+			console.log("🔥 Hot reload enabled");
 
-		// Handle graceful shutdown
-		process.on("SIGTERM", () => {
-			console.log("🛑 SIGTERM received, shutting down gracefully");
-			server.stop();
-				delete globalServer.server;
-			process.exit(0);
-		});
+			// Handle graceful shutdown
+			process.on("SIGTERM", () => {
+				console.log("🛑 SIGTERM received, shutting down gracefully");
+				server.stop();
+				globalServer.server = undefined;
+				process.exit(0);
+			});
 
-		process.on("SIGINT", () => {
-			console.log("🛑 SIGINT received, shutting down gracefully");
-			server.stop();
-				delete globalServer.server;
-			process.exit(0);
-		});
-		} catch (error: any) {
+			process.on("SIGINT", () => {
+				console.log("🛑 SIGINT received, shutting down gracefully");
+				server.stop();
+				globalServer.server = undefined;
+				process.exit(0);
+			});
+		} catch (error: unknown) {
+			const e = error as { code?: string; message?: string };
 			// If port is in use, wait and retry (common during hot reload)
-			if ((error?.code === "EADDRINUSE" || error?.message?.includes("port") || error?.message?.includes("in use")) && retryCount < MAX_RETRIES) {
+			if (
+				(e?.code === "EADDRINUSE" ||
+					e?.message?.includes("port") ||
+					e?.message?.includes("in use")) &&
+				retryCount < MAX_RETRIES
+			) {
 				retryCount++;
-				console.warn(`⚠️ Port ${port} is in use, retrying (${retryCount}/${MAX_RETRIES})...`);
+				console.warn(
+					`⚠️ Port ${port} is in use, retrying (${retryCount}/${MAX_RETRIES})...`,
+				);
 				setTimeout(startServer, 500);
 			} else if (retryCount >= MAX_RETRIES) {
-				console.error(`❌ Failed to start server after ${MAX_RETRIES} retries. Port ${port} is still in use.`);
+				console.error(
+					`❌ Failed to start server after ${MAX_RETRIES} retries. Port ${port} is still in use.`,
+				);
 				console.error("💡 Solutions:");
 				console.error(`   1. Kill the process using port ${port}:`);
 				console.error(`      netstat -ano | findstr :${port}`);
-				console.error(`      taskkill /PID <PID> /F`);
-				console.error(`   2. Or use a different port by setting PORT environment variable`);
-				console.error(`   3. Or wait a few seconds and try again`);
-				console.error(`   4. Or stop the server and restart: Press Ctrl+C to stop`);
+				console.error("      taskkill /PID <PID> /F");
+				console.error(
+					"   2. Or use a different port by setting PORT environment variable",
+				);
+				console.error("   3. Or wait a few seconds and try again");
+				console.error(
+					"   4. Or stop the server and restart: Press Ctrl+C to stop",
+				);
 				process.exit(1);
 			} else {
-		console.error("❌ Failed to start development server:", error);
-				console.error("💡 Tip: Run 'netstat -ano | findstr :8080' to find the process, then 'taskkill /PID <PID> /F' to kill it");
-		process.exit(1);
-	}
+				console.error("❌ Failed to start development server:", error);
+				console.error(
+					"💡 Tip: Run 'netstat -ano | findstr :8080' to find the process, then 'taskkill /PID <PID> /F' to kill it",
+				);
+				process.exit(1);
+			}
 		}
 	};
 
@@ -697,4 +789,4 @@ if (isBunRuntime) {
 export default {
 	// Don't include fetch to prevent Bun's auto-serve
 	// The app is manually served via Bun.serve() above
-} as any;
+} as Record<string, never>;

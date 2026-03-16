@@ -52,9 +52,12 @@ export function calculateDetailedCommission(
 
 	const result: CommissionCalculation = {
 		baseAmount: propertyPrice,
-		commissionRate: commissionType === "percentage"
-			? commissionValue
-			: (propertyPrice > 0 ? (commissionValue / propertyPrice) * 100 : 0),
+		commissionRate:
+			commissionType === "percentage"
+				? commissionValue
+				: propertyPrice > 0
+					? (commissionValue / propertyPrice) * 100
+					: 0,
 		commissionAmount,
 		netAmount: propertyPrice - commissionAmount,
 	};
@@ -89,8 +92,11 @@ export function formatCurrency(amount: number, currency = "USD"): string {
 /**
  * Format percentage for display
  */
-export function formatPercentage(value: number | string | null | undefined, decimals = 1): string {
-	const n = typeof value === "string" ? parseFloat(value) : value ?? 0;
+export function formatPercentage(
+	value: number | string | null | undefined,
+	decimals = 1,
+): string {
+	const n = typeof value === "string" ? Number.parseFloat(value) : (value ?? 0);
 	if (!Number.isFinite(n)) return "0.0%";
 	return `${n.toFixed(decimals)}%`;
 }
