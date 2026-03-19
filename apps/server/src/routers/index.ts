@@ -1,4 +1,5 @@
 import { adminRouter } from "../controllers/admin";
+import { adminLeadsRouter } from "../controllers/admin-leads";
 import { agentTiersRouter } from "../controllers/agent-tiers";
 import { agentsRouter } from "../controllers/agents";
 import { approvalsRouter } from "../controllers/approvals";
@@ -19,6 +20,7 @@ export const appRouter = router({
 	transactions: transactionsRouter,
 	dashboard: dashboardRouter,
 	admin: adminRouter,
+	adminLeads: adminLeadsRouter,
 	agentTiers: agentTiersRouter,
 	agents: agentsRouter,
 	approvals: approvalsRouter,

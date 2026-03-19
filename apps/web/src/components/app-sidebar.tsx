@@ -35,6 +35,7 @@ import {
 	RiCheckboxCircleLine,
 	RiCalendarLine,
 	RiDashboardLine,
+	RiFileList3Line,
 	RiFileTextLine,
 	RiLogoutBoxLine,
 	RiSettings3Line,
@@ -242,6 +243,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 							url: "/admin/agents",
 							icon: RiTeamLine,
 						},
+					{
+						title: "Leads Management",
+						url: "/admin/leads",
+						icon: RiFileList3Line,
+					},
 					{
 						title: "Tag Management",
 						url: "/admin/tags",
