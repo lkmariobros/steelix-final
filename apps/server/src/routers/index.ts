@@ -1,18 +1,18 @@
-import { protectedProcedure, publicProcedure, router } from "../lib/trpc";
-import { adminRouter } from "./admin";
-import { agentTiersRouter } from "./agent-tiers";
-import { agentsRouter } from "./agents";
-import { approvalsRouter } from "./approvals";
-import { autoReplyRouter } from "./auto-reply";
-import { calendarRouter } from "./calendar";
-import { crmRouter } from "./crm";
-import { dashboardRouter } from "./dashboard";
-import { documentsRouter } from "./documents";
-import { feedbackRouter } from "./feedback";
-import { reportsRouter } from "./reports";
-import { tagsRouter } from "./tags";
-import { transactionsRouter } from "./transactions";
-import { whatsappRouter } from "./whatsapp";
+import { adminRouter } from "../controllers/admin";
+import { agentTiersRouter } from "../controllers/agent-tiers";
+import { agentsRouter } from "../controllers/agents";
+import { approvalsRouter } from "../controllers/approvals";
+import { autoReplyRouter } from "../controllers/auto-reply";
+import { calendarRouter } from "../controllers/calendar";
+import { crmRouter } from "../controllers/crm";
+import { dashboardRouter } from "../controllers/dashboard";
+import { documentsRouter } from "../controllers/documents";
+import { feedbackRouter } from "../controllers/feedback";
+import { reportsRouter } from "../controllers/reports";
+import { tagsRouter } from "../controllers/tags";
+import { transactionsRouter } from "../controllers/transactions";
+import { whatsappRouter } from "../controllers/whatsapp";
+import { protectedProcedure, publicProcedure, router } from "../utils/trpc";
 
 export const appRouter = router({
 	healthCheck: publicProcedure.query(() => {

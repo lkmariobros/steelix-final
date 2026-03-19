@@ -3,7 +3,7 @@
 import { Badge } from "@/components/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { trpc } from "@/utils/trpc";
+import { useAgentDashboard } from "@/contexts/agent-dashboard-context";
 
 // Simple utility functions to avoid import issues
 const formatPercentage = (
@@ -57,12 +57,7 @@ const getStatusLabel = (status: string | null): string => {
 };
 
 export function TransactionStatus() {
-	// ✅ CORRECT tRPC query pattern
-	const {
-		data: statusData,
-		isLoading,
-		error,
-	} = trpc.dashboard.getTransactionStatus.useQuery();
+	const { transactionStatus: statusData, isLoading } = useAgentDashboard();
 
 	if (isLoading) {
 		return (
@@ -88,22 +83,9 @@ export function TransactionStatus() {
 		);
 	}
 
-	if (error) {
-		return (
-			<Card>
-				<CardHeader>
-					<CardTitle>Transaction Status</CardTitle>
-				</CardHeader>
-				<CardContent>
-					<p className="text-muted-foreground text-sm">
-						Failed to load status data. Please try again.
-					</p>
-				</CardContent>
-			</Card>
-		);
-	}
+	const statusList = Array.isArray(statusData) ? statusData : [];
 
-	if (!statusData || statusData.length === 0) {
+	if (statusList.length === 0) {
 		return (
 			<Card>
 				<CardHeader>
@@ -118,7 +100,7 @@ export function TransactionStatus() {
 		);
 	}
 
-	const totalTransactions = statusData.reduce(
+	const totalTransactions = statusList.reduce(
 		(sum, status) => sum + status.count,
 		0,
 	);
@@ -131,7 +113,7 @@ export function TransactionStatus() {
 			<CardContent className="space-y-4">
 				{/* Status Breakdown */}
 				<div className="space-y-3">
-					{statusData.map((status) => (
+					{statusList.map((status) => (
 						<div
 							key={status.status}
 							className="flex items-center justify-between"
@@ -172,10 +154,10 @@ export function TransactionStatus() {
 				{/* Quick Insights */}
 				<div className="space-y-2 pt-2">
 					{(() => {
-						const completedStatus = statusData.find(
+						const completedStatus = statusList.find(
 							(s) => s.status === "completed",
 						);
-						const pendingStatuses = statusData.filter(
+						const pendingStatuses = statusList.filter(
 							(s) =>
 								s.status &&
 								["submitted", "under_review", "approved"].includes(s.status),

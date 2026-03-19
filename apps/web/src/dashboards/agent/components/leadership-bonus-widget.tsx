@@ -10,13 +10,13 @@ import {
 	CardTitle,
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useAgentDashboard } from "@/contexts/agent-dashboard-context";
 import {
 	AGENT_TIER_CONFIG,
 	type AgentTier,
 	TIER_COLORS,
 	hasLeadershipBonus,
 } from "@/lib/agent-tier-config";
-import { trpc } from "@/utils/trpc";
 import {
 	RiArrowUpLine,
 	RiMoneyDollarCircleLine,
@@ -24,14 +24,13 @@ import {
 	RiUserAddLine,
 } from "@remixicon/react";
 
-function formatCurrency(value: number): string {
-	return new Intl.NumberFormat("en-US", {
+const formatCurrency = (v: number): string =>
+	new Intl.NumberFormat("en-US", {
 		style: "currency",
 		currency: "USD",
 		minimumFractionDigits: 0,
 		maximumFractionDigits: 0,
-	}).format(value);
-}
+	}).format(v);
 
 interface LeadershipBonusWidgetProps {
 	className?: string;
@@ -40,10 +39,7 @@ interface LeadershipBonusWidgetProps {
 export function LeadershipBonusWidget({
 	className,
 }: LeadershipBonusWidgetProps) {
-	const { data: bonusSummary, isLoading } =
-		trpc.agentTiers.getMyLeadershipBonusSummary.useQuery();
-	const { data: uplineInfo } = trpc.agentTiers.getMyUpline.useQuery();
-	const { data: downline } = trpc.agentTiers.getMyDownline.useQuery();
+	const { bonusSummary, uplineInfo, downline, isLoading } = useAgentDashboard();
 
 	if (isLoading) {
 		return (
@@ -61,7 +57,6 @@ export function LeadershipBonusWidget({
 	if (!bonusSummary) return null;
 
 	const currentTier = (bonusSummary.currentTier || "advisor") as AgentTier;
-	const tierColors = TIER_COLORS[currentTier];
 	const hasBonus = hasLeadershipBonus(currentTier);
 
 	return (
@@ -81,38 +76,42 @@ export function LeadershipBonusWidget({
 				</div>
 			</CardHeader>
 			<CardContent className="space-y-4">
-				{/* Bonus Summary Stats */}
+				{/* Stats row */}
 				<div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-					<div className="rounded-lg border bg-green-50 p-3 text-center dark:bg-green-900/20">
-						<RiMoneyDollarCircleLine className="mx-auto mb-1 h-5 w-5 text-green-600" />
-						<p className="text-muted-foreground text-xs">Total Earned</p>
-						<p className="font-bold text-green-600 text-lg">
-							{formatCurrency(bonusSummary.totalEarnings)}
-						</p>
-					</div>
-					<div className="rounded-lg border bg-yellow-50 p-3 text-center dark:bg-yellow-900/20">
-						<p className="text-muted-foreground text-xs">Pending</p>
-						<p className="font-bold text-lg text-yellow-600">
-							{formatCurrency(bonusSummary.totalPendingBonus)}
-						</p>
-					</div>
-					<div className="rounded-lg border p-3 text-center">
-						<RiUserAddLine className="mx-auto mb-1 h-5 w-5 text-blue-600" />
-						<p className="text-muted-foreground text-xs">Direct Recruits</p>
-						<p className="font-bold text-lg">{bonusSummary.downlineCount}</p>
-					</div>
-					<div className="rounded-lg border p-3 text-center">
-						<RiArrowUpLine className="mx-auto mb-1 h-5 w-5 text-purple-600" />
-						<p className="text-muted-foreground text-xs">Bonus Rate</p>
-						<p className="font-bold text-lg">
-							{bonusSummary.leadershipBonusRate > 0
+					<StatBox
+						icon={
+							<RiMoneyDollarCircleLine className="mx-auto mb-1 h-5 w-5 text-green-600" />
+						}
+						label="Total Earned"
+						value={formatCurrency(bonusSummary.totalEarnings)}
+						colorClass="bg-green-50 dark:bg-green-900/20 text-green-600"
+					/>
+					<StatBox
+						label="Pending"
+						value={formatCurrency(bonusSummary.totalPendingBonus)}
+						colorClass="bg-yellow-50 dark:bg-yellow-900/20 text-yellow-600"
+					/>
+					<StatBox
+						icon={
+							<RiUserAddLine className="mx-auto mb-1 h-5 w-5 text-blue-600" />
+						}
+						label="Direct Recruits"
+						value={bonusSummary.downlineCount.toString()}
+					/>
+					<StatBox
+						icon={
+							<RiArrowUpLine className="mx-auto mb-1 h-5 w-5 text-purple-600" />
+						}
+						label="Bonus Rate"
+						value={
+							bonusSummary.leadershipBonusRate > 0
 								? `${bonusSummary.leadershipBonusRate}%`
-								: "—"}
-						</p>
-					</div>
+								: "—"
+						}
+					/>
 				</div>
 
-				{/* Upline Info */}
+				{/* Upline */}
 				{uplineInfo && (
 					<div className="rounded-lg border bg-muted/30 p-3">
 						<p className="mb-1 text-muted-foreground text-xs">
@@ -121,7 +120,7 @@ export function LeadershipBonusWidget({
 						<div className="flex items-center justify-between">
 							<div className="flex items-center gap-2">
 								<span className="text-lg">
-									{TIER_COLORS[uplineInfo.uplineTier as AgentTier]?.icon ||
+									{TIER_COLORS[uplineInfo.uplineTier as AgentTier]?.icon ??
 										"👤"}
 								</span>
 								<span className="font-medium">{uplineInfo.uplineName}</span>
@@ -138,7 +137,7 @@ export function LeadershipBonusWidget({
 					</div>
 				)}
 
-				{/* Downline Preview */}
+				{/* Downline preview */}
 				{downline && downline.length > 0 && (
 					<div>
 						<p className="mb-2 font-medium text-sm">
@@ -169,7 +168,7 @@ export function LeadershipBonusWidget({
 					</div>
 				)}
 
-				{/* No Bonus Message */}
+				{/* No-bonus message */}
 				{!hasBonus && (
 					<div className="rounded-lg bg-muted/30 p-4 text-center text-muted-foreground text-sm">
 						<p>
@@ -183,5 +182,25 @@ export function LeadershipBonusWidget({
 				)}
 			</CardContent>
 		</Card>
+	);
+}
+
+function StatBox({
+	icon,
+	label,
+	value,
+	colorClass = "",
+}: {
+	icon?: React.ReactNode;
+	label: string;
+	value: string;
+	colorClass?: string;
+}) {
+	return (
+		<div className={`rounded-lg border p-3 text-center ${colorClass}`}>
+			{icon}
+			<p className="text-muted-foreground text-xs">{label}</p>
+			<p className={`font-bold text-lg ${colorClass ? "" : ""}`}>{value}</p>
+		</div>
 	);
 }

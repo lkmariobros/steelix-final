@@ -3,7 +3,7 @@
 import { Badge } from "@/components/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { trpc } from "@/utils/trpc";
+import { useAgentDashboard } from "@/contexts/agent-dashboard-context";
 import {
 	formatCurrency,
 	formatPercentage,
@@ -11,7 +11,6 @@ import {
 	getStatusLabel,
 } from "../agent-schema";
 
-// Pipeline stage order for the funnel visualization
 const PIPELINE_ORDER = [
 	"draft",
 	"submitted",
@@ -21,23 +20,8 @@ const PIPELINE_ORDER = [
 ] as const;
 
 export function TransactionOverview() {
-	// Fetch both pipeline and status data using existing tRPC endpoints
-	const {
-		data: pipelineData,
-		isLoading: pipelineLoading,
-		error: pipelineError,
-	} = trpc.dashboard.getSalesPipeline.useQuery();
+	const { salesPipeline, transactionStatus, isLoading } = useAgentDashboard();
 
-	const {
-		data: statusData,
-		isLoading: statusLoading,
-		error: statusError,
-	} = trpc.dashboard.getTransactionStatus.useQuery();
-
-	const isLoading = pipelineLoading || statusLoading;
-	const error = pipelineError || statusError;
-
-	// Loading state
 	if (isLoading) {
 		return (
 			<Card>
@@ -45,7 +29,6 @@ export function TransactionOverview() {
 					<CardTitle>Transaction Overview</CardTitle>
 				</CardHeader>
 				<CardContent className="space-y-6">
-					{/* Key Metrics Skeleton */}
 					<div className="grid grid-cols-2 gap-4 md:grid-cols-4">
 						{Array.from({ length: 4 }).map((_, i) => (
 							<div key={i} className="space-y-2 rounded-lg border p-3">
@@ -54,7 +37,6 @@ export function TransactionOverview() {
 							</div>
 						))}
 					</div>
-					{/* Pipeline Skeleton */}
 					<div className="space-y-3">
 						<Skeleton className="h-5 w-32" />
 						{Array.from({ length: 4 }).map((_, i) => (
@@ -72,24 +54,7 @@ export function TransactionOverview() {
 		);
 	}
 
-	// Error state
-	if (error) {
-		return (
-			<Card>
-				<CardHeader>
-					<CardTitle>Transaction Overview</CardTitle>
-				</CardHeader>
-				<CardContent>
-					<p className="text-muted-foreground text-sm">
-						Failed to load transaction data. Please try again.
-					</p>
-				</CardContent>
-			</Card>
-		);
-	}
-
-	// Empty state
-	if (!pipelineData && !statusData) {
+	if (!salesPipeline && !transactionStatus) {
 		return (
 			<Card>
 				<CardHeader>
@@ -105,9 +70,8 @@ export function TransactionOverview() {
 		);
 	}
 
-	// Calculate key metrics from combined data
-	const pipeline = pipelineData?.pipeline || [];
-	const allStatuses = statusData || [];
+	const pipeline = salesPipeline?.pipeline ?? [];
+	const allStatuses = transactionStatus ?? [];
 
 	const activeDeals = pipeline.reduce((sum, s) => sum + s.count, 0);
 	const pipelineValue = pipeline.reduce(
@@ -115,16 +79,12 @@ export function TransactionOverview() {
 		0,
 	);
 	const totalTransactions = allStatuses.reduce((sum, s) => sum + s.count, 0);
-
-	// Find specific statuses for metrics
 	const pendingReviewCount = allStatuses
 		.filter((s) => s.status && ["submitted", "under_review"].includes(s.status))
 		.reduce((sum, s) => sum + s.count, 0);
+	const completionRate =
+		allStatuses.find((s) => s.status === "completed")?.percentage ?? 0;
 
-	const completedStatus = allStatuses.find((s) => s.status === "completed");
-	const completionRate = completedStatus?.percentage || 0;
-
-	// Merge pipeline and status data for unified view
 	const mergedPipeline = PIPELINE_ORDER.map((status) => {
 		const pipelineItem = pipeline.find((p) => p.status === status);
 		const statusItem = allStatuses.find((s) => s.status === status);
@@ -147,7 +107,7 @@ export function TransactionOverview() {
 				</CardTitle>
 			</CardHeader>
 			<CardContent className="space-y-6">
-				{/* Key Metrics Row */}
+				{/* Key metrics */}
 				<div className="grid grid-cols-2 gap-3 md:grid-cols-4">
 					<MetricCard label="Active Deals" value={activeDeals.toString()} />
 					<MetricCard
@@ -165,7 +125,7 @@ export function TransactionOverview() {
 					/>
 				</div>
 
-				{/* Pipeline Funnel */}
+				{/* Pipeline funnel */}
 				<div>
 					<h3 className="mb-3 font-medium text-sm">Pipeline Status</h3>
 					{mergedPipeline.length === 0 ? (
@@ -181,7 +141,6 @@ export function TransactionOverview() {
 					)}
 				</div>
 
-				{/* Pipeline Summary */}
 				{(activeDeals > 0 || totalTransactions > 0) && (
 					<div className="border-t pt-4">
 						<div className="grid grid-cols-2 gap-4 text-sm">
@@ -203,15 +162,17 @@ export function TransactionOverview() {
 	);
 }
 
-// Sub-components for cleaner code organization
+// ─── Sub-components ───────────────────────────────────────────────────────────
 
-interface MetricCardProps {
+function MetricCard({
+	label,
+	value,
+	highlight,
+}: {
 	label: string;
 	value: string;
 	highlight?: boolean;
-}
-
-function MetricCard({ label, value, highlight }: MetricCardProps) {
+}) {
 	return (
 		<div
 			className={`rounded-lg border p-3 ${highlight ? "border-yellow-500/50 bg-yellow-500/5" : "bg-muted/30"}`}
@@ -226,18 +187,16 @@ function MetricCard({ label, value, highlight }: MetricCardProps) {
 	);
 }
 
-interface PipelineItem {
-	status: string;
-	count: number;
-	totalValue: number;
-	percentage: number;
-}
-
-interface PipelineRowProps {
-	item: PipelineItem;
-}
-
-function PipelineRow({ item }: PipelineRowProps) {
+function PipelineRow({
+	item,
+}: {
+	item: {
+		status: string;
+		count: number;
+		totalValue: number;
+		percentage: number;
+	};
+}) {
 	return (
 		<div className="flex items-center justify-between rounded-lg border p-2 transition-colors hover:bg-muted/50">
 			<div className="flex items-center gap-3">

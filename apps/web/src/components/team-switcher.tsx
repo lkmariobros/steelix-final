@@ -22,7 +22,6 @@ import {
 } from "@remixicon/react";
 import { usePathname, useRouter } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
-import { trpc } from "@/utils/trpc";
 import { useKeyboardNavigation } from "@/hooks/use-keyboard-navigation";
 
 interface TeamSwitcherProps {
@@ -37,23 +36,15 @@ export function TeamSwitcher({ teams = [] }: TeamSwitcherProps) {
 	const pathname = usePathname();
 	const [isOpen, setIsOpen] = React.useState(false);
 
-	// Authentication and role checking
+	// Authentication
 	const { data: session, isPending: isSessionPending } = authClient.useSession();
-	const { data: roleData, isLoading: isRoleLoading, error: roleError } = trpc.admin.checkAdminRole.useQuery(
-		undefined,
-		{
-			enabled: !!session,
-			retry: false,
-		}
-	);
 
-	// Determine current portal and admin access
+	// Determine current portal
 	const isInAdminPortal = pathname.startsWith("/admin");
 	const currentPortal = isInAdminPortal ? "Admin Portal" : "Agent Dashboard";
-	const hasAdminAccess = !!roleData?.hasAdminAccess;
 
 	// Loading state
-	const isLoading = isSessionPending || (session && isRoleLoading);
+	const isLoading = isSessionPending;
 
 	// Default team for display (using fixed company name as per requirements)
 	const displayTeam = teams[0] || {
@@ -146,67 +137,58 @@ export function TeamSwitcher({ teams = [] }: TeamSwitcherProps) {
 							</div>
 						)}
 
-						{/* Error State */}
-						{roleError && !isLoading && (
-							<div className="p-4 text-center">
-								<p className="text-destructive text-sm">Failed to load user permissions</p>
-							</div>
-						)}
+					{/* Portal Switching Section - Show when not loading */}
+					{!isLoading && session && (
+						<>
+							<DropdownMenuLabel className="text-muted-foreground/60 text-xs uppercase">
+								Portal Access
+							</DropdownMenuLabel>
 
-						{/* Portal Switching Section - Show when not loading */}
-						{!isLoading && session && (
-							<>
-								<DropdownMenuLabel className="text-muted-foreground/60 text-xs uppercase">
-									Portal Access
-								</DropdownMenuLabel>
-
-								{/* Agent Dashboard - Always available */}
-								<DropdownMenuItem
-									onClick={handleNavigateToAgent}
-									className="gap-2 p-2 focus:bg-sidebar-accent focus:text-sidebar-accent-foreground"
-									disabled={!isInAdminPortal}
-									role="menuitem"
-									aria-label="Switch to Agent Dashboard"
-									tabIndex={0}
-								>
-									<RiUserLine
-										className="opacity-60"
-										size={16}
-										aria-hidden="true"
-									/>
-									<div className="font-medium">Agent Dashboard</div>
-									{!isInAdminPortal && (
-										<span className="ml-auto text-muted-foreground text-xs">
-											Current
-										</span>
-									)}
-								</DropdownMenuItem>
-
-								{/* Admin Portal - Only for admin users */}
-								{hasAdminAccess && (
-									<DropdownMenuItem
-										onClick={handleNavigateToAdmin}
-										className="gap-2 p-2 focus:bg-sidebar-accent focus:text-sidebar-accent-foreground"
-										disabled={isInAdminPortal}
-										role="menuitem"
-										aria-label="Switch to Admin Portal"
-										tabIndex={0}
-									>
-										<RiShieldUserLine
-											className="opacity-60"
-											size={16}
-											aria-hidden="true"
-										/>
-										<div className="font-medium">Admin Portal</div>
-										{isInAdminPortal && (
-											<span className="ml-auto text-muted-foreground text-xs">
-												Current
-											</span>
-										)}
-									</DropdownMenuItem>
+							{/* Agent Dashboard */}
+							<DropdownMenuItem
+								onClick={handleNavigateToAgent}
+								className="gap-2 p-2 focus:bg-sidebar-accent focus:text-sidebar-accent-foreground"
+								disabled={!isInAdminPortal}
+								role="menuitem"
+								aria-label="Switch to Agent Dashboard"
+								tabIndex={0}
+							>
+								<RiUserLine
+									className="opacity-60"
+									size={16}
+									aria-hidden="true"
+								/>
+								<div className="font-medium">Agent Dashboard</div>
+								{!isInAdminPortal && (
+									<span className="ml-auto text-muted-foreground text-xs">
+										Current
+									</span>
 								)}
-							</>
-						)}
+							</DropdownMenuItem>
+
+							{/* Admin Portal - Available to all users */}
+							<DropdownMenuItem
+								onClick={handleNavigateToAdmin}
+								className="gap-2 p-2 focus:bg-sidebar-accent focus:text-sidebar-accent-foreground"
+								disabled={isInAdminPortal}
+								role="menuitem"
+								aria-label="Switch to Admin Portal"
+								tabIndex={0}
+							>
+								<RiShieldUserLine
+									className="opacity-60"
+									size={16}
+									aria-hidden="true"
+								/>
+								<div className="font-medium">Admin Portal</div>
+								{isInAdminPortal && (
+									<span className="ml-auto text-muted-foreground text-xs">
+										Current
+									</span>
+								)}
+							</DropdownMenuItem>
+						</>
+					)}
 
 						{/* Not authenticated state */}
 						{!isLoading && !session && (

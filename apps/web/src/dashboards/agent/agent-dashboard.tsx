@@ -14,90 +14,64 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
+import {
+	AgentDashboardProvider,
+	useAgentDashboard,
+} from "@/contexts/agent-dashboard-context";
 import { useTransactionModalActions } from "@/contexts/transaction-modal-context";
 import {
 	RiCalendarLine,
+	RiLoader4Line,
 	RiRefreshLine,
 	RiSettings3Line,
 } from "@remixicon/react";
 import { useEffect, useState } from "react";
 
-// Import dashboard widgets
 import { FinancialOverview } from "./components/financial-overview";
 import { LeadershipBonusWidget } from "./components/leadership-bonus-widget";
 import { RecentTransactions } from "./components/recent-transactions";
 import { TeamLeaderboard } from "./components/team-leaderboard";
 import { TransactionOverview } from "./components/transaction-overview";
 
-interface AgentDashboardProps {
-	className?: string;
-}
+// ─── Inner component (consumes context) ──────────────────────────────────────
 
-export function AgentDashboard({ className }: AgentDashboardProps) {
+function DashboardContent() {
 	const { openCreateModal } = useTransactionModalActions();
-	const [dateRange, setDateRange] = useState<{
-		startDate?: Date;
-		endDate?: Date;
-	}>({});
+	const { dateRange, setDateRange, isRefetching, refetch } =
+		useAgentDashboard();
+
 	const [timeFilter, setTimeFilter] = useState<string>("all");
 	const [isCalendarOpen, setIsCalendarOpen] = useState(false);
 	const [currentTime, setCurrentTime] = useState<string>("");
 
-	// Update time on client side only to avoid hydration mismatch
+	// Avoid hydration mismatch for time display
 	useEffect(() => {
 		setCurrentTime(new Date().toLocaleTimeString());
 	}, []);
 
-	// Handle opening transaction modal
-	const handleNewTransaction = () => {
-		openCreateModal();
-	};
-
-	// Handle time filter changes
 	const handleTimeFilterChange = (value: string) => {
 		setTimeFilter(value);
 		const now = new Date();
-
-		switch (value) {
-			case "7d":
-				setDateRange({
-					startDate: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000),
-					endDate: now,
-				});
-				break;
-			case "30d":
-				setDateRange({
-					startDate: new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000),
-					endDate: now,
-				});
-				break;
-			case "90d":
-				setDateRange({
-					startDate: new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000),
-					endDate: now,
-				});
-				break;
-			case "1y":
-				setDateRange({
-					startDate: new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000),
-					endDate: now,
-				});
-				break;
-			default:
-				setDateRange({});
-				break;
+		const offsets: Record<string, number> = {
+			"7d": 7,
+			"30d": 30,
+			"90d": 90,
+			"1y": 365,
+		};
+		const days = offsets[value];
+		if (days) {
+			setDateRange({
+				startDate: new Date(now.getTime() - days * 86_400_000),
+				endDate: now,
+			});
+		} else {
+			setDateRange({});
 		}
 	};
 
-	// Handle refresh
-	const handleRefresh = () => {
-		// This would trigger a refetch of all queries
-		window.location.reload();
-	};
-
 	return (
-		<div className={className}>
-			{/* Dashboard Header */}
+		<div>
+			{/* Header */}
 			<div className="mb-6 flex items-center justify-between gap-4">
 				<div className="space-y-1">
 					<h1 className="font-semibold text-2xl">Agent Dashboard</h1>
@@ -107,9 +81,8 @@ export function AgentDashboard({ className }: AgentDashboardProps) {
 					</p>
 				</div>
 
-				{/* Dashboard Controls */}
+				{/* Controls */}
 				<div className="flex items-center gap-2">
-					{/* Time Filter */}
 					<Select value={timeFilter} onValueChange={handleTimeFilterChange}>
 						<SelectTrigger className="w-32">
 							<SelectValue placeholder="Time range" />
@@ -123,30 +96,24 @@ export function AgentDashboard({ className }: AgentDashboardProps) {
 						</SelectContent>
 					</Select>
 
-					{/* Custom Date Range */}
 					<Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
 						<PopoverTrigger asChild>
 							<Button variant="outline" size="sm">
 								<RiCalendarLine className="size-4" />
 								{dateRange.startDate && dateRange.endDate
-									? `${dateRange.startDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })} - ${dateRange.endDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
+									? `${dateRange.startDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${dateRange.endDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
 									: "Custom range"}
 							</Button>
 						</PopoverTrigger>
 						<PopoverContent className="w-auto p-0" align="end">
 							<Calendar
 								mode="range"
-								selected={{
-									from: dateRange.startDate,
-									to: dateRange.endDate,
-								}}
+								selected={{ from: dateRange.startDate, to: dateRange.endDate }}
 								onSelect={(range) => {
-									// Update the date range state
 									setDateRange({
 										startDate: range?.from,
 										endDate: range?.to,
 									});
-									// Only close the popover when both dates are selected
 									if (range?.from && range?.to) {
 										setTimeFilter("custom");
 										setIsCalendarOpen(false);
@@ -157,58 +124,75 @@ export function AgentDashboard({ className }: AgentDashboardProps) {
 						</PopoverContent>
 					</Popover>
 
-					{/* Refresh Button */}
-					<Button variant="outline" size="sm" onClick={handleRefresh}>
-						<RiRefreshLine className="size-4" />
+					<Button
+						variant="outline"
+						size="sm"
+						onClick={refetch}
+						disabled={isRefetching}
+					>
+						<RiRefreshLine
+							className={`size-4 ${isRefetching ? "animate-spin" : ""}`}
+						/>
 					</Button>
 
-					{/* Settings Button */}
 					<Button variant="outline" size="sm">
 						<RiSettings3Line className="size-4" />
 					</Button>
 				</div>
 			</div>
 
-			{/* Dashboard Grid - Optimized Layout */}
+			{/* Grid */}
 			<div className="grid gap-6">
-				{/* Financial Overview - Full Width */}
 				<div className="col-span-full">
-					<FinancialOverview dateRange={dateRange} />
+					<FinancialOverview />
 				</div>
-
-				{/* Transaction Overview - Full Width (consolidated pipeline + status) */}
 				<div className="col-span-full">
 					<TransactionOverview />
 				</div>
-
-				{/* Third Row - Recent Transactions and Team Leaderboard */}
 				<div className="grid gap-6 md:grid-cols-2">
 					<RecentTransactions limit={8} />
 					<TeamLeaderboard />
 				</div>
-
-				{/* Fourth Row - Leadership Bonus Widget */}
 				<div className="col-span-full">
 					<LeadershipBonusWidget />
 				</div>
 			</div>
 
-			{/* Quick Actions Footer */}
+			{/* Footer */}
 			<div className="mt-8 border-t pt-6">
 				<div className="flex items-center justify-between">
-					<div className="text-muted-foreground text-sm">
+					<div className="flex items-center gap-2 text-muted-foreground text-sm">
+						{isRefetching && (
+							<RiLoader4Line className="size-3.5 animate-spin" />
+						)}
 						Last updated: {currentTime || "Loading..."}
 					</div>
 					<div className="flex items-center gap-2">
 						<Button variant="outline" size="sm">
 							Export Report
 						</Button>
-						<Button size="sm" onClick={handleNewTransaction}>
+						<Button size="sm" onClick={() => openCreateModal()}>
 							New Transaction
 						</Button>
 					</div>
 				</div>
 			</div>
+		</div>
+	);
+}
+
+// ─── Public export (wraps with provider) ─────────────────────────────────────
+
+interface AgentDashboardProps {
+	className?: string;
+}
+
+export function AgentDashboard({ className }: AgentDashboardProps) {
+	return (
+		<div className={className}>
+			<AgentDashboardProvider transactionLimit={8}>
+				<DashboardContent />
+			</AgentDashboardProvider>
 		</div>
 	);
 }

@@ -3,26 +3,31 @@
 import { Avatar } from "@/components/avatar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { trpc } from "@/utils/trpc";
+import { useAgentDashboard } from "@/contexts/agent-dashboard-context";
 import { RiAwardLine, RiMedalLine, RiTrophyLine } from "@remixicon/react";
 
-// Simple utility function to avoid import issues
-const formatCurrency = (amount: number): string => {
-	return new Intl.NumberFormat("en-US", {
+const formatCurrency = (amount: number): string =>
+	new Intl.NumberFormat("en-US", {
 		style: "currency",
 		currency: "USD",
 		minimumFractionDigits: 0,
 		maximumFractionDigits: 0,
 	}).format(amount);
-};
+
+const RANK_ICONS = [
+	<RiTrophyLine key="t" className="size-4 text-yellow-500" />,
+	<RiMedalLine key="m" className="size-4 text-gray-400" />,
+	<RiAwardLine key="a" className="size-4 text-amber-600" />,
+];
+
+const RANK_COLORS = [
+	"bg-yellow-100 text-yellow-800 border-yellow-200",
+	"bg-gray-100 text-gray-800 border-gray-200",
+	"bg-amber-100 text-amber-800 border-amber-200",
+];
 
 export function TeamLeaderboard() {
-	// ✅ CORRECT tRPC query pattern
-	const {
-		data: leaderboard,
-		isLoading,
-		error,
-	} = trpc.dashboard.getTeamLeaderboard.useQuery();
+	const { teamLeaderboard, isLoading } = useAgentDashboard();
 
 	if (isLoading) {
 		return (
@@ -51,22 +56,7 @@ export function TeamLeaderboard() {
 		);
 	}
 
-	if (error) {
-		return (
-			<Card>
-				<CardHeader>
-					<CardTitle>Team Leaderboard</CardTitle>
-				</CardHeader>
-				<CardContent>
-					<p className="text-muted-foreground text-sm">
-						Failed to load leaderboard data. Please try again.
-					</p>
-				</CardContent>
-			</Card>
-		);
-	}
-
-	if (!leaderboard || leaderboard.length === 0) {
+	if (!teamLeaderboard || teamLeaderboard.length === 0) {
 		return (
 			<Card>
 				<CardHeader>
@@ -81,35 +71,18 @@ export function TeamLeaderboard() {
 		);
 	}
 
-	const getRankIcon = (index: number) => {
-		switch (index) {
-			case 0:
-				return <RiTrophyLine className="size-4 text-yellow-500" />;
-			case 1:
-				return <RiMedalLine className="size-4 text-gray-400" />;
-			case 2:
-				return <RiAwardLine className="size-4 text-amber-600" />;
-			default:
-				return (
-					<div className="flex size-4 items-center justify-center rounded-full bg-muted font-medium text-xs">
-						{index + 1}
-					</div>
-				);
-		}
-	};
-
-	const getRankBadgeColor = (index: number) => {
-		switch (index) {
-			case 0:
-				return "bg-yellow-100 text-yellow-800 border-yellow-200";
-			case 1:
-				return "bg-gray-100 text-gray-800 border-gray-200";
-			case 2:
-				return "bg-amber-100 text-amber-800 border-amber-200";
-			default:
-				return "bg-muted text-muted-foreground border-border";
-		}
-	};
+	const totalCommission = teamLeaderboard.reduce(
+		(sum, a) => sum + a.totalCommission,
+		0,
+	);
+	const totalCompleted = teamLeaderboard.reduce(
+		(sum, a) => sum + a.completedDeals,
+		0,
+	);
+	const totalActive = teamLeaderboard.reduce(
+		(sum, a) => sum + a.activeDeals,
+		0,
+	);
 
 	return (
 		<Card>
@@ -118,21 +91,21 @@ export function TeamLeaderboard() {
 			</CardHeader>
 			<CardContent>
 				<div className="space-y-4">
-					{leaderboard.map((agent, index) => (
+					{teamLeaderboard.map((agent, i) => (
 						<div
 							key={agent.agentId}
-							className={`flex items-center gap-3 rounded-lg p-2 transition-colors ${
-								index < 3 ? "bg-muted/50" : ""
-							}`}
+							className={`flex items-center gap-3 rounded-lg p-2 transition-colors ${i < 3 ? "bg-muted/50" : ""}`}
 						>
-							{/* Rank */}
 							<div
-								className={`flex size-8 items-center justify-center rounded-full border ${getRankBadgeColor(index)}`}
+								className={`flex size-8 items-center justify-center rounded-full border ${RANK_COLORS[i] ?? "border-border bg-muted text-muted-foreground"}`}
 							>
-								{getRankIcon(index)}
+								{RANK_ICONS[i] ?? (
+									<div className="flex size-4 items-center justify-center rounded-full bg-muted font-medium text-xs">
+										{i + 1}
+									</div>
+								)}
 							</div>
 
-							{/* Agent Info */}
 							<div className="flex min-w-0 flex-1 items-center gap-3">
 								<Avatar className="size-8">
 									{agent.agentImage ? (
@@ -152,13 +125,12 @@ export function TeamLeaderboard() {
 										{agent.agentName}
 									</div>
 									<div className="text-muted-foreground text-xs">
-										{agent.completedDeals} completed • {agent.activeDeals}{" "}
+										{agent.completedDeals} completed · {agent.activeDeals}{" "}
 										active
 									</div>
 								</div>
 							</div>
 
-							{/* Performance */}
 							<div className="text-right">
 								<div className="font-semibold text-sm">
 									{formatCurrency(agent.totalCommission)}
@@ -169,39 +141,21 @@ export function TeamLeaderboard() {
 					))}
 				</div>
 
-				{/* Team Summary */}
-				{leaderboard.length > 0 && (
-					<div className="mt-4 space-y-2 border-t pt-4">
-						<div className="flex items-center justify-between text-sm">
-							<span className="text-muted-foreground">Team Total</span>
-							<span className="font-medium">
-								{formatCurrency(
-									leaderboard.reduce(
-										(sum, agent) => sum + agent.totalCommission,
-										0,
-									),
-								)}
-							</span>
+				<div className="mt-4 space-y-2 border-t pt-4">
+					{[
+						{ label: "Team Total", value: formatCurrency(totalCommission) },
+						{ label: "Total Deals", value: `${totalCompleted} completed` },
+						{ label: "Active Pipeline", value: `${totalActive} deals` },
+					].map(({ label, value }) => (
+						<div
+							key={label}
+							className="flex items-center justify-between text-sm"
+						>
+							<span className="text-muted-foreground">{label}</span>
+							<span className="font-medium">{value}</span>
 						</div>
-						<div className="flex items-center justify-between text-sm">
-							<span className="text-muted-foreground">Total Deals</span>
-							<span className="font-medium">
-								{leaderboard.reduce(
-									(sum, agent) => sum + agent.completedDeals,
-									0,
-								)}{" "}
-								completed
-							</span>
-						</div>
-						<div className="flex items-center justify-between text-sm">
-							<span className="text-muted-foreground">Active Pipeline</span>
-							<span className="font-medium">
-								{leaderboard.reduce((sum, agent) => sum + agent.activeDeals, 0)}{" "}
-								deals
-							</span>
-						</div>
-					</div>
-				)}
+					))}
+				</div>
 			</CardContent>
 		</Card>
 	);
