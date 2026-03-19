@@ -27,7 +27,9 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { LoadingScreen } from "@/components/ui/loading-spinner";
 import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
 import { authClient } from "@/lib/auth-client";
 import { trpc } from "@/utils/trpc";
 import {
@@ -98,16 +100,106 @@ export default function AgentSettingsPage() {
 	};
 
 	// Show loading while checking authentication
-	if (isPending || isProfileLoading) {
+	if (isPending) {
+		return <LoadingScreen text="Loading..." />;
+	}
+
+	// Show profile skeleton while profile data loads
+	if (isProfileLoading) {
 		return (
-			<div className="flex h-screen items-center justify-center">
-				<div className="text-center">
-					<RiLoader4Line className="mx-auto h-8 w-8 animate-spin text-primary" />
-					<p className="mt-2 text-muted-foreground text-sm">
-						Loading profile...
-					</p>
-				</div>
-			</div>
+			<SidebarProvider>
+				<AppSidebar />
+				<SidebarInset className="overflow-hidden px-4 md:px-6 lg:px-8">
+					<header className="flex h-16 shrink-0 items-center gap-2 border-b">
+						<div className="flex flex-1 items-center gap-2 px-3">
+							<SidebarTrigger className="-ms-4" />
+							<Separator
+								orientation="vertical"
+								className="mr-2 data-[orientation=vertical]:h-4"
+							/>
+							<Breadcrumb>
+								<BreadcrumbList>
+									<BreadcrumbItem className="hidden md:block">
+										<BreadcrumbLink href="/dashboard">
+											<RiDashboardLine size={22} aria-hidden="true" />
+											<span className="sr-only">Dashboard</span>
+										</BreadcrumbLink>
+									</BreadcrumbItem>
+									<BreadcrumbSeparator className="hidden md:block" />
+									<BreadcrumbItem>
+										<BreadcrumbPage className="flex items-center gap-2">
+											<RiSettings3Line size={20} aria-hidden="true" />
+											Settings
+										</BreadcrumbPage>
+									</BreadcrumbItem>
+								</BreadcrumbList>
+							</Breadcrumb>
+						</div>
+						<div className="ml-auto flex gap-3">
+							<HeaderActions />
+						</div>
+					</header>
+					<div className="flex flex-1 flex-col gap-4 py-4 lg:gap-6 lg:py-6">
+						<div className="mx-auto w-full max-w-2xl">
+							{/* Page title skeleton */}
+							<div className="mb-6 flex items-center gap-4">
+								<Skeleton className="h-12 w-12 rounded-lg" />
+								<div className="space-y-1.5">
+									<Skeleton className="h-8 w-48" />
+									<Skeleton className="h-4 w-56" />
+								</div>
+							</div>
+							{/* Profile card skeleton */}
+							<Card>
+								<CardHeader>
+									<Skeleton className="h-5 w-40" />
+									<Skeleton className="mt-1 h-4 w-64" />
+								</CardHeader>
+								<CardContent className="space-y-6">
+									{/* Avatar row */}
+									<div className="flex items-center gap-6">
+										<Skeleton className="h-20 w-20 rounded-full" />
+										<div className="space-y-2">
+											<Skeleton className="h-9 w-32 rounded-md" />
+											<Skeleton className="h-3.5 w-36" />
+										</div>
+									</div>
+									{/* Name field */}
+									<div className="space-y-2">
+										<Skeleton className="h-4 w-20" />
+										<Skeleton className="h-10 w-full rounded-md" />
+									</div>
+									{/* Email field */}
+									<div className="space-y-2">
+										<Skeleton className="h-4 w-12" />
+										<Skeleton className="h-10 w-full rounded-md" />
+										<Skeleton className="h-3.5 w-64" />
+									</div>
+									{/* Account info */}
+									<div className="rounded-lg border bg-muted/50 p-4">
+										<Skeleton className="mb-3 h-4 w-40" />
+										<div className="grid grid-cols-2 gap-4">
+											<div className="space-y-2">
+												<Skeleton className="h-3.5 w-8" />
+												<Skeleton className="h-5 w-16 rounded-full" />
+											</div>
+											<div className="space-y-2">
+												<Skeleton className="h-3.5 w-8" />
+												<Skeleton className="h-5 w-20 rounded-full" />
+											</div>
+										</div>
+									</div>
+								</CardContent>
+							</Card>
+							{/* Action buttons skeleton */}
+							<div className="mt-6 flex justify-end gap-4">
+								<Skeleton className="h-9 w-20 rounded-md" />
+								<Skeleton className="h-9 w-28 rounded-md" />
+							</div>
+						</div>
+					</div>
+				</SidebarInset>
+			</SidebarProvider>
 		);
 	}
 

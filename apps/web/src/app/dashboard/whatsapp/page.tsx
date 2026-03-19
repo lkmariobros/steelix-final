@@ -18,9 +18,10 @@ import {
 } from "@/components/ui/breadcrumb";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { LoadingScreen } from "@/components/ui/loading-spinner";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
 import { authClient } from "@/lib/auth-client";
 import { trpc } from "@/utils/trpc";
 import {
@@ -250,11 +251,7 @@ export default function WhatsAppPage() {
 
 	// Authentication check
 	if (isSessionPending) {
-		return (
-			<div className="flex h-screen items-center justify-center">
-				<LoadingSpinner size="lg" text="Loading..." />
-			</div>
-		);
+		return <LoadingScreen text="Loading..." />;
 	}
 
 	if (!session) {
@@ -362,8 +359,22 @@ export default function WhatsAppPage() {
 						<ScrollArea className="flex-1">
 							<div className="flex flex-col">
 								{isLoadingConversations ? (
-									<div className="flex items-center justify-center py-12">
-										<RiLoader4Line className="h-6 w-6 animate-spin text-muted-foreground" />
+									<div className="flex flex-col">
+										{Array.from({ length: 7 }).map((_, i) => (
+											<div
+												key={i}
+												className="flex items-center gap-3 border-b p-4"
+											>
+												<Skeleton className="size-10 shrink-0 rounded-full" />
+												<div className="flex-1 space-y-2">
+													<div className="flex items-center justify-between">
+														<Skeleton className="h-4 w-28" />
+														<Skeleton className="h-3 w-10" />
+													</div>
+													<Skeleton className="h-3 w-full" />
+												</div>
+											</div>
+										))}
 									</div>
 								) : conversationsError ? (
 									<div className="px-4 py-12 text-center">
@@ -437,8 +448,34 @@ export default function WhatsAppPage() {
 					{/* Right Pane - Conversation View */}
 					<div className="flex flex-1 flex-col">
 						{isLoadingConversation ? (
-							<div className="flex flex-1 items-center justify-center">
-								<RiLoader4Line className="h-8 w-8 animate-spin text-muted-foreground" />
+							<div className="flex flex-1 flex-col">
+								{/* Header skeleton */}
+								<div className="flex items-center justify-between border-b p-4">
+									<div className="flex items-center gap-3">
+										<Skeleton className="size-10 rounded-full" />
+										<div className="space-y-1.5">
+											<Skeleton className="h-4 w-32" />
+											<Skeleton className="h-3 w-24" />
+										</div>
+									</div>
+								</div>
+								{/* Messages skeleton */}
+								<div className="flex flex-1 flex-col gap-4 p-4">
+									{[false, true, false, true, false].map((isRight, i) => (
+										<div
+											key={i}
+											className={`flex ${isRight ? "justify-end" : "justify-start"}`}
+										>
+											<Skeleton
+												className={`h-10 rounded-lg ${isRight ? "w-1/2" : "w-2/3"}`}
+											/>
+										</div>
+									))}
+								</div>
+								{/* Input skeleton */}
+								<div className="border-t p-4">
+									<Skeleton className="h-10 w-full rounded-md" />
+								</div>
 							</div>
 						) : selectedConversation ? (
 							<>

@@ -32,6 +32,7 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@/components/ui/card";
+import { LoadingScreen } from "@/components/ui/loading-spinner";
 import {
 	Select,
 	SelectContent,
@@ -39,6 +40,7 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { authClient } from "@/lib/auth-client";
 import { trpc } from "@/utils/trpc";
@@ -165,14 +167,7 @@ export default function AdminApprovalsPage() {
 
 	// Show loading while checking authentication
 	if (isPending) {
-		return (
-			<div className="flex h-screen items-center justify-center">
-				<div className="text-center">
-					<div className="mx-auto h-8 w-8 animate-spin rounded-full border-primary border-b-2" />
-					<p className="mt-2 text-muted-foreground text-sm">Loading...</p>
-				</div>
-			</div>
-		);
+		return <LoadingScreen text="Loading..." />;
 	}
 
 	if (!session) {
@@ -332,106 +327,89 @@ export default function AdminApprovalsPage() {
 					</div>
 
 					{/* Approval Summary Cards */}
-					<div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-						<Card>
-							<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-								<CardTitle className="font-medium text-sm">
-									Pending Approvals
-								</CardTitle>
-								<RiCheckboxCircleLine className="h-4 w-4 text-muted-foreground" />
-							</CardHeader>
-							<CardContent>
-								{isLoadingStats ? (
-									<div className="space-y-2">
-										<div className="h-8 w-16 animate-pulse rounded bg-muted" />
-										<div className="h-3 w-24 animate-pulse rounded bg-muted" />
+					{isLoadingStats ? (
+						<div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+							{[...Array(4)].map((_, i) => (
+								<Card key={i} className="overflow-hidden">
+									<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+										<Skeleton className="h-3.5 w-28" />
+										<Skeleton className="h-4 w-4 rounded" />
+									</CardHeader>
+									<CardContent className="space-y-2">
+										<Skeleton className="h-8 w-16" />
+										<Skeleton className="h-3 w-28" />
+									</CardContent>
+								</Card>
+							))}
+						</div>
+					) : (
+						<div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+							<Card>
+								<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+									<CardTitle className="font-medium text-sm">
+										Pending Approvals
+									</CardTitle>
+									<RiCheckboxCircleLine className="h-4 w-4 text-muted-foreground" />
+								</CardHeader>
+								<CardContent>
+									<div className="font-bold text-2xl">
+										{approvalsData?.totalCount || 0}
 									</div>
-								) : (
-									<>
-										<div className="font-bold text-2xl">
-											{approvalsData?.totalCount || 0}
-										</div>
-										<p className="text-muted-foreground text-xs">
-											Awaiting your review
-										</p>
-									</>
-								)}
-							</CardContent>
-						</Card>
-						<Card>
-							<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-								<CardTitle className="font-medium text-sm">
-									Total Transactions
-								</CardTitle>
-								<RiCheckLine className="h-4 w-4 text-muted-foreground" />
-							</CardHeader>
-							<CardContent>
-								{isLoadingStats ? (
-									<div className="space-y-2">
-										<div className="h-8 w-16 animate-pulse rounded bg-muted" />
-										<div className="h-3 w-24 animate-pulse rounded bg-muted" />
+									<p className="text-muted-foreground text-xs">
+										Awaiting your review
+									</p>
+								</CardContent>
+							</Card>
+							<Card>
+								<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+									<CardTitle className="font-medium text-sm">
+										Total Transactions
+									</CardTitle>
+									<RiCheckLine className="h-4 w-4 text-muted-foreground" />
+								</CardHeader>
+								<CardContent>
+									<div className="font-bold text-2xl">
+										{dashboardStats?.totalTransactions || 0}
 									</div>
-								) : (
-									<>
-										<div className="font-bold text-2xl">
-											{dashboardStats?.totalTransactions || 0}
-										</div>
-										<p className="text-muted-foreground text-xs">All time</p>
-									</>
-								)}
-							</CardContent>
-						</Card>
-						<Card>
-							<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-								<CardTitle className="font-medium text-sm">
-									Total Commission
-								</CardTitle>
-								<RiCheckboxCircleLine className="h-4 w-4 text-muted-foreground" />
-							</CardHeader>
-							<CardContent>
-								{isLoadingStats ? (
-									<div className="space-y-2">
-										<div className="h-8 w-20 animate-pulse rounded bg-muted" />
-										<div className="h-3 w-24 animate-pulse rounded bg-muted" />
+									<p className="text-muted-foreground text-xs">All time</p>
+								</CardContent>
+							</Card>
+							<Card>
+								<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+									<CardTitle className="font-medium text-sm">
+										Total Commission
+									</CardTitle>
+									<RiCheckboxCircleLine className="h-4 w-4 text-muted-foreground" />
+								</CardHeader>
+								<CardContent>
+									<div className="font-bold text-2xl">
+										{formatCurrency(
+											Number(dashboardStats?.totalCommissionValue) || 0,
+										)}
 									</div>
-								) : (
-									<>
-										<div className="font-bold text-2xl">
-											{formatCurrency(
-												Number(dashboardStats?.totalCommissionValue) || 0,
-											)}
-										</div>
-										<p className="text-muted-foreground text-xs">
-											All transactions
-										</p>
-									</>
-								)}
-							</CardContent>
-						</Card>
-						<Card>
-							<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-								<CardTitle className="font-medium text-sm">Approved</CardTitle>
-								<RiCheckboxCircleLine className="h-4 w-4 text-muted-foreground" />
-							</CardHeader>
-							<CardContent>
-								{isLoadingStats ? (
-									<div className="space-y-2">
-										<div className="h-8 w-20 animate-pulse rounded bg-muted" />
-										<div className="h-3 w-24 animate-pulse rounded bg-muted" />
+									<p className="text-muted-foreground text-xs">
+										All transactions
+									</p>
+								</CardContent>
+							</Card>
+							<Card>
+								<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+									<CardTitle className="font-medium text-sm">
+										Approved
+									</CardTitle>
+									<RiCheckboxCircleLine className="h-4 w-4 text-muted-foreground" />
+								</CardHeader>
+								<CardContent>
+									<div className="font-bold text-2xl">
+										{dashboardStats?.approvedTransactions || 0}
 									</div>
-								) : (
-									<>
-										<div className="font-bold text-2xl">
-											{dashboardStats?.approvedTransactions || 0}
-										</div>
-										<p className="text-muted-foreground text-xs">
-											Transactions approved
-										</p>
-									</>
-								)}
-							</CardContent>
-						</Card>
-					</div>
+									<p className="text-muted-foreground text-xs">
+										Transactions approved
+									</p>
+								</CardContent>
+							</Card>
+						</div>
+					)}
 
 					{/* Approval Queue */}
 					<Card>
@@ -443,19 +421,24 @@ export default function AdminApprovalsPage() {
 						</CardHeader>
 						<CardContent>
 							{isLoadingApprovals ? (
-								<div className="space-y-4">
-									{Array.from({ length: 3 }, (_, i) => (
+								<div className="space-y-3">
+									{[...Array(4)].map((_, i) => (
 										<div
 											key={`skeleton-${i}`}
 											className="flex items-center justify-between rounded-lg border p-4"
 										>
 											<div className="space-y-2">
-												<div className="h-4 w-32 animate-pulse rounded bg-muted" />
-												<div className="h-3 w-48 animate-pulse rounded bg-muted" />
+												<div className="flex items-center gap-2">
+													<Skeleton className="h-4 w-32" />
+													<Skeleton className="h-5 w-20 rounded-full" />
+													<Skeleton className="h-5 w-16 rounded-full" />
+												</div>
+												<Skeleton className="h-3 w-56" />
+												<Skeleton className="h-3 w-72" />
 											</div>
 											<div className="flex gap-2">
-												<div className="h-8 w-20 animate-pulse rounded bg-muted" />
-												<div className="h-8 w-20 animate-pulse rounded bg-muted" />
+												<Skeleton className="h-8 w-20 rounded-md" />
+												<Skeleton className="h-8 w-16 rounded-md" />
 											</div>
 										</div>
 									))}

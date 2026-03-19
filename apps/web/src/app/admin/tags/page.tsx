@@ -41,6 +41,8 @@ import {
 	DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { LoadingScreen } from "@/components/ui/loading-spinner";
+import { Skeleton } from "@/components/ui/skeleton";
 import { authClient } from "@/lib/auth-client";
 import { trpc } from "@/utils/trpc";
 import {
@@ -188,14 +190,7 @@ export default function AdminTagsPage() {
 
 	// Show loading while checking authentication
 	if (isPending) {
-		return (
-			<div className="flex h-screen items-center justify-center">
-				<div className="text-center">
-					<div className="mx-auto h-8 w-8 animate-spin rounded-full border-primary border-b-2" />
-					<p className="mt-2 text-muted-foreground text-sm">Loading...</p>
-				</div>
-			</div>
-		);
+		return <LoadingScreen text="Loading..." />;
 	}
 
 	// Redirect if not authenticated
@@ -309,8 +304,52 @@ export default function AdminTagsPage() {
 
 							{/* Tags Table */}
 							{isLoadingTags ? (
-								<div className="flex items-center justify-center py-12">
-									<RiLoader4Line className="h-8 w-8 animate-spin text-muted-foreground" />
+								<div className="overflow-hidden rounded-md border">
+									<Table>
+										<TableHeader>
+											<TableRow className="hover:bg-transparent">
+												<TableHead className="w-12">
+													<Skeleton className="h-4 w-4 rounded" />
+												</TableHead>
+												<TableHead>
+													<Skeleton className="h-3.5 w-20" />
+												</TableHead>
+												<TableHead>
+													<Skeleton className="h-3.5 w-24" />
+												</TableHead>
+												<TableHead>
+													<Skeleton className="h-3.5 w-20" />
+												</TableHead>
+												<TableHead className="text-right">
+													<Skeleton className="ml-auto h-3.5 w-16" />
+												</TableHead>
+											</TableRow>
+										</TableHeader>
+										<TableBody>
+											{[...Array(8)].map((_, i) => (
+												<TableRow key={i} className="hover:bg-transparent">
+													<TableCell>
+														<Skeleton className="h-4 w-4 rounded" />
+													</TableCell>
+													<TableCell>
+														<Skeleton className="h-4 w-36" />
+													</TableCell>
+													<TableCell>
+														<Skeleton className="h-3.5 w-24" />
+													</TableCell>
+													<TableCell>
+														<Skeleton className="h-3.5 w-28" />
+													</TableCell>
+													<TableCell className="text-right">
+														<div className="flex items-center justify-end gap-2">
+															<Skeleton className="h-7 w-7 rounded-md" />
+															<Skeleton className="h-7 w-7 rounded-md" />
+														</div>
+													</TableCell>
+												</TableRow>
+											))}
+										</TableBody>
+									</Table>
 								</div>
 							) : tagsError ? (
 								<div className="py-12 text-center">

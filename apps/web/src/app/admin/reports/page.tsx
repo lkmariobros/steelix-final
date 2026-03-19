@@ -34,6 +34,7 @@ import {
 	CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { LoadingScreen } from "@/components/ui/loading-spinner";
 import {
 	Select,
 	SelectContent,
@@ -41,6 +42,7 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { authClient } from "@/lib/auth-client";
 import { trpc } from "@/utils/trpc";
@@ -234,14 +236,7 @@ export default function AdminReportsPage() {
 
 	// Show loading while checking authentication
 	if (isPending) {
-		return (
-			<div className="flex h-screen items-center justify-center">
-				<div className="text-center">
-					<div className="mx-auto h-8 w-8 animate-spin rounded-full border-primary border-b-2" />
-					<p className="mt-2 text-muted-foreground text-sm">Loading...</p>
-				</div>
-			</div>
-		);
+		return <LoadingScreen text="Loading..." />;
 	}
 
 	// Redirect if not authenticated
@@ -353,111 +348,92 @@ export default function AdminReportsPage() {
 						{/* Analytics Tab */}
 						<TabsContent value="analytics" className="space-y-4">
 							{/* Summary Cards */}
-							<div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-								<Card>
-									<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-										<CardTitle className="font-medium text-sm">
-											Total Revenue
-										</CardTitle>
-										<RiBarChartLine className="h-4 w-4 text-muted-foreground" />
-									</CardHeader>
-									<CardContent>
-										{isLoadingStats ? (
-											<div className="space-y-2">
-												<div className="h-8 w-24 animate-pulse rounded bg-muted" />
-												<div className="h-3 w-32 animate-pulse rounded bg-muted" />
+							{isLoadingStats ? (
+								<div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+									{[...Array(4)].map((_, i) => (
+										<Card key={i} className="overflow-hidden">
+											<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+												<Skeleton className="h-3.5 w-24" />
+												<Skeleton className="h-4 w-4 rounded" />
+											</CardHeader>
+											<CardContent className="space-y-2">
+												<Skeleton className="h-8 w-20" />
+												<Skeleton className="h-3 w-32" />
+											</CardContent>
+										</Card>
+									))}
+								</div>
+							) : (
+								<div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+									<Card>
+										<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+											<CardTitle className="font-medium text-sm">
+												Total Revenue
+											</CardTitle>
+											<RiBarChartLine className="h-4 w-4 text-muted-foreground" />
+										</CardHeader>
+										<CardContent>
+											<div className="font-bold text-2xl">
+												$
+												{(
+													dashboardStats?.transactions?.totalCommission || 0
+												).toLocaleString()}
 											</div>
-										) : (
-											<>
-												<div className="font-bold text-2xl">
-													$
-													{(
-														dashboardStats?.transactions?.totalCommission || 0
-													).toLocaleString()}
-												</div>
-												<p className="text-muted-foreground text-xs">
-													Total commission value
-												</p>
-											</>
-										)}
-									</CardContent>
-								</Card>
-								<Card>
-									<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-										<CardTitle className="font-medium text-sm">
-											Transactions
-										</CardTitle>
-										<RiFileTextLine className="h-4 w-4 text-muted-foreground" />
-									</CardHeader>
-									<CardContent>
-										{isLoadingStats ? (
-											<div className="space-y-2">
-												<div className="h-8 w-16 animate-pulse rounded bg-muted" />
-												<div className="h-3 w-24 animate-pulse rounded bg-muted" />
+											<p className="text-muted-foreground text-xs">
+												Total commission value
+											</p>
+										</CardContent>
+									</Card>
+									<Card>
+										<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+											<CardTitle className="font-medium text-sm">
+												Transactions
+											</CardTitle>
+											<RiFileTextLine className="h-4 w-4 text-muted-foreground" />
+										</CardHeader>
+										<CardContent>
+											<div className="font-bold text-2xl">
+												{dashboardStats?.transactions?.totalTransactions || 0}
 											</div>
-										) : (
-											<>
-												<div className="font-bold text-2xl">
-													{dashboardStats?.transactions?.totalTransactions || 0}
-												</div>
-												<p className="text-muted-foreground text-xs">
-													Total transactions
-												</p>
-											</>
-										)}
-									</CardContent>
-								</Card>
-								<Card>
-									<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-										<RiBarChartLine className="h-4 w-4 text-muted-foreground" />
-									</CardHeader>
-									<CardContent>
-										{isLoadingStats ? (
-											<div className="space-y-2">
-												<div className="h-8 w-20 animate-pulse rounded bg-muted" />
-												<div className="h-3 w-24 animate-pulse rounded bg-muted" />
+											<p className="text-muted-foreground text-xs">
+												Total transactions
+											</p>
+										</CardContent>
+									</Card>
+									<Card>
+										<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+											<RiBarChartLine className="h-4 w-4 text-muted-foreground" />
+										</CardHeader>
+										<CardContent>
+											<div className="font-bold text-2xl">
+												$
+												{(
+													dashboardStats?.transactions?.averageCommission || 0
+												).toLocaleString()}
 											</div>
-										) : (
-											<>
-												<div className="font-bold text-2xl">
-													$
-													{(
-														dashboardStats?.transactions?.averageCommission || 0
-													).toLocaleString()}
-												</div>
-												<p className="text-muted-foreground text-xs">
-													Average per transaction
-												</p>
-											</>
-										)}
-									</CardContent>
-								</Card>
-								<Card>
-									<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-										<CardTitle className="font-medium text-sm">
-											Active Agents
-										</CardTitle>
-										<RiGroupLine className="h-4 w-4 text-muted-foreground" />
-									</CardHeader>
-									<CardContent>
-										{isLoadingStats ? (
-											<div className="space-y-2">
-												<div className="h-8 w-16 animate-pulse rounded bg-muted" />
-												<div className="h-3 w-24 animate-pulse rounded bg-muted" />
+											<p className="text-muted-foreground text-xs">
+												Average per transaction
+											</p>
+										</CardContent>
+									</Card>
+									<Card>
+										<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+											<CardTitle className="font-medium text-sm">
+												Active Agents
+											</CardTitle>
+											<RiGroupLine className="h-4 w-4 text-muted-foreground" />
+										</CardHeader>
+										<CardContent>
+											<div className="font-bold text-2xl">
+												{dashboardStats?.agents?.totalAgents || 0}
 											</div>
-										) : (
-											<>
-												<div className="font-bold text-2xl">
-													{dashboardStats?.agents?.totalAgents || 0}
-												</div>
-												<p className="text-muted-foreground text-xs">
-													Active agents
-												</p>
-											</>
-										)}
-									</CardContent>
-								</Card>
-							</div>
+											<p className="text-muted-foreground text-xs">
+												Active agents
+											</p>
+										</CardContent>
+									</Card>
+								</div>
+							)}
 
 							{/* Performance & Top Performers */}
 							<Card>
@@ -470,9 +446,44 @@ export default function AdminReportsPage() {
 								<CardContent>
 									{isLoadingPerformance ? (
 										<div className="space-y-6">
-											<div className="space-y-2">
-												<div className="h-4 w-32 animate-pulse rounded bg-muted" />
-												<div className="h-32 w-full animate-pulse rounded bg-muted" />
+											<div className="space-y-3">
+												<Skeleton className="h-4 w-40" />
+												<div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+													{[...Array(3)].map((_, i) => (
+														<div
+															key={i}
+															className="space-y-2 rounded-lg border p-4"
+														>
+															<div className="flex items-center justify-between">
+																<Skeleton className="h-3.5 w-28" />
+																<Skeleton className="h-3 w-16" />
+															</div>
+															<Skeleton className="h-6 w-24" />
+															<Skeleton className="h-3 w-20" />
+														</div>
+													))}
+												</div>
+											</div>
+											<div className="space-y-3">
+												<Skeleton className="h-4 w-32" />
+												{[...Array(4)].map((_, i) => (
+													<div
+														key={i}
+														className="flex items-center justify-between rounded-lg border p-3"
+													>
+														<div className="flex items-center gap-3">
+															<Skeleton className="h-8 w-8 rounded-full" />
+															<div className="space-y-1.5">
+																<Skeleton className="h-4 w-32" />
+																<Skeleton className="h-3 w-24" />
+															</div>
+														</div>
+														<div className="space-y-1 text-right">
+															<Skeleton className="ml-auto h-4 w-20" />
+															<Skeleton className="ml-auto h-3 w-28" />
+														</div>
+													</div>
+												))}
 											</div>
 										</div>
 									) : performanceAnalytics?.periods &&
@@ -637,13 +648,28 @@ export default function AdminReportsPage() {
 									</div>
 
 									{isLoadingCoBroking ? (
-										<div className="space-y-3">
-											{[1, 2, 3].map((i) => (
-												<div
-													key={i}
-													className="h-16 animate-pulse rounded bg-muted"
-												/>
-											))}
+										<div className="overflow-hidden rounded-md border">
+											<div className="grid grid-cols-7 gap-4 bg-muted/50 px-4 py-3">
+												{[...Array(7)].map((_, i) => (
+													<Skeleton key={i} className="h-3.5 w-full" />
+												))}
+											</div>
+											<div className="divide-y">
+												{[...Array(5)].map((_, i) => (
+													<div
+														key={i}
+														className="grid grid-cols-7 gap-4 px-4 py-3"
+													>
+														<Skeleton className="h-4 w-full" />
+														<Skeleton className="h-4 w-full" />
+														<Skeleton className="h-4 w-4/5" />
+														<Skeleton className="h-4 w-5/6" />
+														<Skeleton className="ml-auto h-4 w-10" />
+														<Skeleton className="ml-auto h-4 w-16" />
+														<Skeleton className="ml-auto h-5 w-16 rounded-full" />
+													</div>
+												))}
+											</div>
 										</div>
 									) : coBrokingData?.transactions &&
 										coBrokingData.transactions.length > 0 ? (
@@ -810,13 +836,28 @@ export default function AdminReportsPage() {
 									</div>
 
 									{isLoadingClients ? (
-										<div className="space-y-3">
-											{[1, 2, 3].map((i) => (
-												<div
-													key={i}
-													className="h-16 animate-pulse rounded bg-muted"
-												/>
-											))}
+										<div className="overflow-hidden rounded-md border">
+											<div className="grid grid-cols-7 gap-4 bg-muted/50 px-4 py-3">
+												{[...Array(7)].map((_, i) => (
+													<Skeleton key={i} className="h-3.5 w-full" />
+												))}
+											</div>
+											<div className="divide-y">
+												{[...Array(6)].map((_, i) => (
+													<div
+														key={i}
+														className="grid grid-cols-7 gap-4 px-4 py-3"
+													>
+														<Skeleton className="h-4 w-full" />
+														<Skeleton className="h-4 w-5/6" />
+														<Skeleton className="h-4 w-4/5" />
+														<Skeleton className="h-5 w-16 rounded-full" />
+														<Skeleton className="h-4 w-full" />
+														<Skeleton className="ml-auto h-4 w-8" />
+														<Skeleton className="ml-auto h-4 w-16" />
+													</div>
+												))}
+											</div>
 										</div>
 									) : clientData?.clients && clientData.clients.length > 0 ? (
 										<div className="rounded-md border">

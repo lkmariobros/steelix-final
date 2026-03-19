@@ -37,7 +37,7 @@ import {
 	FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { LoadingScreen } from "@/components/ui/loading-spinner";
 import {
 	Select,
 	SelectContent,
@@ -46,6 +46,7 @@ import {
 	SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { authClient } from "@/lib/auth-client";
@@ -178,10 +179,11 @@ export default function AdminCalendarPage() {
 	const isAdmin = !!session;
 
 	// Fetch all events for calendar view (needed for monthly display)
-	const { data: allEventsData } = trpc.calendar.listEvents.useQuery(
-		{ includeInactive: isAdmin },
-		{ enabled: !!session },
-	);
+	const { data: allEventsData, isLoading: isLoadingEvents } =
+		trpc.calendar.listEvents.useQuery(
+			{ includeInactive: isAdmin },
+			{ enabled: !!session },
+		);
 
 	// Fetch upcoming events for list view
 	const { data: upcomingEventsData } = trpc.calendar.upcomingEvents.useQuery(
@@ -195,10 +197,11 @@ export default function AdminCalendarPage() {
 	);
 
 	// Fetch announcements
-	const { data: announcementsData } = trpc.calendar.listAnnouncements.useQuery(
-		{ includeExpired: isAdmin, includeInactive: isAdmin },
-		{ enabled: !!session },
-	);
+	const { data: announcementsData, isLoading: isLoadingAnnouncements } =
+		trpc.calendar.listAnnouncements.useQuery(
+			{ includeExpired: isAdmin, includeInactive: isAdmin },
+			{ enabled: !!session },
+		);
 
 	const upcomingEvents = upcomingEventsData?.events || [];
 	const allEvents = allEventsData?.events || [];
@@ -588,11 +591,7 @@ export default function AdminCalendarPage() {
 
 	// Authentication check
 	if (isPending) {
-		return (
-			<div className="flex h-screen items-center justify-center">
-				<LoadingSpinner size="lg" text="Loading..." />
-			</div>
-		);
+		return <LoadingScreen text="Loading..." />;
 	}
 
 	if (!session) {
@@ -687,165 +686,223 @@ export default function AdminCalendarPage() {
 					{viewMode === "calendar" && (
 						<Card className="w-full">
 							<CardContent className="p-6">
-								{/* Calendar Header with Navigation */}
-								<div className="mb-6 flex items-center justify-between">
-									{/* Current Date Display */}
-									<div className="flex items-center gap-4">
-										<div className="flex min-w-[60px] flex-col items-center justify-center rounded-lg bg-muted p-3">
-											<div className="font-medium text-muted-foreground text-xs uppercase">
-												{format(currentMonth, "MMM")}
-											</div>
-											<div className="font-bold text-2xl">
-												{format(new Date(), "d")}
-											</div>
-										</div>
-										<div>
-											<h2 className="font-semibold text-2xl">
-												{format(currentMonth, "MMMM, yyyy")}
-											</h2>
-											<p className="text-muted-foreground text-sm">
-												{format(startOfMonth(currentMonth), "MMM d, yyyy")} -{" "}
-												{format(endOfMonth(currentMonth), "MMM d, yyyy")}
-											</p>
-										</div>
-									</div>
-
-									{/* Navigation Controls */}
-									<div className="flex items-center gap-2">
-										<Button
-											variant="ghost"
-											size="icon"
-											onClick={() => navigateMonth("prev")}
-											className="h-9 w-9"
-										>
-											<RiArrowLeftLine className="size-5" />
-										</Button>
-										<Button
-											variant="outline"
-											size="sm"
-											onClick={() => navigateMonth("today")}
-											className="h-9"
-										>
-											Today
-										</Button>
-										<Button
-											variant="ghost"
-											size="icon"
-											onClick={() => navigateMonth("next")}
-											className="h-9 w-9"
-										>
-											<RiArrowRightLine className="size-5" />
-										</Button>
-										{isAdmin && (
-											<Button
-												variant="default"
-												size="sm"
-												onClick={() => handleCreateEvent()}
-												className="ml-2 h-9"
-											>
-												<RiAddLine className="mr-2 size-4" />
-												New Event
-											</Button>
-										)}
-									</div>
-								</div>
-
-								{/* Calendar Grid */}
-								<div className="overflow-hidden rounded-lg border">
-									{/* Days of Week Header */}
-									<div className="grid grid-cols-7 border-b bg-muted/50">
-										{["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(
-											(day) => (
-												<div
-													key={day}
-													className="border-r p-3 text-center font-medium text-muted-foreground text-sm last:border-r-0"
-												>
-													{day}
+								{isLoadingEvents ? (
+									<>
+										{/* Skeleton header */}
+										<div className="mb-6 flex items-center justify-between">
+											<div className="flex items-center gap-4">
+												<Skeleton className="h-[60px] w-[60px] rounded-lg" />
+												<div className="space-y-2">
+													<Skeleton className="h-7 w-44" />
+													<Skeleton className="h-4 w-52" />
 												</div>
-											),
-										)}
-									</div>
-
-									{/* Calendar Days Grid */}
-									<div className="grid grid-cols-7">
-										{(() => {
-											const monthStart = startOfMonth(currentMonth);
-											const monthEnd = endOfMonth(currentMonth);
-											const calendarStart = new Date(monthStart);
-											calendarStart.setDate(
-												calendarStart.getDate() - calendarStart.getDay(),
-											);
-											const calendarEnd = new Date(monthEnd);
-											calendarEnd.setDate(
-												calendarEnd.getDate() + (6 - calendarEnd.getDay()),
-											);
-											const days = eachDayOfInterval({
-												start: calendarStart,
-												end: calendarEnd,
-											});
-
-											return days.map((day, index) => {
-												const dateKey = format(day, "yyyy-MM-dd");
-												const dayEvents = eventsByDate.get(dateKey) || [];
-												const isCurrentMonth = isSameMonth(day, currentMonth);
-												const isCurrentDay = isToday(day);
-
-												return (
+											</div>
+											<div className="flex items-center gap-2">
+												<Skeleton className="h-9 w-9 rounded-md" />
+												<Skeleton className="h-9 w-16 rounded-md" />
+												<Skeleton className="h-9 w-9 rounded-md" />
+											</div>
+										</div>
+										{/* Skeleton calendar grid */}
+										<div className="overflow-hidden rounded-lg border">
+											<div className="grid grid-cols-7 border-b bg-muted/50">
+												{["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(
+													(d) => (
+														<div
+															key={d}
+															className="border-r p-3 text-center font-medium text-muted-foreground text-sm last:border-r-0"
+														>
+															{d}
+														</div>
+													),
+												)}
+											</div>
+											<div className="grid grid-cols-7">
+												{[...Array(35)].map((_, i) => (
 													<div
-														key={index}
-														className={`min-h-[120px] border-r border-b p-2 last:border-r-0 ${
-															!isCurrentMonth ? "bg-muted/30" : "bg-background"
-														} ${isAdmin ? "cursor-pointer transition-colors hover:bg-muted/50" : ""}`}
-														onClick={() => isAdmin && handleDayClick(day)}
+														key={i}
+														className="min-h-[100px] border-r border-b p-2 last:border-r-0"
 													>
-														<div className="mb-1 flex items-center justify-between">
-															<span
-																className={`font-medium text-sm ${
-																	isCurrentDay
-																		? "flex h-7 w-7 items-center justify-center rounded-full bg-primary text-primary-foreground"
-																		: !isCurrentMonth
-																			? "text-muted-foreground"
-																			: "text-foreground"
-																}`}
-															>
-																{format(day, "d")}
-															</span>
-														</div>
-														<div className="space-y-1">
-															{dayEvents.slice(0, 3).map((event) => (
-																<div
-																	key={event.id}
-																	onClick={(e) => {
-																		e.stopPropagation();
-																		if (isAdmin) {
-																			handleEditEvent(event);
-																		}
-																	}}
-																	className={`cursor-pointer truncate rounded p-1.5 text-xs ${getEventTypeColor(
-																		event.eventType,
-																	)} ${!event.isActive ? "opacity-50" : ""}`}
-																	title={event.title}
-																>
-																	{!event.isAllDay && (
-																		<span className="font-medium">
-																			{formatTime(event.startDate)}{" "}
-																		</span>
-																	)}
-																	{event.title}
-																</div>
-															))}
-															{dayEvents.length > 3 && (
-																<div className="p-1 text-muted-foreground text-xs">
-																	+{dayEvents.length - 3} more
-																</div>
-															)}
-														</div>
+														<Skeleton className="mb-2 h-5 w-5 rounded-full" />
+														{i % 5 === 0 && (
+															<Skeleton className="h-5 w-full rounded" />
+														)}
+														{i % 7 === 2 && (
+															<Skeleton className="mt-1 h-5 w-4/5 rounded" />
+														)}
 													</div>
-												);
-											});
-										})()}
-									</div>
-								</div>
+												))}
+											</div>
+										</div>
+									</>
+								) : (
+									<>
+										{/* Calendar Header with Navigation */}
+										<div className="mb-6 flex items-center justify-between">
+											{/* Current Date Display */}
+											<div className="flex items-center gap-4">
+												<div className="flex min-w-[60px] flex-col items-center justify-center rounded-lg bg-muted p-3">
+													<div className="font-medium text-muted-foreground text-xs uppercase">
+														{format(currentMonth, "MMM")}
+													</div>
+													<div className="font-bold text-2xl">
+														{format(new Date(), "d")}
+													</div>
+												</div>
+												<div>
+													<h2 className="font-semibold text-2xl">
+														{format(currentMonth, "MMMM, yyyy")}
+													</h2>
+													<p className="text-muted-foreground text-sm">
+														{format(startOfMonth(currentMonth), "MMM d, yyyy")}{" "}
+														- {format(endOfMonth(currentMonth), "MMM d, yyyy")}
+													</p>
+												</div>
+											</div>
+
+											{/* Navigation Controls */}
+											<div className="flex items-center gap-2">
+												<Button
+													variant="ghost"
+													size="icon"
+													onClick={() => navigateMonth("prev")}
+													className="h-9 w-9"
+												>
+													<RiArrowLeftLine className="size-5" />
+												</Button>
+												<Button
+													variant="outline"
+													size="sm"
+													onClick={() => navigateMonth("today")}
+													className="h-9"
+												>
+													Today
+												</Button>
+												<Button
+													variant="ghost"
+													size="icon"
+													onClick={() => navigateMonth("next")}
+													className="h-9 w-9"
+												>
+													<RiArrowRightLine className="size-5" />
+												</Button>
+												{isAdmin && (
+													<Button
+														variant="default"
+														size="sm"
+														onClick={() => handleCreateEvent()}
+														className="ml-2 h-9"
+													>
+														<RiAddLine className="mr-2 size-4" />
+														New Event
+													</Button>
+												)}
+											</div>
+										</div>
+
+										{/* Calendar Grid */}
+										<div className="overflow-hidden rounded-lg border">
+											{/* Days of Week Header */}
+											<div className="grid grid-cols-7 border-b bg-muted/50">
+												{["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(
+													(day) => (
+														<div
+															key={day}
+															className="border-r p-3 text-center font-medium text-muted-foreground text-sm last:border-r-0"
+														>
+															{day}
+														</div>
+													),
+												)}
+											</div>
+
+											{/* Calendar Days Grid */}
+											<div className="grid grid-cols-7">
+												{(() => {
+													const monthStart = startOfMonth(currentMonth);
+													const monthEnd = endOfMonth(currentMonth);
+													const calendarStart = new Date(monthStart);
+													calendarStart.setDate(
+														calendarStart.getDate() - calendarStart.getDay(),
+													);
+													const calendarEnd = new Date(monthEnd);
+													calendarEnd.setDate(
+														calendarEnd.getDate() + (6 - calendarEnd.getDay()),
+													);
+													const days = eachDayOfInterval({
+														start: calendarStart,
+														end: calendarEnd,
+													});
+
+													return days.map((day, index) => {
+														const dateKey = format(day, "yyyy-MM-dd");
+														const dayEvents = eventsByDate.get(dateKey) || [];
+														const isCurrentMonth = isSameMonth(
+															day,
+															currentMonth,
+														);
+														const isCurrentDay = isToday(day);
+
+														return (
+															<div
+																key={index}
+																className={`min-h-[120px] border-r border-b p-2 last:border-r-0 ${
+																	!isCurrentMonth
+																		? "bg-muted/30"
+																		: "bg-background"
+																} ${isAdmin ? "cursor-pointer transition-colors hover:bg-muted/50" : ""}`}
+																onClick={() => isAdmin && handleDayClick(day)}
+															>
+																<div className="mb-1 flex items-center justify-between">
+																	<span
+																		className={`font-medium text-sm ${
+																			isCurrentDay
+																				? "flex h-7 w-7 items-center justify-center rounded-full bg-primary text-primary-foreground"
+																				: !isCurrentMonth
+																					? "text-muted-foreground"
+																					: "text-foreground"
+																		}`}
+																	>
+																		{format(day, "d")}
+																	</span>
+																</div>
+																<div className="space-y-1">
+																	{dayEvents.slice(0, 3).map((event) => (
+																		<div
+																			key={event.id}
+																			onClick={(e) => {
+																				e.stopPropagation();
+																				if (isAdmin) {
+																					handleEditEvent(event);
+																				}
+																			}}
+																			className={`cursor-pointer truncate rounded p-1.5 text-xs ${getEventTypeColor(
+																				event.eventType,
+																			)} ${!event.isActive ? "opacity-50" : ""}`}
+																			title={event.title}
+																		>
+																			{!event.isAllDay && (
+																				<span className="font-medium">
+																					{formatTime(event.startDate)}{" "}
+																				</span>
+																			)}
+																			{event.title}
+																		</div>
+																	))}
+																	{dayEvents.length > 3 && (
+																		<div className="p-1 text-muted-foreground text-xs">
+																			+{dayEvents.length - 3} more
+																		</div>
+																	)}
+																</div>
+															</div>
+														);
+													});
+												})()}
+											</div>
+										</div>
+									</>
+								)}
 							</CardContent>
 						</Card>
 					)}
@@ -853,7 +910,37 @@ export default function AdminCalendarPage() {
 					{/* Announcements View */}
 					{viewMode === "announcements" && (
 						<div className="space-y-4">
-							{announcements.length === 0 ? (
+							{isLoadingAnnouncements ? (
+								<>
+									{[...Array(3)].map((_, i) => (
+										<Card key={i}>
+											<CardHeader>
+												<div className="flex items-start justify-between">
+													<div className="flex items-center gap-2">
+														<Skeleton className="h-5 w-5 rounded" />
+														<Skeleton className="h-5 w-48" />
+													</div>
+													{isAdmin && (
+														<div className="flex gap-1">
+															<Skeleton className="h-8 w-8 rounded-md" />
+															<Skeleton className="h-8 w-8 rounded-md" />
+														</div>
+													)}
+												</div>
+												<div className="mt-2 flex items-center gap-2">
+													<Skeleton className="h-5 w-14 rounded-full" />
+													<Skeleton className="h-3 w-40" />
+												</div>
+											</CardHeader>
+											<CardContent className="space-y-2">
+												<Skeleton className="h-3.5 w-full" />
+												<Skeleton className="h-3.5 w-5/6" />
+												<Skeleton className="h-3.5 w-3/4" />
+											</CardContent>
+										</Card>
+									))}
+								</>
+							) : announcements.length === 0 ? (
 								<Card>
 									<CardContent className="flex flex-col items-center justify-center py-12">
 										<RiNotificationLine className="mb-4 size-12 text-muted-foreground" />

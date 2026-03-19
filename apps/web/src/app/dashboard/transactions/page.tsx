@@ -32,7 +32,7 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@/components/ui/card";
-import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { LoadingScreen } from "@/components/ui/loading-spinner";
 import {
 	Select,
 	SelectContent,
@@ -41,6 +41,7 @@ import {
 	SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useTransactionModalActions } from "@/contexts/transaction-modal-context";
 import { authClient } from "@/lib/auth-client";
@@ -55,7 +56,6 @@ import {
 	RiEditLine,
 	RiEyeLine,
 	RiFileTextLine,
-	RiLoader4Line,
 	RiRefreshLine,
 	RiTimeLine,
 } from "@remixicon/react";
@@ -136,11 +136,7 @@ export default function TransactionsPage() {
 
 	// Authentication check
 	if (isPending) {
-		return (
-			<div className="flex h-screen items-center justify-center">
-				<LoadingSpinner size="lg" text="Loading..." />
-			</div>
-		);
+		return <LoadingScreen text="Loading..." />;
 	}
 
 	if (!session) {
@@ -386,7 +382,7 @@ export default function TransactionsPage() {
 									<CardContent>
 										<div className="font-bold text-2xl">
 											{isLoadingPipeline ? (
-												<RiLoader4Line className="h-6 w-6 animate-spin" />
+												<Skeleton className="mt-1 h-8 w-16" />
 											) : (
 												pipelineData?.pipeline?.reduce(
 													(sum, s) => sum + s.count,
@@ -407,7 +403,7 @@ export default function TransactionsPage() {
 									<CardContent>
 										<div className="font-bold text-2xl">
 											{isLoadingPipeline ? (
-												<RiLoader4Line className="h-6 w-6 animate-spin" />
+												<Skeleton className="mt-1 h-8 w-24" />
 											) : (
 												formatCurrency(
 													pipelineData?.pipeline?.reduce(
@@ -432,7 +428,7 @@ export default function TransactionsPage() {
 									<CardContent>
 										<div className="font-bold text-2xl">
 											{isLoadingTransactions ? (
-												<RiLoader4Line className="h-6 w-6 animate-spin" />
+												<Skeleton className="mt-1 h-8 w-16" />
 											) : (
 												displayTransactions.filter(
 													(t) => t.status === "under_review",
@@ -454,7 +450,7 @@ export default function TransactionsPage() {
 									<CardContent>
 										<div className="font-bold text-2xl">
 											{isLoadingTransactions ? (
-												<RiLoader4Line className="h-6 w-6 animate-spin" />
+												<Skeleton className="mt-1 h-8 w-16" />
 											) : (
 												displayTransactions.filter(
 													(t) => t.status === "approved",
@@ -480,7 +476,7 @@ export default function TransactionsPage() {
 									<CardContent>
 										<div className="font-bold text-2xl">
 											{isLoadingTransactions ? (
-												<RiLoader4Line className="h-6 w-6 animate-spin" />
+												<Skeleton className="mt-1 h-8 w-16" />
 											) : (
 												transactionsData?.total || 0
 											)}
@@ -500,7 +496,7 @@ export default function TransactionsPage() {
 									<CardContent>
 										<div className="font-bold text-2xl">
 											{isLoadingTransactions ? (
-												<RiLoader4Line className="h-6 w-6 animate-spin" />
+												<Skeleton className="mt-1 h-8 w-16" />
 											) : (
 												transactionsData?.transactions.filter(
 													(t) =>
@@ -526,7 +522,7 @@ export default function TransactionsPage() {
 									<CardContent>
 										<div className="font-bold text-2xl">
 											{isLoadingTransactions ? (
-												<RiLoader4Line className="h-6 w-6 animate-spin" />
+												<Skeleton className="mt-1 h-8 w-24" />
 											) : (
 												formatCurrency(
 													transactionsData?.transactions.reduce(
@@ -553,7 +549,7 @@ export default function TransactionsPage() {
 									<CardContent>
 										<div className="font-bold text-2xl">
 											{isLoadingTransactions ? (
-												<RiLoader4Line className="h-6 w-6 animate-spin" />
+												<Skeleton className="mt-1 h-8 w-24" />
 											) : (
 												formatCurrency(
 													transactionsData?.transactions.length
@@ -591,8 +587,60 @@ export default function TransactionsPage() {
 							</CardHeader>
 							<CardContent>
 								{isLoadingTransactions ? (
-									<div className="py-8 text-center">
-										<LoadingSpinner size="lg" text="Loading transactions..." />
+									<div className="rounded-md border">
+										<Table>
+											<TableHeader>
+												<TableRow>
+													{[
+														"Property",
+														"Client",
+														"Type",
+														"Commission",
+														"Status",
+														"Date",
+														"Actions",
+													].map((h) => (
+														<TableHead key={h}>
+															<Skeleton className="h-3.5 w-20" />
+														</TableHead>
+													))}
+												</TableRow>
+											</TableHeader>
+											<TableBody>
+												{Array.from({ length: 6 }).map((_, i) => (
+													<TableRow key={i}>
+														<TableCell>
+															<Skeleton className="mb-1 h-4 w-36" />
+															<Skeleton className="h-3 w-24" />
+														</TableCell>
+														<TableCell>
+															<Skeleton className="mb-1 h-4 w-28" />
+															<Skeleton className="h-3 w-16" />
+														</TableCell>
+														<TableCell>
+															<Skeleton className="mb-1 h-4 w-20" />
+															<Skeleton className="h-3 w-16" />
+														</TableCell>
+														<TableCell>
+															<Skeleton className="mb-1 h-4 w-24" />
+															<Skeleton className="h-3 w-16" />
+														</TableCell>
+														<TableCell>
+															<Skeleton className="h-5 w-24 rounded-full" />
+														</TableCell>
+														<TableCell>
+															<Skeleton className="h-4 w-24" />
+														</TableCell>
+														<TableCell className="text-right">
+															<div className="flex justify-end gap-1">
+																<Skeleton className="h-7 w-7 rounded-md" />
+																<Skeleton className="h-7 w-7 rounded-md" />
+															</div>
+														</TableCell>
+													</TableRow>
+												))}
+											</TableBody>
+										</Table>
 									</div>
 								) : displayTransactions.length === 0 ? (
 									<div className="py-8 text-center">

@@ -24,6 +24,7 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@/components/ui/card";
+import { LoadingScreen } from "@/components/ui/loading-spinner";
 import {
 	Select,
 	SelectContent,
@@ -31,6 +32,7 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
 import { authClient } from "@/lib/auth-client";
 import { trpc } from "@/utils/trpc";
 import {
@@ -124,14 +126,7 @@ export default function AdminAgentsPage() {
 
 	// Show loading while checking authentication
 	if (isPending) {
-		return (
-			<div className="flex h-screen items-center justify-center">
-				<div className="text-center">
-					<div className="mx-auto h-8 w-8 animate-spin rounded-full border-primary border-b-2" />
-					<p className="mt-2 text-muted-foreground text-sm">Loading...</p>
-				</div>
-			</div>
-		);
+		return <LoadingScreen text="Loading..." />;
 	}
 
 	// Redirect if not authenticated
@@ -215,106 +210,87 @@ export default function AdminAgentsPage() {
 					</div>
 
 					{/* Agent Summary Cards */}
-					<div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-						<Card>
-							<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-								<CardTitle className="font-medium text-sm">
-									Total Agents
-								</CardTitle>
-								<RiUserLine className="h-4 w-4 text-muted-foreground" />
-							</CardHeader>
-							<CardContent>
-								{isLoadingStats ? (
-									<div className="space-y-2">
-										<div className="h-8 w-16 animate-pulse rounded bg-muted" />
-										<div className="h-3 w-24 animate-pulse rounded bg-muted" />
+					{isLoadingStats ? (
+						<div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+							{[...Array(4)].map((_, i) => (
+								<Card key={i} className="overflow-hidden">
+									<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+										<Skeleton className="h-3.5 w-24" />
+										<Skeleton className="h-4 w-4 rounded" />
+									</CardHeader>
+									<CardContent className="space-y-2">
+										<Skeleton className="h-8 w-16" />
+										<Skeleton className="h-3 w-28" />
+									</CardContent>
+								</Card>
+							))}
+						</div>
+					) : (
+						<div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+							<Card>
+								<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+									<CardTitle className="font-medium text-sm">
+										Total Agents
+									</CardTitle>
+									<RiUserLine className="h-4 w-4 text-muted-foreground" />
+								</CardHeader>
+								<CardContent>
+									<div className="font-bold text-2xl">
+										{agentStats?.totalAgents || 0}
 									</div>
-								) : (
-									<>
-										<div className="font-bold text-2xl">
-											{agentStats?.totalAgents || 0}
-										</div>
-										<p className="text-muted-foreground text-xs">
-											Total registered
-										</p>
-									</>
-								)}
-							</CardContent>
-						</Card>
-						<Card>
-							<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-								<CardTitle className="font-medium text-sm">
-									Active Agents
-								</CardTitle>
-								<RiTeamLine className="h-4 w-4 text-muted-foreground" />
-							</CardHeader>
-							<CardContent>
-								{isLoadingStats ? (
-									<div className="space-y-2">
-										<div className="h-8 w-16 animate-pulse rounded bg-muted" />
-										<div className="h-3 w-24 animate-pulse rounded bg-muted" />
+									<p className="text-muted-foreground text-xs">
+										Total registered
+									</p>
+								</CardContent>
+							</Card>
+							<Card>
+								<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+									<CardTitle className="font-medium text-sm">
+										Active Agents
+									</CardTitle>
+									<RiTeamLine className="h-4 w-4 text-muted-foreground" />
+								</CardHeader>
+								<CardContent>
+									<div className="font-bold text-2xl">
+										{agentStats?.activeAgents || 0}
 									</div>
-								) : (
-									<>
-										<div className="font-bold text-2xl">
-											{agentStats?.activeAgents || 0}
-										</div>
-										<p className="text-muted-foreground text-xs">
-											{agentStats?.totalAgents
-												? `${Math.round((agentStats.activeAgents / agentStats.totalAgents) * 100)}% active rate`
-												: "Active agents"}
-										</p>
-									</>
-								)}
-							</CardContent>
-						</Card>
-						<Card>
-							<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-								<CardTitle className="font-medium text-sm">
-									Team Leads
-								</CardTitle>
-								<RiUserLine className="h-4 w-4 text-muted-foreground" />
-							</CardHeader>
-							<CardContent>
-								{isLoadingStats ? (
-									<div className="space-y-2">
-										<div className="h-8 w-16 animate-pulse rounded bg-muted" />
-										<div className="h-3 w-24 animate-pulse rounded bg-muted" />
+									<p className="text-muted-foreground text-xs">
+										{agentStats?.totalAgents
+											? `${Math.round((agentStats.activeAgents / agentStats.totalAgents) * 100)}% active rate`
+											: "Active agents"}
+									</p>
+								</CardContent>
+							</Card>
+							<Card>
+								<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+									<CardTitle className="font-medium text-sm">
+										Team Leads
+									</CardTitle>
+									<RiUserLine className="h-4 w-4 text-muted-foreground" />
+								</CardHeader>
+								<CardContent>
+									<div className="font-bold text-2xl">
+										{agentStats?.teamLeads || 0}
 									</div>
-								) : (
-									<>
-										<div className="font-bold text-2xl">
-											{agentStats?.teamLeads || 0}
-										</div>
-										<p className="text-muted-foreground text-xs">
-											Leadership roles
-										</p>
-									</>
-								)}
-							</CardContent>
-						</Card>
-						<Card>
-							<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-								<CardTitle className="font-medium text-sm">Admins</CardTitle>
-								<RiTeamLine className="h-4 w-4 text-muted-foreground" />
-							</CardHeader>
-							<CardContent>
-								{isLoadingStats ? (
-									<div className="space-y-2">
-										<div className="h-8 w-16 animate-pulse rounded bg-muted" />
-										<div className="h-3 w-24 animate-pulse rounded bg-muted" />
+									<p className="text-muted-foreground text-xs">
+										Leadership roles
+									</p>
+								</CardContent>
+							</Card>
+							<Card>
+								<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+									<CardTitle className="font-medium text-sm">Admins</CardTitle>
+									<RiTeamLine className="h-4 w-4 text-muted-foreground" />
+								</CardHeader>
+								<CardContent>
+									<div className="font-bold text-2xl">
+										{agentStats?.admins || 0}
 									</div>
-								) : (
-									<>
-										<div className="font-bold text-2xl">
-											{agentStats?.admins || 0}
-										</div>
-										<p className="text-muted-foreground text-xs">Admin users</p>
-									</>
-								)}
-							</CardContent>
-						</Card>
-					</div>
+									<p className="text-muted-foreground text-xs">Admin users</p>
+								</CardContent>
+							</Card>
+						</div>
+					)}
 
 					{/* Tier Distribution Dashboard */}
 					<div className="grid gap-4 lg:grid-cols-3">
@@ -331,22 +307,22 @@ export default function AdminAgentsPage() {
 							</CardHeader>
 							<CardContent>
 								{isLoadingAgents ? (
-									<div className="space-y-4">
-										{Array.from({ length: 5 }, (_, i) => (
+									<div className="space-y-3">
+										{[...Array(5)].map((_, i) => (
 											<div
 												key={`skeleton-${i}`}
 												className="flex items-center justify-between rounded-lg border p-4"
 											>
 												<div className="flex items-center gap-3">
-													<div className="h-10 w-10 animate-pulse rounded-full bg-muted" />
+													<Skeleton className="h-10 w-10 rounded-full" />
 													<div className="space-y-2">
-														<div className="h-4 w-32 animate-pulse rounded bg-muted" />
-														<div className="h-3 w-48 animate-pulse rounded bg-muted" />
+														<Skeleton className="h-4 w-32" />
+														<Skeleton className="h-3 w-52" />
 													</div>
 												</div>
 												<div className="flex gap-2">
-													<div className="h-8 w-20 animate-pulse rounded bg-muted" />
-													<div className="h-8 w-20 animate-pulse rounded bg-muted" />
+													<Skeleton className="h-8 w-20 rounded-md" />
+													<Skeleton className="h-8 w-16 rounded-md" />
 												</div>
 											</div>
 										))}

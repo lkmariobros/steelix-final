@@ -28,7 +28,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { LoadingScreen } from "@/components/ui/loading-spinner";
 import {
 	Select,
 	SelectContent,
@@ -37,6 +37,7 @@ import {
 	SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { authClient } from "@/lib/auth-client";
 import { trpc } from "@/utils/trpc";
@@ -271,11 +272,7 @@ export default function AutoReplyPage() {
 
 	// Authentication check
 	if (isPending) {
-		return (
-			<div className="flex h-screen items-center justify-center">
-				<LoadingSpinner size="lg" text="Loading..." />
-			</div>
-		);
+		return <LoadingScreen text="Loading..." />;
 	}
 
 	if (!session) {
@@ -369,8 +366,45 @@ export default function AutoReplyPage() {
 					{/* Rules List */}
 					<div className="flex flex-col gap-6">
 						{isLoadingRules ? (
-							<div className="flex items-center justify-center py-12">
-								<RiLoader4Line className="h-8 w-8 animate-spin text-muted-foreground" />
+							<div className="flex flex-col gap-6">
+								{Array.from({ length: 3 }).map((_, i) => (
+									<Card key={i} className="border-2">
+										<CardContent className="pt-6">
+											<div className="space-y-4">
+												{/* Message owner row */}
+												<div className="flex items-center justify-between rounded-md border-2 border-muted p-3">
+													<div className="flex items-center gap-2.5">
+														<Skeleton className="h-5 w-5 rounded" />
+														<Skeleton className="h-5 w-36" />
+													</div>
+													<Skeleton className="h-5 w-16 rounded-full" />
+												</div>
+												{/* Trigger block */}
+												<div className="rounded-md bg-muted/30 p-3">
+													<div className="mb-2 flex items-center gap-2">
+														<Skeleton className="h-4 w-4 rounded" />
+														<Skeleton className="h-4 w-24" />
+													</div>
+													<div className="flex flex-wrap gap-2">
+														<Skeleton className="h-5 w-16 rounded-full" />
+														<Skeleton className="h-5 w-20 rounded-full" />
+													</div>
+												</div>
+												{/* Response block */}
+												<div className="rounded-md bg-muted/30 p-3">
+													<Skeleton className="mb-2 h-4 w-20" />
+													<Skeleton className="h-4 w-full" />
+													<Skeleton className="mt-1 h-4 w-4/5" />
+												</div>
+												{/* Action buttons */}
+												<div className="flex justify-end gap-2">
+													<Skeleton className="h-8 w-8 rounded-md" />
+													<Skeleton className="h-8 w-8 rounded-md" />
+												</div>
+											</div>
+										</CardContent>
+									</Card>
+								))}
 							</div>
 						) : rulesError ? (
 							<div className="py-12 text-center">

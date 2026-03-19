@@ -16,6 +16,7 @@ import {
 	BreadcrumbPage,
 	BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
+import { LoadingScreen } from "@/components/ui/loading-spinner";
 import { AdminDashboard } from "@/dashboards/admin";
 import { authClient } from "@/lib/auth-client";
 import { RiDashboardLine, RiShieldUserLine } from "@remixicon/react";
@@ -27,14 +28,7 @@ export default function AdminDashboardPage() {
 
 	// Show loading while checking authentication
 	if (isPending) {
-		return (
-			<div className="flex h-screen items-center justify-center">
-				<div className="text-center">
-					<div className="mx-auto h-8 w-8 animate-spin rounded-full border-primary border-b-2" />
-					<p className="mt-2 text-muted-foreground text-sm">Loading...</p>
-				</div>
-			</div>
-		);
+		return <LoadingScreen text="Loading..." />;
 	}
 
 	// Redirect to login if not authenticated
