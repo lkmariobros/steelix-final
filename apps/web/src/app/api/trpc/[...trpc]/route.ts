@@ -43,9 +43,7 @@ async function handler(request: Request) {
 		headers.set("cookie", cookies);
 	}
 
-	// Log for debugging
-	console.log(`📡 tRPC proxy: ${request.method} ${trpcPath}`);
-	console.log(`📡 Target URL: ${targetUrl}`);
+	// Forward request to backend
 
 	try {
 		const response = await fetch(targetUrl, {

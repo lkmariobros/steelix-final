@@ -1,6 +1,5 @@
 "use client";
 
-import { Separator } from "@/components/separator";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import {
@@ -8,61 +7,32 @@ import {
 	PopoverContent,
 	PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+	AdminDashboardProvider,
+	useAdminDashboard,
+} from "@/contexts/admin-dashboard-context";
 import { cn } from "@/lib/utils";
-import { RiCalendarLine, RiRefreshLine } from "@remixicon/react";
+import { RiCalendarLine, RiLoader4Line, RiRefreshLine } from "@remixicon/react";
 import { format } from "date-fns";
 import { useState } from "react";
 
 import { AgentPerformanceGrid } from "./widgets/agent-performance-grid";
-// Import admin dashboard widgets
 import { CommissionApprovalQueue } from "./widgets/commission-approval-queue";
 import { DashboardSummary } from "./widgets/dashboard-summary";
 import { UrgentTasksPanel } from "./widgets/urgent-tasks-panel";
 
-// Import types
-import type { DateRangeFilter } from "./admin-schema";
+// ─── Inner component (consumes context) ──────────────────────────────────────
 
-interface AdminDashboardProps {
-	className?: string;
-}
-
-export function AdminDashboard({ className }: AdminDashboardProps) {
-	const [dateRange, setDateRange] = useState<DateRangeFilter>({});
+function AdminDashboardContent({ className }: { className?: string }) {
+	const { dateRange, setDateRange, isRefetching, refetch } =
+		useAdminDashboard();
 	const [timeFilter, setTimeFilter] = useState<string>("all");
 	const [isCalendarOpen, setIsCalendarOpen] = useState(false);
-	const [refreshKey, setRefreshKey] = useState(0);
-	// Removed currentTime to fix hydration mismatch
 
-	// Handle date range selection
-	const handleDateRangeSelect = (
-		range: { from?: Date; to?: Date } | undefined,
-	) => {
-		if (!range) {
-			setDateRange({});
-			return;
-		}
-		setDateRange({
-			startDate: range.from,
-			endDate: range.to,
-		});
-		// Only close the popover when both dates are selected
-		if (range.from && range.to) {
-			setTimeFilter("custom");
-			setIsCalendarOpen(false);
-		}
-	};
-
-	// Handle time filter change - uses dynamic date calculation
+	// Handle preset time filters
 	const handleTimeFilterChange = (filter: string) => {
 		setTimeFilter(filter);
-
-		// Calculate date ranges dynamically based on current date
 		const now = new Date();
-		const startOfToday = new Date(
-			now.getFullYear(),
-			now.getMonth(),
-			now.getDate(),
-		);
 		const endOfToday = new Date(
 			now.getFullYear(),
 			now.getMonth(),
@@ -72,75 +42,39 @@ export function AdminDashboard({ className }: AdminDashboardProps) {
 			59,
 		);
 
-		const getDateRange = (
-			filterKey: string,
-		): { startDate?: Date; endDate?: Date } => {
-			switch (filterKey) {
-				case "today":
-					return {
-						startDate: startOfToday,
-						endDate: endOfToday,
-					};
-				case "week":
-					return {
-						startDate: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000),
-						endDate: endOfToday,
-					};
-				case "month":
-					return {
-						startDate: new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000),
-						endDate: endOfToday,
-					};
-				case "quarter":
-					return {
-						startDate: new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000),
-						endDate: endOfToday,
-					};
-				case "year":
-					return {
-						startDate: new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000),
-						endDate: endOfToday,
-					};
-				default:
-					return {
-						startDate: undefined,
-						endDate: undefined,
-					};
-			}
+		const offsets: Record<string, number> = {
+			today: 0,
+			week: 7,
+			month: 30,
+			quarter: 90,
+			year: 365,
 		};
+		const days = offsets[filter];
 
-		setDateRange(getDateRange(filter));
+		if (days !== undefined) {
+			setDateRange({
+				startDate:
+					days === 0
+						? new Date(now.getFullYear(), now.getMonth(), now.getDate())
+						: new Date(now.getTime() - days * 86_400_000),
+				endDate: endOfToday,
+			});
+		} else {
+			setDateRange({});
+		}
 	};
 
-	// Handle manual refresh
-	const handleRefresh = () => {
-		setRefreshKey((prev) => prev + 1);
-	};
-
-	// Format date range for display
+	// Format the active date range for display
 	const formatDateRange = () => {
-		if (!dateRange.startDate && !dateRange.endDate) {
-			return "All time";
-		}
-
 		if (dateRange.startDate && dateRange.endDate) {
-			return `${format(dateRange.startDate, "MMM d")} - ${format(dateRange.endDate, "MMM d, yyyy")}`;
+			return `${format(dateRange.startDate, "MMM d")} – ${format(dateRange.endDate, "MMM d, yyyy")}`;
 		}
-
-		if (dateRange.startDate) {
-			return `From ${format(dateRange.startDate, "MMM d, yyyy")}`;
-		}
-
-		if (dateRange.endDate) {
-			return `Until ${format(dateRange.endDate, "MMM d, yyyy")}`;
-		}
-
 		return "All time";
 	};
 
 	return (
 		<div className={cn("flex flex-col gap-6", className)}>
-			{/* Dashboard Header */}
+			{/* Header */}
 			<div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
 				<div className="flex flex-col gap-1">
 					<h1 className="font-semibold text-2xl tracking-tight">
@@ -151,9 +85,9 @@ export function AdminDashboard({ className }: AdminDashboardProps) {
 					</p>
 				</div>
 
-				{/* Dashboard Controls */}
+				{/* Controls */}
 				<div className="flex flex-wrap items-center gap-2">
-					{/* Time Filter Buttons */}
+					{/* Preset filters */}
 					<div className="flex items-center gap-1 rounded-md border p-1">
 						{[
 							{ key: "all", label: "All" },
@@ -162,20 +96,20 @@ export function AdminDashboard({ className }: AdminDashboardProps) {
 							{ key: "month", label: "Month" },
 							{ key: "quarter", label: "Quarter" },
 							{ key: "year", label: "Year" },
-						].map((filter) => (
+						].map((f) => (
 							<Button
-								key={filter.key}
-								variant={timeFilter === filter.key ? "default" : "ghost"}
+								key={f.key}
+								variant={timeFilter === f.key ? "default" : "ghost"}
 								size="sm"
-								onClick={() => handleTimeFilterChange(filter.key)}
+								onClick={() => handleTimeFilterChange(f.key)}
 								className="h-7 px-2 text-xs"
 							>
-								{filter.label}
+								{f.label}
 							</Button>
 						))}
 					</div>
 
-					{/* Custom Date Range Picker */}
+					{/* Custom date range */}
 					<Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
 						<PopoverTrigger asChild>
 							<Button variant="outline" size="sm" className="h-8 gap-2 text-xs">
@@ -186,57 +120,78 @@ export function AdminDashboard({ className }: AdminDashboardProps) {
 						<PopoverContent className="w-auto p-0" align="end">
 							<Calendar
 								mode="range"
-								selected={{
-									from: dateRange.startDate,
-									to: dateRange.endDate,
+								selected={{ from: dateRange.startDate, to: dateRange.endDate }}
+								onSelect={(range) => {
+									setDateRange({ startDate: range?.from, endDate: range?.to });
+									if (range?.from && range?.to) {
+										setTimeFilter("custom");
+										setIsCalendarOpen(false);
+									}
 								}}
-								onSelect={handleDateRangeSelect}
 								numberOfMonths={2}
 								required={false}
 							/>
 						</PopoverContent>
 					</Popover>
 
-					<Separator orientation="vertical" className="h-6" />
-
-					{/* Refresh Button */}
+					{/* Refresh */}
 					<Button
 						variant="outline"
 						size="sm"
-						onClick={handleRefresh}
+						onClick={refetch}
+						disabled={isRefetching}
 						className="h-8 gap-2 text-xs"
 					>
-						<RiRefreshLine size={14} />
-						Refresh
+						<RiRefreshLine
+							size={14}
+							className={isRefetching ? "animate-spin" : ""}
+						/>
+						{isRefetching ? "Refreshing…" : "Refresh"}
 					</Button>
 				</div>
 			</div>
 
-			{/* Dashboard Grid - Optimized Layout */}
+			{/* Widgets — all read from context, tRPC batches them on mount */}
 			<div className="grid gap-6">
-				{/* Dashboard Summary - Full Width */}
 				<div className="col-span-full">
-					<DashboardSummary dateRange={dateRange} refreshKey={refreshKey} />
+					<DashboardSummary />
 				</div>
 
-				{/* Second Row - Commission Queue and Urgent Tasks */}
 				<div className="grid gap-6 lg:grid-cols-3">
 					<div className="lg:col-span-2">
-						<CommissionApprovalQueue
-							dateRange={dateRange}
-							refreshKey={refreshKey}
-						/>
+						<CommissionApprovalQueue />
 					</div>
 					<div className="lg:col-span-1">
-						<UrgentTasksPanel refreshKey={refreshKey} />
+						<UrgentTasksPanel />
 					</div>
 				</div>
 
-				{/* Third Row - Agent Performance Grid - Full Width */}
 				<div className="col-span-full">
-					<AgentPerformanceGrid dateRange={dateRange} refreshKey={refreshKey} />
+					<AgentPerformanceGrid />
 				</div>
 			</div>
+
+			{/* Footer */}
+			{isRefetching && (
+				<div className="flex items-center gap-2 text-muted-foreground text-sm">
+					<RiLoader4Line className="size-3.5 animate-spin" />
+					Refreshing data…
+				</div>
+			)}
 		</div>
+	);
+}
+
+// ─── Public export (wraps with provider) ─────────────────────────────────────
+
+interface AdminDashboardProps {
+	className?: string;
+}
+
+export function AdminDashboard({ className }: AdminDashboardProps) {
+	return (
+		<AdminDashboardProvider>
+			<AdminDashboardContent className={className} />
+		</AdminDashboardProvider>
 	);
 }

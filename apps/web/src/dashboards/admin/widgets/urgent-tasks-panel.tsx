@@ -4,7 +4,10 @@ import { Badge } from "@/components/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { trpc } from "@/utils/trpc";
+import {
+	type UrgentTaskItem,
+	useAdminDashboard,
+} from "@/contexts/admin-dashboard-context";
 import {
 	RiAlertLine,
 	RiArrowRightLine,
@@ -12,10 +15,6 @@ import {
 	RiTimeLine,
 } from "@remixicon/react";
 
-import React from "react";
-
-// Import types and utilities
-import type { UrgentTask } from "../admin-schema";
 import {
 	formatDateTime,
 	getPriorityColor,
@@ -23,54 +22,34 @@ import {
 } from "../admin-schema";
 
 interface UrgentTasksPanelProps {
-	refreshKey?: number;
 	className?: string;
 }
 
-export function UrgentTasksPanel({
-	refreshKey,
-	className,
-}: UrgentTasksPanelProps) {
-	// ✅ CORRECT tRPC query pattern
-	const {
-		data: urgentTasks,
-		isLoading,
-		error,
-		refetch,
-	} = trpc.admin.getUrgentTasks.useQuery(undefined, {
-		refetchOnWindowFocus: false,
-		staleTime: 30000, // 30 seconds
-	});
+export function UrgentTasksPanel({ className }: UrgentTasksPanelProps) {
+	const { urgentTasks: rawTasks, isLoading, hasError } = useAdminDashboard();
 
-	// Refetch when refreshKey changes
-	React.useEffect(() => {
-		if (refreshKey !== undefined) {
-			refetch();
-		}
-	}, [refreshKey, refetch]);
-
-	// Get priority icon
 	const getPriorityIcon = (priority: string) => {
 		switch (priority) {
 			case "critical":
 				return <RiFireLine size={16} className="text-red-500" />;
 			case "high":
 				return <RiAlertLine size={16} className="text-orange-500" />;
-			case "medium":
-				return <RiTimeLine size={16} className="text-blue-500" />;
 			default:
-				return <RiTimeLine size={16} className="text-gray-500" />;
+				return <RiTimeLine size={16} className="text-blue-500" />;
 		}
 	};
 
-	// Handle task action (placeholder - would navigate to relevant page)
-	const handleTaskAction = (task: UrgentTask) => {
-		// In a real app, this would navigate to the relevant page
-		// For now, we'll just show a placeholder
+	const handleTaskAction = (
+		task: UrgentTaskItem & {
+			type: string;
+			title: string;
+			description: string;
+			priority: "low" | "medium" | "high" | "critical";
+		},
+	) => {
 		console.log("Navigate to task:", task);
 	};
 
-	// Loading state
 	if (isLoading) {
 		return (
 			<Card className={className}>
@@ -101,8 +80,7 @@ export function UrgentTasksPanel({
 		);
 	}
 
-	// Error state
-	if (error) {
+	if (hasError) {
 		return (
 			<Card className={className}>
 				<CardHeader>
@@ -114,7 +92,7 @@ export function UrgentTasksPanel({
 				<CardContent>
 					<div className="flex items-center justify-center py-8">
 						<p className="text-muted-foreground text-sm">
-							Failed to load urgent tasks. Please try again.
+							Failed to load urgent tasks.
 						</p>
 					</div>
 				</CardContent>
@@ -122,8 +100,8 @@ export function UrgentTasksPanel({
 		);
 	}
 
-	// Type-safe task processing - handle unknown types from SQL literals
-	const tasks = (urgentTasks || []).map((task) => ({
+	// Type-safe processing of SQL literal fields
+	const tasks = (rawTasks || []).map((task) => ({
 		...task,
 		type: String(task.type || "overdue_approval"),
 		title: String(task.title || "Overdue Commission Approval"),
@@ -173,7 +151,6 @@ export function UrgentTasksPanel({
 								className="group flex items-start gap-3 rounded-lg border p-3 transition-colors hover:bg-muted/50"
 							>
 								<div className="mt-1">{getPriorityIcon(task.priority)}</div>
-
 								<div className="min-w-0 flex-1">
 									<div className="flex items-start justify-between gap-2">
 										<div className="min-w-0 flex-1">
@@ -184,14 +161,12 @@ export function UrgentTasksPanel({
 												{task.description}
 											</p>
 										</div>
-
 										<Badge
 											className={`${getPriorityColor(task.priority)} shrink-0 text-xs`}
 										>
 											{task.priority}
 										</Badge>
 									</div>
-
 									<div className="mt-3 flex items-center justify-between">
 										<div className="flex items-center gap-2 text-muted-foreground text-xs">
 											{task.agentName && (
@@ -202,7 +177,6 @@ export function UrgentTasksPanel({
 											)}
 											<span>{getRelativeTime(task.createdAt)}</span>
 										</div>
-
 										<Button
 											size="sm"
 											variant="ghost"
@@ -216,18 +190,12 @@ export function UrgentTasksPanel({
 								</div>
 							</div>
 						))}
-
-						{/* Show More Button (if there are many tasks) */}
 						{tasks.length >= 5 && (
 							<div className="border-t pt-2">
 								<Button
 									variant="ghost"
 									size="sm"
 									className="h-8 w-full text-xs"
-									onClick={() => {
-										// Navigate to full urgent tasks page
-										console.log("Navigate to full urgent tasks page");
-									}}
 								>
 									View All Urgent Tasks
 									<RiArrowRightLine size={12} className="ml-1" />

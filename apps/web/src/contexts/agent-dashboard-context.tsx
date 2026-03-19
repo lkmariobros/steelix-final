@@ -23,45 +23,113 @@ export interface DateRange {
 	endDate?: Date;
 }
 
-type FinancialOverviewData = ReturnType<
-	typeof trpc.dashboard.getFinancialOverview.useQuery
->["data"];
-type RecentTransactionsData = ReturnType<
-	typeof trpc.dashboard.getRecentTransactions.useQuery
->["data"];
-type SalesPipelineData = ReturnType<
-	typeof trpc.dashboard.getSalesPipeline.useQuery
->["data"];
-type TransactionStatusData = ReturnType<
-	typeof trpc.dashboard.getTransactionStatus.useQuery
->["data"];
-type TeamLeaderboardData = ReturnType<
-	typeof trpc.dashboard.getTeamLeaderboard.useQuery
->["data"];
-type BonusSummaryData = ReturnType<
-	typeof trpc.agentTiers.getMyLeadershipBonusSummary.useQuery
->["data"];
-type UplineData = ReturnType<
-	typeof trpc.agentTiers.getMyUpline.useQuery
->["data"];
-type DownlineData = ReturnType<
-	typeof trpc.agentTiers.getMyDownline.useQuery
->["data"];
+// Explicit interfaces — avoids broken Drizzle/tRPC inference (resolves to {})
+// Shapes are derived directly from the server controller return values.
+
+export interface FinancialOverviewData {
+	overview: {
+		totalCommission: number;
+		completedDeals: number;
+		pendingCommission: number;
+		averageDealValue: number;
+	};
+	monthlyTrend: { month: string; commission: number; deals: number }[];
+}
+
+export interface RecentTransactionItem {
+	id: string;
+	agentId: string | null;
+	agentName: string | null;
+	propertyAddress: string;
+	propertyPrice: number;
+	clientName: string;
+	status: string | null;
+	transactionDate: Date | null;
+	updatedAt: Date | null;
+}
+
+export type RecentTransactionsData = RecentTransactionItem[];
+
+export interface SalesPipelineItem {
+	status: string | null;
+	count: number;
+	totalValue: number;
+}
+
+export interface SalesPipelineData {
+	pipeline: SalesPipelineItem[];
+	activeTransactions: {
+		id: string;
+		agentId: string | null;
+		propertyAddress: string;
+		propertyPrice: number;
+		clientName: string;
+		status: string | null;
+		transactionDate: Date | null;
+		commissionAmount: string | null;
+	}[];
+}
+
+export interface TransactionStatusItem {
+	status: string | null;
+	count: number;
+	percentage: number;
+}
+
+export type TransactionStatusData = TransactionStatusItem[];
+
+export interface TeamLeaderboardItem {
+	agentId: string;
+	agentName: string | null;
+	agentImage: string | null;
+	totalCommission: number;
+	completedDeals: number;
+	activeDeals: number;
+}
+
+export type TeamLeaderboardData = TeamLeaderboardItem[];
+
+export interface BonusSummaryData {
+	currentTier: string | null | undefined;
+	leadershipBonusRate: number;
+	downlineCount: number;
+	totalPendingBonus: number;
+	totalPaidBonus: number;
+	totalEarnings: number;
+	recentPayments: unknown[];
+}
+
+export interface UplineData {
+	uplineId: string | null;
+	uplineName: string | null;
+	uplineTier: string | null;
+	leadershipBonusRate: number;
+}
+
+export interface DownlineAgent {
+	id: string;
+	name: string | null;
+	email: string | null;
+	agentTier: string | null;
+	recruitedAt: Date | null;
+}
+
+export type DownlineData = DownlineAgent[];
 
 interface AgentDashboardContextValue {
 	// Date filter
 	dateRange: DateRange;
 	setDateRange: (range: DateRange) => void;
 
-	// Data
-	financialOverview: FinancialOverviewData;
-	recentTransactions: RecentTransactionsData;
-	salesPipeline: SalesPipelineData;
-	transactionStatus: TransactionStatusData;
-	teamLeaderboard: TeamLeaderboardData;
-	bonusSummary: BonusSummaryData;
-	uplineInfo: UplineData;
-	downline: DownlineData;
+	// Data — explicitly typed to avoid broken Drizzle/tRPC inference
+	financialOverview: FinancialOverviewData | undefined;
+	recentTransactions: RecentTransactionsData | undefined;
+	salesPipeline: SalesPipelineData | undefined;
+	transactionStatus: TransactionStatusData | undefined;
+	teamLeaderboard: TeamLeaderboardData | undefined;
+	bonusSummary: BonusSummaryData | undefined;
+	uplineInfo: UplineData | null | undefined;
+	downline: DownlineData | undefined;
 
 	// State
 	isLoading: boolean;
@@ -183,14 +251,24 @@ export function AgentDashboardProvider({
 			value={{
 				dateRange,
 				setDateRange,
-				financialOverview: financialQuery.data,
-				recentTransactions: recentTransactionsQuery.data,
-				salesPipeline: salesPipelineQuery.data,
-				transactionStatus: transactionStatusQuery.data,
-				teamLeaderboard: teamLeaderboardQuery.data,
-				bonusSummary: bonusSummaryQuery.data,
-				uplineInfo: uplineQuery.data,
-				downline: downlineQuery.data,
+				// Cast to explicit types — Drizzle SQL expressions (count/sum/avg)
+				// lose specificity through tRPC's type inference chain.
+				financialOverview: financialQuery.data as
+					| FinancialOverviewData
+					| undefined,
+				recentTransactions: recentTransactionsQuery.data as
+					| RecentTransactionsData
+					| undefined,
+				salesPipeline: salesPipelineQuery.data as SalesPipelineData | undefined,
+				transactionStatus: transactionStatusQuery.data as
+					| TransactionStatusData
+					| undefined,
+				teamLeaderboard: teamLeaderboardQuery.data as
+					| TeamLeaderboardData
+					| undefined,
+				bonusSummary: bonusSummaryQuery.data as BonusSummaryData | undefined,
+				uplineInfo: uplineQuery.data as UplineData | null | undefined,
+				downline: downlineQuery.data as DownlineData | undefined,
 				isLoading,
 				isRefetching,
 				hasError,

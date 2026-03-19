@@ -8,7 +8,6 @@ import {
 	SidebarProvider,
 	SidebarTrigger,
 } from "@/components/sidebar";
-import { AccessDenied } from "@/components/ui/access-denied";
 import {
 	Breadcrumb,
 	BreadcrumbItem,
@@ -20,7 +19,6 @@ import {
 import { LoadingScreen } from "@/components/ui/loading-spinner";
 import { Separator } from "@/components/ui/separator";
 import { authClient } from "@/lib/auth-client";
-import { trpc } from "@/utils/trpc";
 import { RiDashboardLine, RiSettings3Line } from "@remixicon/react";
 import { useRouter } from "next/navigation";
 
@@ -28,31 +26,13 @@ export default function TierConfigurationPage() {
 	const router = useRouter();
 	const { data: session, isPending } = authClient.useSession();
 
-	const { data: roleData, isLoading: isRoleLoading } =
-		trpc.admin.checkAdminRole.useQuery(undefined, {
-			enabled: !!session,
-			retry: false,
-		});
-
-	if (isPending || isRoleLoading) {
-		return <LoadingScreen text="Checking permissions..." />;
+	if (isPending) {
+		return <LoadingScreen text="Loading..." />;
 	}
 
 	if (!session) {
 		router.push("/login");
 		return null;
-	}
-
-	if (!roleData || !roleData.hasAdminAccess) {
-		return (
-			<AccessDenied
-				title="Access Denied"
-				message="You don't have permission to access tier configuration."
-				userRole={roleData?.role || "Unknown"}
-				redirectPath="/dashboard"
-				redirectLabel="Go to Agent Dashboard"
-			/>
-		);
 	}
 
 	return (

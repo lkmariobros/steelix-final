@@ -13,3 +13,10 @@ export {
 	useAgentDashboard,
 	type DateRange,
 } from "./agent-dashboard-context";
+
+// Admin dashboard data context
+export {
+	AdminDashboardProvider,
+	useAdminDashboard,
+	type AdminDateRange,
+} from "./admin-dashboard-context";

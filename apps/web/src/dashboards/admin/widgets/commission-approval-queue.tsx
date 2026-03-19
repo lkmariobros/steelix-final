@@ -22,17 +22,22 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import {
+	type CommissionApprovalItem,
+	useAdminDashboard,
+} from "@/contexts/admin-dashboard-context";
+import {
 	invalidateAdminQueries,
 	optimisticUpdateTransaction,
 } from "@/lib/query-invalidation";
 import { trpc } from "@/utils/trpc";
 import { RiCheckLine, RiCloseLine, RiTimeLine } from "@remixicon/react";
 import { useQueryClient } from "@tanstack/react-query";
-import React, { useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 
-// Import types and utilities
-import type { CommissionApproval, DateRangeFilter } from "../admin-schema";
+// CommissionApproval from admin-schema uses agentId:string (non-null) which
+// conflicts with the actual DB shape. We use CommissionApprovalItem from the
+// context (agentId: string | null) everywhere in this component.
 import {
 	formatCurrency,
 	formatDateTime,
@@ -41,21 +46,20 @@ import {
 } from "../admin-schema";
 
 interface CommissionApprovalQueueProps {
-	dateRange?: DateRangeFilter;
-	refreshKey?: number;
 	className?: string;
 }
 
 interface ApprovalDialogState {
 	isOpen: boolean;
-	transaction: CommissionApproval | null;
+	transaction: CommissionApprovalItem | null;
 	action: "approve" | "reject" | null;
 	reviewNotes: string;
 	isSubmitting: boolean;
 }
 
+const PAGE_SIZE = 10;
+
 export function CommissionApprovalQueue({
-	refreshKey,
 	className,
 }: CommissionApprovalQueueProps) {
 	const queryClient = useQueryClient();
@@ -68,71 +72,51 @@ export function CommissionApprovalQueue({
 		isSubmitting: false,
 	});
 
-	const pageSize = 10;
+	// Page 0 comes from the shared context (already batched on mount).
+	// Subsequent pages use their own query (user interaction).
+	const { commissionQueue: contextQueueData, isLoading: contextLoading } =
+		useAdminDashboard();
 
-	// ✅ CORRECT tRPC query pattern - matches other dashboard components
-	const {
-		data: queueData,
-		isLoading,
-		error,
-		refetch,
-	} = trpc.admin.getCommissionApprovalQueue.useQuery(
+	const paginatedQuery = trpc.admin.getCommissionApprovalQueue.useQuery(
+		{ limit: PAGE_SIZE, offset: page * PAGE_SIZE, status: "submitted" },
 		{
-			limit: pageSize,
-			offset: page * pageSize,
-			status: "submitted", // Only show submitted transactions
-		},
-		{
-			refetchOnWindowFocus: false,
-			staleTime: 30000, // 30 seconds
+			enabled: page > 0, // only run when user navigates beyond page 0
+			staleTime: 30_000,
 		},
 	);
 
-	// ✅ REAL tRPC mutation with comprehensive query invalidation
+	const queueData = page === 0 ? contextQueueData : paginatedQuery.data;
+	const isLoading = page === 0 ? contextLoading : paginatedQuery.isLoading;
+	const error = page === 0 ? null : paginatedQuery.error;
+
+	// ── Mutation ──────────────────────────────────────────────────────────────
+
 	const processApprovalMutation =
 		trpc.admin.processCommissionApproval.useMutation({
 			onMutate: async (variables) => {
-				// Optimistic update for immediate UI feedback
-				const statusUpdate =
-					variables.action === "approve" ? "approved" : "rejected";
 				optimisticUpdateTransaction(queryClient, variables.transactionId, {
-					status: statusUpdate,
+					status: variables.action === "approve" ? "approved" : "rejected",
 					reviewNotes: variables.reviewNotes,
 				});
 			},
-			onSuccess: (data, variables) => {
-				const actionText =
-					variables.action === "approve" ? "approved" : "rejected";
-				toast.success(`Transaction ${actionText} successfully`);
-
-				// Comprehensive query invalidation for real-time updates
+			onSuccess: (_, variables) => {
+				const label = variables.action === "approve" ? "approved" : "rejected";
+				toast.success(`Transaction ${label} successfully`);
 				invalidateAdminQueries(queryClient);
-
 				closeDialog();
 			},
-			onError: (error, variables) => {
-				console.error("Commission approval error:", error);
-				const actionText =
-					variables.action === "approve" ? "approve" : "reject";
-				toast.error(`Failed to ${actionText} transaction`);
-
-				// Revert optimistic update on error
+			onError: (err, variables) => {
+				console.error("Commission approval error:", err);
+				toast.error(`Failed to ${variables.action} transaction`);
 				invalidateAdminQueries(queryClient);
-
 				setDialogState((prev) => ({ ...prev, isSubmitting: false }));
 			},
 		});
 
-	// Refetch when refreshKey changes
-	React.useEffect(() => {
-		if (refreshKey !== undefined) {
-			refetch();
-		}
-	}, [refreshKey, refetch]);
+	// ── Handlers ──────────────────────────────────────────────────────────────
 
-	// Handle approval action
 	const handleApprovalAction = (
-		transaction: CommissionApproval,
+		transaction: CommissionApprovalItem,
 		action: "approve" | "reject",
 	) => {
 		setDialogState({
@@ -144,12 +128,9 @@ export function CommissionApprovalQueue({
 		});
 	};
 
-	// Submit approval decision
-	const submitApprovalDecision = async () => {
+	const submitApprovalDecision = () => {
 		if (!dialogState.transaction || !dialogState.action) return;
-
 		setDialogState((prev) => ({ ...prev, isSubmitting: true }));
-
 		processApprovalMutation.mutate({
 			transactionId: dialogState.transaction.id,
 			action: dialogState.action,
@@ -157,7 +138,6 @@ export function CommissionApprovalQueue({
 		});
 	};
 
-	// Close dialog
 	const closeDialog = () => {
 		setDialogState({
 			isOpen: false,
@@ -168,18 +148,8 @@ export function CommissionApprovalQueue({
 		});
 	};
 
-	// Handle pagination
-	const handlePreviousPage = () => {
-		setPage((prev) => Math.max(0, prev - 1));
-	};
+	// ── Render ────────────────────────────────────────────────────────────────
 
-	const handleNextPage = () => {
-		if (queueData?.hasMore) {
-			setPage((prev) => prev + 1);
-		}
-	};
-
-	// Loading state
 	if (isLoading) {
 		return (
 			<Card className={className}>
@@ -212,7 +182,6 @@ export function CommissionApprovalQueue({
 		);
 	}
 
-	// Error state
 	if (error) {
 		return (
 			<Card className={className}>
@@ -225,7 +194,7 @@ export function CommissionApprovalQueue({
 				<CardContent>
 					<div className="flex items-center justify-center py-8">
 						<p className="text-muted-foreground text-sm">
-							Failed to load approval queue. Please try again.
+							Failed to load approval queue.
 						</p>
 					</div>
 				</CardContent>
@@ -233,10 +202,9 @@ export function CommissionApprovalQueue({
 		);
 	}
 
-	// Type-safe transaction processing - handle null status values
-	const transactions = (queueData?.transactions || []).map((transaction) => ({
-		...transaction,
-		status: (transaction.status || "submitted") as
+	const transactions = (queueData?.transactions || []).map((t) => ({
+		...t,
+		status: (t.status || "submitted") as
 			| "submitted"
 			| "under_review"
 			| "approved"
@@ -355,12 +323,12 @@ export function CommissionApprovalQueue({
 							</div>
 
 							{/* Pagination */}
-							{(queueData?.totalCount || 0) > pageSize && (
+							{(queueData?.totalCount || 0) > PAGE_SIZE && (
 								<div className="mt-4 flex items-center justify-between">
 									<p className="text-muted-foreground text-sm">
-										Showing {page * pageSize + 1} to{" "}
+										Showing {page * PAGE_SIZE + 1} to{" "}
 										{Math.min(
-											(page + 1) * pageSize,
+											(page + 1) * PAGE_SIZE,
 											queueData?.totalCount || 0,
 										)}{" "}
 										of {queueData?.totalCount || 0} transactions
@@ -369,7 +337,7 @@ export function CommissionApprovalQueue({
 										<Button
 											size="sm"
 											variant="outline"
-											onClick={handlePreviousPage}
+											onClick={() => setPage((p) => Math.max(0, p - 1))}
 											disabled={page === 0}
 										>
 											Previous
@@ -377,7 +345,7 @@ export function CommissionApprovalQueue({
 										<Button
 											size="sm"
 											variant="outline"
-											onClick={handleNextPage}
+											onClick={() => setPage((p) => p + 1)}
 											disabled={!queueData?.hasMore}
 										>
 											Next
@@ -417,7 +385,6 @@ export function CommissionApprovalQueue({
 							)}
 						</DialogDescription>
 					</DialogHeader>
-
 					<div className="space-y-4">
 						<div>
 							<label htmlFor="review-notes" className="font-medium text-sm">
@@ -445,7 +412,6 @@ export function CommissionApprovalQueue({
 							/>
 						</div>
 					</div>
-
 					<DialogFooter>
 						<Button
 							variant="outline"
@@ -468,7 +434,7 @@ export function CommissionApprovalQueue({
 							}
 						>
 							{dialogState.isSubmitting
-								? "Processing..."
+								? "Processing…"
 								: dialogState.action === "approve"
 									? "Approve"
 									: "Reject"}

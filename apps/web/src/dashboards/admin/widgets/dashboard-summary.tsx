@@ -3,66 +3,41 @@
 import { StatsCard } from "@/components/stats-grid";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { trpc } from "@/utils/trpc";
+import { useAdminDashboard } from "@/contexts/admin-dashboard-context";
+import { safeToFixed } from "@/utils/number-formatting";
 import {
 	RiCheckboxCircleLine,
 	RiFileListLine,
 	RiMoneyDollarCircleLine,
 	RiTimeLine,
 } from "@remixicon/react";
-
 import React from "react";
 
-import { safeToFixed } from "@/utils/number-formatting";
-// Import types and utilities
-import type { DateRangeFilter } from "../admin-schema";
 import { formatCurrency } from "../admin-schema";
 
 interface DashboardSummaryProps {
-	dateRange?: DateRangeFilter;
-	refreshKey?: number;
 	className?: string;
 }
 
-export function DashboardSummary({
-	dateRange,
-	refreshKey,
-	className,
-}: DashboardSummaryProps) {
-	// ✅ CORRECT tRPC query pattern
-	const {
-		data: rawSummaryData,
-		isLoading,
-		error,
-		refetch,
-	} = trpc.admin.getDashboardSummary.useQuery(dateRange || {}, {
-		refetchOnWindowFocus: false,
-		staleTime: 30000, // 30 seconds
-	});
+export function DashboardSummary({ className }: DashboardSummaryProps) {
+	const { dashboardSummary: raw, isLoading, hasError } = useAdminDashboard();
 
-	// Type-safe data processing - handle string commission values from database
-	const summaryData = React.useMemo(() => {
-		if (!rawSummaryData) return null;
-
+	// Normalise commission values (Drizzle sum/avg return string | null)
+	const data = React.useMemo(() => {
+		if (!raw) return null;
 		return {
-			...rawSummaryData,
-			totalCommissionValue: rawSummaryData.totalCommissionValue
-				? Number(rawSummaryData.totalCommissionValue)
-				: 0,
-			avgCommissionValue: rawSummaryData.avgCommissionValue
-				? Number(rawSummaryData.avgCommissionValue)
-				: 0,
+			totalTransactions: raw.totalTransactions,
+			pendingApprovals: raw.pendingApprovals,
+			approvedTransactions: raw.approvedTransactions,
+			totalCommissionValue:
+				raw.totalCommissionValue != null ? Number(raw.totalCommissionValue) : 0,
+			avgCommissionValue:
+				raw.avgCommissionValue != null ? Number(raw.avgCommissionValue) : 0,
 		};
-	}, [rawSummaryData]);
+	}, [raw]);
 
-	// Refetch when refreshKey changes
-	React.useEffect(() => {
-		if (refreshKey !== undefined) {
-			refetch();
-		}
-	}, [refreshKey, refetch]);
+	// ── Loading ───────────────────────────────────────────────────────────────
 
-	// Loading state
 	if (isLoading) {
 		return (
 			<Card className={className}>
@@ -72,7 +47,7 @@ export function DashboardSummary({
 				<CardContent>
 					<div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
 						{Array.from({ length: 4 }, (_, i) => (
-							<div key={`skeleton-${i}`} className="space-y-2">
+							<div key={i} className="space-y-2">
 								<Skeleton className="h-4 w-24" />
 								<Skeleton className="h-8 w-16" />
 								<Skeleton className="h-3 w-20" />
@@ -84,8 +59,9 @@ export function DashboardSummary({
 		);
 	}
 
-	// Error state
-	if (error) {
+	// ── Error / empty ─────────────────────────────────────────────────────────
+
+	if (hasError || !data) {
 		return (
 			<Card className={className}>
 				<CardHeader>
@@ -94,7 +70,9 @@ export function DashboardSummary({
 				<CardContent>
 					<div className="flex items-center justify-center py-8">
 						<p className="text-muted-foreground text-sm">
-							Failed to load dashboard summary. Please try again.
+							{hasError
+								? "Failed to load dashboard summary. Please try again."
+								: "No data available for the selected period."}
 						</p>
 					</div>
 				</CardContent>
@@ -102,48 +80,19 @@ export function DashboardSummary({
 		);
 	}
 
-	// No data state
-	if (!summaryData) {
-		return (
-			<Card className={className}>
-				<CardHeader>
-					<CardTitle>Dashboard Summary</CardTitle>
-				</CardHeader>
-				<CardContent>
-					<div className="flex items-center justify-center py-8">
-						<p className="text-muted-foreground text-sm">
-							No data available for the selected period.
-						</p>
-					</div>
-				</CardContent>
-			</Card>
-		);
-	}
+	// ── Derived metrics ───────────────────────────────────────────────────────
 
-	// Calculate derived metrics with safe number conversion
 	const approvalRate =
-		summaryData.totalTransactions > 0
-			? Number(
-					(summaryData.approvedTransactions / summaryData.totalTransactions) *
-						100,
-				)
+		data.totalTransactions > 0
+			? (data.approvedTransactions / data.totalTransactions) * 100
 			: 0;
 
 	const pendingRate =
-		summaryData.totalTransactions > 0
-			? Number(
-					(summaryData.pendingApprovals / summaryData.totalTransactions) * 100,
-				)
+		data.totalTransactions > 0
+			? (data.pendingApprovals / data.totalTransactions) * 100
 			: 0;
 
-	// Determine trends (simplified - in real app you'd compare with previous period)
-	const totalTransactionsTrend =
-		summaryData.totalTransactions > 0 ? "up" : "down";
-	const pendingApprovalsTrend =
-		summaryData.pendingApprovals > 5 ? "up" : "down";
-	const approvedTransactionsTrend = approvalRate > 80 ? "up" : "down";
-	const commissionTrend =
-		(summaryData.totalCommissionValue || 0) > 0 ? "up" : "down";
+	// ── Render ────────────────────────────────────────────────────────────────
 
 	return (
 		<Card className={className}>
@@ -151,14 +100,14 @@ export function DashboardSummary({
 				<CardTitle>Dashboard Summary</CardTitle>
 			</CardHeader>
 			<CardContent>
+				{/* Stat cards */}
 				<div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-					{/* Total Transactions */}
 					<StatsCard
 						title="Total Transactions"
-						value={summaryData.totalTransactions.toString()}
+						value={data.totalTransactions.toString()}
 						change={{
-							value: `${summaryData.totalTransactions} total`,
-							trend: totalTransactionsTrend as "up" | "down",
+							value: `${data.totalTransactions} total`,
+							trend: data.totalTransactions > 0 ? "up" : "down",
 						}}
 						icon={
 							<RiFileListLine
@@ -167,14 +116,12 @@ export function DashboardSummary({
 							/>
 						}
 					/>
-
-					{/* Pending Approvals */}
 					<StatsCard
 						title="Pending Approvals"
-						value={summaryData.pendingApprovals.toString()}
+						value={data.pendingApprovals.toString()}
 						change={{
 							value: `${safeToFixed(pendingRate, 1)}% of total`,
-							trend: pendingApprovalsTrend as "up" | "down",
+							trend: data.pendingApprovals > 5 ? "up" : "down",
 						}}
 						icon={
 							<RiTimeLine
@@ -183,14 +130,12 @@ export function DashboardSummary({
 							/>
 						}
 					/>
-
-					{/* Approved Transactions */}
 					<StatsCard
 						title="Approved Transactions"
-						value={summaryData.approvedTransactions.toString()}
+						value={data.approvedTransactions.toString()}
 						change={{
 							value: `${safeToFixed(approvalRate, 1)}% approval rate`,
-							trend: approvedTransactionsTrend as "up" | "down",
+							trend: approvalRate > 80 ? "up" : "down",
 						}}
 						icon={
 							<RiCheckboxCircleLine
@@ -199,14 +144,12 @@ export function DashboardSummary({
 							/>
 						}
 					/>
-
-					{/* Total Commission Value */}
 					<StatsCard
 						title="Total Commission"
-						value={formatCurrency(summaryData.totalCommissionValue || 0)}
+						value={formatCurrency(data.totalCommissionValue)}
 						change={{
-							value: `${formatCurrency(summaryData.avgCommissionValue || 0)} avg`,
-							trend: commissionTrend as "up" | "down",
+							value: `${formatCurrency(data.avgCommissionValue)} avg`,
+							trend: data.totalCommissionValue > 0 ? "up" : "down",
 						}}
 						icon={
 							<RiMoneyDollarCircleLine
@@ -217,75 +160,57 @@ export function DashboardSummary({
 					/>
 				</div>
 
-				{/* Additional Summary Info */}
+				{/* Rate indicators */}
 				<div className="mt-6 grid gap-4 md:grid-cols-3">
-					<div className="rounded-lg border p-4">
-						<div className="flex items-center justify-between">
-							<span className="text-muted-foreground text-sm">
-								Approval Rate
-							</span>
-							<span
-								className={`font-medium text-sm ${
-									approvalRate >= 90
-										? "text-green-600 dark:text-green-400"
-										: approvalRate >= 70
-											? "text-yellow-600 dark:text-yellow-400"
-											: "text-red-600 dark:text-red-400"
-								}`}
-							>
-								{typeof approvalRate === "number"
-									? approvalRate.toFixed(1)
-									: "0.0"}
-								%
-							</span>
-						</div>
-						<div className="mt-2 h-2 rounded-full bg-muted">
-							<div
-								className={`h-2 rounded-full ${
-									approvalRate >= 90
-										? "bg-green-500"
-										: approvalRate >= 70
-											? "bg-yellow-500"
-											: "bg-red-500"
-								}`}
-								style={{ width: `${Math.min(approvalRate, 100)}%` }}
-							/>
-						</div>
-					</div>
-
-					<div className="rounded-lg border p-4">
-						<div className="flex items-center justify-between">
-							<span className="text-muted-foreground text-sm">
-								Pending Rate
-							</span>
-							<span
-								className={`font-medium text-sm ${
-									pendingRate <= 10
-										? "text-green-600 dark:text-green-400"
-										: pendingRate <= 25
-											? "text-yellow-600 dark:text-yellow-400"
-											: "text-red-600 dark:text-red-400"
-								}`}
-							>
-								{typeof pendingRate === "number"
-									? pendingRate.toFixed(1)
-									: "0.0"}
-								%
-							</span>
-						</div>
-						<div className="mt-2 h-2 rounded-full bg-muted">
-							<div
-								className={`h-2 rounded-full ${
-									pendingRate <= 10
-										? "bg-green-500"
-										: pendingRate <= 25
-											? "bg-yellow-500"
-											: "bg-red-500"
-								}`}
-								style={{ width: `${Math.min(pendingRate, 100)}%` }}
-							/>
-						</div>
-					</div>
+					{[
+						{
+							label: "Approval Rate",
+							value: `${approvalRate.toFixed(1)}%`,
+							rate: approvalRate,
+							thresholds: [90, 70] as [number, number],
+							inverted: false,
+						},
+						{
+							label: "Pending Rate",
+							value: `${pendingRate.toFixed(1)}%`,
+							rate: pendingRate,
+							thresholds: [10, 25] as [number, number],
+							inverted: true,
+						},
+					].map(({ label, value, rate, thresholds, inverted }) => {
+						const isGood = inverted
+							? rate <= thresholds[0]
+							: rate >= thresholds[0];
+						const isOk = inverted
+							? rate <= thresholds[1]
+							: rate >= thresholds[1];
+						const textCls = isGood
+							? "text-green-600 dark:text-green-400"
+							: isOk
+								? "text-yellow-600 dark:text-yellow-400"
+								: "text-red-600 dark:text-red-400";
+						const barCls = isGood
+							? "bg-green-500"
+							: isOk
+								? "bg-yellow-500"
+								: "bg-red-500";
+						return (
+							<div key={label} className="rounded-lg border p-4">
+								<div className="flex items-center justify-between">
+									<span className="text-muted-foreground text-sm">{label}</span>
+									<span className={`font-medium text-sm ${textCls}`}>
+										{value}
+									</span>
+								</div>
+								<div className="mt-2 h-2 rounded-full bg-muted">
+									<div
+										className={`h-2 rounded-full ${barCls}`}
+										style={{ width: `${Math.min(rate, 100)}%` }}
+									/>
+								</div>
+							</div>
+						);
+					})}
 
 					<div className="rounded-lg border p-4">
 						<div className="flex items-center justify-between">
@@ -293,12 +218,12 @@ export function DashboardSummary({
 								Avg Commission
 							</span>
 							<span className="font-medium text-sm">
-								{formatCurrency(summaryData.avgCommissionValue || 0)}
+								{formatCurrency(data.avgCommissionValue)}
 							</span>
 						</div>
 						<div className="mt-2 text-muted-foreground text-xs">
-							{summaryData.totalTransactions > 0
-								? `Across ${summaryData.totalTransactions} transactions`
+							{data.totalTransactions > 0
+								? `Across ${data.totalTransactions} transactions`
 								: "No transactions"}
 						</div>
 					</div>

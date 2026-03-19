@@ -424,7 +424,7 @@ export const transactionsRouter = router({
 				agentTier?: string;
 				companyCommissionSplit?: number;
 			};
-			type AgentTier = import("../db/schema/auth").AgentTier;
+			type AgentTier = import("../models/auth").AgentTier;
 			const agentTier: AgentTier =
 				(userSession.agentTier as AgentTier) || "advisor";
 			const companyCommissionSplit = userSession.companyCommissionSplit ?? 60;
@@ -493,7 +493,7 @@ export const transactionsRouter = router({
 				agentTier?: string;
 				companyCommissionSplit?: number;
 			};
-			type AgentTier = import("../db/schema/auth").AgentTier;
+			type AgentTier = import("../models/auth").AgentTier;
 			const agentTier: AgentTier =
 				(userSession.agentTier as AgentTier) || "advisor";
 			const companyCommissionSplit = userSession.companyCommissionSplit ?? 60;

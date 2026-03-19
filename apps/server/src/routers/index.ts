@@ -12,18 +12,10 @@ import { reportsRouter } from "../controllers/reports";
 import { tagsRouter } from "../controllers/tags";
 import { transactionsRouter } from "../controllers/transactions";
 import { whatsappRouter } from "../controllers/whatsapp";
-import { protectedProcedure, publicProcedure, router } from "../utils/trpc";
+import { publicProcedure, router } from "../utils/trpc";
 
 export const appRouter = router({
-	healthCheck: publicProcedure.query(() => {
-		return "OK";
-	}),
-	privateData: protectedProcedure.query(({ ctx }) => {
-		return {
-			message: "This is private",
-			user: ctx.session.user,
-		};
-	}),
+	health: publicProcedure.query(() => "OK"),
 	transactions: transactionsRouter,
 	dashboard: dashboardRouter,
 	admin: adminRouter,

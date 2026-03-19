@@ -35,9 +35,6 @@ const allowedOrigins = [
 	"http://localhost:3001",
 	"http://localhost:3002",
 	"https://steelix-final-web.vercel.app",
-	"https://steelix-final-web-git-master-lkmariobros-projects.vercel.app",
-	"https://steelix-final-mx4or73lk-lkmariobros-projects.vercel.app",
-	"https://steelix-final-web-git-admin-typescript-errors-solved-lkmariobros-projects.vercel.app",
 	...(process.env.CORS_ORIGIN?.split(",") ?? []),
 ];
 
@@ -65,16 +62,13 @@ app.use(
 app.all("/api/auth/*", async (c) => {
 	try {
 		const result = await auth.handler(c.req.raw);
-		if (!result) {
-			return c.json(
-				{ error: "Auth endpoint not found", path: c.req.path },
-				404,
-			);
-		}
-		return result;
+		return (
+			result ??
+			c.json({ error: "Auth endpoint not found", path: c.req.path }, 404)
+		);
 	} catch (error) {
 		console.error(
-			"❌ Auth handler error:",
+			"❌ Auth error:",
 			error instanceof Error ? error.message : error,
 		);
 		return c.json(
@@ -84,20 +78,6 @@ app.all("/api/auth/*", async (c) => {
 			},
 			500,
 		);
-	}
-});
-
-// Fallback for alternate auth paths
-app.all("/auth/*", async (c) => {
-	try {
-		const result = await auth.handler(c.req.raw);
-		return result || c.json({ error: "Auth endpoint not found" }, 404);
-	} catch (error) {
-		console.error(
-			"❌ Fallback auth error:",
-			error instanceof Error ? error.message : error,
-		);
-		return c.json({ error: "Auth handler failed" }, 500);
 	}
 });
 
@@ -111,7 +91,7 @@ app.use(
 	}),
 );
 
-// ─── Health checks ────────────────────────────────────────────────────────────
+// ─── Health ───────────────────────────────────────────────────────────────────
 
 app.get("/", (c) => c.text(`OK - ${new Date().toISOString()}`));
 app.get("/health", (c) =>
@@ -129,28 +109,28 @@ app.get("/.well-known/health", (c) => c.json({ status: "ok" }));
 
 app.route("/", webhookRoutes);
 
-// Debug routes — development only
 if (process.env.NODE_ENV !== "production") {
 	app.route("/", debugRoutes);
 }
 
 // ─── Process error guards ─────────────────────────────────────────────────────
 
-process.on("unhandledRejection", (reason) => {
-	console.error("❌ Unhandled rejection:", reason);
-});
-process.on("uncaughtException", (error) => {
-	console.error("❌ Uncaught exception:", error);
-});
+process.on("unhandledRejection", (reason) =>
+	console.error("❌ Unhandled rejection:", reason),
+);
+process.on("uncaughtException", (error) =>
+	console.error("❌ Uncaught exception:", error),
+);
 
 // ─── Startup ──────────────────────────────────────────────────────────────────
 
-console.log(`🚀 Starting server on port ${process.env.PORT || 8080}`);
-console.log(`   NODE_ENV  : ${process.env.NODE_ENV}`);
-console.log(`   DATABASE  : ${process.env.DATABASE_URL ? "✓" : "✗ NOT SET"}`);
-console.log(`   AUTH_URL  : ${process.env.BETTER_AUTH_URL}`);
+console.log(
+	`🚀 Starting on port ${process.env.PORT || 8080} [${process.env.NODE_ENV}]`,
+);
+console.log(
+	`   DB: ${process.env.DATABASE_URL ? "✓" : "✗ NOT SET"}  |  AUTH_URL: ${process.env.BETTER_AUTH_URL}`,
+);
 
 startServer(app);
 
-// Prevent Bun from auto-serving the default export
 export default {} as Record<string, never>;

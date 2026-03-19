@@ -38,7 +38,6 @@ import {
 	RiDashboardLine,
 	RiRefreshLine,
 	RiSettings3Line,
-	RiShieldUserLine,
 	RiTeamLine,
 	RiUserLine,
 } from "@remixicon/react";
@@ -91,16 +90,6 @@ export default function AdminAgentsPage() {
 		setIsManageDialogOpen(true);
 	};
 
-	// Admin role checking
-	const { data: roleData, isLoading: isRoleLoading } =
-		trpc.admin.checkAdminRole.useQuery(undefined, {
-			enabled: !!session,
-			retry: false,
-		}) as {
-			data: { hasAdminAccess: boolean; role: string } | undefined;
-			isLoading: boolean;
-		};
-
 	// Fetch agents data
 	const {
 		data: agentsData,
@@ -120,21 +109,21 @@ export default function AdminAgentsPage() {
 			sortOrder: "asc",
 		},
 		{
-			enabled: !!session && !!roleData?.hasAdminAccess,
+			enabled: !!session,
 		},
 	);
 
 	// Get agent statistics
 	const { data: agentStats, isLoading: isLoadingStats } =
 		trpc.agents.getStats.useQuery(undefined, {
-			enabled: !!session && !!roleData?.hasAdminAccess,
+			enabled: !!session,
 		});
 
 	// Get utils for invalidation after mutations
 	const utils = trpc.useUtils();
 
-	// Show loading while checking authentication and role
-	if (isPending || isRoleLoading) {
+	// Show loading while checking authentication
+	if (isPending) {
 		return (
 			<div className="flex h-screen items-center justify-center">
 				<div className="text-center">
@@ -149,34 +138,6 @@ export default function AdminAgentsPage() {
 	if (!session) {
 		router.push("/login");
 		return null;
-	}
-
-	// Access denied if not admin
-	if (!roleData || !roleData.hasAdminAccess) {
-		return (
-			<div className="flex h-screen items-center justify-center">
-				<div className="text-center">
-					<RiShieldUserLine
-						size={48}
-						className="mx-auto mb-4 text-muted-foreground"
-					/>
-					<h1 className="mb-2 font-semibold text-2xl">Access Denied</h1>
-					<p className="mb-4 text-muted-foreground">
-						You don&apos;t have permission to access agent management.
-					</p>
-					<p className="mb-4 text-muted-foreground text-sm">
-						Current role: {roleData?.role || "Unknown"}
-					</p>
-					<button
-						type="button"
-						onClick={() => router.push("/dashboard")}
-						className="rounded-md bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90"
-					>
-						Go to Agent Dashboard
-					</button>
-				</div>
-			</div>
-		);
 	}
 
 	// Handle refresh

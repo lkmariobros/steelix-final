@@ -60,27 +60,29 @@ function TransactionItem({
 }: {
 	transaction: {
 		id: string;
-		agentId: string;
-		agentName: string;
+		agentId: string | null;
+		agentName: string | null;
 		propertyAddress: string;
 		propertyPrice: number;
 		clientName: string;
 		status: string | null;
-		transactionDate: string | Date;
-		updatedAt: string | Date;
+		transactionDate: string | Date | null;
+		updatedAt: string | Date | null;
 	};
 }) {
 	const rel = useRelativeTime(
-		typeof transaction.updatedAt === "string"
-			? new Date(transaction.updatedAt)
-			: transaction.updatedAt,
+		transaction.updatedAt == null
+			? new Date()
+			: typeof transaction.updatedAt === "string"
+				? new Date(transaction.updatedAt)
+				: transaction.updatedAt,
 	);
 
 	return (
 		<div className="flex items-center gap-3">
 			<Avatar className="size-10">
 				<div className="flex size-full items-center justify-center bg-primary/10 font-medium text-primary text-sm">
-					{transaction.agentName.charAt(0).toUpperCase()}
+					{(transaction.agentName ?? "?").charAt(0).toUpperCase()}
 				</div>
 			</Avatar>
 			<div className="min-w-0 flex-1">

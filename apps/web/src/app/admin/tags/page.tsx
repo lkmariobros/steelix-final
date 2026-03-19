@@ -81,16 +81,6 @@ export default function AdminTagsPage() {
 	const [tagName, setTagName] = useState("");
 	const itemsPerPage = 20;
 
-	// Admin role checking
-	const { data: roleData, isLoading: isRoleLoading } =
-		trpc.admin.checkAdminRole.useQuery(undefined, {
-			enabled: !!session,
-			retry: false,
-		}) as {
-			data: { hasAdminAccess: boolean; role: string } | undefined;
-			isLoading: boolean;
-		};
-
 	// Fetch tags
 	const {
 		data: tagsData,
@@ -104,7 +94,7 @@ export default function AdminTagsPage() {
 			limit: itemsPerPage,
 		},
 		{
-			enabled: !!session && !!roleData?.hasAdminAccess,
+			enabled: !!session,
 			retry: 1,
 			staleTime: 30000,
 		},
@@ -196,8 +186,8 @@ export default function AdminTagsPage() {
 		deleteTagMutation.mutate({ id: selectedTag.id });
 	};
 
-	// Show loading while checking authentication and role
-	if (isPending || isRoleLoading) {
+	// Show loading while checking authentication
+	if (isPending) {
 		return (
 			<div className="flex h-screen items-center justify-center">
 				<div className="text-center">
@@ -212,23 +202,6 @@ export default function AdminTagsPage() {
 	if (!session) {
 		router.push("/login");
 		return null;
-	}
-
-	// Access denied if not admin
-	if (!roleData || !roleData.hasAdminAccess) {
-		return (
-			<div className="flex h-screen items-center justify-center">
-				<div className="text-center">
-					<h1 className="font-semibold text-2xl">Access Denied</h1>
-					<p className="mt-2 text-muted-foreground">
-						You don't have permission to access this page.
-					</p>
-					<Button onClick={() => router.push("/dashboard")} className="mt-4">
-						Go to Dashboard
-					</Button>
-				</div>
-			</div>
-		);
 	}
 
 	const formatDate = (date: Date | string) => {

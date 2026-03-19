@@ -111,12 +111,12 @@ export function TeamLeaderboard() {
 									{agent.agentImage ? (
 										<img
 											src={agent.agentImage}
-											alt={agent.agentName}
+											alt={agent.agentName ?? undefined}
 											className="size-full object-cover"
 										/>
 									) : (
 										<div className="flex size-full items-center justify-center bg-primary/10 font-medium text-primary text-sm">
-											{agent.agentName.charAt(0).toUpperCase()}
+											{(agent.agentName ?? "?").charAt(0).toUpperCase()}
 										</div>
 									)}
 								</Avatar>

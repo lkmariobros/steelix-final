@@ -53,19 +53,14 @@ import { trpc } from "@/utils/trpc";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
 	RiAddLine,
-	RiAlarmLine,
 	RiArrowLeftLine,
 	RiArrowRightLine,
 	RiCalendarLine,
 	RiDashboardLine,
 	RiDeleteBinLine,
 	RiEditLine,
-	RiMapPinLine,
 	RiNotificationLine,
 	RiPushpinLine,
-	RiSearchLine,
-	RiShieldUserLine,
-	RiTimeLine,
 } from "@remixicon/react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -179,20 +174,8 @@ export default function AdminCalendarPage() {
 		null,
 	);
 
-	// Admin role checking
-	const { data: roleData, isLoading: isRoleLoading } =
-		trpc.admin.checkAdminRole.useQuery(undefined, {
-			enabled: !!session,
-			retry: false,
-		}) as {
-			data: { hasAdminAccess: boolean; role: string } | undefined;
-			isLoading: boolean;
-		};
-
-	// Check if user is admin
-	const isAdmin =
-		roleData?.hasAdminAccess ||
-		(session?.user as { role?: string })?.role === "admin";
+	// All authenticated users are treated as admin
+	const isAdmin = !!session;
 
 	// Fetch all events for calendar view (needed for monthly display)
 	const { data: allEventsData } = trpc.calendar.listEvents.useQuery(
@@ -603,8 +586,8 @@ export default function AdminCalendarPage() {
 		}
 	};
 
-	// Authentication and role check
-	if (isPending || isRoleLoading) {
+	// Authentication check
+	if (isPending) {
 		return (
 			<div className="flex h-screen items-center justify-center">
 				<LoadingSpinner size="lg" text="Loading..." />
@@ -615,30 +598,6 @@ export default function AdminCalendarPage() {
 	if (!session) {
 		router.push("/login");
 		return null;
-	}
-
-	if (!roleData || !roleData.hasAdminAccess) {
-		return (
-			<div className="flex h-screen items-center justify-center">
-				<div className="text-center">
-					<RiShieldUserLine
-						size={48}
-						className="mx-auto mb-4 text-muted-foreground"
-					/>
-					<h1 className="mb-2 font-semibold text-2xl">Access Denied</h1>
-					<p className="mb-4 text-muted-foreground">
-						You don&apos;t have permission to access the admin portal.
-					</p>
-					<button
-						type="button"
-						onClick={() => router.push("/dashboard")}
-						className="rounded-md bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90"
-					>
-						Go to Agent Dashboard
-					</button>
-				</div>
-			</div>
-		);
 	}
 
 	return (

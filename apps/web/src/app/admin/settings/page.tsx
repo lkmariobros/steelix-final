@@ -7,7 +7,6 @@ import {
 	SidebarProvider,
 	SidebarTrigger,
 } from "@/components/sidebar";
-import { AccessDenied } from "@/components/ui/access-denied";
 import {
 	Breadcrumb,
 	BreadcrumbItem,
@@ -26,7 +25,6 @@ import {
 import { LoadingScreen } from "@/components/ui/loading-spinner";
 import { Separator } from "@/components/ui/separator";
 import { authClient } from "@/lib/auth-client";
-import { trpc } from "@/utils/trpc";
 import { RiDashboardLine, RiSettings3Line } from "@remixicon/react";
 import { useRouter } from "next/navigation";
 
@@ -34,35 +32,15 @@ export default function AdminSettingsPage() {
 	const router = useRouter();
 	const { data: session, isPending } = authClient.useSession();
 
-	// Admin role checking
-	const { data: roleData, isLoading: isRoleLoading } =
-		trpc.admin.checkAdminRole.useQuery(undefined, {
-			enabled: !!session,
-			retry: false,
-		});
-
-	// Show loading while checking authentication and role
-	if (isPending || isRoleLoading) {
-		return <LoadingScreen text="Checking permissions..." />;
+	// Show loading while checking authentication
+	if (isPending) {
+		return <LoadingScreen text="Loading..." />;
 	}
 
 	// Redirect if not authenticated
 	if (!session) {
 		router.push("/login");
 		return null;
-	}
-
-	// Access denied if not admin
-	if (!roleData || !roleData.hasAdminAccess) {
-		return (
-			<AccessDenied
-				title="Access Denied"
-				message="You don't have permission to access admin settings."
-				userRole={roleData?.role || "Unknown"}
-				redirectPath="/dashboard"
-				redirectLabel="Go to Agent Dashboard"
-			/>
-		);
 	}
 
 	return (
@@ -131,7 +109,7 @@ export default function AdminSettingsPage() {
 									<div className="rounded-lg border bg-muted/50 p-3">
 										<p className="text-muted-foreground">Role</p>
 										<p className="mt-1 font-medium capitalize">
-											{roleData?.role || "Admin"}
+											{(session?.user as { role?: string })?.role || "User"}
 										</p>
 									</div>
 									<div className="rounded-lg border bg-muted/50 p-3">

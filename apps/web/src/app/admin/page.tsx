@@ -18,7 +18,6 @@ import {
 } from "@/components/ui/breadcrumb";
 import { AdminDashboard } from "@/dashboards/admin";
 import { authClient } from "@/lib/auth-client";
-import { trpc } from "@/utils/trpc";
 import { RiDashboardLine, RiShieldUserLine } from "@remixicon/react";
 import { useRouter } from "next/navigation";
 
@@ -26,18 +25,8 @@ export default function AdminDashboardPage() {
 	const router = useRouter();
 	const { data: session, isPending } = authClient.useSession();
 
-	// ✅ CORRECT tRPC query pattern with proper role checking
-	const { data: roleData, isLoading: isRoleLoading } =
-		trpc.admin.checkAdminRole.useQuery(undefined, {
-			enabled: !!session, // Only check role if user is authenticated
-			retry: false,
-		}) as {
-			data: { hasAdminAccess: boolean; role: string } | undefined;
-			isLoading: boolean;
-		};
-
-	// Show loading while checking authentication and role
-	if (isPending || isRoleLoading) {
+	// Show loading while checking authentication
+	if (isPending) {
 		return (
 			<div className="flex h-screen items-center justify-center">
 				<div className="text-center">
@@ -48,38 +37,10 @@ export default function AdminDashboardPage() {
 		);
 	}
 
-	// Redirect if not authenticated
+	// Redirect to login if not authenticated
 	if (!session) {
 		router.push("/login");
 		return null;
-	}
-
-	// ✅ SECURITY FIX: Proper admin access control
-	if (!roleData || !roleData.hasAdminAccess) {
-		return (
-			<div className="flex h-screen items-center justify-center">
-				<div className="text-center">
-					<RiShieldUserLine
-						size={48}
-						className="mx-auto mb-4 text-muted-foreground"
-					/>
-					<h1 className="mb-2 font-semibold text-2xl">Access Denied</h1>
-					<p className="mb-4 text-muted-foreground">
-						You don&apos;t have permission to access the admin portal.
-					</p>
-					<p className="mb-4 text-muted-foreground text-sm">
-						Current role: {roleData?.role || "Unknown"}
-					</p>
-					<button
-						type="button"
-						onClick={() => router.push("/dashboard")}
-						className="rounded-md bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90"
-					>
-						Go to Agent Dashboard
-					</button>
-				</div>
-			</div>
-		);
 	}
 
 	return (

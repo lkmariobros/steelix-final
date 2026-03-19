@@ -53,7 +53,6 @@ import {
 	RiRefreshLine,
 	RiSearchLine,
 	RiShakeHandsLine,
-	RiShieldUserLine,
 	RiUserLine,
 } from "@remixicon/react";
 import { useRouter } from "next/navigation";
@@ -84,16 +83,6 @@ export default function AdminReportsPage() {
 		return { startDate, endDate };
 	}, [timeRange]);
 
-	// Admin role checking
-	const { data: roleData, isLoading: isRoleLoading } =
-		trpc.admin.checkAdminRole.useQuery(undefined, {
-			enabled: !!session,
-			retry: false,
-		}) as {
-			data: { hasAdminAccess: boolean; role: string } | undefined;
-			isLoading: boolean;
-		};
-
 	// Get dashboard statistics
 	const { data: dashboardStats, isLoading: isLoadingStats } =
 		trpc.reports.getDashboardStats.useQuery(
@@ -102,7 +91,7 @@ export default function AdminReportsPage() {
 				endDate: dateRange.endDate,
 			},
 			{
-				enabled: !!session && !!roleData?.hasAdminAccess,
+				enabled: !!session,
 				staleTime: 5 * 60 * 1000,
 				refetchOnWindowFocus: false,
 			},
@@ -117,7 +106,7 @@ export default function AdminReportsPage() {
 				endDate: dateRange.endDate,
 			},
 			{
-				enabled: !!session && !!roleData?.hasAdminAccess,
+				enabled: !!session,
 				staleTime: 5 * 60 * 1000,
 				refetchOnWindowFocus: false,
 			},
@@ -132,8 +121,7 @@ export default function AdminReportsPage() {
 				agencyName: agencySearch || undefined,
 			},
 			{
-				enabled:
-					!!session && !!roleData?.hasAdminAccess && activeTab === "co-broking",
+				enabled: !!session && activeTab === "co-broking",
 				staleTime: 5 * 60 * 1000,
 				refetchOnWindowFocus: false,
 			},
@@ -156,8 +144,7 @@ export default function AdminReportsPage() {
 				searchQuery: searchQuery || undefined,
 			},
 			{
-				enabled:
-					!!session && !!roleData?.hasAdminAccess && activeTab === "clients",
+				enabled: !!session && activeTab === "clients",
 				staleTime: 5 * 60 * 1000,
 				refetchOnWindowFocus: false,
 			},
@@ -245,8 +232,8 @@ export default function AdminReportsPage() {
 		exportToCSV(exportData, "client_export");
 	}, [clientData, exportToCSV]);
 
-	// Show loading while checking authentication and role
-	if (isPending || isRoleLoading) {
+	// Show loading while checking authentication
+	if (isPending) {
 		return (
 			<div className="flex h-screen items-center justify-center">
 				<div className="text-center">
@@ -261,34 +248,6 @@ export default function AdminReportsPage() {
 	if (!session) {
 		router.push("/login");
 		return null;
-	}
-
-	// Access denied if not admin
-	if (!roleData || !roleData.hasAdminAccess) {
-		return (
-			<div className="flex h-screen items-center justify-center">
-				<div className="text-center">
-					<RiShieldUserLine
-						size={48}
-						className="mx-auto mb-4 text-muted-foreground"
-					/>
-					<h1 className="mb-2 font-semibold text-2xl">Access Denied</h1>
-					<p className="mb-4 text-muted-foreground">
-						You don&apos;t have permission to access reports and analytics.
-					</p>
-					<p className="mb-4 text-muted-foreground text-sm">
-						Current role: {roleData?.role || "Unknown"}
-					</p>
-					<button
-						type="button"
-						onClick={() => router.push("/dashboard")}
-						className="rounded-md bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90"
-					>
-						Go to Agent Dashboard
-					</button>
-				</div>
-			</div>
-		);
 	}
 
 	// Handle refresh

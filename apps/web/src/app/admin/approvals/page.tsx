@@ -49,7 +49,6 @@ import {
 	RiDashboardLine,
 	RiLoader4Line,
 	RiRefreshLine,
-	RiShieldUserLine,
 } from "@remixicon/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
@@ -98,16 +97,6 @@ export default function AdminApprovalsPage() {
 		isSubmitting: false,
 	});
 
-	// Admin role checking
-	const { data: roleData, isLoading: isRoleLoading } =
-		trpc.admin.checkAdminRole.useQuery(undefined, {
-			enabled: !!session,
-			retry: false,
-		}) as {
-			data: { hasAdminAccess: boolean; role: string } | undefined;
-			isLoading: boolean;
-		};
-
 	// Fetch approvals data from transactions table (like dashboard widget)
 	const {
 		data: approvalsData,
@@ -123,7 +112,7 @@ export default function AdminApprovalsPage() {
 					: (statusFilter as "submitted" | "under_review"),
 		},
 		{
-			enabled: !!session && !!roleData?.hasAdminAccess,
+			enabled: !!session,
 			refetchOnWindowFocus: false,
 			staleTime: 30000,
 		},
@@ -134,7 +123,7 @@ export default function AdminApprovalsPage() {
 		trpc.admin.getDashboardSummary.useQuery(
 			{},
 			{
-				enabled: !!session && !!roleData?.hasAdminAccess,
+				enabled: !!session,
 			},
 		);
 
@@ -174,8 +163,8 @@ export default function AdminApprovalsPage() {
 		}
 	}, [isPending, session, router]);
 
-	// Show loading while checking authentication and role
-	if (isPending || isRoleLoading) {
+	// Show loading while checking authentication
+	if (isPending) {
 		return (
 			<div className="flex h-screen items-center justify-center">
 				<div className="text-center">
@@ -186,44 +175,9 @@ export default function AdminApprovalsPage() {
 		);
 	}
 
-	// Show loading while redirecting unauthenticated users
 	if (!session) {
-		return (
-			<div className="flex h-screen items-center justify-center">
-				<div className="text-center">
-					<div className="mx-auto h-8 w-8 animate-spin rounded-full border-primary border-b-2" />
-					<p className="mt-2 text-muted-foreground text-sm">Redirecting...</p>
-				</div>
-			</div>
-		);
-	}
-
-	// Access denied if not admin
-	if (!roleData || !roleData.hasAdminAccess) {
-		return (
-			<div className="flex h-screen items-center justify-center">
-				<div className="text-center">
-					<RiShieldUserLine
-						size={48}
-						className="mx-auto mb-4 text-muted-foreground"
-					/>
-					<h1 className="mb-2 font-semibold text-2xl">Access Denied</h1>
-					<p className="mb-4 text-muted-foreground">
-						You don&apos;t have permission to access commission approvals.
-					</p>
-					<p className="mb-4 text-muted-foreground text-sm">
-						Current role: {roleData?.role || "Unknown"}
-					</p>
-					<button
-						type="button"
-						onClick={() => router.push("/dashboard")}
-						className="rounded-md bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90"
-					>
-						Go to Agent Dashboard
-					</button>
-				</div>
-			</div>
-		);
+		router.push("/login");
+		return null;
 	}
 
 	// Handle refresh
