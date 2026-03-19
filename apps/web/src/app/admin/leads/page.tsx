@@ -57,6 +57,7 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { authClient } from "@/lib/auth-client";
 import { trpc } from "@/utils/trpc";
@@ -64,6 +65,7 @@ import {
 	RiAddLine,
 	RiArrowDownLine,
 	RiArrowUpLine,
+	RiBarChartLine,
 	RiCheckboxMultipleLine,
 	RiCloseLine,
 	RiDashboardLine,
@@ -80,7 +82,18 @@ import {
 } from "@remixicon/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+	Area,
+	AreaChart,
+	Cell,
+	Pie,
+	PieChart,
+	ResponsiveContainer,
+	Tooltip,
+	XAxis,
+	YAxis,
+} from "recharts";
 import { toast } from "sonner";
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
@@ -580,22 +593,23 @@ function EditLeadDialog({
 		onError: (e) => toast.error(e.message),
 	});
 
-	// Pre-populate form when lead changes
-	// biome-ignore lint: intentional render-time side effect for form pre-population
-	if (open && lead && form.name !== lead.name) {
-		setForm({
-			name: lead.name,
-			email: lead.email,
-			phone: lead.phone,
-			source: lead.source,
-			type: lead.type,
-			property: lead.property,
-			status: lead.status,
-			stage: lead.stage,
-			leadType: lead.leadType,
-			agentId: lead.agentId ?? "__unassigned__",
-		});
-	}
+	// Pre-populate form only when the dialog opens or a different lead is selected
+	useEffect(() => {
+		if (open && lead) {
+			setForm({
+				name: lead.name,
+				email: lead.email,
+				phone: lead.phone,
+				source: lead.source,
+				type: lead.type,
+				property: lead.property,
+				status: lead.status,
+				stage: lead.stage,
+				leadType: lead.leadType,
+				agentId: lead.agentId ?? "__unassigned__",
+			});
+		}
+	}, [open, lead?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
 	if (!lead) return null;
 
@@ -1159,7 +1173,6 @@ function StatsCards({
 	leads: Lead[];
 	isLoading: boolean;
 }) {
-	// Compute stats directly from the loaded dataset — no extra API calls
 	const stats = useMemo(() => {
 		const total = leads.length;
 		const active = leads.filter((l) => l.status === "active").length;
@@ -1173,7 +1186,6 @@ function StatsCards({
 		const tenants = leads.filter((l) => l.type === "tenant").length;
 		const uniqueAgents = new Set(leads.map((l) => l.agentId).filter(Boolean))
 			.size;
-
 		return {
 			total,
 			active,
@@ -1191,13 +1203,14 @@ function StatsCards({
 		return (
 			<div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
 				{[...Array(4)].map((_, i) => (
-					<Card key={i}>
+					<Card key={i} className="overflow-hidden">
 						<CardHeader className="pb-2">
-							<div className="h-4 w-24 animate-pulse rounded bg-muted" />
-							<div className="mt-1 h-8 w-16 animate-pulse rounded bg-muted" />
+							<Skeleton className="h-3.5 w-28" />
+							<Skeleton className="mt-2 h-9 w-16" />
 						</CardHeader>
-						<CardContent>
-							<div className="h-3 w-32 animate-pulse rounded bg-muted" />
+						<CardContent className="space-y-2">
+							<Skeleton className="h-1.5 w-full rounded-full" />
+							<Skeleton className="h-3 w-36" />
 						</CardContent>
 					</Card>
 				))}
@@ -1205,50 +1218,365 @@ function StatsCards({
 		);
 	}
 
+	const activeRate = stats.total
+		? Math.round((stats.active / stats.total) * 100)
+		: 0;
+	const bookingRate = stats.total
+		? Math.round((stats.bookingsMade / stats.total) * 100)
+		: 0;
+
 	return (
 		<div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-			<Card>
+			<Card className="overflow-hidden">
 				<CardHeader className="pb-2">
 					<CardDescription>Total Leads</CardDescription>
 					<CardTitle className="text-3xl">{stats.total}</CardTitle>
 				</CardHeader>
-				<CardContent>
+				<CardContent className="space-y-2">
+					<div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+						<div
+							className="h-full rounded-full bg-primary transition-all duration-500"
+							style={{ width: "100%" }}
+						/>
+					</div>
 					<p className="text-muted-foreground text-xs">
 						{stats.buyers} buyers · {stats.tenants} tenants
 					</p>
 				</CardContent>
 			</Card>
-			<Card>
+			<Card className="overflow-hidden">
 				<CardHeader className="pb-2">
 					<CardDescription>Active Leads</CardDescription>
 					<CardTitle className="text-3xl">{stats.active}</CardTitle>
 				</CardHeader>
-				<CardContent>
+				<CardContent className="space-y-2">
+					<div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+						<div
+							className="h-full rounded-full bg-green-500 transition-all duration-500"
+							style={{ width: `${activeRate}%` }}
+						/>
+					</div>
 					<p className="text-muted-foreground text-xs">
-						{stats.pending} pending · {stats.inactive} inactive
+						{activeRate}% active · {stats.pending} pending · {stats.inactive}{" "}
+						inactive
 					</p>
 				</CardContent>
 			</Card>
-			<Card>
+			<Card className="overflow-hidden">
 				<CardHeader className="pb-2">
-					<CardDescription>Unclaimed Company Leads</CardDescription>
-					<CardTitle className="text-3xl">{stats.unclaimedCompany}</CardTitle>
+					<CardDescription>Bookings Made</CardDescription>
+					<CardTitle className="text-3xl">{stats.bookingsMade}</CardTitle>
 				</CardHeader>
-				<CardContent>
+				<CardContent className="space-y-2">
+					<div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+						<div
+							className="h-full rounded-full bg-emerald-500 transition-all duration-500"
+							style={{ width: `${bookingRate}%` }}
+						/>
+					</div>
 					<p className="text-muted-foreground text-xs">
-						{stats.bookingsMade} bookings made
+						{bookingRate}% conversion · {stats.unclaimedCompany} unclaimed co.
 					</p>
 				</CardContent>
 			</Card>
-			<Card>
+			<Card className="overflow-hidden">
 				<CardHeader className="pb-2">
 					<CardDescription>Agents With Leads</CardDescription>
 					<CardTitle className="text-3xl">{stats.uniqueAgents}</CardTitle>
 				</CardHeader>
-				<CardContent>
+				<CardContent className="space-y-2">
+					<div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+						<div
+							className="h-full rounded-full bg-blue-500 transition-all duration-500"
+							style={{ width: stats.uniqueAgents ? "75%" : "0%" }}
+						/>
+					</div>
 					<p className="text-muted-foreground text-xs">
 						{stats.total} total leads tracked
 					</p>
+				</CardContent>
+			</Card>
+		</div>
+	);
+}
+
+// ─── Charts Section ────────────────────────────────────────────────────────────
+
+const CHART_COLORS = [
+	"#60a5fa", // blue-400   - new_lead
+	"#fbbf24", // amber-400  - follow_up_in_progress
+	"#94a3b8", // slate-400  - no_pick_reply
+	"#c084fc", // purple-400 - follow_up_for_appointment
+	"#2dd4bf", // teal-400   - potential_lead
+	"#fb923c", // orange-400 - consider_seen
+	"#4ade80", // green-400  - appointment_made
+	"#f87171", // red-400    - reject_project
+	"#34d399", // emerald-400- booking_made
+	"#f472b6", // pink-400   - spam_fake_lead
+];
+
+// Axis tick color — a fixed light-gray that looks sharp in both light and dark
+const TICK_COLOR = "#94a3b8"; // slate-400
+
+// Custom tooltip for area chart
+function AreaTooltip({
+	active,
+	payload,
+	label,
+}: { active?: boolean; payload?: Array<{ value: number }>; label?: string }) {
+	if (!active || !payload?.length) return null;
+	return (
+		<div className="rounded-lg border border-border bg-popover px-3 py-2 shadow-lg">
+			<p className="mb-1 font-semibold text-foreground text-xs">{label}</p>
+			<p className="text-muted-foreground text-xs">
+				<span className="font-bold text-blue-400">{payload[0].value}</span>{" "}
+				leads
+			</p>
+		</div>
+	);
+}
+
+// Custom tooltip for pie/donut chart
+function PieTooltip({
+	active,
+	payload,
+}: {
+	active?: boolean;
+	payload?: Array<{ name: string; value: number; payload: { color: string } }>;
+}) {
+	if (!active || !payload?.length) return null;
+	const item = payload[0];
+	return (
+		<div className="rounded-lg border border-border bg-popover px-3 py-2 shadow-lg">
+			<div className="flex items-center gap-2">
+				<span
+					className="size-2.5 shrink-0 rounded-full"
+					style={{ backgroundColor: item.payload.color }}
+				/>
+				<p className="font-semibold text-foreground text-xs">{item.name}</p>
+			</div>
+			<p className="mt-0.5 text-muted-foreground text-xs">
+				<span className="font-bold text-foreground">{item.value}</span> leads
+			</p>
+		</div>
+	);
+}
+
+function LeadsCharts({
+	leads,
+	isLoading,
+}: { leads: Lead[]; isLoading: boolean }) {
+	const { stageData, monthlyData } = useMemo(() => {
+		// Stage distribution — attach color to each datum for the custom tooltip
+		const stageCounts: Record<string, number> = {};
+		for (const lead of leads) {
+			stageCounts[lead.stage] = (stageCounts[lead.stage] ?? 0) + 1;
+		}
+		const stageData = PIPELINE_STAGES.map((s, i) => ({
+			name: s.label,
+			value: stageCounts[s.value] ?? 0,
+			color: CHART_COLORS[i % CHART_COLORS.length],
+		})).filter((s) => s.value > 0);
+
+		// Monthly trend (last 6 months)
+		const now = new Date();
+		const months: { key: string; label: string }[] = [];
+		for (let i = 5; i >= 0; i--) {
+			const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+			months.push({
+				key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`,
+				label: d.toLocaleDateString("en", { month: "short", year: "2-digit" }),
+			});
+		}
+		const monthlyCounts: Record<string, number> = {};
+		for (const lead of leads) {
+			const d = new Date(lead.createdAt);
+			const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+			monthlyCounts[key] = (monthlyCounts[key] ?? 0) + 1;
+		}
+		const monthlyData = months.map((m) => ({
+			month: m.label,
+			leads: monthlyCounts[m.key] ?? 0,
+		}));
+
+		return { stageData, monthlyData };
+	}, [leads]);
+
+	const totalLeads = stageData.reduce((s, d) => s + d.value, 0);
+
+	if (isLoading) {
+		return (
+			<div className="grid gap-4 lg:grid-cols-3">
+				<Card className="lg:col-span-2">
+					<CardHeader className="pb-3">
+						<Skeleton className="h-4 w-40" />
+						<Skeleton className="h-3 w-56" />
+					</CardHeader>
+					<CardContent>
+						<Skeleton className="h-[200px] w-full rounded-lg" />
+					</CardContent>
+				</Card>
+				<Card>
+					<CardHeader className="pb-3">
+						<Skeleton className="h-4 w-36" />
+						<Skeleton className="h-3 w-48" />
+					</CardHeader>
+					<CardContent className="flex items-center justify-center">
+						<Skeleton className="h-[180px] w-[180px] rounded-full" />
+					</CardContent>
+				</Card>
+			</div>
+		);
+	}
+
+	if (leads.length === 0) return null;
+
+	return (
+		<div className="grid gap-4 lg:grid-cols-3">
+			{/* ── Monthly trend — area chart ── */}
+			<Card className="lg:col-span-2">
+				<CardHeader className="pb-2">
+					<div className="flex items-center gap-2">
+						<RiBarChartLine size={16} className="text-blue-400" />
+						<CardTitle className="font-semibold text-sm">
+							Monthly Lead Trend
+						</CardTitle>
+					</div>
+					<CardDescription className="text-xs">
+						Leads created over the last 6 months
+					</CardDescription>
+				</CardHeader>
+				<CardContent className="pr-4 pb-4 pl-0">
+					<ResponsiveContainer width="100%" height={210}>
+						<AreaChart
+							data={monthlyData}
+							margin={{ top: 8, right: 8, bottom: 0, left: 4 }}
+						>
+							<defs>
+								<linearGradient id="leadsGradient" x1="0" y1="0" x2="0" y2="1">
+									<stop offset="5%" stopColor="#60a5fa" stopOpacity={0.3} />
+									<stop offset="95%" stopColor="#60a5fa" stopOpacity={0.02} />
+								</linearGradient>
+							</defs>
+							<XAxis
+								dataKey="month"
+								tick={{ fontSize: 12, fill: TICK_COLOR, fontWeight: 500 }}
+								axisLine={{ stroke: "#334155" }}
+								tickLine={false}
+								dy={6}
+							/>
+							<YAxis
+								tick={{ fontSize: 12, fill: TICK_COLOR, fontWeight: 500 }}
+								axisLine={false}
+								tickLine={false}
+								allowDecimals={false}
+								width={32}
+							/>
+							{/* @ts-ignore — recharts custom tooltip */}
+							<Tooltip
+								content={<AreaTooltip />}
+								cursor={{
+									stroke: "#60a5fa",
+									strokeWidth: 1,
+									strokeDasharray: "4 4",
+								}}
+							/>
+							<Area
+								type="monotone"
+								dataKey="leads"
+								stroke="#60a5fa"
+								strokeWidth={2.5}
+								fill="url(#leadsGradient)"
+								dot={{
+									r: 4,
+									fill: "#60a5fa",
+									stroke: "#1e3a5f",
+									strokeWidth: 2,
+								}}
+								activeDot={{
+									r: 6,
+									fill: "#60a5fa",
+									stroke: "#fff",
+									strokeWidth: 2,
+								}}
+							/>
+						</AreaChart>
+					</ResponsiveContainer>
+				</CardContent>
+			</Card>
+
+			{/* ── Stage distribution — donut chart ── */}
+			<Card>
+				<CardHeader className="pb-2">
+					<CardTitle className="font-semibold text-sm">
+						Stage Distribution
+					</CardTitle>
+					<CardDescription className="text-xs">
+						Leads by pipeline stage
+					</CardDescription>
+				</CardHeader>
+				<CardContent className="pb-3">
+					{/* Donut + center label */}
+					<div className="relative">
+						<ResponsiveContainer width="100%" height={180}>
+							<PieChart>
+								<Pie
+									data={stageData}
+									cx="50%"
+									cy="50%"
+									innerRadius={54}
+									outerRadius={80}
+									paddingAngle={3}
+									dataKey="value"
+									strokeWidth={0}
+								>
+									{stageData.map((entry, idx) => (
+										<Cell key={`cell-${idx}`} fill={entry.color} />
+									))}
+								</Pie>
+								{/* @ts-ignore */}
+								<Tooltip content={<PieTooltip />} />
+							</PieChart>
+						</ResponsiveContainer>
+						{/* Center total */}
+						<div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+							<span className="font-bold text-2xl text-foreground leading-none">
+								{totalLeads}
+							</span>
+							<span className="mt-0.5 text-muted-foreground text-xs">
+								total
+							</span>
+						</div>
+					</div>
+
+					{/* Legend — all visible stages */}
+					<div className="mt-2 space-y-1.5">
+						{stageData.map((s) => {
+							const pct = totalLeads
+								? Math.round((s.value / totalLeads) * 100)
+								: 0;
+							return (
+								<div key={s.name} className="flex items-center gap-2">
+									<span
+										className="size-2.5 shrink-0 rounded-sm"
+										style={{ backgroundColor: s.color }}
+									/>
+									<span
+										className="min-w-0 flex-1 truncate font-medium text-foreground/90 text-xs"
+										title={s.name}
+									>
+										{s.name}
+									</span>
+									<span className="shrink-0 text-muted-foreground text-xs">
+										{pct}%
+									</span>
+									<span className="w-5 shrink-0 text-right font-semibold text-foreground text-xs">
+										{s.value}
+									</span>
+								</div>
+							);
+						})}
+					</div>
 				</CardContent>
 			</Card>
 		</div>
@@ -1550,11 +1878,14 @@ export default function AdminLeadsPage() {
 							<h1 className="font-bold text-2xl tracking-tight">
 								Leads Management
 							</h1>
-							<p className="mt-0.5 text-muted-foreground text-sm">
-								{isLoading
-									? "Loading all leads…"
-									: `${allLeads.length} total leads loaded · all filtering is instant`}
-							</p>
+							{isLoading ? (
+								<Skeleton className="mt-1.5 h-4 w-64" />
+							) : (
+								<p className="mt-0.5 text-muted-foreground text-sm">
+									{allLeads.length} leads loaded · filters &amp; sorting are
+									instant
+								</p>
+							)}
 						</div>
 						<div className="flex items-center gap-2">
 							<Button
@@ -1573,35 +1904,20 @@ export default function AdminLeadsPage() {
 						</div>
 					</div>
 
-					{/* Stats — computed from loaded data, zero extra requests */}
+					{/* Stats */}
 					<StatsCards leads={allLeads} isLoading={isLoading} />
 
-					{/* Filters Toolbar */}
-					<Card>
-						<CardHeader className="pb-3">
-							<div className="flex items-center gap-2">
-								<RiFilter3Line size={16} className="text-muted-foreground" />
-								<CardTitle className="font-medium text-sm">Filters</CardTitle>
-								<span className="ml-1 text-muted-foreground text-xs">
-									— instant, no network requests
-								</span>
-								{hasFilters && (
-									<Button
-										variant="ghost"
-										size="sm"
-										className="ml-auto h-6 px-2 text-xs"
-										onClick={resetFilters}
-									>
-										<RiCloseLine size={12} className="mr-1" />
-										Clear all
-									</Button>
-								)}
-							</div>
-						</CardHeader>
-						<CardContent>
-							<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+					{/* Charts */}
+					<LeadsCharts leads={allLeads} isLoading={isLoading} />
+
+					{/* Table */}
+					<Card className="overflow-hidden">
+						{/* ── Toolbar ── */}
+						<div className="flex flex-col gap-2 border-b px-4 py-3">
+							{/* Row 1: search + filters */}
+							<div className="flex flex-wrap items-center gap-2">
 								{/* Search */}
-								<div className="relative xl:col-span-2">
+								<div className="relative min-w-[220px] flex-1">
 									<RiSearchLine className="-translate-y-1/2 absolute top-1/2 left-3 size-4 text-muted-foreground" />
 									<Input
 										placeholder="Search name, email, phone, property…"
@@ -1610,139 +1926,376 @@ export default function AdminLeadsPage() {
 											setSearch(e.target.value);
 											setPage(1);
 										}}
-										className="pl-9"
+										className="h-9 pl-9 text-sm"
 									/>
 								</div>
-								{/* Agent */}
-								<Select
-									value={agentFilter}
-									onValueChange={setFilter(setAgentFilter)}
-								>
-									<SelectTrigger>
-										<SelectValue placeholder="All Agents" />
-									</SelectTrigger>
-									<SelectContent>
-										<SelectItem value="__all__">All Agents</SelectItem>
-										<SelectItem value="__unassigned__">
-											— Unassigned —
-										</SelectItem>
-										{agents.map((a) => (
-											<SelectItem key={a.agentId} value={a.agentId}>
-												{a.agentName ?? a.agentEmail}
-											</SelectItem>
-										))}
-									</SelectContent>
-								</Select>
-								{/* Stage */}
-								<Select
-									value={stageFilter}
-									onValueChange={setFilter(setStageFilter)}
-								>
-									<SelectTrigger>
-										<SelectValue placeholder="All Stages" />
-									</SelectTrigger>
-									<SelectContent>
-										<SelectItem value="__all__">All Stages</SelectItem>
-										{PIPELINE_STAGES.map((s) => (
-											<SelectItem key={s.value} value={s.value}>
-												{s.label}
-											</SelectItem>
-										))}
-									</SelectContent>
-								</Select>
-								{/* Status */}
-								<Select
-									value={statusFilter}
-									onValueChange={setFilter(setStatusFilter)}
-								>
-									<SelectTrigger>
-										<SelectValue placeholder="All Statuses" />
-									</SelectTrigger>
-									<SelectContent>
-										<SelectItem value="__all__">All Statuses</SelectItem>
-										{STATUS_OPTIONS.map((o) => (
-											<SelectItem key={o.value} value={o.value}>
-												{o.label}
-											</SelectItem>
-										))}
-									</SelectContent>
-								</Select>
-								{/* Type */}
-								<Select
-									value={typeFilter}
-									onValueChange={setFilter(setTypeFilter)}
-								>
-									<SelectTrigger>
-										<SelectValue placeholder="All Types" />
-									</SelectTrigger>
-									<SelectContent>
-										<SelectItem value="__all__">All Types</SelectItem>
-										{TYPE_OPTIONS.map((o) => (
-											<SelectItem key={o.value} value={o.value}>
-												{o.label}
-											</SelectItem>
-										))}
-									</SelectContent>
-								</Select>
-							</div>
-						</CardContent>
-					</Card>
 
-					{/* Bulk Actions Bar */}
-					{selectedIds.size > 0 && (
-						<div className="flex items-center gap-3 rounded-lg border bg-muted/40 px-4 py-2.5 text-sm">
-							<RiCheckboxMultipleLine size={16} className="text-primary" />
-							<span className="font-medium">
-								{selectedIds.size} lead(s) selected
-							</span>
-							<div className="ml-auto flex gap-2">
-								<Button
-									size="sm"
-									variant="outline"
-									onClick={() => setIsBulkStageOpen(true)}
-								>
-									Update Stage
-								</Button>
-								<Button
-									size="sm"
-									variant="ghost"
-									onClick={() => setSelectedIds(new Set())}
-								>
-									<RiCloseLine size={14} className="mr-1" />
-									Deselect
-								</Button>
+								{/* Divider */}
+								<div className="hidden h-6 w-px bg-border sm:block" />
+
+								{/* Filter dropdowns */}
+								<div className="flex flex-wrap items-center gap-2">
+									<Select
+										value={agentFilter}
+										onValueChange={setFilter(setAgentFilter)}
+									>
+										<SelectTrigger className="h-9 w-[130px] text-xs">
+											<RiUserLine
+												size={13}
+												className="mr-1.5 shrink-0 text-muted-foreground"
+											/>
+											<SelectValue placeholder="Agent" />
+										</SelectTrigger>
+										<SelectContent>
+											<SelectItem value="__all__">All Agents</SelectItem>
+											<SelectItem value="__unassigned__">Unassigned</SelectItem>
+											{agents.map((a) => (
+												<SelectItem key={a.agentId} value={a.agentId}>
+													{a.agentName ?? a.agentEmail}
+												</SelectItem>
+											))}
+										</SelectContent>
+									</Select>
+
+									<Select
+										value={stageFilter}
+										onValueChange={setFilter(setStageFilter)}
+									>
+										<SelectTrigger className="h-9 w-[140px] text-xs">
+											<SelectValue placeholder="Stage" />
+										</SelectTrigger>
+										<SelectContent>
+											<SelectItem value="__all__">All Stages</SelectItem>
+											{PIPELINE_STAGES.map((s) => (
+												<SelectItem key={s.value} value={s.value}>
+													{s.label}
+												</SelectItem>
+											))}
+										</SelectContent>
+									</Select>
+
+									<Select
+										value={statusFilter}
+										onValueChange={setFilter(setStatusFilter)}
+									>
+										<SelectTrigger className="h-9 w-[120px] text-xs">
+											<SelectValue placeholder="Status" />
+										</SelectTrigger>
+										<SelectContent>
+											<SelectItem value="__all__">All Statuses</SelectItem>
+											{STATUS_OPTIONS.map((o) => (
+												<SelectItem key={o.value} value={o.value}>
+													{o.label}
+												</SelectItem>
+											))}
+										</SelectContent>
+									</Select>
+
+									<Select
+										value={typeFilter}
+										onValueChange={setFilter(setTypeFilter)}
+									>
+										<SelectTrigger className="h-9 w-[110px] text-xs">
+											<SelectValue placeholder="Type" />
+										</SelectTrigger>
+										<SelectContent>
+											<SelectItem value="__all__">All Types</SelectItem>
+											{TYPE_OPTIONS.map((o) => (
+												<SelectItem key={o.value} value={o.value}>
+													{o.label}
+												</SelectItem>
+											))}
+										</SelectContent>
+									</Select>
+
+									<Select
+										value={leadTypeFilter}
+										onValueChange={setFilter(setLeadTypeFilter)}
+									>
+										<SelectTrigger className="h-9 w-[120px] text-xs">
+											<SelectValue placeholder="Lead Type" />
+										</SelectTrigger>
+										<SelectContent>
+											<SelectItem value="__all__">All Lead Types</SelectItem>
+											{LEAD_TYPE_OPTIONS.map((o) => (
+												<SelectItem key={o.value} value={o.value}>
+													{o.label}
+												</SelectItem>
+											))}
+										</SelectContent>
+									</Select>
+
+									{hasFilters && (
+										<Button
+											variant="ghost"
+											size="sm"
+											className="h-9 gap-1.5 text-muted-foreground text-xs hover:text-foreground"
+											onClick={resetFilters}
+										>
+											<RiCloseLine size={13} />
+											Clear filters
+										</Button>
+									)}
+								</div>
+							</div>
+
+							{/* Row 2: active filter chips + result count + bulk actions */}
+							<div className="flex items-center justify-between gap-2">
+								<div className="flex flex-wrap items-center gap-1.5">
+									{agentFilter !== "__all__" && (
+										<span className="inline-flex items-center gap-1 rounded-md border bg-muted/60 px-2 py-0.5 text-xs">
+											Agent:{" "}
+											<span className="font-medium">
+												{agentFilter === "__unassigned__"
+													? "Unassigned"
+													: (agents.find((a) => a.agentId === agentFilter)
+															?.agentName ?? agentFilter)}
+											</span>
+											<button
+												type="button"
+												onClick={() => {
+													setAgentFilter("__all__");
+													setPage(1);
+												}}
+												className="ml-0.5 rounded-sm opacity-60 hover:opacity-100"
+											>
+												<RiCloseLine size={11} />
+											</button>
+										</span>
+									)}
+									{stageFilter !== "__all__" && (
+										<span className="inline-flex items-center gap-1 rounded-md border bg-muted/60 px-2 py-0.5 text-xs">
+											Stage:{" "}
+											<span className="font-medium">
+												{stageMap[stageFilter]?.label ?? stageFilter}
+											</span>
+											<button
+												type="button"
+												onClick={() => {
+													setStageFilter("__all__");
+													setPage(1);
+												}}
+												className="ml-0.5 rounded-sm opacity-60 hover:opacity-100"
+											>
+												<RiCloseLine size={11} />
+											</button>
+										</span>
+									)}
+									{statusFilter !== "__all__" && (
+										<span className="inline-flex items-center gap-1 rounded-md border bg-muted/60 px-2 py-0.5 text-xs">
+											Status:{" "}
+											<span className="font-medium capitalize">
+												{statusFilter}
+											</span>
+											<button
+												type="button"
+												onClick={() => {
+													setStatusFilter("__all__");
+													setPage(1);
+												}}
+												className="ml-0.5 rounded-sm opacity-60 hover:opacity-100"
+											>
+												<RiCloseLine size={11} />
+											</button>
+										</span>
+									)}
+									{typeFilter !== "__all__" && (
+										<span className="inline-flex items-center gap-1 rounded-md border bg-muted/60 px-2 py-0.5 text-xs">
+											Type:{" "}
+											<span className="font-medium capitalize">
+												{typeFilter}
+											</span>
+											<button
+												type="button"
+												onClick={() => {
+													setTypeFilter("__all__");
+													setPage(1);
+												}}
+												className="ml-0.5 rounded-sm opacity-60 hover:opacity-100"
+											>
+												<RiCloseLine size={11} />
+											</button>
+										</span>
+									)}
+									{leadTypeFilter !== "__all__" && (
+										<span className="inline-flex items-center gap-1 rounded-md border bg-muted/60 px-2 py-0.5 text-xs">
+											Lead Type:{" "}
+											<span className="font-medium capitalize">
+												{leadTypeFilter}
+											</span>
+											<button
+												type="button"
+												onClick={() => {
+													setLeadTypeFilter("__all__");
+													setPage(1);
+												}}
+												className="ml-0.5 rounded-sm opacity-60 hover:opacity-100"
+											>
+												<RiCloseLine size={11} />
+											</button>
+										</span>
+									)}
+									{search && (
+										<span className="inline-flex items-center gap-1 rounded-md border bg-muted/60 px-2 py-0.5 text-xs">
+											Search:{" "}
+											<span className="font-medium">
+												&ldquo;{search}&rdquo;
+											</span>
+											<button
+												type="button"
+												onClick={() => {
+													setSearch("");
+													setPage(1);
+												}}
+												className="ml-0.5 rounded-sm opacity-60 hover:opacity-100"
+											>
+												<RiCloseLine size={11} />
+											</button>
+										</span>
+									)}
+								</div>
+
+								{/* Right side: count + bulk */}
+								<div className="flex shrink-0 items-center gap-2">
+									{selectedIds.size > 0 && (
+										<>
+											<span className="flex items-center gap-1.5 text-muted-foreground text-xs">
+												<RiCheckboxMultipleLine
+													size={13}
+													className="text-primary"
+												/>
+												<span className="font-medium text-foreground">
+													{selectedIds.size}
+												</span>{" "}
+												selected
+											</span>
+											<Button
+												size="sm"
+												variant="outline"
+												className="h-7 text-xs"
+												onClick={() => setIsBulkStageOpen(true)}
+											>
+												Update Stage
+											</Button>
+											<Button
+												size="sm"
+												variant="ghost"
+												className="h-7 text-xs"
+												onClick={() => setSelectedIds(new Set())}
+											>
+												<RiCloseLine size={13} className="mr-1" />
+												Deselect
+											</Button>
+											<div className="h-4 w-px bg-border" />
+										</>
+									)}
+									<span className="text-muted-foreground text-xs">
+										{isLoading ? (
+											"Loading…"
+										) : totalFiltered === allLeads.length ? (
+											<>
+												Total leads:{" "}
+												<span className="font-medium text-foreground">
+													{totalFiltered}
+												</span>
+											</>
+										) : (
+											<>
+												<span className="font-medium text-foreground">
+													{totalFiltered}
+												</span>{" "}
+												of {allLeads.length} leads
+											</>
+										)}
+									</span>
+								</div>
 							</div>
 						</div>
-					)}
-
-					{/* Table */}
-					<Card className="overflow-hidden">
-						<CardHeader className="pb-3">
-							<div className="flex items-center justify-between">
-								<CardTitle className="font-medium text-sm">
-									{isLoading
-										? "Loading…"
-										: totalFiltered === allLeads.length
-											? `${totalFiltered} leads`
-											: `${totalFiltered} of ${allLeads.length} leads (filtered)`}
-								</CardTitle>
-								<p className="text-muted-foreground text-xs">
-									Click column headers to sort
-								</p>
-							</div>
-						</CardHeader>
 						<CardContent className="p-0">
 							{isLoading ? (
-								<div className="flex flex-col items-center justify-center gap-3 py-16">
-									<RiLoader4Line className="size-8 animate-spin text-primary" />
-									<p className="text-muted-foreground text-sm">
-										Loading all leads…
-									</p>
+								<div className="overflow-x-auto">
+									<Table>
+										<TableHeader>
+											<TableRow className="hover:bg-transparent">
+												<TableHead className="w-10 pl-4">
+													<Skeleton className="h-4 w-4 rounded" />
+												</TableHead>
+												<TableHead>
+													<Skeleton className="h-3.5 w-12" />
+												</TableHead>
+												<TableHead className="hidden md:table-cell">
+													<Skeleton className="h-3.5 w-16" />
+												</TableHead>
+												<TableHead className="hidden lg:table-cell">
+													<Skeleton className="h-3.5 w-16" />
+												</TableHead>
+												<TableHead>
+													<Skeleton className="h-3.5 w-12" />
+												</TableHead>
+												<TableHead>
+													<Skeleton className="h-3.5 w-14" />
+												</TableHead>
+												<TableHead>
+													<Skeleton className="h-3.5 w-12" />
+												</TableHead>
+												<TableHead className="hidden xl:table-cell">
+													<Skeleton className="h-3.5 w-10" />
+												</TableHead>
+												<TableHead>
+													<Skeleton className="h-3.5 w-16" />
+												</TableHead>
+												<TableHead className="w-[100px]" />
+											</TableRow>
+										</TableHeader>
+										<TableBody>
+											{[...Array(8)].map((_, i) => (
+												<TableRow key={i} className="hover:bg-transparent">
+													<TableCell className="pl-4">
+														<Skeleton className="h-4 w-4 rounded" />
+													</TableCell>
+													<TableCell>
+														<Skeleton className="mb-1 h-4 w-28" />
+														<Skeleton className="h-3 w-36 md:hidden" />
+													</TableCell>
+													<TableCell className="hidden md:table-cell">
+														<Skeleton className="mb-1 h-3.5 w-36" />
+														<Skeleton className="h-3 w-24" />
+													</TableCell>
+													<TableCell className="hidden lg:table-cell">
+														<Skeleton className="h-3.5 w-28" />
+													</TableCell>
+													<TableCell>
+														<Skeleton className="h-5 w-24 rounded-full" />
+													</TableCell>
+													<TableCell>
+														<Skeleton className="h-5 w-16 rounded-full" />
+													</TableCell>
+													<TableCell>
+														<Skeleton className="h-3.5 w-20" />
+													</TableCell>
+													<TableCell className="hidden xl:table-cell">
+														<Skeleton className="mb-1 h-3 w-12" />
+														<Skeleton className="h-3 w-16" />
+													</TableCell>
+													<TableCell>
+														<Skeleton className="h-3.5 w-16" />
+													</TableCell>
+													<TableCell className="w-[100px] pr-4">
+														<div className="flex justify-center gap-1">
+															<Skeleton className="h-7 w-7 rounded" />
+															<Skeleton className="h-7 w-7 rounded" />
+															<Skeleton className="h-7 w-7 rounded" />
+														</div>
+													</TableCell>
+												</TableRow>
+											))}
+										</TableBody>
+									</Table>
 								</div>
 							) : visibleLeads.length === 0 ? (
 								<div className="flex flex-col items-center justify-center py-16 text-center">
-									<RiUserLine className="mb-3 size-12 text-muted-foreground/40" />
-									<p className="font-medium">No leads match your filters</p>
+									<RiUserLine className="mb-3 size-12 text-muted-foreground/30" />
+									<p className="font-medium">No leads found</p>
 									<p className="mt-1 text-muted-foreground text-sm">
 										{allLeads.length === 0
 											? "Create your first lead to get started."
@@ -1763,8 +2316,8 @@ export default function AdminLeadsPage() {
 								<div className="overflow-x-auto">
 									<Table>
 										<TableHeader>
-											<TableRow>
-												<TableHead className="w-10">
+											<TableRow className="hover:bg-transparent">
+												<TableHead className="w-10 pl-4">
 													<input
 														type="checkbox"
 														checked={allSelected}
@@ -1816,18 +2369,18 @@ export default function AdminLeadsPage() {
 													order={sortOrder}
 													onSort={handleSort}
 												/>
-												<TableHead className="text-right">Actions</TableHead>
+												<TableHead className="w-[100px] pr-4 text-center">
+													Actions
+												</TableHead>
 											</TableRow>
 										</TableHeader>
 										<TableBody>
 											{visibleLeads.map((lead) => (
 												<TableRow
 													key={lead.id}
-													className={
-														selectedIds.has(lead.id) ? "bg-muted/40" : ""
-													}
+													className={`transition-colors ${selectedIds.has(lead.id) ? "bg-muted/50" : "hover:bg-muted/30"}`}
 												>
-													<TableCell>
+													<TableCell className="pl-4">
 														<input
 															type="checkbox"
 															checked={selectedIds.has(lead.id)}
@@ -1836,20 +2389,18 @@ export default function AdminLeadsPage() {
 														/>
 													</TableCell>
 													<TableCell>
-														<div>
-															<p className="font-medium text-sm">{lead.name}</p>
-															<p className="text-muted-foreground text-xs md:hidden">
-																{lead.email}
-															</p>
-														</div>
+														<p className="font-medium text-sm leading-snug">
+															{lead.name}
+														</p>
+														<p className="text-muted-foreground text-xs md:hidden">
+															{lead.email}
+														</p>
 													</TableCell>
 													<TableCell className="hidden md:table-cell">
-														<div className="text-sm">
-															<p>{lead.email}</p>
-															<p className="text-muted-foreground text-xs">
-																{lead.phone}
-															</p>
-														</div>
+														<p className="text-sm">{lead.email}</p>
+														<p className="text-muted-foreground text-xs">
+															{lead.phone}
+														</p>
 													</TableCell>
 													<TableCell className="hidden lg:table-cell">
 														<p
@@ -1891,22 +2442,20 @@ export default function AdminLeadsPage() {
 														)}
 													</TableCell>
 													<TableCell className="hidden xl:table-cell">
-														<div className="space-y-0.5 text-xs">
-															<p className="capitalize">{lead.type}</p>
-															<p className="text-muted-foreground capitalize">
-																{lead.leadType}
-															</p>
-														</div>
+														<p className="text-xs capitalize">{lead.type}</p>
+														<p className="text-muted-foreground text-xs capitalize">
+															{lead.leadType}
+														</p>
 													</TableCell>
 													<TableCell className="whitespace-nowrap text-muted-foreground text-xs">
 														{new Date(lead.createdAt).toLocaleDateString()}
 													</TableCell>
-													<TableCell className="text-right">
-														<div className="flex items-center justify-end gap-1">
+													<TableCell className="w-[100px] pr-4">
+														<div className="flex items-center justify-center gap-0.5">
 															<Button
 																variant="ghost"
 																size="sm"
-																className="h-7 w-7 p-0"
+																className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
 																title="View details"
 																onClick={() => setViewLead(lead)}
 															>
@@ -1915,7 +2464,7 @@ export default function AdminLeadsPage() {
 															<Button
 																variant="ghost"
 																size="sm"
-																className="h-7 w-7 p-0"
+																className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
 																title="Edit lead"
 																onClick={() => setEditLead(lead)}
 															>
@@ -1924,7 +2473,7 @@ export default function AdminLeadsPage() {
 															<Button
 																variant="ghost"
 																size="sm"
-																className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+																className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
 																title="Delete lead"
 																onClick={() => setDeleteLead(lead)}
 															>
