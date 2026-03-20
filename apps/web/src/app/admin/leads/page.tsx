@@ -78,6 +78,7 @@ import { LeadsCharts } from "./_components/leads-charts";
 import { SortHeader } from "./_components/sort-header";
 import { StatsCards } from "./_components/stats-cards";
 import { TodayTasksWidget } from "./_components/today-tasks-widget";
+import { KanbanPipelineBoard } from "./_components/kanban-pipeline-board";
 
 export default function AdminLeadsPage() {
 	const router = useRouter();
@@ -95,6 +96,7 @@ export default function AdminLeadsPage() {
 	const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
 	const [page, setPage] = useState(1);
 	const [pageSize, setPageSize] = useState(10);
+	const [viewMode, setViewMode] = useState<"table" | "kanban">("table");
 
 	// ── Dialogs ────────────────────────────────────────────────────────────
 	const [viewLead, setViewLead] = useState<Lead | null>(null);
@@ -110,6 +112,7 @@ export default function AdminLeadsPage() {
 	const {
 		data: rawData,
 		isLoading,
+		isFetching,
 		refetch,
 	} = trpc.adminLeads.list.useQuery(
 		{ limit: 5000, page: 1 }, // fetch entire dataset in one shot
@@ -143,7 +146,7 @@ export default function AdminLeadsPage() {
 
 	// ── All filtering + sorting + pagination via useMemo ────────────────────
 	// Runs entirely in memory — instant, no network round-trips
-	const { visibleLeads, totalFiltered } = useMemo(() => {
+	const { visibleLeads, totalFiltered, kanbanLeads } = useMemo(() => {
 		const q = search.toLowerCase().trim();
 
 		// 1. Filter
@@ -199,12 +202,13 @@ export default function AdminLeadsPage() {
 		});
 
 		const totalFiltered = filtered.length;
+		const kanbanLeads = filtered;
 
 		// 3. Paginate
 		const start = (page - 1) * pageSize;
 		const visibleLeads = filtered.slice(start, start + pageSize);
 
-		return { visibleLeads, totalFiltered };
+		return { visibleLeads, totalFiltered, kanbanLeads };
 	}, [
 		allLeads,
 		search,
@@ -249,9 +253,8 @@ export default function AdminLeadsPage() {
 		agentFilter !== "__all__";
 
 	const handleRefresh = () => {
-		refetch();
-		queryClient.invalidateQueries({ queryKey: [["adminLeads"]] });
 		setSelectedIds(new Set());
+		void refetch();
 	};
 
 	// Selection
@@ -344,18 +347,68 @@ export default function AdminLeadsPage() {
 								</p>
 							)}
 						</div>
-						<div className="flex items-center gap-2">
+						<div className="flex flex-wrap items-center justify-end gap-2">
+							{/* Refresh */}
 							<Button
 								variant="outline"
 								size="sm"
 								onClick={handleRefresh}
-								disabled={isLoading}
+								disabled={isLoading || isFetching}
+								className="h-9 gap-1.5 transition-colors"
 							>
-								<RiRefreshLine size={16} className="mr-1.5" />
-								Refresh
+								{isLoading || isFetching ? (
+									<RiLoader4Line className="size-4 animate-spin" aria-hidden="true" />
+								) : (
+									<RiRefreshLine size={16} className="mr-0.5" aria-hidden="true" />
+								)}
+								<span>Refresh</span>
 							</Button>
-							<Button size="sm" onClick={() => setIsCreateOpen(true)}>
-								<RiAddLine size={16} className="mr-1.5" />
+
+							{/* Segmented Table / Kanban */}
+							<div className="inline-flex items-center rounded-md border bg-background p-1">
+								<Button
+									variant="outline"
+									size="sm"
+									aria-pressed={viewMode === "table"}
+									onClick={() => {
+										setViewMode("table");
+										setSelectedIds(new Set());
+									}}
+									className={[
+										"h-9 rounded-l-md rounded-none border-0 px-3 transition-colors",
+										viewMode === "table"
+											? "bg-primary text-primary-foreground hover:bg-primary/90"
+											: "bg-transparent text-muted-foreground hover:text-foreground",
+									].join(" ")}
+								>
+									Table
+								</Button>
+								<Button
+									variant="outline"
+									size="sm"
+									aria-pressed={viewMode === "kanban"}
+									onClick={() => {
+										setViewMode("kanban");
+										setSelectedIds(new Set());
+									}}
+									className={[
+										"h-9 rounded-none border-0 px-3 transition-colors",
+										(viewMode === "kanban"
+											? "bg-primary text-primary-foreground hover:bg-primary/90"
+											: "bg-transparent text-muted-foreground hover:text-foreground") + " rounded-r-md",
+									].join(" ")}
+								>
+									Kanban
+								</Button>
+							</div>
+
+							{/* New Lead */}
+							<Button
+								size="sm"
+								onClick={() => setIsCreateOpen(true)}
+								className="h-9 transition-colors"
+							>
+								<RiAddLine size={16} className="mr-1.5" aria-hidden="true" />
 								New Lead
 							</Button>
 						</div>
@@ -677,6 +730,7 @@ export default function AdminLeadsPage() {
 							</div>
 						</div>
 						<CardContent className="p-0">
+							<div className={viewMode === "table" ? "" : "hidden"}>
 							{isLoading ? (
 								<div className="overflow-x-auto">
 									<Table>
@@ -1136,6 +1190,40 @@ export default function AdminLeadsPage() {
 									</div>
 								</div>
 							)}
+							</div>
+							<div className={viewMode === "kanban" ? "p-4" : "hidden"}>
+								{isLoading ? (
+									<div className="flex items-center justify-center py-12">
+										<RiLoader4Line className="size-8 animate-spin text-primary" />
+									</div>
+								) : kanbanLeads.length === 0 ? (
+									<div className="flex flex-col items-center justify-center py-16 text-center">
+										<RiUserLine className="mb-3 size-12 text-muted-foreground/30" />
+										<p className="font-medium">No leads found</p>
+										<p className="mt-1 text-muted-foreground text-sm">
+											{allLeads.length === 0
+												? "Create your first lead to get started."
+												: "Try adjusting or clearing your filters."}
+										</p>
+										{hasFilters && (
+											<Button
+												variant="link"
+												size="sm"
+												className="mt-2"
+												onClick={resetFilters}
+											>
+												Clear filters
+											</Button>
+										)}
+									</div>
+								) : (
+									<KanbanPipelineBoard
+										leads={kanbanLeads}
+										onViewLead={(lead) => setViewLead(lead)}
+										onRefresh={handleRefresh}
+									/>
+								)}
+							</div>
 						</CardContent>
 					</Card>
 				</div>
