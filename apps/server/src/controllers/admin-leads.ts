@@ -8,12 +8,16 @@ import {
 	addNoteToLeadAdmin,
 	assignLeadAdmin,
 	bulkUpdateLeadsStageAdmin,
+	checkLeadDuplicateAdmin,
 	createLeadAdmin,
 	deleteLeadAdmin,
 	getAgentsWithLeads,
 	getAllLeadsAdmin,
+	getLeadActivityAdmin,
 	getLeadByIdAdmin,
 	getLeadsStatsAdmin,
+	logCallForLeadAdmin,
+	logEmailForLeadAdmin,
 	updateLeadAdmin,
 } from "../services/leads";
 import { adminProcedure, router } from "../utils/trpc";
@@ -64,6 +68,26 @@ const adminAddNoteInput = z.object({
 	content: z.string().min(1, "Note content is required"),
 });
 
+const adminLogCallInput = z.object({
+	leadId: z.string().uuid(),
+	content: z.string().min(1, "Call description is required"),
+});
+
+const adminLogEmailInput = z.object({
+	leadId: z.string().uuid(),
+	content: z.string().min(1, "Email description is required"),
+});
+
+const adminGetTimelineInput = z.object({
+	leadId: z.string().uuid(),
+});
+
+const adminCheckDuplicateInput = z.object({
+	email: z.string().email(),
+	phone: z.string().min(1),
+	excludeId: z.string().uuid().optional(), // pass when editing an existing lead
+});
+
 // ─── Admin Leads Router ────────────────────────────────────────────────────────
 
 export const adminLeadsRouter = router({
@@ -98,13 +122,40 @@ export const adminLeadsRouter = router({
 	}),
 
 	/**
+	 * Check if an email or phone is already used by another lead.
+	 * Used for real-time duplicate validation in create/edit forms.
+	 */
+	checkDuplicate: adminProcedure
+		.input(adminCheckDuplicateInput)
+		.query(async ({ input }) => {
+			return await checkLeadDuplicateAdmin(
+				input.email,
+				input.phone,
+				input.excludeId,
+			);
+		}),
+
+	/**
+	 * Get the full activity timeline for a lead (newest first)
+	 */
+	getTimeline: adminProcedure
+		.input(adminGetTimelineInput)
+		.query(async ({ input }) => {
+			return await getLeadActivityAdmin(input.leadId);
+		}),
+
+	/**
 	 * Create a new lead (admin can specify agentId directly)
 	 */
 	create: adminProcedure
 		.input(adminCreateLeadInput)
-		.mutation(async ({ input }) => {
+		.mutation(async ({ input, ctx }) => {
 			const { tagIds, ...rest } = input;
-			return await createLeadAdmin({ ...rest, tagIds });
+			return await createLeadAdmin({
+				...rest,
+				tagIds,
+				_actorId: ctx.session.user.id,
+			});
 		}),
 
 	/**
@@ -112,9 +163,13 @@ export const adminLeadsRouter = router({
 	 */
 	update: adminProcedure
 		.input(adminUpdateLeadInput)
-		.mutation(async ({ input }) => {
+		.mutation(async ({ input, ctx }) => {
 			const { id, tagIds, ...fields } = input;
-			return await updateLeadAdmin(id, { ...fields, tagIds });
+			return await updateLeadAdmin(id, {
+				...fields,
+				tagIds,
+				_actorId: ctx.session.user.id,
+			});
 		}),
 
 	/**
@@ -131,8 +186,12 @@ export const adminLeadsRouter = router({
 	 */
 	assign: adminProcedure
 		.input(adminAssignLeadInput)
-		.mutation(async ({ input }) => {
-			return await assignLeadAdmin(input.id, input.agentId);
+		.mutation(async ({ input, ctx }) => {
+			return await assignLeadAdmin(
+				input.id,
+				input.agentId,
+				ctx.session.user.id,
+			);
 		}),
 
 	/**
@@ -155,5 +214,33 @@ export const adminLeadsRouter = router({
 				input.content,
 				ctx.session.user.id,
 			);
+		}),
+
+	/**
+	 * Log a call interaction for a lead
+	 */
+	logCall: adminProcedure
+		.input(adminLogCallInput)
+		.mutation(async ({ input, ctx }) => {
+			await logCallForLeadAdmin(
+				input.leadId,
+				input.content,
+				ctx.session.user.id,
+			);
+			return { success: true };
+		}),
+
+	/**
+	 * Log an email interaction for a lead
+	 */
+	logEmail: adminProcedure
+		.input(adminLogEmailInput)
+		.mutation(async ({ input, ctx }) => {
+			await logEmailForLeadAdmin(
+				input.leadId,
+				input.content,
+				ctx.session.user.id,
+			);
+			return { success: true };
 		}),
 });

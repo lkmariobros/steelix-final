@@ -71,13 +71,18 @@ import {
 	RiDashboardLine,
 	RiDeleteBinLine,
 	RiEditLine,
+	RiErrorWarningLine,
 	RiEyeLine,
 	RiFileList3Line,
 	RiFilter3Line,
+	RiHistoryLine,
 	RiLoader4Line,
+	RiMailLine,
+	RiPhoneLine,
 	RiRefreshLine,
 	RiSearchLine,
 	RiShieldUserLine,
+	RiStickyNoteLine,
 	RiUserLine,
 } from "@remixicon/react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -247,6 +252,73 @@ function StatusBadge({ status }: { status: string }) {
 	);
 }
 
+// ─── Activity Timeline Helpers ─────────────────────────────────────────────────
+
+type ActivityEventType =
+	| "note_added"
+	| "stage_changed"
+	| "lead_assigned"
+	| "lead_updated"
+	| "call_logged"
+	| "email_sent";
+
+const ACTIVITY_CONFIG: Record<
+	ActivityEventType,
+	{ icon: React.ReactNode; label: string; color: string; dotColor: string }
+> = {
+	note_added: {
+		icon: <RiStickyNoteLine className="size-3.5" />,
+		label: "Note Added",
+		color: "bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300",
+		dotColor: "bg-blue-400",
+	},
+	stage_changed: {
+		icon: <RiHistoryLine className="size-3.5" />,
+		label: "Stage Changed",
+		color:
+			"bg-purple-50 text-purple-700 dark:bg-purple-900/20 dark:text-purple-300",
+		dotColor: "bg-purple-400",
+	},
+	lead_assigned: {
+		icon: <RiUserLine className="size-3.5" />,
+		label: "Assigned",
+		color:
+			"bg-orange-50 text-orange-700 dark:bg-orange-900/20 dark:text-orange-300",
+		dotColor: "bg-orange-400",
+	},
+	lead_updated: {
+		icon: <RiEditLine className="size-3.5" />,
+		label: "Details Updated",
+		color: "bg-gray-50 text-gray-700 dark:bg-gray-900/20 dark:text-gray-300",
+		dotColor: "bg-gray-400",
+	},
+	call_logged: {
+		icon: <RiPhoneLine className="size-3.5" />,
+		label: "Call Logged",
+		color:
+			"bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-300",
+		dotColor: "bg-green-400",
+	},
+	email_sent: {
+		icon: <RiMailLine className="size-3.5" />,
+		label: "Email Sent",
+		color: "bg-teal-50 text-teal-700 dark:bg-teal-900/20 dark:text-teal-300",
+		dotColor: "bg-teal-400",
+	},
+};
+
+function ActivityEventIcon({ type }: { type: ActivityEventType }) {
+	const cfg = ACTIVITY_CONFIG[type] ?? ACTIVITY_CONFIG.lead_updated;
+	return (
+		<span
+			className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-medium text-xs ${cfg.color}`}
+		>
+			{cfg.icon}
+			{cfg.label}
+		</span>
+	);
+}
+
 // ─── Lead Detail Sheet ─────────────────────────────────────────────────────────
 
 function LeadDetailSheet({
@@ -267,20 +339,60 @@ function LeadDetailSheet({
 	onRefresh: () => void;
 }) {
 	const queryClient = useQueryClient();
-	const [noteContent, setNoteContent] = useState("");
+
+	// Input state for the three action types
+	const [activeInput, setActiveInput] = useState<
+		"note" | "call" | "email" | null
+	>(null);
+	const [inputContent, setInputContent] = useState("");
 	const [newStage, setNewStage] = useState<string>("");
 	const [assignAgentId, setAssignAgentId] = useState<string>("");
+
+	const invalidate = () => {
+		queryClient.invalidateQueries({ queryKey: [["adminLeads", "get"]] });
+		queryClient.invalidateQueries({
+			queryKey: [["adminLeads", "getTimeline"]],
+		});
+	};
 
 	const { data: detail, isLoading } = trpc.adminLeads.get.useQuery(
 		{ id: lead?.id ?? "" },
 		{ enabled: !!lead?.id && open, staleTime: 0 },
 	);
 
+	const { data: timeline, isLoading: timelineLoading } =
+		trpc.adminLeads.getTimeline.useQuery(
+			{ leadId: lead?.id ?? "" },
+			{ enabled: !!lead?.id && open, staleTime: 0 },
+		);
+
 	const addNoteMutation = trpc.adminLeads.addNote.useMutation({
 		onSuccess: () => {
 			toast.success("Note added");
-			setNoteContent("");
-			queryClient.invalidateQueries({ queryKey: [["adminLeads", "get"]] });
+			setInputContent("");
+			setActiveInput(null);
+			invalidate();
+		},
+		onError: (e) => toast.error(e.message),
+	});
+
+	const logCallMutation = trpc.adminLeads.logCall.useMutation({
+		onSuccess: () => {
+			toast.success("Call logged");
+			setInputContent("");
+			setActiveInput(null);
+			invalidate();
+			onRefresh();
+		},
+		onError: (e) => toast.error(e.message),
+	});
+
+	const logEmailMutation = trpc.adminLeads.logEmail.useMutation({
+		onSuccess: () => {
+			toast.success("Email logged");
+			setInputContent("");
+			setActiveInput(null);
+			invalidate();
 		},
 		onError: (e) => toast.error(e.message),
 	});
@@ -289,7 +401,7 @@ function LeadDetailSheet({
 		onSuccess: () => {
 			toast.success("Stage updated");
 			onRefresh();
-			queryClient.invalidateQueries({ queryKey: [["adminLeads", "get"]] });
+			invalidate();
 		},
 		onError: (e) => toast.error(e.message),
 	});
@@ -298,7 +410,7 @@ function LeadDetailSheet({
 		onSuccess: () => {
 			toast.success("Lead reassigned");
 			onRefresh();
-			queryClient.invalidateQueries({ queryKey: [["adminLeads", "get"]] });
+			invalidate();
 		},
 		onError: (e) => toast.error(e.message),
 	});
@@ -314,6 +426,52 @@ function LeadDetailSheet({
 		}
 	};
 
+	const formatDateTime = (d: Date | string) => {
+		try {
+			const dt = new Date(d);
+			return dt.toLocaleString(undefined, {
+				month: "short",
+				day: "numeric",
+				year: "numeric",
+				hour: "2-digit",
+				minute: "2-digit",
+			});
+		} catch {
+			return "—";
+		}
+	};
+
+	const handleSubmitAction = () => {
+		if (!inputContent.trim() || !lead) return;
+		if (activeInput === "note") {
+			addNoteMutation.mutate({ leadId: lead.id, content: inputContent.trim() });
+		} else if (activeInput === "call") {
+			logCallMutation.mutate({ leadId: lead.id, content: inputContent.trim() });
+		} else if (activeInput === "email") {
+			logEmailMutation.mutate({
+				leadId: lead.id,
+				content: inputContent.trim(),
+			});
+		}
+	};
+
+	const isSubmitting =
+		addNoteMutation.isPending ||
+		logCallMutation.isPending ||
+		logEmailMutation.isPending;
+
+	const actionLabels: Record<"note" | "call" | "email", string> = {
+		note: "Note",
+		call: "Call Summary",
+		email: "Email Summary",
+	};
+
+	const actionPlaceholders: Record<"note" | "call" | "email", string> = {
+		note: "Add a note about this lead…",
+		call: 'e.g. "Called John, interested in Unit 12A, will follow up Friday"',
+		email: 'e.g. "Sent brochure for Breeze Hill — awaiting reply"',
+	};
+
 	return (
 		<Sheet open={open} onOpenChange={(v) => !v && onClose()}>
 			<SheetContent className="w-full overflow-y-auto sm:max-w-2xl">
@@ -323,7 +481,7 @@ function LeadDetailSheet({
 						{lead.name}
 					</SheetTitle>
 					<SheetDescription>
-						Lead details, notes, and management actions
+						Lead details, activity timeline, and management actions
 					</SheetDescription>
 				</SheetHeader>
 
@@ -333,6 +491,7 @@ function LeadDetailSheet({
 					</div>
 				) : (
 					<div className="space-y-6">
+						{/* Contact Info */}
 						<Card>
 							<CardHeader className="pb-3">
 								<CardTitle className="text-sm">Contact Info</CardTitle>
@@ -383,6 +542,7 @@ function LeadDetailSheet({
 							</CardContent>
 						</Card>
 
+						{/* Pipeline Stage */}
 						<Card>
 							<CardHeader className="pb-3">
 								<CardTitle className="text-sm">Pipeline Stage</CardTitle>
@@ -432,6 +592,7 @@ function LeadDetailSheet({
 							</CardContent>
 						</Card>
 
+						{/* Assign to Agent */}
 						<Card>
 							<CardHeader className="pb-3">
 								<CardTitle className="text-sm">Assign to Agent</CardTitle>
@@ -481,6 +642,7 @@ function LeadDetailSheet({
 							</CardContent>
 						</Card>
 
+						{/* Tags */}
 						{lead.tagNames.length > 0 && (
 							<Card>
 								<CardHeader className="pb-3">
@@ -496,53 +658,166 @@ function LeadDetailSheet({
 							</Card>
 						)}
 
+						{/* ── Activity Timeline ── */}
 						<Card>
 							<CardHeader className="pb-3">
-								<CardTitle className="text-sm">Notes</CardTitle>
+								<div className="flex items-center justify-between">
+									<CardTitle className="flex items-center gap-2 text-sm">
+										<RiHistoryLine className="size-4" />
+										Activity Timeline
+									</CardTitle>
+									{timeline && timeline.length > 0 && (
+										<span className="text-muted-foreground text-xs">
+											{timeline.length} event
+											{timeline.length !== 1 ? "s" : ""}
+										</span>
+									)}
+								</div>
+								<CardDescription className="text-xs">
+									Every touchpoint with this lead, newest first
+								</CardDescription>
 							</CardHeader>
-							<CardContent className="space-y-3">
-								{detail?.notes && detail.notes.length > 0 ? (
-									<div className="max-h-60 space-y-2 overflow-y-auto pr-1">
-										{detail.notes.map((note) => (
-											<div
-												key={note.id}
-												className="rounded-md border bg-muted/30 p-3 text-sm"
-											>
-												<p className="mb-1 font-medium text-muted-foreground text-xs">
-													{note.agentName} ·{" "}
-													{new Date(note.createdAt).toLocaleString()}
-												</p>
-												<p className="whitespace-pre-line">{note.content}</p>
-											</div>
-										))}
-									</div>
-								) : (
-									<p className="text-muted-foreground text-sm">No notes yet.</p>
-								)}
-								<div className="space-y-2 border-t pt-2">
-									<Textarea
-										placeholder="Add a note…"
-										value={noteContent}
-										onChange={(e) => setNoteContent(e.target.value)}
-										rows={3}
-										className="resize-none"
-									/>
+							<CardContent className="space-y-4">
+								{/* Quick-log action buttons */}
+								<div className="flex flex-wrap gap-2">
 									<Button
 										size="sm"
-										disabled={!noteContent.trim() || addNoteMutation.isPending}
+										variant={activeInput === "note" ? "default" : "outline"}
+										className="h-8 gap-1.5 text-xs"
 										onClick={() =>
-											addNoteMutation.mutate({
-												leadId: lead.id,
-												content: noteContent.trim(),
-											})
+											setActiveInput(activeInput === "note" ? null : "note")
 										}
 									>
-										{addNoteMutation.isPending && (
-											<RiLoader4Line className="mr-1 size-4 animate-spin" />
-										)}
+										<RiStickyNoteLine className="size-3.5" />
 										Add Note
 									</Button>
+									<Button
+										size="sm"
+										variant={activeInput === "call" ? "default" : "outline"}
+										className="h-8 gap-1.5 text-xs"
+										onClick={() =>
+											setActiveInput(activeInput === "call" ? null : "call")
+										}
+									>
+										<RiPhoneLine className="size-3.5" />
+										Log Call
+									</Button>
+									<Button
+										size="sm"
+										variant={activeInput === "email" ? "default" : "outline"}
+										className="h-8 gap-1.5 text-xs"
+										onClick={() =>
+											setActiveInput(activeInput === "email" ? null : "email")
+										}
+									>
+										<RiMailLine className="size-3.5" />
+										Log Email
+									</Button>
 								</div>
+
+								{/* Expandable text input */}
+								{activeInput && (
+									<div className="space-y-2 rounded-md border bg-muted/30 p-3">
+										<p className="font-medium text-xs">
+											{actionLabels[activeInput]}
+										</p>
+										<Textarea
+											placeholder={actionPlaceholders[activeInput]}
+											value={inputContent}
+											onChange={(e) => setInputContent(e.target.value)}
+											rows={3}
+											className="resize-none bg-background"
+											autoFocus
+										/>
+										<div className="flex gap-2">
+											<Button
+												size="sm"
+												disabled={!inputContent.trim() || isSubmitting}
+												onClick={handleSubmitAction}
+											>
+												{isSubmitting ? (
+													<RiLoader4Line className="mr-1 size-4 animate-spin" />
+												) : null}
+												Save {actionLabels[activeInput]}
+											</Button>
+											<Button
+												size="sm"
+												variant="ghost"
+												onClick={() => {
+													setActiveInput(null);
+													setInputContent("");
+												}}
+											>
+												Cancel
+											</Button>
+										</div>
+									</div>
+								)}
+
+								{/* Timeline feed */}
+								{timelineLoading ? (
+									<div className="flex items-center justify-center py-6">
+										<RiLoader4Line className="size-5 animate-spin text-muted-foreground" />
+									</div>
+								) : timeline && timeline.length > 0 ? (
+									<div className="relative space-y-0">
+										{/* Vertical connector line */}
+										<div className="absolute top-2 bottom-2 left-3.5 w-px bg-border" />
+										<div className="space-y-4">
+											{timeline.map((event) => {
+												const cfg =
+													ACTIVITY_CONFIG[
+														event.eventType as ActivityEventType
+													] ?? ACTIVITY_CONFIG.lead_updated;
+												return (
+													<div key={event.id} className="relative flex gap-3">
+														{/* Dot */}
+														<div
+															className={`relative z-10 mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full border-2 border-background ${cfg.dotColor}`}
+														>
+															<span className="text-white [&>svg]:size-3">
+																{cfg.icon}
+															</span>
+														</div>
+														{/* Content */}
+														<div className="flex-1 pb-1">
+															<div className="flex flex-wrap items-center gap-2">
+																<ActivityEventIcon
+																	type={event.eventType as ActivityEventType}
+																/>
+																<span className="text-muted-foreground text-xs">
+																	by{" "}
+																	<span className="font-medium text-foreground">
+																		{event.actorName}
+																	</span>
+																</span>
+															</div>
+															{event.content && (
+																<p className="mt-1.5 whitespace-pre-line text-sm leading-relaxed">
+																	{event.content}
+																</p>
+															)}
+															<p className="mt-1 text-muted-foreground text-xs">
+																{formatDateTime(event.createdAt)}
+															</p>
+														</div>
+													</div>
+												);
+											})}
+										</div>
+									</div>
+								) : (
+									<div className="flex flex-col items-center gap-2 py-8 text-center">
+										<RiHistoryLine className="size-8 text-muted-foreground/40" />
+										<p className="text-muted-foreground text-sm">
+											No activity yet
+										</p>
+										<p className="text-muted-foreground text-xs">
+											Add a note, log a call, or change the stage to start the
+											timeline
+										</p>
+									</div>
+								)}
 							</CardContent>
 						</Card>
 					</div>
@@ -584,6 +859,36 @@ function EditLeadDialog({
 		agentId: "",
 	});
 
+	// Debounced values for duplicate check
+	const [debouncedEmail, setDebouncedEmail] = useState("");
+	const [debouncedPhone, setDebouncedPhone] = useState("");
+
+	useEffect(() => {
+		const t = setTimeout(() => setDebouncedEmail(form.email.trim()), 500);
+		return () => clearTimeout(t);
+	}, [form.email]);
+
+	useEffect(() => {
+		const t = setTimeout(() => setDebouncedPhone(form.phone.trim()), 500);
+		return () => clearTimeout(t);
+	}, [form.phone]);
+
+	const isValidEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(debouncedEmail);
+	const isValidPhone = debouncedPhone.length >= 8;
+
+	// excludeId = this lead's own ID — so its own email/phone don't flag as duplicate
+	const { data: dupeCheck, isFetching: dupeChecking } =
+		trpc.adminLeads.checkDuplicate.useQuery(
+			{
+				email: debouncedEmail,
+				phone: debouncedPhone,
+				excludeId: lead?.id,
+			},
+			{ enabled: !!lead?.id && isValidEmail && isValidPhone, staleTime: 3000 },
+		);
+
+	const hasDuplicate = !!(dupeCheck?.emailTaken || dupeCheck?.phoneTaken);
+
 	const updateMutation = trpc.adminLeads.update.useMutation({
 		onSuccess: () => {
 			toast.success("Lead updated successfully");
@@ -608,6 +913,9 @@ function EditLeadDialog({
 				leadType: lead.leadType,
 				agentId: lead.agentId ?? "__unassigned__",
 			});
+			// Seed debounced values immediately so the check runs on open
+			setDebouncedEmail(lead.email.trim());
+			setDebouncedPhone(lead.phone.trim());
 		}
 	}, [open, lead?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -631,13 +939,49 @@ function EditLeadDialog({
 						<Label htmlFor="edit-name">Name</Label>
 						<Input id="edit-name" value={form.name} onChange={f("name")} />
 					</div>
+					{/* Email with duplicate check */}
 					<div className="space-y-1.5">
 						<Label htmlFor="edit-email">Email</Label>
-						<Input id="edit-email" value={form.email} onChange={f("email")} />
+						<div className="relative">
+							<Input
+								id="edit-email"
+								value={form.email}
+								onChange={f("email")}
+								className={
+									dupeCheck?.emailTaken
+										? "border-destructive pr-8 focus-visible:ring-destructive"
+										: ""
+								}
+							/>
+							{dupeChecking && isValidEmail && (
+								<RiLoader4Line className="absolute top-2.5 right-2.5 size-4 animate-spin text-muted-foreground" />
+							)}
+						</div>
+						{dupeCheck?.emailTaken && (
+							<DupeError name={dupeCheck.emailConflictName} />
+						)}
 					</div>
+					{/* Phone with duplicate check */}
 					<div className="space-y-1.5">
 						<Label htmlFor="edit-phone">Phone</Label>
-						<Input id="edit-phone" value={form.phone} onChange={f("phone")} />
+						<div className="relative">
+							<Input
+								id="edit-phone"
+								value={form.phone}
+								onChange={f("phone")}
+								className={
+									dupeCheck?.phoneTaken
+										? "border-destructive pr-8 focus-visible:ring-destructive"
+										: ""
+								}
+							/>
+							{dupeChecking && isValidPhone && (
+								<RiLoader4Line className="absolute top-2.5 right-2.5 size-4 animate-spin text-muted-foreground" />
+							)}
+						</div>
+						{dupeCheck?.phoneTaken && (
+							<DupeError name={dupeCheck.phoneConflictName} />
+						)}
 					</div>
 					<div className="space-y-1.5">
 						<Label htmlFor="edit-source">Source</Label>
@@ -759,12 +1103,30 @@ function EditLeadDialog({
 						</Select>
 					</div>
 				</div>
+
+				{/* Summary banner when duplicates detected */}
+				{hasDuplicate && (
+					<div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2.5 text-destructive text-sm">
+						<RiErrorWarningLine className="mt-0.5 size-4 shrink-0" />
+						<span>
+							Cannot save — the{" "}
+							{[
+								dupeCheck?.emailTaken && "email",
+								dupeCheck?.phoneTaken && "phone number",
+							]
+								.filter(Boolean)
+								.join(" and ")}{" "}
+							already belong to another lead.
+						</span>
+					</div>
+				)}
+
 				<DialogFooter>
 					<Button variant="outline" onClick={onClose}>
 						Cancel
 					</Button>
 					<Button
-						disabled={updateMutation.isPending}
+						disabled={updateMutation.isPending || hasDuplicate || dupeChecking}
 						onClick={() =>
 							updateMutation.mutate({
 								id: lead.id,
@@ -842,6 +1204,17 @@ function DeleteLeadDialog({
 	);
 }
 
+// ─── Duplicate Field Error ─────────────────────────────────────────────────────
+
+function DupeError({ name }: { name: string | null }) {
+	return (
+		<p className="flex items-center gap-1 text-destructive text-xs">
+			<RiErrorWarningLine className="size-3.5 shrink-0" />
+			Already used by <strong>{name}</strong>
+		</p>
+	);
+}
+
 // ─── Create Lead Dialog ────────────────────────────────────────────────────────
 
 function CreateLeadDialog({
@@ -873,11 +1246,37 @@ function CreateLeadDialog({
 	};
 
 	const [form, setForm] = useState(emptyForm);
+	// Debounced values used for the duplicate query (500 ms delay)
+	const [debouncedEmail, setDebouncedEmail] = useState("");
+	const [debouncedPhone, setDebouncedPhone] = useState("");
+
+	useEffect(() => {
+		const t = setTimeout(() => setDebouncedEmail(form.email.trim()), 500);
+		return () => clearTimeout(t);
+	}, [form.email]);
+
+	useEffect(() => {
+		const t = setTimeout(() => setDebouncedPhone(form.phone.trim()), 500);
+		return () => clearTimeout(t);
+	}, [form.phone]);
+
+	const isValidEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(debouncedEmail);
+	const isValidPhone = debouncedPhone.length >= 8;
+
+	const { data: dupeCheck, isFetching: dupeChecking } =
+		trpc.adminLeads.checkDuplicate.useQuery(
+			{ email: debouncedEmail, phone: debouncedPhone },
+			{ enabled: isValidEmail && isValidPhone, staleTime: 3000 },
+		);
+
+	const hasDuplicate = !!(dupeCheck?.emailTaken || dupeCheck?.phoneTaken);
 
 	const createMutation = trpc.adminLeads.create.useMutation({
 		onSuccess: () => {
 			toast.success("Lead created successfully");
 			setForm(emptyForm);
+			setDebouncedEmail("");
+			setDebouncedPhone("");
 			onSuccess();
 			onClose();
 		},
@@ -891,6 +1290,8 @@ function CreateLeadDialog({
 	const handleClose = () => {
 		onClose();
 		setForm(emptyForm);
+		setDebouncedEmail("");
+		setDebouncedPhone("");
 	};
 
 	return (
@@ -917,23 +1318,51 @@ function CreateLeadDialog({
 							placeholder="Full name"
 						/>
 					</div>
+					{/* Email with duplicate check */}
 					<div className="space-y-1.5">
 						<Label htmlFor="create-email">Email *</Label>
-						<Input
-							id="create-email"
-							value={form.email}
-							onChange={f("email")}
-							placeholder="email@example.com"
-						/>
+						<div className="relative">
+							<Input
+								id="create-email"
+								value={form.email}
+								onChange={f("email")}
+								placeholder="email@example.com"
+								className={
+									dupeCheck?.emailTaken
+										? "border-destructive pr-8 focus-visible:ring-destructive"
+										: ""
+								}
+							/>
+							{dupeChecking && isValidEmail && (
+								<RiLoader4Line className="absolute top-2.5 right-2.5 size-4 animate-spin text-muted-foreground" />
+							)}
+						</div>
+						{dupeCheck?.emailTaken && (
+							<DupeError name={dupeCheck.emailConflictName} />
+						)}
 					</div>
+					{/* Phone with duplicate check */}
 					<div className="space-y-1.5">
 						<Label htmlFor="create-phone">Phone *</Label>
-						<Input
-							id="create-phone"
-							value={form.phone}
-							onChange={f("phone")}
-							placeholder="+60 12-345 6789"
-						/>
+						<div className="relative">
+							<Input
+								id="create-phone"
+								value={form.phone}
+								onChange={f("phone")}
+								placeholder="+60 12-345 6789"
+								className={
+									dupeCheck?.phoneTaken
+										? "border-destructive pr-8 focus-visible:ring-destructive"
+										: ""
+								}
+							/>
+							{dupeChecking && isValidPhone && (
+								<RiLoader4Line className="absolute top-2.5 right-2.5 size-4 animate-spin text-muted-foreground" />
+							)}
+						</div>
+						{dupeCheck?.phoneTaken && (
+							<DupeError name={dupeCheck.phoneConflictName} />
+						)}
 					</div>
 					<div className="space-y-1.5">
 						<Label htmlFor="create-source">Source *</Label>
@@ -1057,6 +1486,24 @@ function CreateLeadDialog({
 						</Select>
 					</div>
 				</div>
+
+				{/* Summary banner when duplicates detected */}
+				{hasDuplicate && (
+					<div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2.5 text-destructive text-sm">
+						<RiErrorWarningLine className="mt-0.5 size-4 shrink-0" />
+						<span>
+							This lead cannot be saved — the{" "}
+							{[
+								dupeCheck?.emailTaken && "email",
+								dupeCheck?.phoneTaken && "phone number",
+							]
+								.filter(Boolean)
+								.join(" and ")}{" "}
+							already exist in the system.
+						</span>
+					</div>
+				)}
+
 				<DialogFooter>
 					<Button variant="outline" onClick={handleClose}>
 						Cancel
@@ -1064,6 +1511,8 @@ function CreateLeadDialog({
 					<Button
 						disabled={
 							createMutation.isPending ||
+							hasDuplicate ||
+							dupeChecking ||
 							!form.name ||
 							!form.email ||
 							!form.phone ||
