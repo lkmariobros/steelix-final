@@ -42,8 +42,15 @@ export function MonthlyPerformance({ dateRange }: MonthlyPerformanceProps) {
 				</CardHeader>
 				<CardContent>
 					<div className="space-y-2">
-						{Array.from({ length: 6 }).map((_, i) => (
-							<div key={i} className="flex items-center justify-between py-2">
+						{[
+							"sk-mp-1",
+							"sk-mp-2",
+							"sk-mp-3",
+							"sk-mp-4",
+							"sk-mp-5",
+							"sk-mp-6",
+						].map((id) => (
+							<div key={id} className="flex items-center justify-between py-2">
 								<Skeleton className="h-4 w-20" />
 								<div className="flex items-center gap-4">
 									<div className="space-y-1 text-right">

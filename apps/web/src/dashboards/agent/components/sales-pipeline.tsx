@@ -63,8 +63,15 @@ export function SalesPipeline() {
 				<CardContent className="space-y-4">
 					{/* Pipeline Status Skeleton */}
 					<div className="grid grid-cols-2 gap-4 md:grid-cols-3">
-						{Array.from({ length: 6 }).map((_, i) => (
-							<div key={i} className="space-y-2">
+						{[
+							"sk-sp-1",
+							"sk-sp-2",
+							"sk-sp-3",
+							"sk-sp-4",
+							"sk-sp-5",
+							"sk-sp-6",
+						].map((id) => (
+							<div key={id} className="space-y-2">
 								<Skeleton className="h-4 w-20" />
 								<Skeleton className="h-6 w-12" />
 								<Skeleton className="h-3 w-16" />
@@ -75,9 +82,9 @@ export function SalesPipeline() {
 					{/* Active Transactions Skeleton */}
 					<div className="space-y-3">
 						<Skeleton className="h-5 w-32" />
-						{Array.from({ length: 3 }).map((_, i) => (
+						{["sk-sat-1", "sk-sat-2", "sk-sat-3"].map((id) => (
 							<div
-								key={i}
+								key={id}
 								className="flex items-center justify-between rounded-lg border p-3"
 							>
 								<div className="space-y-1">

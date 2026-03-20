@@ -2,7 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ArrowLeft, ArrowRight, Mail, Phone, User } from "lucide-react";
-import { useEffect } from "react";
+import { useCallback, useEffect } from "react";
 import { useForm } from "react-hook-form";
 
 import { Button } from "@/components/ui/button";
@@ -71,12 +71,12 @@ export function StepClient({
 	});
 
 	// Auto-save on form changes (moved before useEffect to fix ReferenceError)
-	const handleFormChange = () => {
+	const handleFormChange = useCallback(() => {
 		const values = form.getValues();
 		if (form.formState.isValid) {
 			onUpdate(values);
 		}
-	};
+	}, [form, onUpdate]);
 
 	const handleSubmit = (formData: ClientData) => {
 		onUpdate(formData);

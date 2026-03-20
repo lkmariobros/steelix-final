@@ -61,9 +61,9 @@ export function UrgentTasksPanel({ className }: UrgentTasksPanelProps) {
 				</CardHeader>
 				<CardContent>
 					<div className="space-y-4">
-						{Array.from({ length: 4 }).map((_, i) => (
+						{["sk-ut-1", "sk-ut-2", "sk-ut-3", "sk-ut-4"].map((id) => (
 							<div
-								key={i}
+								key={id}
 								className="flex items-start gap-3 rounded-lg border p-3"
 							>
 								<Skeleton className="mt-1 h-4 w-4" />

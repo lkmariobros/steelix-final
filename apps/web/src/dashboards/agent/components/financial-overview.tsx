@@ -27,8 +27,8 @@ export function FinancialOverview() {
 			<div className="space-y-4">
 				<h2 className="font-semibold text-lg">Financial Overview</h2>
 				<div className="grid grid-cols-2 rounded-xl border border-border bg-gradient-to-br from-sidebar/60 to-sidebar min-[1200px]:grid-cols-4">
-					{Array.from({ length: 4 }).map((_, i) => (
-						<div key={`fin-sk-${i}`} className="p-4 lg:p-5">
+					{["fin-sk-1", "fin-sk-2", "fin-sk-3", "fin-sk-4"].map((id) => (
+						<div key={id} className="p-4 lg:p-5">
 							<div className="flex items-center gap-4">
 								<Skeleton className="size-10 rounded-full" />
 								<div className="space-y-2">

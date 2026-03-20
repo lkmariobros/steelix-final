@@ -718,16 +718,19 @@ export default function AdminCalendarPage() {
 												)}
 											</div>
 											<div className="grid grid-cols-7">
-												{[...Array(35)].map((_, i) => (
+												{Array.from({ length: 35 }, (_, n) => ({
+													id: `sk-day-${n}`,
+													n,
+												})).map(({ id, n }) => (
 													<div
-														key={i}
+														key={id}
 														className="min-h-[100px] border-r border-b p-2 last:border-r-0"
 													>
 														<Skeleton className="mb-2 h-5 w-5 rounded-full" />
-														{i % 5 === 0 && (
+														{n % 5 === 0 && (
 															<Skeleton className="h-5 w-full rounded" />
 														)}
-														{i % 7 === 2 && (
+														{n % 7 === 2 && (
 															<Skeleton className="mt-1 h-5 w-4/5 rounded" />
 														)}
 													</div>
@@ -834,7 +837,7 @@ export default function AdminCalendarPage() {
 														end: calendarEnd,
 													});
 
-													return days.map((day, index) => {
+													return days.map((day) => {
 														const dateKey = format(day, "yyyy-MM-dd");
 														const dayEvents = eventsByDate.get(dateKey) || [];
 														const isCurrentMonth = isSameMonth(
@@ -845,13 +848,18 @@ export default function AdminCalendarPage() {
 
 														return (
 															<div
-																key={index}
+																key={dateKey}
 																className={`min-h-[120px] border-r border-b p-2 last:border-r-0 ${
 																	!isCurrentMonth
 																		? "bg-muted/30"
 																		: "bg-background"
 																} ${isAdmin ? "cursor-pointer transition-colors hover:bg-muted/50" : ""}`}
 																onClick={() => isAdmin && handleDayClick(day)}
+																onKeyDown={(e) => {
+																	if (e.key === "Enter" || e.key === " ") {
+																		isAdmin && handleDayClick(day);
+																	}
+																}}
 															>
 																<div className="mb-1 flex items-center justify-between">
 																	<span
@@ -874,6 +882,17 @@ export default function AdminCalendarPage() {
 																				e.stopPropagation();
 																				if (isAdmin) {
 																					handleEditEvent(event);
+																				}
+																			}}
+																			onKeyDown={(e) => {
+																				if (
+																					e.key === "Enter" ||
+																					e.key === " "
+																				) {
+																					e.stopPropagation();
+																					if (isAdmin) {
+																						handleEditEvent(event);
+																					}
 																				}
 																			}}
 																			className={`cursor-pointer truncate rounded p-1.5 text-xs ${getEventTypeColor(
@@ -912,8 +931,8 @@ export default function AdminCalendarPage() {
 						<div className="space-y-4">
 							{isLoadingAnnouncements ? (
 								<>
-									{[...Array(3)].map((_, i) => (
-										<Card key={i}>
+									{["sk-1", "sk-2", "sk-3"].map((id) => (
+										<Card key={id}>
 											<CardHeader>
 												<div className="flex items-start justify-between">
 													<div className="flex items-center gap-2">

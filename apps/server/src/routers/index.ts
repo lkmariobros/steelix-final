@@ -1,6 +1,5 @@
 import { adminRouter } from "../controllers/admin";
 import { adminLeadsRouter } from "../controllers/admin-leads";
-import { leadTasksRouter } from "../controllers/lead-tasks";
 import { agentTiersRouter } from "../controllers/agent-tiers";
 import { agentsRouter } from "../controllers/agents";
 import { approvalsRouter } from "../controllers/approvals";
@@ -10,6 +9,7 @@ import { crmRouter } from "../controllers/crm";
 import { dashboardRouter } from "../controllers/dashboard";
 import { documentsRouter } from "../controllers/documents";
 import { feedbackRouter } from "../controllers/feedback";
+import { leadTasksRouter } from "../controllers/lead-tasks";
 import { reportsRouter } from "../controllers/reports";
 import { tagsRouter } from "../controllers/tags";
 import { transactionsRouter } from "../controllers/transactions";

@@ -178,9 +178,11 @@ export async function createLeadTask(
 	if (!row) throw new Error("Failed to create task");
 
 	// Fetch with name joins so the returned object is complete
-	return (await getTasksForLead(input.prospectId)).find(
+	const created = (await getTasksForLead(input.prospectId)).find(
 		(t) => t.id === row.id,
-	)!;
+	);
+	if (!created) throw new Error("Task not found after creation");
+	return created;
 }
 
 /**
@@ -264,10 +266,9 @@ export async function completeLeadTask(
  * Delete a task permanently.
  */
 export async function deleteLeadTask(id: string): Promise<{ success: true }> {
-	const res = await pool.query(
-		`DELETE FROM public.lead_tasks WHERE id = $1`,
-		[id],
-	);
+	const res = await pool.query("DELETE FROM public.lead_tasks WHERE id = $1", [
+		id,
+	]);
 
 	if (res.rowCount === 0) throw new Error("Task not found");
 	return { success: true };

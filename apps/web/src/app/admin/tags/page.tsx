@@ -326,8 +326,17 @@ export default function AdminTagsPage() {
 											</TableRow>
 										</TableHeader>
 										<TableBody>
-											{[...Array(8)].map((_, i) => (
-												<TableRow key={i} className="hover:bg-transparent">
+											{[
+												"sk-1",
+												"sk-2",
+												"sk-3",
+												"sk-4",
+												"sk-5",
+												"sk-6",
+												"sk-7",
+												"sk-8",
+											].map((id) => (
+												<TableRow key={id} className="hover:bg-transparent">
 													<TableCell>
 														<Skeleton className="h-4 w-4 rounded" />
 													</TableCell>

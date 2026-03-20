@@ -30,8 +30,8 @@ export function TransactionOverview() {
 				</CardHeader>
 				<CardContent className="space-y-6">
 					<div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-						{Array.from({ length: 4 }).map((_, i) => (
-							<div key={i} className="space-y-2 rounded-lg border p-3">
+						{["sk-to-1", "sk-to-2", "sk-to-3", "sk-to-4"].map((id) => (
+							<div key={id} className="space-y-2 rounded-lg border p-3">
 								<Skeleton className="h-3 w-20" />
 								<Skeleton className="h-6 w-16" />
 							</div>
@@ -39,8 +39,8 @@ export function TransactionOverview() {
 					</div>
 					<div className="space-y-3">
 						<Skeleton className="h-5 w-32" />
-						{Array.from({ length: 4 }).map((_, i) => (
-							<div key={i} className="flex items-center justify-between">
+						{["sk-tot-1", "sk-tot-2", "sk-tot-3", "sk-tot-4"].map((id) => (
+							<div key={id} className="flex items-center justify-between">
 								<div className="flex items-center gap-3">
 									<Skeleton className="h-6 w-24" />
 									<Skeleton className="h-4 w-8" />

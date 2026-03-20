@@ -37,19 +37,21 @@ export function TeamLeaderboard() {
 				</CardHeader>
 				<CardContent>
 					<div className="space-y-4">
-						{Array.from({ length: 5 }).map((_, i) => (
-							<div key={i} className="flex items-center gap-3">
-								<Skeleton className="size-8 rounded-full" />
-								<div className="flex-1 space-y-1">
-									<Skeleton className="h-4 w-32" />
-									<Skeleton className="h-3 w-24" />
+						{["sk-tl-1", "sk-tl-2", "sk-tl-3", "sk-tl-4", "sk-tl-5"].map(
+							(id) => (
+								<div key={id} className="flex items-center gap-3">
+									<Skeleton className="size-8 rounded-full" />
+									<div className="flex-1 space-y-1">
+										<Skeleton className="h-4 w-32" />
+										<Skeleton className="h-3 w-24" />
+									</div>
+									<div className="space-y-1 text-right">
+										<Skeleton className="h-4 w-20" />
+										<Skeleton className="h-3 w-16" />
+									</div>
 								</div>
-								<div className="space-y-1 text-right">
-									<Skeleton className="h-4 w-20" />
-									<Skeleton className="h-3 w-16" />
-								</div>
-							</div>
-						))}
+							),
+						)}
 					</div>
 				</CardContent>
 			</Card>

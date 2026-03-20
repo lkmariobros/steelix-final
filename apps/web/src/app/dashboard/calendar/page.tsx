@@ -717,23 +717,34 @@ export default function CalendarPage() {
 										{/* Calendar grid skeleton */}
 										<div className="overflow-hidden rounded-lg border">
 											<div className="grid grid-cols-7 border-b bg-muted/50">
-												{Array.from({ length: 7 }).map((_, i) => (
-													<div key={i} className="border-r p-3 last:border-r-0">
+												{[
+													"sk-ch-0",
+													"sk-ch-1",
+													"sk-ch-2",
+													"sk-ch-3",
+													"sk-ch-4",
+													"sk-ch-5",
+													"sk-ch-6",
+												].map((id) => (
+													<div
+														key={id}
+														className="border-r p-3 last:border-r-0"
+													>
 														<Skeleton className="mx-auto h-4 w-8" />
 													</div>
 												))}
 											</div>
 											<div className="grid grid-cols-7">
-												{Array.from({ length: 35 }).map((_, i) => (
+												{Array.from({ length: 35 }, (_, i) => i).map((n) => (
 													<div
-														key={i}
+														key={`sk-cd-${n}`}
 														className="min-h-[100px] border-r border-b p-2 last:border-r-0"
 													>
 														<Skeleton className="mb-1 h-5 w-5 rounded-full" />
-														{i % 5 === 0 && (
+														{n % 5 === 0 && (
 															<Skeleton className="mt-1 h-5 w-full rounded" />
 														)}
-														{i % 7 === 2 && (
+														{n % 7 === 2 && (
 															<Skeleton className="mt-1 h-5 w-4/5 rounded" />
 														)}
 													</div>
@@ -840,7 +851,7 @@ export default function CalendarPage() {
 														end: calendarEnd,
 													});
 
-													return days.map((day, index) => {
+													return days.map((day) => {
 														const dateKey = format(day, "yyyy-MM-dd");
 														const dayEvents = eventsByDate.get(dateKey) || [];
 														const isCurrentMonth = isSameMonth(
@@ -851,13 +862,18 @@ export default function CalendarPage() {
 
 														return (
 															<div
-																key={index}
+																key={dateKey}
 																className={`min-h-[120px] border-r border-b p-2 last:border-r-0 ${
 																	!isCurrentMonth
 																		? "bg-muted/30"
 																		: "bg-background"
 																} ${isAdmin ? "cursor-pointer transition-colors hover:bg-muted/50" : ""}`}
 																onClick={() => isAdmin && handleDayClick(day)}
+																onKeyDown={(e) => {
+																	if (e.key === "Enter" || e.key === " ") {
+																		if (isAdmin) handleDayClick(day);
+																	}
+																}}
 															>
 																<div className="mb-1 flex items-center justify-between">
 																	<span
@@ -882,6 +898,19 @@ export default function CalendarPage() {
 																					handleEditEvent(event);
 																				} else {
 																					handleViewEvent(event);
+																				}
+																			}}
+																			onKeyDown={(e) => {
+																				if (
+																					e.key === "Enter" ||
+																					e.key === " "
+																				) {
+																					e.stopPropagation();
+																					if (isAdmin) {
+																						handleEditEvent(event);
+																					} else {
+																						handleViewEvent(event);
+																					}
 																				}
 																			}}
 																			className={`cursor-pointer truncate rounded p-1.5 text-xs ${getEventTypeColor(
@@ -919,8 +948,8 @@ export default function CalendarPage() {
 					{viewMode === "announcements" && (
 						<div className="space-y-4">
 							{isLoadingAnnouncements ? (
-								Array.from({ length: 3 }).map((_, i) => (
-									<Card key={i}>
+								["sk-an-1", "sk-an-2", "sk-an-3"].map((id) => (
+									<Card key={id}>
 										<CardHeader>
 											<div className="flex items-start justify-between">
 												<div className="flex items-center gap-2">

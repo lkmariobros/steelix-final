@@ -212,8 +212,8 @@ export default function AdminAgentsPage() {
 					{/* Agent Summary Cards */}
 					{isLoadingStats ? (
 						<div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-							{[...Array(4)].map((_, i) => (
-								<Card key={i} className="overflow-hidden">
+							{["sk-a1", "sk-a2", "sk-a3", "sk-a4"].map((id) => (
+								<Card key={id} className="overflow-hidden">
 									<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
 										<Skeleton className="h-3.5 w-24" />
 										<Skeleton className="h-4 w-4 rounded" />
@@ -308,9 +308,9 @@ export default function AdminAgentsPage() {
 							<CardContent>
 								{isLoadingAgents ? (
 									<div className="space-y-3">
-										{[...Array(5)].map((_, i) => (
+										{["sk-b1", "sk-b2", "sk-b3", "sk-b4", "sk-b5"].map((id) => (
 											<div
-												key={`skeleton-${i}`}
+												key={id}
 												className="flex items-center justify-between rounded-lg border p-4"
 											>
 												<div className="flex items-center gap-3">

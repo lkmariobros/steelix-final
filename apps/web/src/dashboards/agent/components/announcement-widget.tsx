@@ -118,6 +118,10 @@ export function AnnouncementWidget({ className }: AnnouncementWidgetProps) {
 								key={announcement.id}
 								className="cursor-pointer rounded-lg border bg-muted/30 p-3 transition-colors hover:bg-muted/50"
 								onClick={() => router.push("/dashboard/calendar")}
+								onKeyDown={(e) => {
+									if (e.key === "Enter" || e.key === " ")
+										router.push("/dashboard/calendar");
+								}}
 							>
 								<div className="mb-2 flex items-start justify-between gap-2">
 									<div className="flex min-w-0 flex-1 items-center gap-2">

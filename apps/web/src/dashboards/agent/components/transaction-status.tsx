@@ -66,8 +66,15 @@ export function TransactionStatus() {
 					<CardTitle>Transaction Status</CardTitle>
 				</CardHeader>
 				<CardContent className="space-y-4">
-					{Array.from({ length: 6 }).map((_, i) => (
-						<div key={i} className="flex items-center justify-between">
+					{[
+						"sk-ts-1",
+						"sk-ts-2",
+						"sk-ts-3",
+						"sk-ts-4",
+						"sk-ts-5",
+						"sk-ts-6",
+					].map((id) => (
+						<div key={id} className="flex items-center justify-between">
 							<div className="flex items-center gap-3">
 								<Skeleton className="h-6 w-20" />
 								<Skeleton className="h-4 w-8" />

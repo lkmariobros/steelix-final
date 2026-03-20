@@ -131,19 +131,21 @@ export function RecentTransactions({ limit = 10 }: RecentTransactionsProps) {
 				</CardHeader>
 				<CardContent>
 					<div className="space-y-4">
-						{Array.from({ length: 5 }).map((_, i) => (
-							<div key={i} className="flex items-center gap-3">
-								<Skeleton className="size-10 rounded-full" />
-								<div className="flex-1 space-y-1">
-									<Skeleton className="h-4 w-48" />
-									<Skeleton className="h-3 w-32" />
+						{["sk-rt-1", "sk-rt-2", "sk-rt-3", "sk-rt-4", "sk-rt-5"].map(
+							(id) => (
+								<div key={id} className="flex items-center gap-3">
+									<Skeleton className="size-10 rounded-full" />
+									<div className="flex-1 space-y-1">
+										<Skeleton className="h-4 w-48" />
+										<Skeleton className="h-3 w-32" />
+									</div>
+									<div className="space-y-1 text-right">
+										<Skeleton className="h-4 w-20" />
+										<Skeleton className="h-3 w-16" />
+									</div>
 								</div>
-								<div className="space-y-1 text-right">
-									<Skeleton className="h-4 w-20" />
-									<Skeleton className="h-3 w-16" />
-								</div>
-							</div>
-						))}
+							),
+						)}
 					</div>
 				</CardContent>
 			</Card>

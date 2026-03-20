@@ -360,9 +360,17 @@ export default function WhatsAppPage() {
 							<div className="flex flex-col">
 								{isLoadingConversations ? (
 									<div className="flex flex-col">
-										{Array.from({ length: 7 }).map((_, i) => (
+										{[
+											"sk-wc-1",
+											"sk-wc-2",
+											"sk-wc-3",
+											"sk-wc-4",
+											"sk-wc-5",
+											"sk-wc-6",
+											"sk-wc-7",
+										].map((id) => (
 											<div
-												key={i}
+												key={id}
 												className="flex items-center gap-3 border-b p-4"
 											>
 												<Skeleton className="size-10 shrink-0 rounded-full" />
@@ -461,9 +469,15 @@ export default function WhatsAppPage() {
 								</div>
 								{/* Messages skeleton */}
 								<div className="flex flex-1 flex-col gap-4 p-4">
-									{[false, true, false, true, false].map((isRight, i) => (
+									{[
+										{ id: "sk-wm-1", isRight: false },
+										{ id: "sk-wm-2", isRight: true },
+										{ id: "sk-wm-3", isRight: false },
+										{ id: "sk-wm-4", isRight: true },
+										{ id: "sk-wm-5", isRight: false },
+									].map(({ id, isRight }) => (
 										<div
-											key={i}
+											key={id}
 											className={`flex ${isRight ? "justify-end" : "justify-start"}`}
 										>
 											<Skeleton

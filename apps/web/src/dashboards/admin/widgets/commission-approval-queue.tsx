@@ -161,21 +161,23 @@ export function CommissionApprovalQueue({
 				</CardHeader>
 				<CardContent>
 					<div className="space-y-4">
-						{Array.from({ length: 5 }).map((_, i) => (
-							<div
-								key={i}
-								className="flex items-center justify-between rounded-lg border p-4"
-							>
-								<div className="space-y-2">
-									<Skeleton className="h-4 w-48" />
-									<Skeleton className="h-3 w-32" />
+						{["sk-ca-1", "sk-ca-2", "sk-ca-3", "sk-ca-4", "sk-ca-5"].map(
+							(id) => (
+								<div
+									key={id}
+									className="flex items-center justify-between rounded-lg border p-4"
+								>
+									<div className="space-y-2">
+										<Skeleton className="h-4 w-48" />
+										<Skeleton className="h-3 w-32" />
+									</div>
+									<div className="flex gap-2">
+										<Skeleton className="h-8 w-20" />
+										<Skeleton className="h-8 w-20" />
+									</div>
 								</div>
-								<div className="flex gap-2">
-									<Skeleton className="h-8 w-20" />
-									<Skeleton className="h-8 w-20" />
-								</div>
-							</div>
-						))}
+							),
+						)}
 					</div>
 				</CardContent>
 			</Card>

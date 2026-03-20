@@ -607,8 +607,15 @@ export default function TransactionsPage() {
 												</TableRow>
 											</TableHeader>
 											<TableBody>
-												{Array.from({ length: 6 }).map((_, i) => (
-													<TableRow key={i}>
+												{[
+													"sk-tr-1",
+													"sk-tr-2",
+													"sk-tr-3",
+													"sk-tr-4",
+													"sk-tr-5",
+													"sk-tr-6",
+												].map((id) => (
+													<TableRow key={id}>
 														<TableCell>
 															<Skeleton className="mb-1 h-4 w-36" />
 															<Skeleton className="h-3 w-24" />

@@ -24,12 +24,6 @@ import {
 	TableRow,
 } from "@/components/table";
 import { Badge } from "@/components/ui/badge";
-import { Calendar } from "@/components/ui/calendar";
-import {
-	Popover,
-	PopoverContent,
-	PopoverTrigger,
-} from "@/components/ui/popover";
 import {
 	Breadcrumb,
 	BreadcrumbItem,
@@ -39,6 +33,7 @@ import {
 	BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
 import {
 	Card,
 	CardContent,
@@ -57,6 +52,11 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+	Popover,
+	PopoverContent,
+	PopoverTrigger,
+} from "@/components/ui/popover";
+import {
 	Select,
 	SelectContent,
 	SelectItem,
@@ -65,8 +65,8 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
-import { cn } from "@/lib/utils";
 import { authClient } from "@/lib/auth-client";
+import { cn } from "@/lib/utils";
 import { trpc } from "@/utils/trpc";
 import {
 	RiAddLine,
@@ -75,8 +75,8 @@ import {
 	RiArrowUpLine,
 	RiBarChartLine,
 	RiCalendar2Line,
-	RiCheckboxMultipleLine,
 	RiCheckLine,
+	RiCheckboxMultipleLine,
 	RiCloseLine,
 	RiDashboardLine,
 	RiDeleteBinLine,
@@ -411,13 +411,14 @@ function DateTimePicker({
 	const currentMinute = String(rawM).padStart(2, "0");
 
 	const displayValue = isValid
-		? dateObj.toLocaleDateString(undefined, {
+		? `${dateObj.toLocaleDateString(undefined, {
 				month: "short",
 				day: "numeric",
 				year: "numeric",
-			}) +
-			" · " +
-			dateObj.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+			})} · ${dateObj.toLocaleTimeString([], {
+				hour: "2-digit",
+				minute: "2-digit",
+			})}`
 		: null;
 
 	const handleDaySelect = (day: Date | undefined) => {
@@ -427,18 +428,14 @@ function DateTimePicker({
 		onChange(`${dateStr}T${timePart}`);
 	};
 
-	const applyTime = (
-		hour12: string,
-		minute: string,
-		amPm: "AM" | "PM",
-	) => {
+	const applyTime = (hour12: string, minute: string, amPm: "AM" | "PM") => {
 		let datePart = value?.split("T")[0];
 		if (!datePart) {
 			const today = new Date();
 			const pad = (n: number) => String(n).padStart(2, "0");
 			datePart = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
 		}
-		let h = parseInt(hour12, 10);
+		let h = Number.parseInt(hour12, 10);
 		if (amPm === "AM" && h === 12) h = 0;
 		else if (amPm === "PM" && h !== 12) h += 12;
 		onChange(`${datePart}T${String(h).padStart(2, "0")}:${minute}`);
@@ -474,9 +471,7 @@ function DateTimePicker({
 						{/* Hour */}
 						<Select
 							value={currentHour12}
-							onValueChange={(v) =>
-								applyTime(v, currentMinute, currentAmPm)
-							}
+							onValueChange={(v) => applyTime(v, currentMinute, currentAmPm)}
 						>
 							<SelectTrigger className="h-8 w-[4.5rem] text-xs">
 								<SelectValue />
@@ -495,9 +490,7 @@ function DateTimePicker({
 						{/* Minute */}
 						<Select
 							value={currentMinute}
-							onValueChange={(v) =>
-								applyTime(currentHour12, v, currentAmPm)
-							}
+							onValueChange={(v) => applyTime(currentHour12, v, currentAmPm)}
 						>
 							<SelectTrigger className="h-8 w-[4.5rem] text-xs">
 								<SelectValue />
@@ -516,7 +509,7 @@ function DateTimePicker({
 							<button
 								type="button"
 								className={cn(
-									"px-2.5 py-1 text-xs font-medium transition-colors",
+									"px-2.5 py-1 font-medium text-xs transition-colors",
 									currentAmPm === "AM"
 										? "bg-primary text-primary-foreground"
 										: "bg-background text-muted-foreground hover:bg-accent",
@@ -528,7 +521,7 @@ function DateTimePicker({
 							<button
 								type="button"
 								className={cn(
-									"border-l px-2.5 py-1 text-xs font-medium transition-colors",
+									"border-l px-2.5 py-1 font-medium text-xs transition-colors",
 									currentAmPm === "PM"
 										? "bg-primary text-primary-foreground"
 										: "bg-background text-muted-foreground hover:bg-accent",
@@ -722,7 +715,9 @@ function LeadTasksCard({ leadId }: { leadId: string }) {
 							<Input
 								placeholder="Task title e.g. Call Ahmad on Thursday 10am"
 								value={form.title}
-								onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))}
+								onChange={(e) =>
+									setForm((p) => ({ ...p, title: e.target.value }))
+								}
 								className="h-8 text-sm"
 								autoFocus
 							/>
@@ -757,9 +752,10 @@ function LeadTasksCard({ leadId }: { leadId: string }) {
 									</SelectTrigger>
 									<SelectContent>
 										{(
-											Object.entries(
-												TASK_PRIORITY_CONFIG,
-											) as [TaskPriority, { label: string }][]
+											Object.entries(TASK_PRIORITY_CONFIG) as [
+												TaskPriority,
+												{ label: string },
+											][]
 										).map(([val, cfg]) => (
 											<SelectItem key={val} value={val} className="text-xs">
 												{cfg.label}
@@ -768,28 +764,32 @@ function LeadTasksCard({ leadId }: { leadId: string }) {
 									</SelectContent>
 								</Select>
 							</div>
-						<DateTimePicker
-							value={form.dueDate}
-							onChange={(v) => setForm((p) => ({ ...p, dueDate: v }))}
-							placeholder="Due date & time"
-						/>
-						<Textarea
-							placeholder="Notes (optional)"
-							value={form.notes}
-							onChange={(e) =>
-								setForm((p) => ({ ...p, notes: e.target.value }))
-							}
-							rows={2}
-							className="resize-none bg-background text-xs"
-						/>
-					</div>
-					<div className="flex gap-2">
-						<Button
-							size="sm"
-							className="h-7 text-xs"
-							disabled={!form.title.trim() || !form.dueDate || createMutation.isPending}
-							onClick={handleCreate}
-						>
+							<DateTimePicker
+								value={form.dueDate}
+								onChange={(v) => setForm((p) => ({ ...p, dueDate: v }))}
+								placeholder="Due date & time"
+							/>
+							<Textarea
+								placeholder="Notes (optional)"
+								value={form.notes}
+								onChange={(e) =>
+									setForm((p) => ({ ...p, notes: e.target.value }))
+								}
+								rows={2}
+								className="resize-none bg-background text-xs"
+							/>
+						</div>
+						<div className="flex gap-2">
+							<Button
+								size="sm"
+								className="h-7 text-xs"
+								disabled={
+									!form.title.trim() ||
+									!form.dueDate ||
+									createMutation.isPending
+								}
+								onClick={handleCreate}
+							>
 								{createMutation.isPending && (
 									<RiLoader4Line className="mr-1 size-3.5 animate-spin" />
 								)}
@@ -807,218 +807,225 @@ function LeadTasksCard({ leadId }: { leadId: string }) {
 					</div>
 				)}
 
-			{/* ── Task List ── */}
-			{tasksLoading ? (
-				<div className="space-y-2">
-					{[1, 2].map((i) => (
-						<div key={i} className="rounded-md border p-2.5">
-							<div className="flex items-start justify-between gap-2">
-								<div className="flex-1 space-y-2">
-									<Skeleton className="h-4 w-3/4" />
-									<Skeleton className="h-3 w-1/2" />
-								</div>
-								<div className="flex gap-1">
-									<Skeleton className="h-7 w-7 rounded-md" />
-									<Skeleton className="h-7 w-7 rounded-md" />
-									<Skeleton className="h-7 w-7 rounded-md" />
-								</div>
-							</div>
-						</div>
-					))}
-				</div>
-			) : (tasks ?? []).length === 0 ? (
-				<div className="flex flex-col items-center gap-1.5 py-6 text-center">
-					<RiTodoLine className="size-7 text-muted-foreground/40" />
-					<p className="text-muted-foreground text-sm">No tasks yet</p>
-					<p className="text-muted-foreground text-xs">
-						Click &ldquo;Add Task&rdquo; to create a follow-up reminder
-					</p>
-				</div>
-			) : (
-				<div className="space-y-2">
-					{/* Pending tasks */}
-					{pendingTasks.map((task) =>
-						editingTaskId === task.id ? (
-							/* ── Inline Edit Form ── */
-							<div
-								key={task.id}
-								className="space-y-2.5 rounded-md border border-primary/30 bg-muted/30 p-3"
-							>
-								<p className="font-medium text-xs text-primary">Edit Task</p>
-								<Input
-									value={editForm.title}
-									onChange={(e) =>
-										setEditForm((p) => ({ ...p, title: e.target.value }))
-									}
-									className="h-8 text-sm"
-									autoFocus
-								/>
-								<div className="grid grid-cols-2 gap-2">
-									<Select
-										value={editForm.taskType}
-										onValueChange={(v) =>
-											setEditForm((p) => ({ ...p, taskType: v as TaskType }))
-										}
-									>
-										<SelectTrigger className="h-8 text-xs">
-											<SelectValue />
-										</SelectTrigger>
-										<SelectContent>
-											{(
-												Object.entries(TASK_TYPE_LABELS) as [TaskType, string][]
-											).map(([val, label]) => (
-												<SelectItem key={val} value={val} className="text-xs">
-													{label}
-												</SelectItem>
-											))}
-										</SelectContent>
-									</Select>
-									<Select
-										value={editForm.priority}
-										onValueChange={(v) =>
-											setEditForm((p) => ({
-												...p,
-												priority: v as TaskPriority,
-											}))
-										}
-									>
-										<SelectTrigger className="h-8 text-xs">
-											<SelectValue />
-										</SelectTrigger>
-										<SelectContent>
-											{(
-												Object.entries(
-													TASK_PRIORITY_CONFIG,
-												) as [TaskPriority, { label: string }][]
-											).map(([val, cfg]) => (
-												<SelectItem key={val} value={val} className="text-xs">
-													{cfg.label}
-												</SelectItem>
-											))}
-										</SelectContent>
-									</Select>
-								</div>
-							<DateTimePicker
-								value={editForm.dueDate}
-								onChange={(v) => setEditForm((p) => ({ ...p, dueDate: v }))}
-								placeholder="Due date & time"
-							/>
-								<Textarea
-									placeholder="Notes (optional)"
-									value={editForm.notes}
-									onChange={(e) =>
-										setEditForm((p) => ({ ...p, notes: e.target.value }))
-									}
-									rows={2}
-									className="resize-none bg-background text-xs"
-								/>
-								<div className="flex gap-2">
-									<Button
-										size="sm"
-										className="h-7 text-xs"
-										disabled={
-											!editForm.title.trim() ||
-											!editForm.dueDate ||
-											updateMutation.isPending
-										}
-										onClick={handleSaveEdit}
-									>
-										{updateMutation.isPending && (
-											<RiLoader4Line className="mr-1 size-3.5 animate-spin" />
-										)}
-										Save Changes
-									</Button>
-									<Button
-										size="sm"
-										variant="ghost"
-										className="h-7 text-xs"
-										onClick={() => setEditingTaskId(null)}
-									>
-										Cancel
-									</Button>
-								</div>
-							</div>
-						) : (
-							/* ── Task Row ── */
-							<div
-								key={task.id}
-								className={`rounded-md border p-2.5 transition-colors ${
-									task.isOverdue
-										? "border-red-200 bg-red-50 dark:border-red-900/40 dark:bg-red-950/20"
-										: "bg-muted/20 hover:bg-muted/40"
-								}`}
-							>
+				{/* ── Task List ── */}
+				{tasksLoading ? (
+					<div className="space-y-2">
+						{[1, 2].map((i) => (
+							<div key={i} className="rounded-md border p-2.5">
 								<div className="flex items-start justify-between gap-2">
-									<div className="min-w-0 flex-1">
-										<div className="flex flex-wrap items-center gap-1.5">
-											{task.isOverdue && (
-												<RiAlarmWarningLine className="size-3.5 shrink-0 text-red-500" />
-											)}
-											<p
-												className={`font-medium text-sm ${task.isOverdue ? "text-red-700 dark:text-red-400" : ""}`}
-											>
-												{task.title}
-											</p>
-										</div>
-										<div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
-											<span className="text-muted-foreground">
-												{TASK_TYPE_LABELS[task.taskType as TaskType]}
-											</span>
-											<span className="text-muted-foreground">·</span>
-											<TaskPriorityBadge
-												priority={task.priority as TaskPriority}
-											/>
-											<span className="text-muted-foreground">·</span>
-											<span
-												className={`flex items-center gap-0.5 ${task.isOverdue ? "font-medium text-red-600 dark:text-red-400" : "text-muted-foreground"}`}
-											>
-												<RiCalendar2Line className="size-3" />
-												{formatDue(task.dueDate)}
-											</span>
-										</div>
-										{task.notes && (
-											<p className="mt-1 line-clamp-2 text-muted-foreground text-xs">
-												{task.notes}
-											</p>
-										)}
+									<div className="flex-1 space-y-2">
+										<Skeleton className="h-4 w-3/4" />
+										<Skeleton className="h-3 w-1/2" />
 									</div>
-									<div className="flex shrink-0 gap-0.5">
-										<Button
-											variant="ghost"
-											size="sm"
-											className="h-7 w-7 p-0 text-muted-foreground hover:text-green-600"
-											title="Mark complete"
-											onClick={() =>
-												completeMutation.mutate({ id: task.id, completed: true })
-											}
-											disabled={completeMutation.isPending}
-										>
-											<RiCheckLine className="size-3.5" />
-										</Button>
-										<Button
-											variant="ghost"
-											size="sm"
-											className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
-											title="Edit task"
-											onClick={() => handleStartEdit(task as LeadTask)}
-										>
-											<RiEditLine className="size-3.5" />
-										</Button>
-										<Button
-											variant="ghost"
-											size="sm"
-											className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
-											title="Delete task"
-											onClick={() => deleteMutation.mutate({ id: task.id })}
-											disabled={deleteMutation.isPending}
-										>
-											<RiDeleteBinLine className="size-3.5" />
-										</Button>
+									<div className="flex gap-1">
+										<Skeleton className="h-7 w-7 rounded-md" />
+										<Skeleton className="h-7 w-7 rounded-md" />
+										<Skeleton className="h-7 w-7 rounded-md" />
 									</div>
 								</div>
 							</div>
-						),
-					)}
+						))}
+					</div>
+				) : (tasks ?? []).length === 0 ? (
+					<div className="flex flex-col items-center gap-1.5 py-6 text-center">
+						<RiTodoLine className="size-7 text-muted-foreground/40" />
+						<p className="text-muted-foreground text-sm">No tasks yet</p>
+						<p className="text-muted-foreground text-xs">
+							Click &ldquo;Add Task&rdquo; to create a follow-up reminder
+						</p>
+					</div>
+				) : (
+					<div className="space-y-2">
+						{/* Pending tasks */}
+						{pendingTasks.map((task) =>
+							editingTaskId === task.id ? (
+								/* ── Inline Edit Form ── */
+								<div
+									key={task.id}
+									className="space-y-2.5 rounded-md border border-primary/30 bg-muted/30 p-3"
+								>
+									<p className="font-medium text-primary text-xs">Edit Task</p>
+									<Input
+										value={editForm.title}
+										onChange={(e) =>
+											setEditForm((p) => ({ ...p, title: e.target.value }))
+										}
+										className="h-8 text-sm"
+										autoFocus
+									/>
+									<div className="grid grid-cols-2 gap-2">
+										<Select
+											value={editForm.taskType}
+											onValueChange={(v) =>
+												setEditForm((p) => ({ ...p, taskType: v as TaskType }))
+											}
+										>
+											<SelectTrigger className="h-8 text-xs">
+												<SelectValue />
+											</SelectTrigger>
+											<SelectContent>
+												{(
+													Object.entries(TASK_TYPE_LABELS) as [
+														TaskType,
+														string,
+													][]
+												).map(([val, label]) => (
+													<SelectItem key={val} value={val} className="text-xs">
+														{label}
+													</SelectItem>
+												))}
+											</SelectContent>
+										</Select>
+										<Select
+											value={editForm.priority}
+											onValueChange={(v) =>
+												setEditForm((p) => ({
+													...p,
+													priority: v as TaskPriority,
+												}))
+											}
+										>
+											<SelectTrigger className="h-8 text-xs">
+												<SelectValue />
+											</SelectTrigger>
+											<SelectContent>
+												{(
+													Object.entries(TASK_PRIORITY_CONFIG) as [
+														TaskPriority,
+														{ label: string },
+													][]
+												).map(([val, cfg]) => (
+													<SelectItem key={val} value={val} className="text-xs">
+														{cfg.label}
+													</SelectItem>
+												))}
+											</SelectContent>
+										</Select>
+									</div>
+									<DateTimePicker
+										value={editForm.dueDate}
+										onChange={(v) => setEditForm((p) => ({ ...p, dueDate: v }))}
+										placeholder="Due date & time"
+									/>
+									<Textarea
+										placeholder="Notes (optional)"
+										value={editForm.notes}
+										onChange={(e) =>
+											setEditForm((p) => ({ ...p, notes: e.target.value }))
+										}
+										rows={2}
+										className="resize-none bg-background text-xs"
+									/>
+									<div className="flex gap-2">
+										<Button
+											size="sm"
+											className="h-7 text-xs"
+											disabled={
+												!editForm.title.trim() ||
+												!editForm.dueDate ||
+												updateMutation.isPending
+											}
+											onClick={handleSaveEdit}
+										>
+											{updateMutation.isPending && (
+												<RiLoader4Line className="mr-1 size-3.5 animate-spin" />
+											)}
+											Save Changes
+										</Button>
+										<Button
+											size="sm"
+											variant="ghost"
+											className="h-7 text-xs"
+											onClick={() => setEditingTaskId(null)}
+										>
+											Cancel
+										</Button>
+									</div>
+								</div>
+							) : (
+								/* ── Task Row ── */
+								<div
+									key={task.id}
+									className={`rounded-md border p-2.5 transition-colors ${
+										task.isOverdue
+											? "border-red-200 bg-red-50 dark:border-red-900/40 dark:bg-red-950/20"
+											: "bg-muted/20 hover:bg-muted/40"
+									}`}
+								>
+									<div className="flex items-start justify-between gap-2">
+										<div className="min-w-0 flex-1">
+											<div className="flex flex-wrap items-center gap-1.5">
+												{task.isOverdue && (
+													<RiAlarmWarningLine className="size-3.5 shrink-0 text-red-500" />
+												)}
+												<p
+													className={`font-medium text-sm ${task.isOverdue ? "text-red-700 dark:text-red-400" : ""}`}
+												>
+													{task.title}
+												</p>
+											</div>
+											<div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
+												<span className="text-muted-foreground">
+													{TASK_TYPE_LABELS[task.taskType as TaskType]}
+												</span>
+												<span className="text-muted-foreground">·</span>
+												<TaskPriorityBadge
+													priority={task.priority as TaskPriority}
+												/>
+												<span className="text-muted-foreground">·</span>
+												<span
+													className={`flex items-center gap-0.5 ${task.isOverdue ? "font-medium text-red-600 dark:text-red-400" : "text-muted-foreground"}`}
+												>
+													<RiCalendar2Line className="size-3" />
+													{formatDue(task.dueDate)}
+												</span>
+											</div>
+											{task.notes && (
+												<p className="mt-1 line-clamp-2 text-muted-foreground text-xs">
+													{task.notes}
+												</p>
+											)}
+										</div>
+										<div className="flex shrink-0 gap-0.5">
+											<Button
+												variant="ghost"
+												size="sm"
+												className="h-7 w-7 p-0 text-muted-foreground hover:text-green-600"
+												title="Mark complete"
+												onClick={() =>
+													completeMutation.mutate({
+														id: task.id,
+														completed: true,
+													})
+												}
+												disabled={completeMutation.isPending}
+											>
+												<RiCheckLine className="size-3.5" />
+											</Button>
+											<Button
+												variant="ghost"
+												size="sm"
+												className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+												title="Edit task"
+												onClick={() => handleStartEdit(task as LeadTask)}
+											>
+												<RiEditLine className="size-3.5" />
+											</Button>
+											<Button
+												variant="ghost"
+												size="sm"
+												className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+												title="Delete task"
+												onClick={() => deleteMutation.mutate({ id: task.id })}
+												disabled={deleteMutation.isPending}
+											>
+												<RiDeleteBinLine className="size-3.5" />
+											</Button>
+										</div>
+									</div>
+								</div>
+							),
+						)}
 
 						{/* Completed tasks (collapsed indicator) */}
 						{completedTasks.length > 0 && (
@@ -1066,9 +1073,7 @@ function LeadTasksCard({ leadId }: { leadId: string }) {
 													size="sm"
 													className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
 													title="Delete task"
-													onClick={() =>
-														deleteMutation.mutate({ id: task.id })
-													}
+													onClick={() => deleteMutation.mutate({ id: task.id })}
 													disabled={deleteMutation.isPending}
 												>
 													<RiDeleteBinLine className="size-3.5" />
@@ -1128,7 +1133,10 @@ function TodayTasksWidget({
 				</div>
 				<div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3">
 					{[1, 2, 3, 4].map((i) => (
-						<div key={i} className="flex flex-col gap-2.5 rounded-lg border p-3">
+						<div
+							key={i}
+							className="flex flex-col gap-2.5 rounded-lg border p-3"
+						>
 							<div className="flex items-start gap-2">
 								<Skeleton className="mt-0.5 size-6 shrink-0 rounded" />
 								<div className="flex-1 space-y-1.5">
@@ -1208,7 +1216,7 @@ function TodayTasksWidget({
 							)}
 						/>
 
-						<div className="flex flex-col gap-2 pl-3 pr-3 pt-2.5 pb-2.5">
+						<div className="flex flex-col gap-2 pt-2.5 pr-3 pb-2.5 pl-3">
 							{/* Top row: icon + title */}
 							<div className="flex items-start gap-2">
 								<div
@@ -1245,7 +1253,7 @@ function TodayTasksWidget({
 								<div className="flex items-center gap-1.5">
 									{/* Due chip */}
 									{task.isOverdue ? (
-										<span className="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 font-semibold text-red-700 text-[0.65rem] dark:bg-red-900/20 dark:text-red-400">
+										<span className="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 font-semibold text-[0.65rem] text-red-700 dark:bg-red-900/20 dark:text-red-400">
 											<RiAlarmWarningLine className="mr-1 size-2.5" />
 											{new Date(task.dueDate).toLocaleDateString([], {
 												month: "short",
@@ -1253,7 +1261,7 @@ function TodayTasksWidget({
 											})}
 										</span>
 									) : (
-										<span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 font-semibold text-amber-700 text-[0.65rem] dark:bg-amber-900/20 dark:text-amber-400">
+										<span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 font-semibold text-[0.65rem] text-amber-700 dark:bg-amber-900/20 dark:text-amber-400">
 											<RiCalendar2Line className="mr-1 size-2.5" />
 											{new Date(task.dueDate).toLocaleTimeString([], {
 												hour: "2-digit",
@@ -1315,8 +1323,8 @@ function TodayTasksWidget({
 
 			{tasks.length > MAX_VISIBLE && (
 				<div className="border-t bg-muted/20 px-4 py-2.5 text-center text-muted-foreground text-xs">
-					+{tasks.length - MAX_VISIBLE} more tasks — open individual leads to see
-					all
+					+{tasks.length - MAX_VISIBLE} more tasks — open individual leads to
+					see all
 				</div>
 			)}
 		</div>
@@ -1761,85 +1769,82 @@ function LeadDetailSheet({
 									</div>
 								)}
 
-							{/* Timeline feed */}
-							{timelineLoading ? (
-								<div className="space-y-3 pt-1">
-									{[1, 2, 3].map((i) => (
-										<div key={i} className="flex gap-3">
-											<Skeleton className="mt-0.5 size-7 shrink-0 rounded-full" />
-											<div className="flex-1 space-y-1.5 pt-1">
-												<Skeleton className="h-3.5 w-28 rounded" />
-												<Skeleton className="h-3 w-48 rounded" />
-												<Skeleton className="h-3 w-20 rounded" />
+								{/* Timeline feed */}
+								{timelineLoading ? (
+									<div className="space-y-3 pt-1">
+										{[1, 2, 3].map((i) => (
+											<div key={i} className="flex gap-3">
+												<Skeleton className="mt-0.5 size-7 shrink-0 rounded-full" />
+												<div className="flex-1 space-y-1.5 pt-1">
+													<Skeleton className="h-3.5 w-28 rounded" />
+													<Skeleton className="h-3 w-48 rounded" />
+													<Skeleton className="h-3 w-20 rounded" />
+												</div>
 											</div>
-										</div>
-									))}
-								</div>
-							) : timeline && timeline.length > 0 ? (
-								<div className="relative">
-									{/* Vertical connector line — sits behind dots */}
-									<div className="absolute top-3.5 bottom-3.5 left-3.5 w-px bg-gradient-to-b from-border via-border/60 to-transparent" />
-									<div className="space-y-1">
-										{timeline.map((event, idx) => {
-											const cfg =
-												ACTIVITY_CONFIG[
-													event.eventType as ActivityEventType
-												] ?? ACTIVITY_CONFIG.lead_updated;
-											const isLast = idx === timeline.length - 1;
-											return (
-												<div
-													key={event.id}
-													className="relative flex gap-3"
-												>
-													{/* Dot */}
-													<div
-														className={`relative z-10 mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full border-2 border-background shadow-sm ${cfg.dotColor}`}
-													>
-														<span className="text-white [&>svg]:size-3">
-															{cfg.icon}
-														</span>
-													</div>
-													{/* Content bubble */}
-													<div
-														className={`flex-1 rounded-lg border bg-muted/20 px-3 py-2 ${isLast ? "mb-0" : "mb-1"}`}
-													>
-														<div className="flex flex-wrap items-center gap-2">
-															<ActivityEventIcon
-																type={event.eventType as ActivityEventType}
-															/>
-															<span className="text-muted-foreground text-xs">
-																by{" "}
-																<span className="font-medium text-foreground">
-																	{event.actorName}
-																</span>
-															</span>
-															<span className="ml-auto shrink-0 text-muted-foreground text-xs">
-																{formatDateTime(event.createdAt)}
+										))}
+									</div>
+								) : timeline && timeline.length > 0 ? (
+									<div className="relative">
+										{/* Vertical connector line — sits behind dots */}
+										<div className="absolute top-3.5 bottom-3.5 left-3.5 w-px bg-gradient-to-b from-border via-border/60 to-transparent" />
+										<div className="space-y-1">
+											{timeline.map((event, idx) => {
+												const cfg =
+													ACTIVITY_CONFIG[
+														event.eventType as ActivityEventType
+													] ?? ACTIVITY_CONFIG.lead_updated;
+												const isLast = idx === timeline.length - 1;
+												return (
+													<div key={event.id} className="relative flex gap-3">
+														{/* Dot */}
+														<div
+															className={`relative z-10 mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full border-2 border-background shadow-sm ${cfg.dotColor}`}
+														>
+															<span className="text-white [&>svg]:size-3">
+																{cfg.icon}
 															</span>
 														</div>
-														{event.content && (
-															<p className="mt-1.5 whitespace-pre-line text-sm leading-relaxed text-foreground/90">
-																{event.content}
-															</p>
-														)}
+														{/* Content bubble */}
+														<div
+															className={`flex-1 rounded-lg border bg-muted/20 px-3 py-2 ${isLast ? "mb-0" : "mb-1"}`}
+														>
+															<div className="flex flex-wrap items-center gap-2">
+																<ActivityEventIcon
+																	type={event.eventType as ActivityEventType}
+																/>
+																<span className="text-muted-foreground text-xs">
+																	by{" "}
+																	<span className="font-medium text-foreground">
+																		{event.actorName}
+																	</span>
+																</span>
+																<span className="ml-auto shrink-0 text-muted-foreground text-xs">
+																	{formatDateTime(event.createdAt)}
+																</span>
+															</div>
+															{event.content && (
+																<p className="mt-1.5 whitespace-pre-line text-foreground/90 text-sm leading-relaxed">
+																	{event.content}
+																</p>
+															)}
+														</div>
 													</div>
-												</div>
-											);
-										})}
+												);
+											})}
+										</div>
 									</div>
-								</div>
-							) : (
-								<div className="flex flex-col items-center gap-2 py-8 text-center">
-									<RiHistoryLine className="size-8 text-muted-foreground/40" />
-									<p className="text-muted-foreground text-sm">
-										No activity yet
-									</p>
-									<p className="text-muted-foreground text-xs">
-										Add a note, log a call, or change the stage to start the
-										timeline
-									</p>
-								</div>
-							)}
+								) : (
+									<div className="flex flex-col items-center gap-2 py-8 text-center">
+										<RiHistoryLine className="size-8 text-muted-foreground/40" />
+										<p className="text-muted-foreground text-sm">
+											No activity yet
+										</p>
+										<p className="text-muted-foreground text-xs">
+											Add a note, log a call, or change the stage to start the
+											timeline
+										</p>
+									</div>
+								)}
 							</CardContent>
 						</Card>
 					</div>
@@ -1939,7 +1944,7 @@ function EditLeadDialog({
 			setDebouncedEmail(lead.email.trim());
 			setDebouncedPhone(lead.phone.trim());
 		}
-	}, [open, lead?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+	}, [open, lead]);
 
 	if (!lead) return null;
 
@@ -2673,8 +2678,13 @@ function StatsCards({
 	if (isLoading) {
 		return (
 			<div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-				{[...Array(4)].map((_, i) => (
-					<Card key={i} className="overflow-hidden">
+				{[
+					"sk-leads-stats-1",
+					"sk-leads-stats-2",
+					"sk-leads-stats-3",
+					"sk-leads-stats-4",
+				].map((id) => (
+					<Card key={id} className="overflow-hidden">
 						<CardHeader className="pb-2">
 							<Skeleton className="h-3.5 w-28" />
 							<Skeleton className="mt-2 h-9 w-16" />
@@ -3001,8 +3011,8 @@ function LeadsCharts({
 									dataKey="value"
 									strokeWidth={0}
 								>
-									{stageData.map((entry, idx) => (
-										<Cell key={`cell-${idx}`} fill={entry.color} />
+									{stageData.map((entry) => (
+										<Cell key={entry.name} fill={entry.color} />
 									))}
 								</Pie>
 								{/* @ts-ignore */}
@@ -3375,21 +3385,21 @@ export default function AdminLeadsPage() {
 						</div>
 					</div>
 
-				{/* Stats */}
-				<StatsCards leads={allLeads} isLoading={isLoading} />
+					{/* Stats */}
+					<StatsCards leads={allLeads} isLoading={isLoading} />
 
-				{/* Charts */}
-				<LeadsCharts leads={allLeads} isLoading={isLoading} />
+					{/* Charts */}
+					<LeadsCharts leads={allLeads} isLoading={isLoading} />
 
-				{/* Today's Tasks */}
-				<TodayTasksWidget
-					onViewLead={(leadId) => {
-						const lead = allLeads.find((l) => l.id === leadId);
-						if (lead) setViewLead(lead);
-					}}
-				/>
+					{/* Today's Tasks */}
+					<TodayTasksWidget
+						onViewLead={(leadId) => {
+							const lead = allLeads.find((l) => l.id === leadId);
+							if (lead) setViewLead(lead);
+						}}
+					/>
 
-				{/* Table */}
+					{/* Table */}
 					<Card className="overflow-hidden">
 						{/* ── Toolbar ── */}
 						<div className="flex flex-col gap-2 border-b px-4 py-3">
@@ -3727,8 +3737,17 @@ export default function AdminLeadsPage() {
 											</TableRow>
 										</TableHeader>
 										<TableBody>
-											{[...Array(8)].map((_, i) => (
-												<TableRow key={i} className="hover:bg-transparent">
+											{[
+												"sk-leads-table-1",
+												"sk-leads-table-2",
+												"sk-leads-table-3",
+												"sk-leads-table-4",
+												"sk-leads-table-5",
+												"sk-leads-table-6",
+												"sk-leads-table-7",
+												"sk-leads-table-8",
+											].map((id) => (
+												<TableRow key={id} className="hover:bg-transparent">
 													<TableCell className="pl-4">
 														<Skeleton className="h-4 w-4 rounded" />
 													</TableCell>

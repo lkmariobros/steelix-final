@@ -212,6 +212,8 @@ export function StepCommission({
 		representationType,
 		enhancedCommission,
 		agentTierInfo,
+		form,
+		onUpdate,
 	]);
 
 	return (

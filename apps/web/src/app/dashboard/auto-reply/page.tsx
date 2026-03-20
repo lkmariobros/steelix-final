@@ -367,8 +367,8 @@ export default function AutoReplyPage() {
 					<div className="flex flex-col gap-6">
 						{isLoadingRules ? (
 							<div className="flex flex-col gap-6">
-								{Array.from({ length: 3 }).map((_, i) => (
-									<Card key={i} className="border-2">
+								{["sk-1", "sk-2", "sk-3"].map((id) => (
+									<Card key={id} className="border-2">
 										<CardContent className="pt-6">
 											<div className="space-y-4">
 												{/* Message owner row */}

@@ -163,25 +163,27 @@ export function AgentPerformanceGrid({ className }: AgentPerformanceGridProps) {
 				</CardHeader>
 				<CardContent>
 					<div className="space-y-4">
-						{Array.from({ length: 5 }).map((_, i) => (
-							<div
-								key={i}
-								className="flex items-center justify-between rounded-lg border p-4"
-							>
-								<div className="flex items-center gap-3">
-									<Skeleton className="h-10 w-10 rounded-full" />
-									<div className="space-y-2">
-										<Skeleton className="h-4 w-32" />
-										<Skeleton className="h-3 w-24" />
+						{["sk-ag-1", "sk-ag-2", "sk-ag-3", "sk-ag-4", "sk-ag-5"].map(
+							(id) => (
+								<div
+									key={id}
+									className="flex items-center justify-between rounded-lg border p-4"
+								>
+									<div className="flex items-center gap-3">
+										<Skeleton className="h-10 w-10 rounded-full" />
+										<div className="space-y-2">
+											<Skeleton className="h-4 w-32" />
+											<Skeleton className="h-3 w-24" />
+										</div>
+									</div>
+									<div className="flex gap-4">
+										<Skeleton className="h-4 w-16" />
+										<Skeleton className="h-4 w-16" />
+										<Skeleton className="h-4 w-16" />
 									</div>
 								</div>
-								<div className="flex gap-4">
-									<Skeleton className="h-4 w-16" />
-									<Skeleton className="h-4 w-16" />
-									<Skeleton className="h-4 w-16" />
-								</div>
-							</div>
-						))}
+							),
+						)}
 					</div>
 				</CardContent>
 			</Card>

@@ -350,8 +350,8 @@ export default function AdminReportsPage() {
 							{/* Summary Cards */}
 							{isLoadingStats ? (
 								<div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-									{[...Array(4)].map((_, i) => (
-										<Card key={i} className="overflow-hidden">
+									{["sk-a1", "sk-a2", "sk-a3", "sk-a4"].map((id) => (
+										<Card key={id} className="overflow-hidden">
 											<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
 												<Skeleton className="h-3.5 w-24" />
 												<Skeleton className="h-4 w-4 rounded" />
@@ -449,9 +449,9 @@ export default function AdminReportsPage() {
 											<div className="space-y-3">
 												<Skeleton className="h-4 w-40" />
 												<div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-													{[...Array(3)].map((_, i) => (
+													{["sk-b1", "sk-b2", "sk-b3"].map((id) => (
 														<div
-															key={i}
+															key={id}
 															className="space-y-2 rounded-lg border p-4"
 														>
 															<div className="flex items-center justify-between">
@@ -466,9 +466,9 @@ export default function AdminReportsPage() {
 											</div>
 											<div className="space-y-3">
 												<Skeleton className="h-4 w-32" />
-												{[...Array(4)].map((_, i) => (
+												{["sk-c1", "sk-c2", "sk-c3", "sk-c4"].map((id) => (
 													<div
-														key={i}
+														key={id}
 														className="flex items-center justify-between rounded-lg border p-3"
 													>
 														<div className="flex items-center gap-3">
@@ -650,25 +650,35 @@ export default function AdminReportsPage() {
 									{isLoadingCoBroking ? (
 										<div className="overflow-hidden rounded-md border">
 											<div className="grid grid-cols-7 gap-4 bg-muted/50 px-4 py-3">
-												{[...Array(7)].map((_, i) => (
-													<Skeleton key={i} className="h-3.5 w-full" />
+												{[
+													"sk-h1",
+													"sk-h2",
+													"sk-h3",
+													"sk-h4",
+													"sk-h5",
+													"sk-h6",
+													"sk-h7",
+												].map((id) => (
+													<Skeleton key={id} className="h-3.5 w-full" />
 												))}
 											</div>
 											<div className="divide-y">
-												{[...Array(5)].map((_, i) => (
-													<div
-														key={i}
-														className="grid grid-cols-7 gap-4 px-4 py-3"
-													>
-														<Skeleton className="h-4 w-full" />
-														<Skeleton className="h-4 w-full" />
-														<Skeleton className="h-4 w-4/5" />
-														<Skeleton className="h-4 w-5/6" />
-														<Skeleton className="ml-auto h-4 w-10" />
-														<Skeleton className="ml-auto h-4 w-16" />
-														<Skeleton className="ml-auto h-5 w-16 rounded-full" />
-													</div>
-												))}
+												{["sk-r1", "sk-r2", "sk-r3", "sk-r4", "sk-r5"].map(
+													(id) => (
+														<div
+															key={id}
+															className="grid grid-cols-7 gap-4 px-4 py-3"
+														>
+															<Skeleton className="h-4 w-full" />
+															<Skeleton className="h-4 w-full" />
+															<Skeleton className="h-4 w-4/5" />
+															<Skeleton className="h-4 w-5/6" />
+															<Skeleton className="ml-auto h-4 w-10" />
+															<Skeleton className="ml-auto h-4 w-16" />
+															<Skeleton className="ml-auto h-5 w-16 rounded-full" />
+														</div>
+													),
+												)}
 											</div>
 										</div>
 									) : coBrokingData?.transactions &&
@@ -838,14 +848,29 @@ export default function AdminReportsPage() {
 									{isLoadingClients ? (
 										<div className="overflow-hidden rounded-md border">
 											<div className="grid grid-cols-7 gap-4 bg-muted/50 px-4 py-3">
-												{[...Array(7)].map((_, i) => (
-													<Skeleton key={i} className="h-3.5 w-full" />
+												{[
+													"sk-h1",
+													"sk-h2",
+													"sk-h3",
+													"sk-h4",
+													"sk-h5",
+													"sk-h6",
+													"sk-h7",
+												].map((id) => (
+													<Skeleton key={id} className="h-3.5 w-full" />
 												))}
 											</div>
 											<div className="divide-y">
-												{[...Array(6)].map((_, i) => (
+												{[
+													"sk-r1",
+													"sk-r2",
+													"sk-r3",
+													"sk-r4",
+													"sk-r5",
+													"sk-r6",
+												].map((id) => (
 													<div
-														key={i}
+														key={id}
 														className="grid grid-cols-7 gap-4 px-4 py-3"
 													>
 														<Skeleton className="h-4 w-full" />

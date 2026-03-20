@@ -980,9 +980,9 @@ export default function CRMPage() {
 													<div className="flex flex-wrap gap-2">
 														{selectedProspect.tagNames &&
 														selectedProspect.tagNames.length > 0
-															? selectedProspect.tagNames.map((tag, idx) => (
+															? selectedProspect.tagNames.map((tag) => (
 																	<Badge
-																		key={idx}
+																		key={tag}
 																		variant="secondary"
 																		className="text-xs"
 																	>
@@ -992,9 +992,9 @@ export default function CRMPage() {
 															: selectedProspect.tags
 																? selectedProspect.tags
 																		.split(",")
-																		.map((tag, idx) => (
+																		.map((tag) => (
 																			<Badge
-																				key={idx}
+																				key={tag.trim()}
 																				variant="secondary"
 																				className="text-xs"
 																			>
@@ -1393,25 +1393,30 @@ export default function CRMPage() {
 						<div className="flex flex-col gap-4">
 							{isLoadingProspects ? (
 								<div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-5">
-									{Array.from({ length: 5 }).map((_, i) => (
-										<div key={i} className="rounded-lg border bg-muted/30 p-3">
-											<Skeleton className="mb-3 h-5 w-3/4" />
-											<div className="space-y-2">
-												{Array.from({ length: 2 }).map((_, j) => (
-													<div
-														key={j}
-														className="rounded-md border bg-card p-3 shadow-sm"
-													>
-														<Skeleton className="mb-2 h-4 w-full" />
-														<Skeleton className="h-3 w-3/4" />
-														<div className="mt-2 flex gap-1">
-															<Skeleton className="h-5 w-14 rounded-full" />
+									{["sk-kb-1", "sk-kb-2", "sk-kb-3", "sk-kb-4", "sk-kb-5"].map(
+										(colId) => (
+											<div
+												key={colId}
+												className="rounded-lg border bg-muted/30 p-3"
+											>
+												<Skeleton className="mb-3 h-5 w-3/4" />
+												<div className="space-y-2">
+													{[`${colId}-a`, `${colId}-b`].map((cardId) => (
+														<div
+															key={cardId}
+															className="rounded-md border bg-card p-3 shadow-sm"
+														>
+															<Skeleton className="mb-2 h-4 w-full" />
+															<Skeleton className="h-3 w-3/4" />
+															<div className="mt-2 flex gap-1">
+																<Skeleton className="h-5 w-14 rounded-full" />
+															</div>
 														</div>
-													</div>
-												))}
+													))}
+												</div>
 											</div>
-										</div>
-									))}
+										),
+									)}
 								</div>
 							) : prospectsError ? (
 								<div className="py-12 text-center">
@@ -1445,40 +1450,42 @@ export default function CRMPage() {
 						<div className="flex flex-col gap-3">
 							{isLoadingProspects ? (
 								<div className="flex flex-col gap-3">
-									{Array.from({ length: 5 }).map((_, i) => (
-										<Card key={i}>
-											<CardContent className="p-4">
-												<div className="flex items-start justify-between">
-													<div className="flex-1 space-y-3">
-														{/* Name */}
-														<div className="flex items-center gap-2">
-															<Skeleton className="h-4 w-4 rounded" />
-															<Skeleton className="h-4 w-36" />
+									{["sk-lv-1", "sk-lv-2", "sk-lv-3", "sk-lv-4", "sk-lv-5"].map(
+										(id) => (
+											<Card key={id}>
+												<CardContent className="p-4">
+													<div className="flex items-start justify-between">
+														<div className="flex-1 space-y-3">
+															{/* Name */}
+															<div className="flex items-center gap-2">
+																<Skeleton className="h-4 w-4 rounded" />
+																<Skeleton className="h-4 w-36" />
+															</div>
+															{/* Contact */}
+															<div className="flex flex-wrap gap-4">
+																<Skeleton className="h-3.5 w-40" />
+																<Skeleton className="h-3.5 w-32" />
+															</div>
+															{/* Badges */}
+															<div className="flex gap-2">
+																<Skeleton className="h-5 w-16 rounded-full" />
+																<Skeleton className="h-5 w-24 rounded-full" />
+															</div>
+															{/* Details row */}
+															<div className="flex gap-4">
+																<Skeleton className="h-3.5 w-32" />
+																<Skeleton className="h-5 w-20 rounded-full" />
+															</div>
 														</div>
-														{/* Contact */}
-														<div className="flex flex-wrap gap-4">
-															<Skeleton className="h-3.5 w-40" />
-															<Skeleton className="h-3.5 w-32" />
-														</div>
-														{/* Badges */}
-														<div className="flex gap-2">
-															<Skeleton className="h-5 w-16 rounded-full" />
-															<Skeleton className="h-5 w-24 rounded-full" />
-														</div>
-														{/* Details row */}
-														<div className="flex gap-4">
-															<Skeleton className="h-3.5 w-32" />
-															<Skeleton className="h-5 w-20 rounded-full" />
+														<div className="ml-4 flex gap-2">
+															<Skeleton className="h-8 w-8 rounded-md" />
+															<Skeleton className="h-8 w-8 rounded-md" />
 														</div>
 													</div>
-													<div className="ml-4 flex gap-2">
-														<Skeleton className="h-8 w-8 rounded-md" />
-														<Skeleton className="h-8 w-8 rounded-md" />
-													</div>
-												</div>
-											</CardContent>
-										</Card>
-									))}
+												</CardContent>
+											</Card>
+										),
+									)}
 								</div>
 							) : prospectsError ? (
 								<div className="col-span-full py-12 text-center">
@@ -1531,9 +1538,9 @@ export default function CRMPage() {
 													prospect.tags?.trim() ? (
 														<div className="flex flex-wrap items-center gap-2">
 															{prospect.tagNames && prospect.tagNames.length > 0
-																? prospect.tagNames.map((tag, idx) => (
+																? prospect.tagNames.map((tag) => (
 																		<Badge
-																			key={idx}
+																			key={tag}
 																			variant="secondary"
 																			className="text-xs"
 																		>
@@ -1541,9 +1548,9 @@ export default function CRMPage() {
 																		</Badge>
 																	))
 																: prospect.tags
-																	? prospect.tags.split(",").map((tag, idx) => (
+																	? prospect.tags.split(",").map((tag) => (
 																			<Badge
-																				key={idx}
+																				key={tag.trim()}
 																				variant="secondary"
 																				className="text-xs"
 																			>

@@ -79,8 +79,8 @@ export function PipelineSummary() {
 				</CardHeader>
 				<CardContent className="space-y-4">
 					<div className="grid grid-cols-3 gap-4">
-						{Array.from({ length: 3 }).map((_, i) => (
-							<div key={i} className="space-y-2">
+						{["sk-ps-1", "sk-ps-2", "sk-ps-3"].map((id) => (
+							<div key={id} className="space-y-2">
 								<Skeleton className="h-4 w-20" />
 								<Skeleton className="h-6 w-12" />
 								<Skeleton className="h-3 w-16" />
