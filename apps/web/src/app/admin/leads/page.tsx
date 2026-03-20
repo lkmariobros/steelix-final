@@ -28,6 +28,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
 	Select,
 	SelectContent,
 	SelectItem,
@@ -45,6 +51,7 @@ import {
 	RiDeleteBinLine,
 	RiEditLine,
 	RiEyeLine,
+	RiFileDownloadLine,
 	RiFileList3Line,
 	RiLoader4Line,
 	RiRefreshLine,
@@ -52,6 +59,7 @@ import {
 	RiShieldUserLine,
 	RiUserLine,
 } from "@remixicon/react";
+import { FileSpreadsheet, FileText } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import type React from "react";
@@ -105,6 +113,7 @@ export default function AdminLeadsPage() {
 	const [isCreateOpen, setIsCreateOpen] = useState(false);
 	const [isBulkStageOpen, setIsBulkStageOpen] = useState(false);
 	const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+	const [isExporting, setIsExporting] = useState(false);
 
 	// ── Fetch ALL leads ONCE — no filter params sent to backend ─────────────
 	// Backend returns the full dataset; all filtering/sorting/pagination
@@ -256,6 +265,177 @@ export default function AdminLeadsPage() {
 		setSelectedIds(new Set());
 		void refetch();
 	};
+
+	const formatDateForExport = (value: Date | string | null | undefined) => {
+		if (!value) return "";
+		const d = new Date(value);
+		if (Number.isNaN(d.getTime())) return "";
+		// Keep exports stable across locales (YYYY-MM-DD) for compliance/handover.
+		return d.toISOString().slice(0, 10);
+	};
+
+	const capitalizeForExport = (value: string | null | undefined) => {
+		if (!value) return "";
+		return value.charAt(0).toUpperCase() + value.slice(1);
+	};
+
+	const leadsToExportRows = (leads: Lead[]) => {
+		return leads.map((lead) => ({
+			"Name": lead.name ?? "",
+			"Email": lead.email ?? "",
+			"Phone": lead.phone ?? "",
+			"Property": lead.property ?? "",
+			"Project": lead.projectName ?? "",
+			"Stage": stageMap[lead.stage]?.label ?? lead.stage ?? "",
+			"Status": capitalizeForExport(lead.status),
+			"Agent": lead.agentName ?? "Unassigned",
+			"Agent Email": lead.agentEmail ?? "",
+			"Type": capitalizeForExport(lead.type),
+			"Lead Type": capitalizeForExport(lead.leadType),
+			"Source": lead.source ?? "",
+			"Tags": (lead.tagNames?.length ? lead.tagNames.join("; ") : lead.tags) ?? "",
+			"Last Contact": formatDateForExport(lead.lastContact),
+			"Next Contact": formatDateForExport(lead.nextContact),
+			"Created At": formatDateForExport(lead.createdAt),
+			"Updated At": formatDateForExport(lead.updatedAt),
+		}));
+	};
+
+	const exportToCSV = useCallback(
+		(data: Record<string, string>[], filenameBase: string) => {
+			if (!data || data.length === 0) return;
+
+			const headers = Object.keys(data[0] as Record<string, unknown>);
+			const csvContent = [
+				headers.join(","),
+				...data.map((row) =>
+					headers
+						.map((header) => {
+							const value = (row as Record<string, unknown>)[header];
+							if (value === null || value === undefined) return "";
+							const str = String(value);
+
+							// CSV escaping: quote if value includes comma, quotes, or newlines.
+							if (
+								str.includes(",") ||
+								str.includes('"') ||
+								str.includes("\n") ||
+								str.includes("\r")
+							) {
+								return `"${str.replace(/"/g, '""')}"`;
+							}
+							return str;
+						})
+						.join(","),
+				),
+			].join("\n");
+
+			const blob = new Blob([csvContent], {
+				type: "text/csv;charset=utf-8;",
+			});
+			const link = document.createElement("a");
+			link.href = URL.createObjectURL(blob);
+			link.download = `${filenameBase}_${new Date()
+				.toISOString()
+				.split("T")[0]}.csv`;
+			link.click();
+		},
+		[],
+	);
+
+	const escapeHtml = useCallback(
+		(value: string) =>
+			value
+				.replace(/&/g, "&amp;")
+				.replace(/</g, "&lt;")
+				.replace(/>/g, "&gt;")
+				.replace(/"/g, "&quot;")
+				.replace(/'/g, "&#39;"),
+		[],
+	);
+
+	// Excel can open HTML tables even with a legacy .xls extension.
+	const exportToExcelHtml = useCallback(
+		(data: Record<string, string>[], filenameBase: string) => {
+			if (!data || data.length === 0) return;
+
+			const headers = Object.keys(data[0] as Record<string, unknown>);
+			const thead = `<tr>${headers
+				.map((h) => `<th>${escapeHtml(String(h))}</th>`)
+				.join("")}</tr>`;
+
+			const tbody = data
+				.map((row) => {
+					return `<tr>${headers
+						.map((h) => {
+							const value = (row as Record<string, unknown>)[h];
+							return `<td>${escapeHtml(value === undefined || value === null ? "" : String(value))}</td>`;
+						})
+						.join("")}</tr>`;
+				})
+				.join("");
+
+			const html = `<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="utf-8" />
+	</head>
+	<body>
+		<table>
+			<thead>${thead}</thead>
+			<tbody>${tbody}</tbody>
+		</table>
+	</body>
+</html>`;
+
+			const blob = new Blob([html], {
+				type: "application/vnd.ms-excel;charset=utf-8;",
+			});
+
+			const link = document.createElement("a");
+			link.href = URL.createObjectURL(blob);
+			link.download = `${filenameBase}_${new Date()
+				.toISOString()
+				.split("T")[0]}.xls`;
+			link.click();
+		},
+		[escapeHtml],
+	);
+
+	const handleExport = useCallback(
+		(
+			format: "csv" | "excel",
+			scope: "filtered" | "selected",
+		) => {
+			if (isExporting || isLoading) return;
+			setIsExporting(true);
+			try {
+				const leads =
+					scope === "selected"
+						? allLeads.filter((l) => selectedIds.has(l.id))
+						: kanbanLeads;
+
+				const exportRows = leadsToExportRows(leads);
+				const baseName =
+					scope === "selected" ? "leads_selected" : "leads_filtered";
+
+				if (format === "csv") exportToCSV(exportRows, baseName);
+				else exportToExcelHtml(exportRows, baseName);
+			} finally {
+				setIsExporting(false);
+			}
+		},
+		[
+			allLeads,
+			exportToCSV,
+			exportToExcelHtml,
+			isExporting,
+			isLoading,
+			kanbanLeads,
+			leadsToExportRows,
+			selectedIds,
+		],
+	);
 
 	// Selection
 	const allSelected =
@@ -567,7 +747,7 @@ export default function AdminLeadsPage() {
 												{agentFilter === "__unassigned__"
 													? "Unassigned"
 													: (agents.find((a) => a.agentId === agentFilter)
-															?.agentName ?? agentFilter)}
+														?.agentName ?? agentFilter)}
 											</span>
 											<button
 												type="button"
@@ -726,470 +906,556 @@ export default function AdminLeadsPage() {
 											</>
 										)}
 									</span>
+									{/* Export (top-right of the table toolbar) */}
+									<DropdownMenu>
+										<DropdownMenuTrigger asChild>
+											<span
+												className={[
+													"inline-flex",
+													isLoading || isExporting
+														? "pointer-events-none opacity-50"
+														: "",
+												].join(" ")}
+											>
+												<Tooltip>
+													<TooltipTrigger asChild>
+														<Button
+															size="icon"
+															variant="ghost"
+															className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
+															disabled={isLoading || isExporting}
+															aria-label="Export leads"
+														>
+															<RiFileDownloadLine
+																size={16}
+																aria-hidden="true"
+															/>
+														</Button>
+													</TooltipTrigger>
+													<TooltipContent className="z-[60]">
+														Export leads
+													</TooltipContent>
+												</Tooltip>
+											</span>
+										</DropdownMenuTrigger>
+										<DropdownMenuContent
+											align="end"
+											className="w-fit min-w-0 p-0"
+										>
+											<div className="flex items-center gap-0 p-0">
+												<Tooltip>
+													<TooltipTrigger asChild>
+														<DropdownMenuItem
+															disabled={
+																isLoading ||
+																isExporting ||
+																(selectedIds.size === 0 && kanbanLeads.length === 0)
+															}
+															onSelect={() => {
+																handleExport(
+																	"csv",
+																	selectedIds.size > 0 ? "selected" : "filtered",
+																);
+															}}
+															className="h-7 w-7 gap-0 !px-0 !py-0 justify-center"
+														>
+															<FileText size={14} aria-hidden="true" />
+														</DropdownMenuItem>
+													</TooltipTrigger>
+													<TooltipContent className="z-[60]">
+														Export CSV ({selectedIds.size > 0 ? "selected" : "filtered"})
+													</TooltipContent>
+												</Tooltip>
+												<Tooltip>
+													<TooltipTrigger asChild>
+														<DropdownMenuItem
+															disabled={
+																isLoading ||
+																isExporting ||
+																(selectedIds.size === 0 && kanbanLeads.length === 0)
+															}
+															onSelect={() => {
+																handleExport(
+																	"excel",
+																	selectedIds.size > 0 ? "selected" : "filtered",
+																);
+															}}
+															className="h-7 w-7 gap-0 !px-0 !py-0 justify-center"
+														>
+															<FileSpreadsheet size={14} aria-hidden="true" />
+														</DropdownMenuItem>
+													</TooltipTrigger>
+													<TooltipContent className="z-[60]">
+														Export Excel ({selectedIds.size > 0 ? "selected" : "filtered"})
+													</TooltipContent>
+												</Tooltip>
+											</div>
+										</DropdownMenuContent>
+									</DropdownMenu>
 								</div>
 							</div>
 						</div>
 						<CardContent className="p-0">
 							<div className={viewMode === "table" ? "" : "hidden"}>
-							{isLoading ? (
-								<div className="overflow-x-auto">
-									<Table>
-										<TableHeader>
-											<TableRow className="hover:bg-transparent">
-												<TableHead className="w-10 pl-4">
-													<Skeleton className="h-4 w-4 rounded" />
-												</TableHead>
-												<TableHead>
-													<Skeleton className="h-3.5 w-12" />
-												</TableHead>
-												<TableHead className="hidden md:table-cell">
-													<Skeleton className="h-3.5 w-16" />
-												</TableHead>
-												<TableHead className="hidden lg:table-cell">
-													<Skeleton className="h-3.5 w-16" />
-												</TableHead>
-												<TableHead>
-													<Skeleton className="h-3.5 w-12" />
-												</TableHead>
-												<TableHead>
-													<Skeleton className="h-3.5 w-14" />
-												</TableHead>
-												<TableHead>
-													<Skeleton className="h-3.5 w-12" />
-												</TableHead>
-												<TableHead className="hidden xl:table-cell">
-													<Skeleton className="h-3.5 w-10" />
-												</TableHead>
-												<TableHead>
-													<Skeleton className="h-3.5 w-16" />
-												</TableHead>
-												<TableHead className="w-[100px]" />
-											</TableRow>
-										</TableHeader>
-										<TableBody>
-											{[
-												"sk-leads-table-1",
-												"sk-leads-table-2",
-												"sk-leads-table-3",
-												"sk-leads-table-4",
-												"sk-leads-table-5",
-												"sk-leads-table-6",
-												"sk-leads-table-7",
-												"sk-leads-table-8",
-											].map((id) => (
-												<TableRow key={id} className="hover:bg-transparent">
-													<TableCell className="pl-4">
+								{isLoading ? (
+									<div className="overflow-x-auto">
+										<Table>
+											<TableHeader>
+												<TableRow className="hover:bg-transparent">
+													<TableHead className="w-10 pl-4">
 														<Skeleton className="h-4 w-4 rounded" />
-													</TableCell>
-													<TableCell>
-														<Skeleton className="mb-1 h-4 w-28" />
-														<Skeleton className="h-3 w-36 md:hidden" />
-													</TableCell>
-													<TableCell className="hidden md:table-cell">
-														<Skeleton className="mb-1 h-3.5 w-36" />
-														<Skeleton className="h-3 w-24" />
-													</TableCell>
-													<TableCell className="hidden lg:table-cell">
-														<Skeleton className="h-3.5 w-28" />
-													</TableCell>
-													<TableCell>
-														<Skeleton className="h-5 w-24 rounded-full" />
-													</TableCell>
-													<TableCell>
-														<Skeleton className="h-5 w-16 rounded-full" />
-													</TableCell>
-													<TableCell>
-														<Skeleton className="h-3.5 w-20" />
-													</TableCell>
-													<TableCell className="hidden xl:table-cell">
-														<Skeleton className="mb-1 h-3 w-12" />
-														<Skeleton className="h-3 w-16" />
-													</TableCell>
-													<TableCell>
+													</TableHead>
+													<TableHead>
+														<Skeleton className="h-3.5 w-12" />
+													</TableHead>
+													<TableHead className="hidden md:table-cell">
 														<Skeleton className="h-3.5 w-16" />
-													</TableCell>
-													<TableCell className="w-[100px] pr-4">
-														<div className="flex justify-center gap-1">
-															<Skeleton className="h-7 w-7 rounded" />
-															<Skeleton className="h-7 w-7 rounded" />
-															<Skeleton className="h-7 w-7 rounded" />
-														</div>
-													</TableCell>
+													</TableHead>
+													<TableHead className="hidden lg:table-cell">
+														<Skeleton className="h-3.5 w-16" />
+													</TableHead>
+													<TableHead>
+														<Skeleton className="h-3.5 w-12" />
+													</TableHead>
+													<TableHead>
+														<Skeleton className="h-3.5 w-14" />
+													</TableHead>
+													<TableHead>
+														<Skeleton className="h-3.5 w-12" />
+													</TableHead>
+													<TableHead className="hidden xl:table-cell">
+														<Skeleton className="h-3.5 w-10" />
+													</TableHead>
+													<TableHead>
+														<Skeleton className="h-3.5 w-16" />
+													</TableHead>
+													<TableHead className="w-[100px]" />
 												</TableRow>
-											))}
-										</TableBody>
-									</Table>
-								</div>
-							) : visibleLeads.length === 0 ? (
-								<div className="flex flex-col items-center justify-center py-16 text-center">
-									<RiUserLine className="mb-3 size-12 text-muted-foreground/30" />
-									<p className="font-medium">No leads found</p>
-									<p className="mt-1 text-muted-foreground text-sm">
-										{allLeads.length === 0
-											? "Create your first lead to get started."
-											: "Try adjusting or clearing your filters."}
-									</p>
-									{hasFilters && (
-										<Button
-											variant="link"
-											size="sm"
-											className="mt-2"
-											onClick={resetFilters}
-										>
-											Clear filters
-										</Button>
-									)}
-								</div>
-							) : (
-								<div className="overflow-x-auto">
-									<Table>
-										<TableHeader>
-											<TableRow className="hover:bg-transparent">
-												<TableHead className="w-10 pl-4">
-													<input
-														type="checkbox"
-														checked={allSelected}
-														onChange={toggleSelectAll}
-														className="cursor-pointer rounded"
-													/>
-												</TableHead>
-												<SortHeader
-													label="Name"
-													sortKey="name"
-													current={sortKey}
-													order={sortOrder}
-													onSort={handleSort}
-												/>
-												<TableHead className="hidden md:table-cell">
-													Contact
-												</TableHead>
-												<TableHead className="hidden lg:table-cell">
-													Property
-												</TableHead>
-												<SortHeader
-													label="Stage"
-													sortKey="stage"
-													current={sortKey}
-													order={sortOrder}
-													onSort={handleSort}
-												/>
-												<SortHeader
-													label="Status"
-													sortKey="status"
-													current={sortKey}
-													order={sortOrder}
-													onSort={handleSort}
-												/>
-												<SortHeader
-													label="Agent"
-													sortKey="agentName"
-													current={sortKey}
-													order={sortOrder}
-													onSort={handleSort}
-												/>
-												<TableHead className="hidden xl:table-cell">
-													Type
-												</TableHead>
-												<SortHeader
-													label="Created"
-													sortKey="createdAt"
-													current={sortKey}
-													order={sortOrder}
-													onSort={handleSort}
-												/>
-												<TableHead className="w-[100px] pr-4 text-center">
-													Actions
-												</TableHead>
-											</TableRow>
-										</TableHeader>
-										<TableBody>
-											{visibleLeads.map((lead) => (
-												<TableRow
-													key={lead.id}
-													className={`transition-colors ${selectedIds.has(lead.id) ? "bg-muted/50" : "hover:bg-muted/30"}`}
-													onClick={(e) => {
-														const target = e.target as HTMLElement | null;
-														// Avoid opening details when user is selecting rows or using an action button.
-														if (
-															target?.closest('input[type="checkbox"]') ||
-															target?.closest("button")
-														) {
-															return;
-														}
-														setViewLead(lead);
-													}}
-												>
-													<TableCell className="pl-4">
+											</TableHeader>
+											<TableBody>
+												{[
+													"sk-leads-table-1",
+													"sk-leads-table-2",
+													"sk-leads-table-3",
+													"sk-leads-table-4",
+													"sk-leads-table-5",
+													"sk-leads-table-6",
+													"sk-leads-table-7",
+													"sk-leads-table-8",
+												].map((id) => (
+													<TableRow key={id} className="hover:bg-transparent">
+														<TableCell className="pl-4">
+															<Skeleton className="h-4 w-4 rounded" />
+														</TableCell>
+														<TableCell>
+															<Skeleton className="mb-1 h-4 w-28" />
+															<Skeleton className="h-3 w-36 md:hidden" />
+														</TableCell>
+														<TableCell className="hidden md:table-cell">
+															<Skeleton className="mb-1 h-3.5 w-36" />
+															<Skeleton className="h-3 w-24" />
+														</TableCell>
+														<TableCell className="hidden lg:table-cell">
+															<Skeleton className="h-3.5 w-28" />
+														</TableCell>
+														<TableCell>
+															<Skeleton className="h-5 w-24 rounded-full" />
+														</TableCell>
+														<TableCell>
+															<Skeleton className="h-5 w-16 rounded-full" />
+														</TableCell>
+														<TableCell>
+															<Skeleton className="h-3.5 w-20" />
+														</TableCell>
+														<TableCell className="hidden xl:table-cell">
+															<Skeleton className="mb-1 h-3 w-12" />
+															<Skeleton className="h-3 w-16" />
+														</TableCell>
+														<TableCell>
+															<Skeleton className="h-3.5 w-16" />
+														</TableCell>
+														<TableCell className="w-[100px] pr-4">
+															<div className="flex justify-center gap-1">
+																<Skeleton className="h-7 w-7 rounded" />
+																<Skeleton className="h-7 w-7 rounded" />
+																<Skeleton className="h-7 w-7 rounded" />
+															</div>
+														</TableCell>
+													</TableRow>
+												))}
+											</TableBody>
+										</Table>
+									</div>
+								) : visibleLeads.length === 0 ? (
+									<div className="flex flex-col items-center justify-center py-16 text-center">
+										<RiUserLine className="mb-3 size-12 text-muted-foreground/30" />
+										<p className="font-medium">No leads found</p>
+										<p className="mt-1 text-muted-foreground text-sm">
+											{allLeads.length === 0
+												? "Create your first lead to get started."
+												: "Try adjusting or clearing your filters."}
+										</p>
+										{hasFilters && (
+											<Button
+												variant="link"
+												size="sm"
+												className="mt-2"
+												onClick={resetFilters}
+											>
+												Clear filters
+											</Button>
+										)}
+									</div>
+								) : (
+									<div className="overflow-x-auto">
+										<Table>
+											<TableHeader>
+												<TableRow className="hover:bg-transparent">
+													<TableHead className="w-10 pl-4">
 														<input
 															type="checkbox"
-															checked={selectedIds.has(lead.id)}
-															onChange={() => toggleSelect(lead.id)}
+															checked={allSelected}
+															onChange={toggleSelectAll}
 															className="cursor-pointer rounded"
 														/>
-													</TableCell>
-													<TableCell>
-														<p className="font-medium text-sm leading-snug">
-															{lead.name}
-														</p>
-														<p className="text-muted-foreground text-xs md:hidden">
-															{lead.email}
-														</p>
-													</TableCell>
-													<TableCell className="hidden md:table-cell">
-														<p className="text-sm">{lead.email}</p>
-														<p className="text-muted-foreground text-xs">
-															{lead.phone}
-														</p>
-													</TableCell>
-													<TableCell className="hidden lg:table-cell">
-														<p
-															className="max-w-[140px] truncate text-sm"
-															title={lead.property}
-														>
-															{lead.property}
-														</p>
-														{lead.projectName && (
-															<p className="max-w-[140px] truncate text-muted-foreground text-xs">
-																{lead.projectName}
-															</p>
-														)}
-													</TableCell>
-													<TableCell>
-														<StageBadge stage={lead.stage} />
-													</TableCell>
-													<TableCell>
-														<StatusBadge status={lead.status} />
-													</TableCell>
-													<TableCell>
-														{lead.agentName ? (
-															<div className="flex items-center gap-1.5">
-																<RiUserLine
-																	size={13}
-																	className="shrink-0 text-muted-foreground"
-																/>
-																<span
-																	className="max-w-[110px] truncate text-sm"
-																	title={lead.agentName}
-																>
-																	{lead.agentName}
-																</span>
-															</div>
-														) : (
-															<span className="text-muted-foreground text-xs italic">
-																Unassigned
-															</span>
-														)}
-													</TableCell>
-													<TableCell className="hidden xl:table-cell">
-														<p className="text-xs capitalize">{lead.type}</p>
-														<p className="text-muted-foreground text-xs capitalize">
-															{lead.leadType}
-														</p>
-													</TableCell>
-													<TableCell className="whitespace-nowrap text-muted-foreground text-xs">
-														{new Date(lead.createdAt).toLocaleDateString()}
-													</TableCell>
-													<TableCell className="w-[100px] pr-4">
-														<div className="flex items-center justify-center gap-0.5">
-															<Tooltip>
-																<TooltipTrigger asChild>
-																	<Button
-																		variant="ghost"
-																		size="sm"
-																		className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
-																		title="View details"
-																		onClick={() => setViewLead(lead)}
-																	>
-																		<RiEyeLine size={14} />
-																	</Button>
-																</TooltipTrigger>
-																<TooltipContent>View details</TooltipContent>
-															</Tooltip>
-															<Tooltip>
-																<TooltipTrigger asChild>
-																	<Button
-																		variant="ghost"
-																		size="sm"
-																		className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
-																		title="Edit lead"
-																		onClick={() => setEditLead(lead)}
-																	>
-																		<RiEditLine size={14} />
-																	</Button>
-																</TooltipTrigger>
-																<TooltipContent>Edit lead</TooltipContent>
-															</Tooltip>
-															<Tooltip>
-																<TooltipTrigger asChild>
-																	<Button
-																		variant="ghost"
-																		size="sm"
-																		className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
-																		title="Delete lead"
-																		onClick={() => setDeleteLead(lead)}
-																	>
-																		<RiDeleteBinLine size={14} />
-																	</Button>
-																</TooltipTrigger>
-																<TooltipContent>Delete lead</TooltipContent>
-															</Tooltip>
-														</div>
-													</TableCell>
+													</TableHead>
+													<SortHeader
+														label="Name"
+														sortKey="name"
+														current={sortKey}
+														order={sortOrder}
+														onSort={handleSort}
+													/>
+													<TableHead className="hidden md:table-cell">
+														Contact
+													</TableHead>
+													<TableHead className="hidden lg:table-cell">
+														Property
+													</TableHead>
+													<SortHeader
+														label="Stage"
+														sortKey="stage"
+														current={sortKey}
+														order={sortOrder}
+														onSort={handleSort}
+													/>
+													<SortHeader
+														label="Status"
+														sortKey="status"
+														current={sortKey}
+														order={sortOrder}
+														onSort={handleSort}
+													/>
+													<SortHeader
+														label="Agent"
+														sortKey="agentName"
+														current={sortKey}
+														order={sortOrder}
+														onSort={handleSort}
+													/>
+													<TableHead className="hidden xl:table-cell">
+														Type
+													</TableHead>
+													<SortHeader
+														label="Created"
+														sortKey="createdAt"
+														current={sortKey}
+														order={sortOrder}
+														onSort={handleSort}
+													/>
+													<TableHead className="w-[100px] pr-4 text-center">
+														Actions
+													</TableHead>
 												</TableRow>
-											))}
-										</TableBody>
-									</Table>
-								</div>
-							)}
-
-							{/* Pagination */}
-							{totalFiltered > 0 && (
-								<div className="flex flex-wrap items-center justify-center gap-1.5 border-t px-4 py-3">
-									{/* |◄ First */}
-									<Button
-										variant="outline"
-										size="sm"
-										className="h-8 w-8 p-0"
-										disabled={page <= 1}
-										onClick={() => setPage(1)}
-										title="First page"
-									>
-										<span className="sr-only">First</span>
-										<svg
-											viewBox="0 0 16 16"
-											className="size-3.5"
-											fill="currentColor"
-											aria-hidden="true"
-										>
-											<path d="M3 3h1.5v10H3zm2.5 5 6-5v10z" />
-										</svg>
-									</Button>
-
-									{/* ◄ Prev */}
-									<Button
-										variant="outline"
-										size="sm"
-										className="h-8 w-8 p-0"
-										disabled={page <= 1}
-										onClick={() => setPage((p) => p - 1)}
-										title="Previous page"
-									>
-										<span className="sr-only">Previous</span>
-										<svg
-											viewBox="0 0 16 16"
-											className="size-3.5"
-											fill="currentColor"
-											aria-hidden="true"
-										>
-											<path d="M10.5 3 4 8l6.5 5z" />
-										</svg>
-									</Button>
-
-									{/* Numbered pages with ellipsis */}
-									{(() => {
-										const delta = 2;
-										const pages: (number | "…left" | "…right")[] = [];
-										const left = Math.max(2, page - delta);
-										const right = Math.min(totalPages - 1, page + delta);
-
-										pages.push(1);
-										if (left > 2) pages.push("…left");
-										for (let i = left; i <= right; i++) pages.push(i);
-										if (right < totalPages - 1) pages.push("…right");
-										if (totalPages > 1) pages.push(totalPages);
-
-										return pages.map((p) =>
-											typeof p === "string" ? (
-												<span
-													key={p}
-													className="flex h-8 w-6 select-none items-center justify-center text-muted-foreground text-xs"
-												>
-													…
-												</span>
-											) : (
-												<Button
-													key={p}
-													variant={p === page ? "default" : "outline"}
-													size="sm"
-													className="h-8 w-8 p-0 text-xs"
-													onClick={() => setPage(p)}
-												>
-													{p}
-												</Button>
-											),
-										);
-									})()}
-
-									{/* ► Next */}
-									<Button
-										variant="outline"
-										size="sm"
-										className="h-8 w-8 p-0"
-										disabled={page >= totalPages}
-										onClick={() => setPage((p) => p + 1)}
-										title="Next page"
-									>
-										<span className="sr-only">Next</span>
-										<svg
-											viewBox="0 0 16 16"
-											className="size-3.5"
-											fill="currentColor"
-											aria-hidden="true"
-										>
-											<path d="M5.5 3 12 8l-6.5 5z" />
-										</svg>
-									</Button>
-
-									{/* ►| Last */}
-									<Button
-										variant="outline"
-										size="sm"
-										className="h-8 w-8 p-0"
-										disabled={page >= totalPages}
-										onClick={() => setPage(totalPages)}
-										title="Last page"
-									>
-										<span className="sr-only">Last</span>
-										<svg
-											viewBox="0 0 16 16"
-											className="size-3.5"
-											fill="currentColor"
-											aria-hidden="true"
-										>
-											<path d="M11.5 3H13v10h-1.5zM4 3l6.5 5L4 13z" />
-										</svg>
-									</Button>
-
-									{/* Items-per-page selector */}
-									<div className="ml-2 flex items-center gap-1.5 border-l pl-2">
-										<Select
-											value={String(pageSize)}
-											onValueChange={(v) => {
-												setPageSize(Number(v));
-												setPage(1);
-											}}
-										>
-											<SelectTrigger className="h-8 w-16 px-2 text-xs">
-												<SelectValue />
-											</SelectTrigger>
-											<SelectContent>
-												{PAGE_SIZE_OPTIONS.map((n) => (
-													<SelectItem
-														key={n}
-														value={String(n)}
-														className="text-xs"
+											</TableHeader>
+											<TableBody>
+												{visibleLeads.map((lead) => (
+													<TableRow
+														key={lead.id}
+														className={`transition-colors ${selectedIds.has(lead.id) ? "bg-muted/50" : "hover:bg-muted/30"}`}
+														onClick={(e) => {
+															const target = e.target as HTMLElement | null;
+															// Avoid opening details when user is selecting rows or using an action button.
+															if (
+																target?.closest('input[type="checkbox"]') ||
+																target?.closest("button")
+															) {
+																return;
+															}
+															setViewLead(lead);
+														}}
 													>
-														{n}
-													</SelectItem>
+														<TableCell className="pl-4">
+															<input
+																type="checkbox"
+																checked={selectedIds.has(lead.id)}
+																onChange={() => toggleSelect(lead.id)}
+																className="cursor-pointer rounded"
+															/>
+														</TableCell>
+														<TableCell>
+															<p className="font-medium text-sm leading-snug">
+																{lead.name}
+															</p>
+															<p className="text-muted-foreground text-xs md:hidden">
+																{lead.email}
+															</p>
+														</TableCell>
+														<TableCell className="hidden md:table-cell">
+															<p className="text-sm">{lead.email}</p>
+															<p className="text-muted-foreground text-xs">
+																{lead.phone}
+															</p>
+														</TableCell>
+														<TableCell className="hidden lg:table-cell">
+															<p
+																className="max-w-[140px] truncate text-sm"
+																title={lead.property}
+															>
+																{lead.property}
+															</p>
+															{lead.projectName && (
+																<p className="max-w-[140px] truncate text-muted-foreground text-xs">
+																	{lead.projectName}
+																</p>
+															)}
+														</TableCell>
+														<TableCell>
+															<StageBadge stage={lead.stage} />
+														</TableCell>
+														<TableCell>
+															<StatusBadge status={lead.status} />
+														</TableCell>
+														<TableCell>
+															{lead.agentName ? (
+																<div className="flex items-center gap-1.5">
+																	<RiUserLine
+																		size={13}
+																		className="shrink-0 text-muted-foreground"
+																	/>
+																	<span
+																		className="max-w-[110px] truncate text-sm"
+																		title={lead.agentName}
+																	>
+																		{lead.agentName}
+																	</span>
+																</div>
+															) : (
+																<span className="text-muted-foreground text-xs italic">
+																	Unassigned
+																</span>
+															)}
+														</TableCell>
+														<TableCell className="hidden xl:table-cell">
+															<p className="text-xs capitalize">{lead.type}</p>
+															<p className="text-muted-foreground text-xs capitalize">
+																{lead.leadType}
+															</p>
+														</TableCell>
+														<TableCell className="whitespace-nowrap text-muted-foreground text-xs">
+															{new Date(lead.createdAt).toLocaleDateString()}
+														</TableCell>
+														<TableCell className="w-[100px] pr-4">
+															<div className="flex items-center justify-center gap-0.5">
+																<Tooltip>
+																	<TooltipTrigger asChild>
+																		<Button
+																			variant="ghost"
+																			size="sm"
+																			className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+																			title="View details"
+																			onClick={() => setViewLead(lead)}
+																		>
+																			<RiEyeLine size={14} />
+																		</Button>
+																	</TooltipTrigger>
+																	<TooltipContent>View details</TooltipContent>
+																</Tooltip>
+																<Tooltip>
+																	<TooltipTrigger asChild>
+																		<Button
+																			variant="ghost"
+																			size="sm"
+																			className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+																			title="Edit lead"
+																			onClick={() => setEditLead(lead)}
+																		>
+																			<RiEditLine size={14} />
+																		</Button>
+																	</TooltipTrigger>
+																	<TooltipContent>Edit lead</TooltipContent>
+																</Tooltip>
+																<Tooltip>
+																	<TooltipTrigger asChild>
+																		<Button
+																			variant="ghost"
+																			size="sm"
+																			className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+																			title="Delete lead"
+																			onClick={() => setDeleteLead(lead)}
+																		>
+																			<RiDeleteBinLine size={14} />
+																		</Button>
+																	</TooltipTrigger>
+																	<TooltipContent>Delete lead</TooltipContent>
+																</Tooltip>
+															</div>
+														</TableCell>
+													</TableRow>
 												))}
-											</SelectContent>
-										</Select>
-										<span className="whitespace-nowrap text-muted-foreground text-xs">
-											items per page
-										</span>
+											</TableBody>
+										</Table>
 									</div>
-								</div>
-							)}
+								)}
+
+								{/* Pagination */}
+								{totalFiltered > 0 && (
+									<div className="flex flex-wrap items-center justify-center gap-1.5 border-t px-4 py-3">
+										{/* |◄ First */}
+										<Button
+											variant="outline"
+											size="sm"
+											className="h-8 w-8 p-0"
+											disabled={page <= 1}
+											onClick={() => setPage(1)}
+											title="First page"
+										>
+											<span className="sr-only">First</span>
+											<svg
+												viewBox="0 0 16 16"
+												className="size-3.5"
+												fill="currentColor"
+												aria-hidden="true"
+											>
+												<path d="M3 3h1.5v10H3zm2.5 5 6-5v10z" />
+											</svg>
+										</Button>
+
+										{/* ◄ Prev */}
+										<Button
+											variant="outline"
+											size="sm"
+											className="h-8 w-8 p-0"
+											disabled={page <= 1}
+											onClick={() => setPage((p) => p - 1)}
+											title="Previous page"
+										>
+											<span className="sr-only">Previous</span>
+											<svg
+												viewBox="0 0 16 16"
+												className="size-3.5"
+												fill="currentColor"
+												aria-hidden="true"
+											>
+												<path d="M10.5 3 4 8l6.5 5z" />
+											</svg>
+										</Button>
+
+										{/* Numbered pages with ellipsis */}
+										{(() => {
+											const delta = 2;
+											const pages: (number | "…left" | "…right")[] = [];
+											const left = Math.max(2, page - delta);
+											const right = Math.min(totalPages - 1, page + delta);
+
+											pages.push(1);
+											if (left > 2) pages.push("…left");
+											for (let i = left; i <= right; i++) pages.push(i);
+											if (right < totalPages - 1) pages.push("…right");
+											if (totalPages > 1) pages.push(totalPages);
+
+											return pages.map((p) =>
+												typeof p === "string" ? (
+													<span
+														key={p}
+														className="flex h-8 w-6 select-none items-center justify-center text-muted-foreground text-xs"
+													>
+														…
+													</span>
+												) : (
+													<Button
+														key={p}
+														variant={p === page ? "default" : "outline"}
+														size="sm"
+														className="h-8 w-8 p-0 text-xs"
+														onClick={() => setPage(p)}
+													>
+														{p}
+													</Button>
+												),
+											);
+										})()}
+
+										{/* ► Next */}
+										<Button
+											variant="outline"
+											size="sm"
+											className="h-8 w-8 p-0"
+											disabled={page >= totalPages}
+											onClick={() => setPage((p) => p + 1)}
+											title="Next page"
+										>
+											<span className="sr-only">Next</span>
+											<svg
+												viewBox="0 0 16 16"
+												className="size-3.5"
+												fill="currentColor"
+												aria-hidden="true"
+											>
+												<path d="M5.5 3 12 8l-6.5 5z" />
+											</svg>
+										</Button>
+
+										{/* ►| Last */}
+										<Button
+											variant="outline"
+											size="sm"
+											className="h-8 w-8 p-0"
+											disabled={page >= totalPages}
+											onClick={() => setPage(totalPages)}
+											title="Last page"
+										>
+											<span className="sr-only">Last</span>
+											<svg
+												viewBox="0 0 16 16"
+												className="size-3.5"
+												fill="currentColor"
+												aria-hidden="true"
+											>
+												<path d="M11.5 3H13v10h-1.5zM4 3l6.5 5L4 13z" />
+											</svg>
+										</Button>
+
+										{/* Items-per-page selector */}
+										<div className="ml-2 flex items-center gap-1.5 border-l pl-2">
+											<Select
+												value={String(pageSize)}
+												onValueChange={(v) => {
+													setPageSize(Number(v));
+													setPage(1);
+												}}
+											>
+												<SelectTrigger className="h-8 w-16 px-2 text-xs">
+													<SelectValue />
+												</SelectTrigger>
+												<SelectContent>
+													{PAGE_SIZE_OPTIONS.map((n) => (
+														<SelectItem
+															key={n}
+															value={String(n)}
+															className="text-xs"
+														>
+															{n}
+														</SelectItem>
+													))}
+												</SelectContent>
+											</Select>
+											<span className="whitespace-nowrap text-muted-foreground text-xs">
+												items per page
+											</span>
+										</div>
+									</div>
+								)}
 							</div>
 							<div className={viewMode === "kanban" ? "p-4" : "hidden"}>
 								{isLoading ? (
@@ -1227,12 +1493,13 @@ export default function AdminLeadsPage() {
 						</CardContent>
 					</Card>
 				</div>
-			</SidebarInset>
+			</SidebarInset >
 
 			{/* Dialogs & Sheets */}
-			<LeadDetailSheet
+			< LeadDetailSheet
 				lead={viewLead}
-				open={!!viewLead}
+				open={!!viewLead
+				}
 				onClose={() => setViewLead(null)}
 				agents={agents}
 				onRefresh={handleRefresh}
@@ -1265,6 +1532,6 @@ export default function AdminLeadsPage() {
 					setSelectedIds(new Set());
 				}}
 			/>
-		</SidebarProvider>
+		</SidebarProvider >
 	);
 }
