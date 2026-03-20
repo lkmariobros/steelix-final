@@ -1,5 +1,6 @@
 import { adminRouter } from "../controllers/admin";
 import { adminLeadsRouter } from "../controllers/admin-leads";
+import { leadTasksRouter } from "../controllers/lead-tasks";
 import { agentTiersRouter } from "../controllers/agent-tiers";
 import { agentsRouter } from "../controllers/agents";
 import { approvalsRouter } from "../controllers/approvals";
@@ -32,6 +33,7 @@ export const appRouter = router({
 	tags: tagsRouter,
 	calendar: calendarRouter,
 	feedback: feedbackRouter,
+	leadTasks: leadTasksRouter,
 });
 
 export type AppRouter = typeof appRouter;

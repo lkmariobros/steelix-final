@@ -24,6 +24,12 @@ import {
 	TableRow,
 } from "@/components/table";
 import { Badge } from "@/components/ui/badge";
+import { Calendar } from "@/components/ui/calendar";
+import {
+	Popover,
+	PopoverContent,
+	PopoverTrigger,
+} from "@/components/ui/popover";
 import {
 	Breadcrumb,
 	BreadcrumbItem,
@@ -59,14 +65,18 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
 import { authClient } from "@/lib/auth-client";
 import { trpc } from "@/utils/trpc";
 import {
 	RiAddLine,
+	RiAlarmWarningLine,
 	RiArrowDownLine,
 	RiArrowUpLine,
 	RiBarChartLine,
+	RiCalendar2Line,
 	RiCheckboxMultipleLine,
+	RiCheckLine,
 	RiCloseLine,
 	RiDashboardLine,
 	RiDeleteBinLine,
@@ -83,6 +93,7 @@ import {
 	RiSearchLine,
 	RiShieldUserLine,
 	RiStickyNoteLine,
+	RiTodoLine,
 	RiUserLine,
 } from "@remixicon/react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -218,6 +229,55 @@ type SortKey =
 	| "createdAt"
 	| "updatedAt";
 
+type TaskType = "call" | "email" | "follow_up" | "meeting" | "other";
+type TaskPriority = "low" | "normal" | "high" | "urgent";
+
+type LeadTask = {
+	id: string;
+	prospectId: string;
+	prospectName: string | null;
+	title: string;
+	taskType: TaskType;
+	priority: TaskPriority;
+	dueDate: Date | string;
+	completedAt: Date | string | null;
+	assignedTo: string | null;
+	assignedToName: string | null;
+	createdBy: string;
+	createdByName: string | null;
+	notes: string | null;
+	createdAt: Date | string;
+	updatedAt: Date | string;
+	isOverdue: boolean;
+};
+
+// ─── Task Helpers ───────────────────────────────────────────────────────────
+
+const TASK_TYPE_LABELS: Record<TaskType, string> = {
+	call: "Call",
+	email: "Email",
+	follow_up: "Follow-up",
+	meeting: "Meeting",
+	other: "Other",
+};
+
+const TASK_PRIORITY_CONFIG: Record<
+	TaskPriority,
+	{ label: string; color: string }
+> = {
+	low: { label: "Low", color: "text-muted-foreground" },
+	normal: { label: "Normal", color: "text-blue-600 dark:text-blue-400" },
+	high: { label: "High", color: "text-orange-600 dark:text-orange-400" },
+	urgent: { label: "Urgent", color: "text-red-600 dark:text-red-400" },
+};
+
+function TaskPriorityBadge({ priority }: { priority: TaskPriority }) {
+	const cfg = TASK_PRIORITY_CONFIG[priority];
+	return (
+		<span className={`font-medium text-xs ${cfg.color}`}>{cfg.label}</span>
+	);
+}
+
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
 function StageBadge({ stage }: { stage: string }) {
@@ -316,6 +376,950 @@ function ActivityEventIcon({ type }: { type: ActivityEventType }) {
 			{cfg.icon}
 			{cfg.label}
 		</span>
+	);
+}
+
+// ─── Date Time Picker ─────────────────────────────────────────────────────────
+
+// Static arrays defined once outside the component
+const DTP_HOURS = Array.from({ length: 12 }, (_, i) =>
+	String(i + 1).padStart(2, "0"),
+);
+const DTP_MINUTES = Array.from({ length: 60 }, (_, i) =>
+	String(i).padStart(2, "0"),
+);
+
+function DateTimePicker({
+	value,
+	onChange,
+	placeholder = "Pick date & time",
+}: {
+	value: string; // "YYYY-MM-DDTHH:mm"
+	onChange: (v: string) => void;
+	placeholder?: string;
+}) {
+	const [open, setOpen] = useState(false);
+
+	const dateObj = value ? new Date(value) : undefined;
+	const isValid = dateObj && !Number.isNaN(dateObj.getTime());
+
+	const timePart = value?.split("T")[1]?.slice(0, 5) ?? "09:00";
+	const [rawH, rawM] = timePart.split(":").map(Number);
+	const currentAmPm: "AM" | "PM" = rawH >= 12 ? "PM" : "AM";
+	const hour12Num = rawH % 12 === 0 ? 12 : rawH % 12;
+	const currentHour12 = String(hour12Num).padStart(2, "0");
+	const currentMinute = String(rawM).padStart(2, "0");
+
+	const displayValue = isValid
+		? dateObj.toLocaleDateString(undefined, {
+				month: "short",
+				day: "numeric",
+				year: "numeric",
+			}) +
+			" · " +
+			dateObj.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+		: null;
+
+	const handleDaySelect = (day: Date | undefined) => {
+		if (!day) return;
+		const pad = (n: number) => String(n).padStart(2, "0");
+		const dateStr = `${day.getFullYear()}-${pad(day.getMonth() + 1)}-${pad(day.getDate())}`;
+		onChange(`${dateStr}T${timePart}`);
+	};
+
+	const applyTime = (
+		hour12: string,
+		minute: string,
+		amPm: "AM" | "PM",
+	) => {
+		let datePart = value?.split("T")[0];
+		if (!datePart) {
+			const today = new Date();
+			const pad = (n: number) => String(n).padStart(2, "0");
+			datePart = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
+		}
+		let h = parseInt(hour12, 10);
+		if (amPm === "AM" && h === 12) h = 0;
+		else if (amPm === "PM" && h !== 12) h += 12;
+		onChange(`${datePart}T${String(h).padStart(2, "0")}:${minute}`);
+	};
+
+	return (
+		<Popover open={open} onOpenChange={setOpen}>
+			<PopoverTrigger asChild>
+				<button
+					type="button"
+					className={cn(
+						"flex h-8 w-full items-center gap-2 rounded-md border border-input bg-background px-3 text-left text-xs transition-colors hover:bg-accent/50 focus:outline-none focus:ring-2 focus:ring-ring",
+						!displayValue && "text-muted-foreground",
+					)}
+				>
+					<RiCalendar2Line className="size-3.5 shrink-0 text-muted-foreground" />
+					{displayValue ?? placeholder}
+				</button>
+			</PopoverTrigger>
+			<PopoverContent className="w-auto p-0" align="start">
+				<Calendar
+					mode="single"
+					selected={isValid ? dateObj : undefined}
+					onSelect={handleDaySelect}
+					captionLayout="label"
+				/>
+				{/* ── Time Picker ── */}
+				<div className="border-t px-3 py-3">
+					<p className="mb-2.5 font-medium text-muted-foreground text-xs">
+						Time
+					</p>
+					<div className="flex items-center gap-2">
+						{/* Hour */}
+						<Select
+							value={currentHour12}
+							onValueChange={(v) =>
+								applyTime(v, currentMinute, currentAmPm)
+							}
+						>
+							<SelectTrigger className="h-8 w-[4.5rem] text-xs">
+								<SelectValue />
+							</SelectTrigger>
+							<SelectContent className="max-h-44">
+								{DTP_HOURS.map((h) => (
+									<SelectItem key={h} value={h} className="text-xs">
+										{h}
+									</SelectItem>
+								))}
+							</SelectContent>
+						</Select>
+
+						<span className="font-bold text-muted-foreground text-sm">:</span>
+
+						{/* Minute */}
+						<Select
+							value={currentMinute}
+							onValueChange={(v) =>
+								applyTime(currentHour12, v, currentAmPm)
+							}
+						>
+							<SelectTrigger className="h-8 w-[4.5rem] text-xs">
+								<SelectValue />
+							</SelectTrigger>
+							<SelectContent className="max-h-44">
+								{DTP_MINUTES.map((m) => (
+									<SelectItem key={m} value={m} className="text-xs">
+										{m}
+									</SelectItem>
+								))}
+							</SelectContent>
+						</Select>
+
+						{/* AM / PM toggle */}
+						<div className="flex overflow-hidden rounded-md border">
+							<button
+								type="button"
+								className={cn(
+									"px-2.5 py-1 text-xs font-medium transition-colors",
+									currentAmPm === "AM"
+										? "bg-primary text-primary-foreground"
+										: "bg-background text-muted-foreground hover:bg-accent",
+								)}
+								onClick={() => applyTime(currentHour12, currentMinute, "AM")}
+							>
+								AM
+							</button>
+							<button
+								type="button"
+								className={cn(
+									"border-l px-2.5 py-1 text-xs font-medium transition-colors",
+									currentAmPm === "PM"
+										? "bg-primary text-primary-foreground"
+										: "bg-background text-muted-foreground hover:bg-accent",
+								)}
+								onClick={() => applyTime(currentHour12, currentMinute, "PM")}
+							>
+								PM
+							</button>
+						</div>
+					</div>
+				</div>
+			</PopoverContent>
+		</Popover>
+	);
+}
+
+// ─── Lead Tasks Card ──────────────────────────────────────────────────────────
+
+function LeadTasksCard({ leadId }: { leadId: string }) {
+	const queryClient = useQueryClient();
+
+	const { data: tasks, isLoading: tasksLoading } = trpc.leadTasks.list.useQuery(
+		{ prospectId: leadId },
+		{ staleTime: 0 },
+	);
+
+	const [showForm, setShowForm] = useState(false);
+	const [form, setForm] = useState({
+		title: "",
+		taskType: "follow_up" as TaskType,
+		priority: "normal" as TaskPriority,
+		dueDate: "",
+		notes: "",
+	});
+
+	// Inline edit state
+	const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+	const [editForm, setEditForm] = useState({
+		title: "",
+		taskType: "follow_up" as TaskType,
+		priority: "normal" as TaskPriority,
+		dueDate: "",
+		notes: "",
+	});
+
+	const invalidate = () => {
+		queryClient.invalidateQueries({ queryKey: [["leadTasks", "list"]] });
+		queryClient.invalidateQueries({ queryKey: [["leadTasks", "listToday"]] });
+	};
+
+	const createMutation = trpc.leadTasks.create.useMutation({
+		onSuccess: () => {
+			toast.success("Task created");
+			setShowForm(false);
+			setForm({
+				title: "",
+				taskType: "follow_up",
+				priority: "normal",
+				dueDate: "",
+				notes: "",
+			});
+			invalidate();
+		},
+		onError: (e) => toast.error(e.message),
+	});
+
+	const updateMutation = trpc.leadTasks.update.useMutation({
+		onSuccess: () => {
+			toast.success("Task updated");
+			setEditingTaskId(null);
+			invalidate();
+		},
+		onError: (e) => toast.error(e.message),
+	});
+
+	const completeMutation = trpc.leadTasks.complete.useMutation({
+		onSuccess: (task) => {
+			toast.success(task.completedAt ? "Task completed ✓" : "Task reopened");
+			invalidate();
+		},
+		onError: (e) => toast.error(e.message),
+	});
+
+	const deleteMutation = trpc.leadTasks.delete.useMutation({
+		onSuccess: () => {
+			toast.success("Task deleted");
+			invalidate();
+		},
+		onError: (e) => toast.error(e.message),
+	});
+
+	const handleCreate = () => {
+		if (!form.title.trim() || !form.dueDate) return;
+		createMutation.mutate({
+			prospectId: leadId,
+			title: form.title.trim(),
+			taskType: form.taskType,
+			priority: form.priority,
+			dueDate: new Date(form.dueDate),
+			notes: form.notes.trim() || null,
+		});
+	};
+
+	const handleStartEdit = (task: LeadTask) => {
+		const dt = new Date(task.dueDate);
+		const pad = (n: number) => String(n).padStart(2, "0");
+		const local = `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}T${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
+		setEditForm({
+			title: task.title,
+			taskType: task.taskType as TaskType,
+			priority: task.priority as TaskPriority,
+			dueDate: local,
+			notes: task.notes ?? "",
+		});
+		setEditingTaskId(task.id);
+	};
+
+	const handleSaveEdit = () => {
+		if (!editingTaskId || !editForm.title.trim() || !editForm.dueDate) return;
+		updateMutation.mutate({
+			id: editingTaskId,
+			title: editForm.title.trim(),
+			taskType: editForm.taskType,
+			priority: editForm.priority,
+			dueDate: new Date(editForm.dueDate),
+			notes: editForm.notes.trim() || null,
+		});
+	};
+
+	const formatDue = (d: Date | string) => {
+		const dt = new Date(d);
+		const now = new Date();
+		const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+		const tomorrow = new Date(today);
+		tomorrow.setDate(today.getDate() + 1);
+		const taskDay = new Date(dt.getFullYear(), dt.getMonth(), dt.getDate());
+
+		if (taskDay.getTime() === today.getTime())
+			return `Today ${dt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+		if (taskDay.getTime() === tomorrow.getTime())
+			return `Tomorrow ${dt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+		return dt.toLocaleDateString(undefined, {
+			month: "short",
+			day: "numeric",
+			year: dt.getFullYear() !== now.getFullYear() ? "numeric" : undefined,
+			hour: "2-digit",
+			minute: "2-digit",
+		});
+	};
+
+	const pendingTasks = (tasks ?? []).filter((t) => !t.completedAt);
+	const completedTasks = (tasks ?? []).filter((t) => !!t.completedAt);
+	const overduePending = pendingTasks.filter((t) => t.isOverdue);
+
+	return (
+		<Card>
+			<CardHeader className="pb-3">
+				<div className="flex items-center justify-between">
+					<CardTitle className="flex items-center gap-2 text-sm">
+						<RiTodoLine className="size-4" />
+						Tasks &amp; Follow-ups
+						{pendingTasks.length > 0 && (
+							<span className="ml-1 rounded-full bg-primary/10 px-1.5 py-0.5 font-medium text-primary text-xs">
+								{pendingTasks.length}
+							</span>
+						)}
+						{overduePending.length > 0 && (
+							<span className="ml-0.5 rounded-full bg-red-100 px-1.5 py-0.5 font-medium text-red-700 text-xs dark:bg-red-900/20 dark:text-red-400">
+								{overduePending.length} overdue
+							</span>
+						)}
+					</CardTitle>
+					<Button
+						size="sm"
+						variant="ghost"
+						className="h-7 gap-1 px-2 text-xs"
+						onClick={() => setShowForm((v) => !v)}
+					>
+						<RiAddLine className="size-3.5" />
+						Add Task
+					</Button>
+				</div>
+			</CardHeader>
+
+			<CardContent className="space-y-3">
+				{/* ── Add Task Form ── */}
+				{showForm && (
+					<div className="space-y-3 rounded-md border bg-muted/30 p-3">
+						<p className="font-medium text-xs">New Task</p>
+						<div className="space-y-2">
+							<Input
+								placeholder="Task title e.g. Call Ahmad on Thursday 10am"
+								value={form.title}
+								onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))}
+								className="h-8 text-sm"
+								autoFocus
+							/>
+							<div className="grid grid-cols-2 gap-2">
+								<Select
+									value={form.taskType}
+									onValueChange={(v) =>
+										setForm((p) => ({ ...p, taskType: v as TaskType }))
+									}
+								>
+									<SelectTrigger className="h-8 text-xs">
+										<SelectValue />
+									</SelectTrigger>
+									<SelectContent>
+										{(
+											Object.entries(TASK_TYPE_LABELS) as [TaskType, string][]
+										).map(([val, label]) => (
+											<SelectItem key={val} value={val} className="text-xs">
+												{label}
+											</SelectItem>
+										))}
+									</SelectContent>
+								</Select>
+								<Select
+									value={form.priority}
+									onValueChange={(v) =>
+										setForm((p) => ({ ...p, priority: v as TaskPriority }))
+									}
+								>
+									<SelectTrigger className="h-8 text-xs">
+										<SelectValue />
+									</SelectTrigger>
+									<SelectContent>
+										{(
+											Object.entries(
+												TASK_PRIORITY_CONFIG,
+											) as [TaskPriority, { label: string }][]
+										).map(([val, cfg]) => (
+											<SelectItem key={val} value={val} className="text-xs">
+												{cfg.label}
+											</SelectItem>
+										))}
+									</SelectContent>
+								</Select>
+							</div>
+						<DateTimePicker
+							value={form.dueDate}
+							onChange={(v) => setForm((p) => ({ ...p, dueDate: v }))}
+							placeholder="Due date & time"
+						/>
+						<Textarea
+							placeholder="Notes (optional)"
+							value={form.notes}
+							onChange={(e) =>
+								setForm((p) => ({ ...p, notes: e.target.value }))
+							}
+							rows={2}
+							className="resize-none bg-background text-xs"
+						/>
+					</div>
+					<div className="flex gap-2">
+						<Button
+							size="sm"
+							className="h-7 text-xs"
+							disabled={!form.title.trim() || !form.dueDate || createMutation.isPending}
+							onClick={handleCreate}
+						>
+								{createMutation.isPending && (
+									<RiLoader4Line className="mr-1 size-3.5 animate-spin" />
+								)}
+								Save Task
+							</Button>
+							<Button
+								size="sm"
+								variant="ghost"
+								className="h-7 text-xs"
+								onClick={() => setShowForm(false)}
+							>
+								Cancel
+							</Button>
+						</div>
+					</div>
+				)}
+
+			{/* ── Task List ── */}
+			{tasksLoading ? (
+				<div className="space-y-2">
+					{[1, 2].map((i) => (
+						<div key={i} className="rounded-md border p-2.5">
+							<div className="flex items-start justify-between gap-2">
+								<div className="flex-1 space-y-2">
+									<Skeleton className="h-4 w-3/4" />
+									<Skeleton className="h-3 w-1/2" />
+								</div>
+								<div className="flex gap-1">
+									<Skeleton className="h-7 w-7 rounded-md" />
+									<Skeleton className="h-7 w-7 rounded-md" />
+									<Skeleton className="h-7 w-7 rounded-md" />
+								</div>
+							</div>
+						</div>
+					))}
+				</div>
+			) : (tasks ?? []).length === 0 ? (
+				<div className="flex flex-col items-center gap-1.5 py-6 text-center">
+					<RiTodoLine className="size-7 text-muted-foreground/40" />
+					<p className="text-muted-foreground text-sm">No tasks yet</p>
+					<p className="text-muted-foreground text-xs">
+						Click &ldquo;Add Task&rdquo; to create a follow-up reminder
+					</p>
+				</div>
+			) : (
+				<div className="space-y-2">
+					{/* Pending tasks */}
+					{pendingTasks.map((task) =>
+						editingTaskId === task.id ? (
+							/* ── Inline Edit Form ── */
+							<div
+								key={task.id}
+								className="space-y-2.5 rounded-md border border-primary/30 bg-muted/30 p-3"
+							>
+								<p className="font-medium text-xs text-primary">Edit Task</p>
+								<Input
+									value={editForm.title}
+									onChange={(e) =>
+										setEditForm((p) => ({ ...p, title: e.target.value }))
+									}
+									className="h-8 text-sm"
+									autoFocus
+								/>
+								<div className="grid grid-cols-2 gap-2">
+									<Select
+										value={editForm.taskType}
+										onValueChange={(v) =>
+											setEditForm((p) => ({ ...p, taskType: v as TaskType }))
+										}
+									>
+										<SelectTrigger className="h-8 text-xs">
+											<SelectValue />
+										</SelectTrigger>
+										<SelectContent>
+											{(
+												Object.entries(TASK_TYPE_LABELS) as [TaskType, string][]
+											).map(([val, label]) => (
+												<SelectItem key={val} value={val} className="text-xs">
+													{label}
+												</SelectItem>
+											))}
+										</SelectContent>
+									</Select>
+									<Select
+										value={editForm.priority}
+										onValueChange={(v) =>
+											setEditForm((p) => ({
+												...p,
+												priority: v as TaskPriority,
+											}))
+										}
+									>
+										<SelectTrigger className="h-8 text-xs">
+											<SelectValue />
+										</SelectTrigger>
+										<SelectContent>
+											{(
+												Object.entries(
+													TASK_PRIORITY_CONFIG,
+												) as [TaskPriority, { label: string }][]
+											).map(([val, cfg]) => (
+												<SelectItem key={val} value={val} className="text-xs">
+													{cfg.label}
+												</SelectItem>
+											))}
+										</SelectContent>
+									</Select>
+								</div>
+							<DateTimePicker
+								value={editForm.dueDate}
+								onChange={(v) => setEditForm((p) => ({ ...p, dueDate: v }))}
+								placeholder="Due date & time"
+							/>
+								<Textarea
+									placeholder="Notes (optional)"
+									value={editForm.notes}
+									onChange={(e) =>
+										setEditForm((p) => ({ ...p, notes: e.target.value }))
+									}
+									rows={2}
+									className="resize-none bg-background text-xs"
+								/>
+								<div className="flex gap-2">
+									<Button
+										size="sm"
+										className="h-7 text-xs"
+										disabled={
+											!editForm.title.trim() ||
+											!editForm.dueDate ||
+											updateMutation.isPending
+										}
+										onClick={handleSaveEdit}
+									>
+										{updateMutation.isPending && (
+											<RiLoader4Line className="mr-1 size-3.5 animate-spin" />
+										)}
+										Save Changes
+									</Button>
+									<Button
+										size="sm"
+										variant="ghost"
+										className="h-7 text-xs"
+										onClick={() => setEditingTaskId(null)}
+									>
+										Cancel
+									</Button>
+								</div>
+							</div>
+						) : (
+							/* ── Task Row ── */
+							<div
+								key={task.id}
+								className={`rounded-md border p-2.5 transition-colors ${
+									task.isOverdue
+										? "border-red-200 bg-red-50 dark:border-red-900/40 dark:bg-red-950/20"
+										: "bg-muted/20 hover:bg-muted/40"
+								}`}
+							>
+								<div className="flex items-start justify-between gap-2">
+									<div className="min-w-0 flex-1">
+										<div className="flex flex-wrap items-center gap-1.5">
+											{task.isOverdue && (
+												<RiAlarmWarningLine className="size-3.5 shrink-0 text-red-500" />
+											)}
+											<p
+												className={`font-medium text-sm ${task.isOverdue ? "text-red-700 dark:text-red-400" : ""}`}
+											>
+												{task.title}
+											</p>
+										</div>
+										<div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
+											<span className="text-muted-foreground">
+												{TASK_TYPE_LABELS[task.taskType as TaskType]}
+											</span>
+											<span className="text-muted-foreground">·</span>
+											<TaskPriorityBadge
+												priority={task.priority as TaskPriority}
+											/>
+											<span className="text-muted-foreground">·</span>
+											<span
+												className={`flex items-center gap-0.5 ${task.isOverdue ? "font-medium text-red-600 dark:text-red-400" : "text-muted-foreground"}`}
+											>
+												<RiCalendar2Line className="size-3" />
+												{formatDue(task.dueDate)}
+											</span>
+										</div>
+										{task.notes && (
+											<p className="mt-1 line-clamp-2 text-muted-foreground text-xs">
+												{task.notes}
+											</p>
+										)}
+									</div>
+									<div className="flex shrink-0 gap-0.5">
+										<Button
+											variant="ghost"
+											size="sm"
+											className="h-7 w-7 p-0 text-muted-foreground hover:text-green-600"
+											title="Mark complete"
+											onClick={() =>
+												completeMutation.mutate({ id: task.id, completed: true })
+											}
+											disabled={completeMutation.isPending}
+										>
+											<RiCheckLine className="size-3.5" />
+										</Button>
+										<Button
+											variant="ghost"
+											size="sm"
+											className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+											title="Edit task"
+											onClick={() => handleStartEdit(task as LeadTask)}
+										>
+											<RiEditLine className="size-3.5" />
+										</Button>
+										<Button
+											variant="ghost"
+											size="sm"
+											className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+											title="Delete task"
+											onClick={() => deleteMutation.mutate({ id: task.id })}
+											disabled={deleteMutation.isPending}
+										>
+											<RiDeleteBinLine className="size-3.5" />
+										</Button>
+									</div>
+								</div>
+							</div>
+						),
+					)}
+
+						{/* Completed tasks (collapsed indicator) */}
+						{completedTasks.length > 0 && (
+							<details className="group">
+								<summary className="flex cursor-pointer select-none list-none items-center gap-1.5 text-muted-foreground text-xs hover:text-foreground">
+									<RiCheckboxMultipleLine className="size-3.5" />
+									{completedTasks.length} completed task
+									{completedTasks.length !== 1 ? "s" : ""}
+								</summary>
+								<div className="mt-2 space-y-1.5">
+									{completedTasks.map((task) => (
+										<div
+											key={task.id}
+											className="flex items-center justify-between gap-2 rounded-md border bg-muted/10 px-2.5 py-2 opacity-60"
+										>
+											<div className="min-w-0 flex-1">
+												<p className="truncate text-sm line-through">
+													{task.title}
+												</p>
+												<p className="text-muted-foreground text-xs">
+													{TASK_TYPE_LABELS[task.taskType as TaskType]} ·{" "}
+													{task.completedAt
+														? `Done ${new Date(task.completedAt).toLocaleDateString()}`
+														: ""}
+												</p>
+											</div>
+											<div className="flex shrink-0 gap-0.5">
+												<Button
+													variant="ghost"
+													size="sm"
+													className="h-7 px-2 text-muted-foreground text-xs hover:text-foreground"
+													title="Reopen task"
+													onClick={() =>
+														completeMutation.mutate({
+															id: task.id,
+															completed: false,
+														})
+													}
+													disabled={completeMutation.isPending}
+												>
+													Reopen
+												</Button>
+												<Button
+													variant="ghost"
+													size="sm"
+													className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+													title="Delete task"
+													onClick={() =>
+														deleteMutation.mutate({ id: task.id })
+													}
+													disabled={deleteMutation.isPending}
+												>
+													<RiDeleteBinLine className="size-3.5" />
+												</Button>
+											</div>
+										</div>
+									))}
+								</div>
+							</details>
+						)}
+					</div>
+				)}
+			</CardContent>
+		</Card>
+	);
+}
+
+// ─── Today's Tasks Widget ─────────────────────────────────────────────────────
+
+// Task-type icon map used inside TodayTasksWidget
+const TASK_TYPE_ICONS: Record<TaskType, React.ReactNode> = {
+	call: <RiPhoneLine className="size-3.5" />,
+	email: <RiMailLine className="size-3.5" />,
+	follow_up: <RiTodoLine className="size-3.5" />,
+	meeting: <RiCalendar2Line className="size-3.5" />,
+	other: <RiFileList3Line className="size-3.5" />,
+};
+
+function TodayTasksWidget({
+	onViewLead,
+}: {
+	onViewLead: (leadId: string) => void;
+}) {
+	const { data: tasks, isLoading } = trpc.leadTasks.listToday.useQuery(
+		undefined,
+		{ staleTime: 30 * 1000 },
+	);
+	const queryClient = useQueryClient();
+
+	const completeMutation = trpc.leadTasks.complete.useMutation({
+		onSuccess: (task) => {
+			toast.success(task.completedAt ? "Task completed ✓" : "Task reopened");
+			queryClient.invalidateQueries({ queryKey: [["leadTasks"]] });
+		},
+		onError: (e) => toast.error(e.message),
+	});
+
+	if (isLoading) {
+		return (
+			<div className="overflow-hidden rounded-xl border bg-card shadow-sm">
+				<div className="flex items-center gap-3 border-b px-4 py-3">
+					<Skeleton className="size-8 shrink-0 rounded-lg" />
+					<div className="space-y-1.5">
+						<Skeleton className="h-4 w-36" />
+						<Skeleton className="h-3 w-48" />
+					</div>
+				</div>
+				<div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3">
+					{[1, 2, 3, 4].map((i) => (
+						<div key={i} className="flex flex-col gap-2.5 rounded-lg border p-3">
+							<div className="flex items-start gap-2">
+								<Skeleton className="mt-0.5 size-6 shrink-0 rounded" />
+								<div className="flex-1 space-y-1.5">
+									<Skeleton className="h-3.5 w-4/5" />
+									<Skeleton className="h-3 w-2/3" />
+								</div>
+							</div>
+							<div className="flex items-center justify-between pt-1">
+								<Skeleton className="h-5 w-20 rounded-full" />
+								<div className="flex gap-1">
+									<Skeleton className="size-6 rounded-md" />
+									<Skeleton className="size-6 rounded-md" />
+								</div>
+							</div>
+						</div>
+					))}
+				</div>
+			</div>
+		);
+	}
+
+	if (!tasks || tasks.length === 0) return null;
+
+	const overdue = tasks.filter((t) => t.isOverdue);
+	const dueToday = tasks.filter((t) => !t.isOverdue);
+
+	const MAX_VISIBLE = 9;
+	const visible = tasks.slice(0, MAX_VISIBLE);
+
+	return (
+		<div className="overflow-hidden rounded-xl border bg-card shadow-sm">
+			{/* ── Header ── */}
+			<div className="flex items-center justify-between border-b px-4 py-3">
+				<div className="flex items-center gap-3">
+					<div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-amber-100 dark:bg-amber-900/30">
+						<RiTodoLine className="size-4 text-amber-600 dark:text-amber-400" />
+					</div>
+					<div>
+						<h3 className="font-semibold text-sm">Tasks Due Today</h3>
+						<p className="text-muted-foreground text-xs">
+							Follow-ups &amp; tasks that need your attention
+						</p>
+					</div>
+				</div>
+				<div className="flex items-center gap-1.5">
+					{overdue.length > 0 && (
+						<span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2.5 py-1 font-semibold text-red-700 text-xs dark:bg-red-900/20 dark:text-red-400">
+							<RiAlarmWarningLine className="size-3" />
+							{overdue.length} overdue
+						</span>
+					)}
+					{dueToday.length > 0 && (
+						<span className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-1 font-semibold text-amber-700 text-xs dark:bg-amber-900/20 dark:text-amber-400">
+							{dueToday.length} today
+						</span>
+					)}
+				</div>
+			</div>
+
+			{/* ── Card Grid ── */}
+			<div className="grid gap-2.5 p-4 sm:grid-cols-2 xl:grid-cols-3">
+				{visible.map((task) => (
+					<div
+						key={task.id}
+						className={cn(
+							"group relative flex flex-col gap-2 overflow-hidden rounded-lg border transition-all hover:shadow-sm",
+							task.isOverdue
+								? "border-red-200 bg-red-50/40 dark:border-red-900/40 dark:bg-red-950/20"
+								: "border-amber-200/70 bg-amber-50/30 dark:border-amber-900/30 dark:bg-amber-950/10",
+						)}
+					>
+						{/* Left accent bar */}
+						<div
+							className={cn(
+								"absolute inset-y-0 left-0 w-0.5",
+								task.isOverdue ? "bg-red-500" : "bg-amber-400",
+							)}
+						/>
+
+						<div className="flex flex-col gap-2 pl-3 pr-3 pt-2.5 pb-2.5">
+							{/* Top row: icon + title */}
+							<div className="flex items-start gap-2">
+								<div
+									className={cn(
+										"mt-0.5 flex size-6 shrink-0 items-center justify-center rounded",
+										task.isOverdue
+											? "bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400"
+											: "bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400",
+									)}
+								>
+									{TASK_TYPE_ICONS[task.taskType as TaskType]}
+								</div>
+								<p
+									className={cn(
+										"line-clamp-2 font-semibold text-sm leading-snug",
+										task.isOverdue && "text-red-700 dark:text-red-400",
+									)}
+								>
+									{task.title}
+								</p>
+							</div>
+
+							{/* Lead + type */}
+							<p className="truncate pl-8 text-muted-foreground text-xs">
+								<span className="font-medium text-foreground/70">
+									{task.prospectName ?? "Unknown Lead"}
+								</span>
+								<span className="mx-1 opacity-40">·</span>
+								{TASK_TYPE_LABELS[task.taskType as TaskType]}
+							</p>
+
+							{/* Footer: due chip + priority + actions */}
+							<div className="flex items-center justify-between pl-8">
+								<div className="flex items-center gap-1.5">
+									{/* Due chip */}
+									{task.isOverdue ? (
+										<span className="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 font-semibold text-red-700 text-[0.65rem] dark:bg-red-900/20 dark:text-red-400">
+											<RiAlarmWarningLine className="mr-1 size-2.5" />
+											{new Date(task.dueDate).toLocaleDateString([], {
+												month: "short",
+												day: "numeric",
+											})}
+										</span>
+									) : (
+										<span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 font-semibold text-amber-700 text-[0.65rem] dark:bg-amber-900/20 dark:text-amber-400">
+											<RiCalendar2Line className="mr-1 size-2.5" />
+											{new Date(task.dueDate).toLocaleTimeString([], {
+												hour: "2-digit",
+												minute: "2-digit",
+											})}
+										</span>
+									)}
+									{/* Priority badge */}
+									<span
+										className={cn(
+											"inline-flex items-center rounded-full px-2 py-0.5 font-medium text-[0.65rem]",
+											{
+												"bg-muted text-muted-foreground":
+													task.priority === "low",
+												"bg-blue-100 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400":
+													task.priority === "normal",
+												"bg-orange-100 text-orange-700 dark:bg-orange-900/20 dark:text-orange-400":
+													task.priority === "high",
+												"bg-red-100 text-red-700 dark:bg-red-900/20 dark:text-red-400":
+													task.priority === "urgent",
+											},
+										)}
+									>
+										{TASK_PRIORITY_CONFIG[task.priority as TaskPriority].label}
+									</span>
+								</div>
+								{/* Action buttons */}
+								<div className="flex items-center gap-0.5">
+									<Button
+										variant="ghost"
+										size="sm"
+										className="size-6 p-0 text-muted-foreground hover:bg-green-100 hover:text-green-700 dark:hover:bg-green-900/20 dark:hover:text-green-400"
+										title="Mark complete"
+										onClick={() =>
+											completeMutation.mutate({
+												id: task.id,
+												completed: true,
+											})
+										}
+										disabled={completeMutation.isPending}
+									>
+										<RiCheckLine className="size-3" />
+									</Button>
+									<Button
+										variant="ghost"
+										size="sm"
+										className="size-6 p-0 text-muted-foreground hover:bg-accent"
+										title="View lead"
+										onClick={() => onViewLead(task.prospectId)}
+									>
+										<RiEyeLine className="size-3" />
+									</Button>
+								</div>
+							</div>
+						</div>
+					</div>
+				))}
+			</div>
+
+			{tasks.length > MAX_VISIBLE && (
+				<div className="border-t bg-muted/20 px-4 py-2.5 text-center text-muted-foreground text-xs">
+					+{tasks.length - MAX_VISIBLE} more tasks — open individual leads to see
+					all
+				</div>
+			)}
+		</div>
 	);
 }
 
@@ -658,6 +1662,9 @@ function LeadDetailSheet({
 							</Card>
 						)}
 
+						{/* ── Tasks & Follow-ups ── */}
+						<LeadTasksCard leadId={lead.id} />
+
 						{/* ── Activity Timeline ── */}
 						<Card>
 							<CardHeader className="pb-3">
@@ -754,70 +1761,85 @@ function LeadDetailSheet({
 									</div>
 								)}
 
-								{/* Timeline feed */}
-								{timelineLoading ? (
-									<div className="flex items-center justify-center py-6">
-										<RiLoader4Line className="size-5 animate-spin text-muted-foreground" />
-									</div>
-								) : timeline && timeline.length > 0 ? (
-									<div className="relative space-y-0">
-										{/* Vertical connector line */}
-										<div className="absolute top-2 bottom-2 left-3.5 w-px bg-border" />
-										<div className="space-y-4">
-											{timeline.map((event) => {
-												const cfg =
-													ACTIVITY_CONFIG[
-														event.eventType as ActivityEventType
-													] ?? ACTIVITY_CONFIG.lead_updated;
-												return (
-													<div key={event.id} className="relative flex gap-3">
-														{/* Dot */}
-														<div
-															className={`relative z-10 mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full border-2 border-background ${cfg.dotColor}`}
-														>
-															<span className="text-white [&>svg]:size-3">
-																{cfg.icon}
+							{/* Timeline feed */}
+							{timelineLoading ? (
+								<div className="space-y-3 pt-1">
+									{[1, 2, 3].map((i) => (
+										<div key={i} className="flex gap-3">
+											<Skeleton className="mt-0.5 size-7 shrink-0 rounded-full" />
+											<div className="flex-1 space-y-1.5 pt-1">
+												<Skeleton className="h-3.5 w-28 rounded" />
+												<Skeleton className="h-3 w-48 rounded" />
+												<Skeleton className="h-3 w-20 rounded" />
+											</div>
+										</div>
+									))}
+								</div>
+							) : timeline && timeline.length > 0 ? (
+								<div className="relative">
+									{/* Vertical connector line — sits behind dots */}
+									<div className="absolute top-3.5 bottom-3.5 left-3.5 w-px bg-gradient-to-b from-border via-border/60 to-transparent" />
+									<div className="space-y-1">
+										{timeline.map((event, idx) => {
+											const cfg =
+												ACTIVITY_CONFIG[
+													event.eventType as ActivityEventType
+												] ?? ACTIVITY_CONFIG.lead_updated;
+											const isLast = idx === timeline.length - 1;
+											return (
+												<div
+													key={event.id}
+													className="relative flex gap-3"
+												>
+													{/* Dot */}
+													<div
+														className={`relative z-10 mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full border-2 border-background shadow-sm ${cfg.dotColor}`}
+													>
+														<span className="text-white [&>svg]:size-3">
+															{cfg.icon}
+														</span>
+													</div>
+													{/* Content bubble */}
+													<div
+														className={`flex-1 rounded-lg border bg-muted/20 px-3 py-2 ${isLast ? "mb-0" : "mb-1"}`}
+													>
+														<div className="flex flex-wrap items-center gap-2">
+															<ActivityEventIcon
+																type={event.eventType as ActivityEventType}
+															/>
+															<span className="text-muted-foreground text-xs">
+																by{" "}
+																<span className="font-medium text-foreground">
+																	{event.actorName}
+																</span>
+															</span>
+															<span className="ml-auto shrink-0 text-muted-foreground text-xs">
+																{formatDateTime(event.createdAt)}
 															</span>
 														</div>
-														{/* Content */}
-														<div className="flex-1 pb-1">
-															<div className="flex flex-wrap items-center gap-2">
-																<ActivityEventIcon
-																	type={event.eventType as ActivityEventType}
-																/>
-																<span className="text-muted-foreground text-xs">
-																	by{" "}
-																	<span className="font-medium text-foreground">
-																		{event.actorName}
-																	</span>
-																</span>
-															</div>
-															{event.content && (
-																<p className="mt-1.5 whitespace-pre-line text-sm leading-relaxed">
-																	{event.content}
-																</p>
-															)}
-															<p className="mt-1 text-muted-foreground text-xs">
-																{formatDateTime(event.createdAt)}
+														{event.content && (
+															<p className="mt-1.5 whitespace-pre-line text-sm leading-relaxed text-foreground/90">
+																{event.content}
 															</p>
-														</div>
+														)}
 													</div>
-												);
-											})}
-										</div>
+												</div>
+											);
+										})}
 									</div>
-								) : (
-									<div className="flex flex-col items-center gap-2 py-8 text-center">
-										<RiHistoryLine className="size-8 text-muted-foreground/40" />
-										<p className="text-muted-foreground text-sm">
-											No activity yet
-										</p>
-										<p className="text-muted-foreground text-xs">
-											Add a note, log a call, or change the stage to start the
-											timeline
-										</p>
-									</div>
-								)}
+								</div>
+							) : (
+								<div className="flex flex-col items-center gap-2 py-8 text-center">
+									<RiHistoryLine className="size-8 text-muted-foreground/40" />
+									<p className="text-muted-foreground text-sm">
+										No activity yet
+									</p>
+									<p className="text-muted-foreground text-xs">
+										Add a note, log a call, or change the stage to start the
+										timeline
+									</p>
+								</div>
+							)}
 							</CardContent>
 						</Card>
 					</div>
@@ -2353,13 +3375,21 @@ export default function AdminLeadsPage() {
 						</div>
 					</div>
 
-					{/* Stats */}
-					<StatsCards leads={allLeads} isLoading={isLoading} />
+				{/* Stats */}
+				<StatsCards leads={allLeads} isLoading={isLoading} />
 
-					{/* Charts */}
-					<LeadsCharts leads={allLeads} isLoading={isLoading} />
+				{/* Charts */}
+				<LeadsCharts leads={allLeads} isLoading={isLoading} />
 
-					{/* Table */}
+				{/* Today's Tasks */}
+				<TodayTasksWidget
+					onViewLead={(leadId) => {
+						const lead = allLeads.find((l) => l.id === leadId);
+						if (lead) setViewLead(lead);
+					}}
+				/>
+
+				{/* Table */}
 					<Card className="overflow-hidden">
 						{/* ── Toolbar ── */}
 						<div className="flex flex-col gap-2 border-b px-4 py-3">
