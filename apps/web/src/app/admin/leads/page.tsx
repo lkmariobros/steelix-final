@@ -44,7 +44,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { authClient } from "@/lib/auth-client";
 import { trpc } from "@/utils/trpc";
 import {
-	RiAddLine,
 	RiCheckboxMultipleLine,
 	RiCloseLine,
 	RiDashboardLine,
@@ -52,21 +51,21 @@ import {
 	RiEditLine,
 	RiEyeLine,
 	RiFileDownloadLine,
+	RiFileUploadLine,
 	RiFileList3Line,
 	RiLoader4Line,
-	RiRefreshLine,
 	RiSearchLine,
 	RiShieldUserLine,
 	RiUserLine,
 } from "@remixicon/react";
 import { FileSpreadsheet, FileText } from "lucide-react";
-import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import type React from "react";
 import { useCallback, useMemo, useState } from "react";
 
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/tooltip";
 
+import { AdminLeadsPageHeader } from "./_components/admin-leads-page-header";
 import { BulkStageDialog } from "./_components/bulk-stage-dialog";
 import { CreateLeadDialog } from "./_components/create-lead-dialog";
 import { DeleteLeadDialog } from "./_components/delete-lead-dialog";
@@ -87,10 +86,10 @@ import { SortHeader } from "./_components/sort-header";
 import { StatsCards } from "./_components/stats-cards";
 import { TodayTasksWidget } from "./_components/today-tasks-widget";
 import { KanbanPipelineBoard } from "./_components/kanban-pipeline-board";
+import { ImportLeadsDialog } from "./_components/import-leads-dialog";
 
 export default function AdminLeadsPage() {
 	const router = useRouter();
-	const queryClient = useQueryClient();
 	const { data: session, isPending } = authClient.useSession();
 
 	// ── Filters (all client-side, no backend re-fetch) ──────────────────────
@@ -114,6 +113,7 @@ export default function AdminLeadsPage() {
 	const [isBulkStageOpen, setIsBulkStageOpen] = useState(false);
 	const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 	const [isExporting, setIsExporting] = useState(false);
+	const [isImportOpen, setIsImportOpen] = useState(false);
 
 	// ── Fetch ALL leads ONCE — no filter params sent to backend ─────────────
 	// Backend returns the full dataset; all filtering/sorting/pagination
@@ -512,87 +512,18 @@ export default function AdminLeadsPage() {
 				</header>
 
 				<div className="flex flex-1 flex-col gap-6 py-6">
-					{/* Page Title */}
-					<div className="flex items-center justify-between">
-						<div>
-							<h1 className="font-bold text-2xl tracking-tight">
-								Leads Management
-							</h1>
-							{isLoading ? (
-								<Skeleton className="mt-1.5 h-4 w-64" />
-							) : (
-								<p className="mt-0.5 text-muted-foreground text-sm">
-									{allLeads.length} leads loaded · filters &amp; sorting are
-									instant
-								</p>
-							)}
-						</div>
-						<div className="flex flex-wrap items-center justify-end gap-2">
-							{/* Refresh */}
-							<Button
-								variant="outline"
-								size="sm"
-								onClick={handleRefresh}
-								disabled={isLoading || isFetching}
-								className="h-9 gap-1.5 transition-colors"
-							>
-								{isLoading || isFetching ? (
-									<RiLoader4Line className="size-4 animate-spin" aria-hidden="true" />
-								) : (
-									<RiRefreshLine size={16} className="mr-0.5" aria-hidden="true" />
-								)}
-								<span>Refresh</span>
-							</Button>
-
-							{/* Segmented Table / Kanban */}
-							<div className="inline-flex items-center rounded-md border bg-background p-1">
-								<Button
-									variant="outline"
-									size="sm"
-									aria-pressed={viewMode === "table"}
-									onClick={() => {
-										setViewMode("table");
-										setSelectedIds(new Set());
-									}}
-									className={[
-										"h-9 rounded-l-md rounded-none border-0 px-3 transition-colors",
-										viewMode === "table"
-											? "bg-primary text-primary-foreground hover:bg-primary/90"
-											: "bg-transparent text-muted-foreground hover:text-foreground",
-									].join(" ")}
-								>
-									Table
-								</Button>
-								<Button
-									variant="outline"
-									size="sm"
-									aria-pressed={viewMode === "kanban"}
-									onClick={() => {
-										setViewMode("kanban");
-										setSelectedIds(new Set());
-									}}
-									className={[
-										"h-9 rounded-none border-0 px-3 transition-colors",
-										(viewMode === "kanban"
-											? "bg-primary text-primary-foreground hover:bg-primary/90"
-											: "bg-transparent text-muted-foreground hover:text-foreground") + " rounded-r-md",
-									].join(" ")}
-								>
-									Kanban
-								</Button>
-							</div>
-
-							{/* New Lead */}
-							<Button
-								size="sm"
-								onClick={() => setIsCreateOpen(true)}
-								className="h-9 transition-colors"
-							>
-								<RiAddLine size={16} className="mr-1.5" aria-hidden="true" />
-								New Lead
-							</Button>
-						</div>
-					</div>
+					<AdminLeadsPageHeader
+						isLoading={isLoading}
+						leadCount={allLeads.length}
+						isRefreshing={isLoading || isFetching}
+						viewMode={viewMode}
+						onRefresh={handleRefresh}
+						onViewMode={(mode) => {
+							setViewMode(mode);
+							setSelectedIds(new Set());
+						}}
+						onNewLead={() => setIsCreateOpen(true)}
+					/>
 
 					{/* Stats */}
 					<StatsCards leads={allLeads} isLoading={isLoading} />
@@ -906,92 +837,119 @@ export default function AdminLeadsPage() {
 											</>
 										)}
 									</span>
-									{/* Export (top-right of the table toolbar) */}
-									<DropdownMenu>
-										<DropdownMenuTrigger asChild>
-											<span
-												className={[
-													"inline-flex",
-													isLoading || isExporting
-														? "pointer-events-none opacity-50"
-														: "",
-												].join(" ")}
+									{/* Import / export */}
+									<div className="inline-flex items-center overflow-hidden rounded-md border border-border/80 bg-muted/25">
+										<Tooltip>
+											<TooltipTrigger asChild>
+												<Button
+													type="button"
+													size="icon"
+													variant="ghost"
+													className="h-8 w-8 rounded-none p-0 text-muted-foreground hover:text-foreground"
+													disabled={isLoading}
+													aria-label="Import leads from CSV"
+													onClick={() => setIsImportOpen(true)}
+												>
+													<RiFileUploadLine size={16} aria-hidden />
+												</Button>
+											</TooltipTrigger>
+											<TooltipContent className="z-[60]">Import CSV</TooltipContent>
+										</Tooltip>
+										<div className="h-5 w-px bg-border" />
+										<DropdownMenu>
+											<DropdownMenuTrigger asChild>
+												<span
+													className={[
+														"inline-flex",
+														isLoading || isExporting
+															? "pointer-events-none opacity-50"
+															: "",
+													].join(" ")}
+												>
+													<Tooltip>
+														<TooltipTrigger asChild>
+															<Button
+																size="icon"
+																variant="ghost"
+																className="h-8 w-8 rounded-none p-0 text-muted-foreground hover:text-foreground"
+																disabled={isLoading || isExporting}
+																aria-label="Export leads"
+															>
+																<RiFileDownloadLine
+																	size={16}
+																	aria-hidden="true"
+																/>
+															</Button>
+														</TooltipTrigger>
+														<TooltipContent className="z-[60]">
+															Export leads
+														</TooltipContent>
+													</Tooltip>
+												</span>
+											</DropdownMenuTrigger>
+											<DropdownMenuContent
+												align="end"
+												className="w-fit min-w-0 p-0"
 											>
-												<Tooltip>
-													<TooltipTrigger asChild>
-														<Button
-															size="icon"
-															variant="ghost"
-															className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
-															disabled={isLoading || isExporting}
-															aria-label="Export leads"
-														>
-															<RiFileDownloadLine
-																size={16}
-																aria-hidden="true"
-															/>
-														</Button>
-													</TooltipTrigger>
-													<TooltipContent className="z-[60]">
-														Export leads
-													</TooltipContent>
-												</Tooltip>
-											</span>
-										</DropdownMenuTrigger>
-										<DropdownMenuContent
-											align="end"
-											className="w-fit min-w-0 p-0"
-										>
-											<div className="flex items-center gap-0 p-0">
-												<Tooltip>
-													<TooltipTrigger asChild>
-														<DropdownMenuItem
-															disabled={
-																isLoading ||
-																isExporting ||
-																(selectedIds.size === 0 && kanbanLeads.length === 0)
-															}
-															onSelect={() => {
-																handleExport(
-																	"csv",
-																	selectedIds.size > 0 ? "selected" : "filtered",
-																);
-															}}
-															className="h-7 w-7 gap-0 !px-0 !py-0 justify-center"
-														>
-															<FileText size={14} aria-hidden="true" />
-														</DropdownMenuItem>
-													</TooltipTrigger>
-													<TooltipContent className="z-[60]">
-														Export CSV ({selectedIds.size > 0 ? "selected" : "filtered"})
-													</TooltipContent>
-												</Tooltip>
-												<Tooltip>
-													<TooltipTrigger asChild>
-														<DropdownMenuItem
-															disabled={
-																isLoading ||
-																isExporting ||
-																(selectedIds.size === 0 && kanbanLeads.length === 0)
-															}
-															onSelect={() => {
-																handleExport(
-																	"excel",
-																	selectedIds.size > 0 ? "selected" : "filtered",
-																);
-															}}
-															className="h-7 w-7 gap-0 !px-0 !py-0 justify-center"
-														>
-															<FileSpreadsheet size={14} aria-hidden="true" />
-														</DropdownMenuItem>
-													</TooltipTrigger>
-													<TooltipContent className="z-[60]">
-														Export Excel ({selectedIds.size > 0 ? "selected" : "filtered"})
-													</TooltipContent>
-												</Tooltip>
-											</div>
-										</DropdownMenuContent>
-									</DropdownMenu>
+												<div className="flex items-center gap-0 p-0">
+													<Tooltip>
+														<TooltipTrigger asChild>
+															<DropdownMenuItem
+																disabled={
+																	isLoading ||
+																	isExporting ||
+																	(selectedIds.size === 0 &&
+																		kanbanLeads.length === 0)
+																}
+																onSelect={() => {
+																	handleExport(
+																		"csv",
+																		selectedIds.size > 0
+																			? "selected"
+																			: "filtered",
+																	);
+																}}
+																className="h-7 w-7 gap-0 !px-0 !py-0 justify-center"
+															>
+																<FileText size={14} aria-hidden="true" />
+															</DropdownMenuItem>
+														</TooltipTrigger>
+														<TooltipContent className="z-[60]">
+															Export CSV (
+															{selectedIds.size > 0 ? "selected" : "filtered"})
+														</TooltipContent>
+													</Tooltip>
+													<Tooltip>
+														<TooltipTrigger asChild>
+															<DropdownMenuItem
+																disabled={
+																	isLoading ||
+																	isExporting ||
+																	(selectedIds.size === 0 &&
+																		kanbanLeads.length === 0)
+																}
+																onSelect={() => {
+																	handleExport(
+																		"excel",
+																		selectedIds.size > 0
+																			? "selected"
+																			: "filtered",
+																	);
+																}}
+																className="h-7 w-7 gap-0 !px-0 !py-0 justify-center"
+															>
+																<FileSpreadsheet size={14} aria-hidden="true" />
+															</DropdownMenuItem>
+														</TooltipTrigger>
+														<TooltipContent className="z-[60]">
+															Export Excel (
+															{selectedIds.size > 0 ? "selected" : "filtered"})
+														</TooltipContent>
+													</Tooltip>
+												</div>
+											</DropdownMenuContent>
+										</DropdownMenu>
+									</div>
 								</div>
 							</div>
 						</div>
@@ -1493,13 +1451,12 @@ export default function AdminLeadsPage() {
 						</CardContent>
 					</Card>
 				</div>
-			</SidebarInset >
+			</SidebarInset>
 
 			{/* Dialogs & Sheets */}
-			< LeadDetailSheet
+			<LeadDetailSheet
 				lead={viewLead}
-				open={!!viewLead
-				}
+				open={!!viewLead}
 				onClose={() => setViewLead(null)}
 				agents={agents}
 				onRefresh={handleRefresh}
@@ -1532,6 +1489,11 @@ export default function AdminLeadsPage() {
 					setSelectedIds(new Set());
 				}}
 			/>
-		</SidebarProvider >
+			<ImportLeadsDialog
+				open={isImportOpen}
+				onOpenChange={setIsImportOpen}
+				onImported={handleRefresh}
+			/>
+		</SidebarProvider>
 	);
 }

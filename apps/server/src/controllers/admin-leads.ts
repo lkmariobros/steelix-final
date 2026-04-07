@@ -10,6 +10,7 @@ import {
 	bulkUpdateLeadsStageAdmin,
 	checkLeadDuplicateAdmin,
 	createLeadAdmin,
+	importLeadsBulkAdmin,
 	deleteLeadAdmin,
 	getAgentsWithLeads,
 	getAllLeadsAdmin,
@@ -88,6 +89,10 @@ const adminCheckDuplicateInput = z.object({
 	excludeId: z.string().uuid().optional(), // pass when editing an existing lead
 });
 
+const adminImportLeadsInput = z.object({
+	rows: z.array(z.record(z.string())).max(2000),
+});
+
 // ─── Admin Leads Router ────────────────────────────────────────────────────────
 
 export const adminLeadsRouter = router({
@@ -156,6 +161,15 @@ export const adminLeadsRouter = router({
 				tagIds,
 				_actorId: ctx.session.user.id,
 			});
+		}),
+
+	/**
+	 * Bulk import leads from parsed CSV rows (same columns as export).
+	 */
+	importCsv: adminProcedure
+		.input(adminImportLeadsInput)
+		.mutation(async ({ input, ctx }) => {
+			return await importLeadsBulkAdmin(input.rows, ctx.session.user.id);
 		}),
 
 	/**
