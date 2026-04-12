@@ -23,6 +23,7 @@ import {
 	updateCrmProjectSchema,
 	updateProspectSchema,
 } from "../models/crm";
+import { importProspectsBulkForAgent } from "../services/leads";
 import { db } from "../utils/db";
 import { adminProcedure, protectedProcedure, router } from "../utils/trpc";
 
@@ -36,7 +37,15 @@ const listProspectsInput = z.object({
 	leadType: leadTypeSchema.optional(), // Filter by lead type
 	includeCompanyLeads: z.boolean().default(false), // Include unclaimed company leads
 	page: z.number().min(1).default(1),
-	limit: z.number().min(1).max(1000).default(10),
+	/** Max 5000 when forExport; otherwise capped to 1000 in the handler. */
+	limit: z.number().min(1).max(5000).default(10),
+	/** When true, returns up to 5000 matching rows (offset 0) for CSV/Excel export. */
+	forExport: z.boolean().optional(),
+});
+
+const crmImportCsvInput = z.object({
+	rows: z.array(z.record(z.string())).max(2000),
+	mode: z.enum(["personal_assigned", "company_unclaimed"]),
 });
 
 // Get prospect by ID input schema
@@ -113,8 +122,13 @@ export const crmRouter = router({
 					includeCompanyLeads,
 					page,
 					limit,
+					forExport,
 				} = input;
 				const agentId = ctx.session.user.id;
+
+				const exportAll = forExport === true;
+				const effectiveLimit = exportAll ? 5000 : Math.min(limit, 1000);
+				const effectiveOffset = exportAll ? 0 : (page - 1) * effectiveLimit;
 
 				// Build where conditions
 				const conditions: SQL[] = [];
@@ -226,13 +240,13 @@ export const crmRouter = router({
 				const total = Number(countResult?.count || 0);
 
 				// Get paginated results with agent name
-				const offset = (page - 1) * limit;
 				const results = await executeQueryWithRetry(
 					() =>
 						db
 							.select({
 								prospect: prospects,
 								agentName: user.name,
+								agentEmail: user.email,
 								projectName: crmProjects.name,
 							})
 							.from(prospects)
@@ -240,8 +254,8 @@ export const crmRouter = router({
 							.leftJoin(crmProjects, eq(prospects.projectId, crmProjects.id))
 							.where(and(...conditions))
 							.orderBy(desc(prospects.createdAt))
-							.limit(limit)
-							.offset(offset),
+							.limit(effectiveLimit)
+							.offset(effectiveOffset),
 					"Fetch prospects query",
 				);
 
@@ -294,6 +308,11 @@ export const crmRouter = router({
 					tagsByProspectId[item.prospectId].push(item.tag);
 				}
 
+				const effectivePage = exportAll ? 1 : page;
+				const effectiveTotalPages = exportAll
+					? 1
+					: Math.ceil(total / effectiveLimit);
+
 				return {
 					prospects: results.map((r) => {
 						// Handle missing columns gracefully (for databases that haven't been migrated yet)
@@ -314,6 +333,7 @@ export const crmRouter = router({
 						return {
 							...parsed,
 							agentName: r.agentName || null,
+							agentEmail: r.agentEmail || null,
 							projectName: r.projectName || null,
 							tagIds: tagsByProspectId[r.prospect.id]?.map((t) => t.id) || [],
 							tagNames:
@@ -322,9 +342,9 @@ export const crmRouter = router({
 					}),
 					pagination: {
 						total,
-						page,
-						limit,
-						totalPages: Math.ceil(total / limit),
+						page: effectivePage,
+						limit: exportAll ? results.length : effectiveLimit,
+						totalPages: effectiveTotalPages,
 					},
 				};
 			} catch (error: unknown) {
@@ -376,6 +396,21 @@ export const crmRouter = router({
 
 				throw error;
 			}
+		}),
+
+	/**
+	 * Bulk import prospects from CSV (same columns as admin export).
+	 * personal_assigned → your CRM (personal leads assigned to you).
+	 * company_unclaimed → company pool (unclaimed company leads).
+	 */
+	importCsv: protectedProcedure
+		.input(crmImportCsvInput)
+		.mutation(async ({ input, ctx }) => {
+			return await importProspectsBulkForAgent(
+				input.rows,
+				ctx.session.user.id,
+				input.mode,
+			);
 		}),
 
 	// Get a single prospect by ID (with notes)

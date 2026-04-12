@@ -948,8 +948,22 @@ export async function importLeadsBulkAdmin(
 		const rowNum = i + 1;
 
 		const name = pickCsvField(row, "name", "Name");
-		const email = pickCsvField(row, "email", "Email");
-		const phoneRaw = pickCsvField(row, "phone", "Phone");
+		const email = pickCsvField(
+			row,
+			"email",
+			"Email",
+			"contact email",
+			"contactemail",
+			"Contact Email",
+		);
+		const phoneRaw = pickCsvField(
+			row,
+			"phone",
+			"Phone",
+			"contact phone",
+			"contactphone",
+			"Contact Phone",
+		);
 		const property = pickCsvField(row, "property", "Property");
 		const projectName = pickCsvField(
 			row,
@@ -1076,6 +1090,176 @@ export async function importLeadsBulkAdmin(
 				...validated.data,
 				agentId: agentId ?? undefined,
 				_actorId: actorId,
+			});
+			result.created++;
+			seenEmail.add(emailNorm);
+			seenPhone.add(phoneNorm);
+		} catch (e) {
+			result.skippedInvalid++;
+			result.errors.push({
+				rowIndex: rowNum,
+				message: e instanceof Error ? e.message : "Insert failed",
+			});
+		}
+	}
+
+	return result;
+}
+
+export type AgentProspectCsvImportMode =
+	| "personal_assigned"
+	| "company_unclaimed";
+
+/**
+ * Agent CRM bulk import: rows are validated like admin import, but assignment
+ * is always the current agent (personal) or the company pool (unclaimed company).
+ * CSV "Agent Email" / agent columns are ignored for security.
+ */
+export async function importProspectsBulkForAgent(
+	rows: Record<string, string>[],
+	agentId: string,
+	mode: AgentProspectCsvImportMode,
+) {
+	if (rows.length > IMPORT_MAX_ROWS) {
+		throw new Error(`Import is limited to ${IMPORT_MAX_ROWS} rows per batch.`);
+	}
+
+	const result = {
+		created: 0,
+		skippedDuplicate: 0,
+		skippedInvalid: 0,
+		errors: [] as { rowIndex: number; message: string }[],
+	};
+
+	const seenEmail = new Set<string>();
+	const seenPhone = new Set<string>();
+
+	const forcedLeadType: LeadType =
+		mode === "company_unclaimed" ? "company" : "personal";
+	const assignAgentId: string | null =
+		mode === "company_unclaimed" ? null : agentId;
+
+	for (let i = 0; i < rows.length; i++) {
+		const row = rows[i];
+		const rowNum = i + 1;
+
+		const name = pickCsvField(row, "name", "Name");
+		const email = pickCsvField(
+			row,
+			"email",
+			"Email",
+			"contact email",
+			"contactemail",
+			"Contact Email",
+		);
+		const phoneRaw = pickCsvField(
+			row,
+			"phone",
+			"Phone",
+			"contact phone",
+			"contactphone",
+			"Contact Phone",
+		);
+		const property = pickCsvField(row, "property", "Property");
+		const projectName = pickCsvField(
+			row,
+			"project",
+			"Project",
+			"projectname",
+			"project name",
+		);
+		const stageRaw = pickCsvField(row, "stage", "Stage");
+		const statusRaw = pickCsvField(row, "status", "Status");
+		const typeRaw = pickCsvField(row, "type", "Type");
+		const source = pickCsvField(row, "source", "Source");
+		const tags = pickCsvField(row, "tags", "Tags");
+		const lastContactRaw = pickCsvField(
+			row,
+			"lastcontact",
+			"last contact",
+			"Last Contact",
+		);
+		const nextContactRaw = pickCsvField(
+			row,
+			"nextcontact",
+			"next contact",
+			"Next Contact",
+		);
+
+		if (!name || !email || !phoneRaw) {
+			result.skippedInvalid++;
+			result.errors.push({
+				rowIndex: rowNum,
+				message: "Missing required field (name, email, or phone).",
+			});
+			continue;
+		}
+
+		const phone = normalizePhoneForImport(phoneRaw);
+		const emailNorm = email.trim().toLowerCase();
+		const phoneNorm = phone.replace(/\s+/g, "");
+
+		if (seenEmail.has(emailNorm) || seenPhone.has(phoneNorm)) {
+			result.skippedDuplicate++;
+			continue;
+		}
+
+		const dup = await checkLeadDuplicateAdmin(email, phone);
+		if (dup.emailTaken || dup.phoneTaken) {
+			result.skippedDuplicate++;
+			continue;
+		}
+
+		const parsedStage = parseStageFromCsv(stageRaw);
+		const parsedStatus = parseStatusFromCsv(statusRaw);
+		const parsedType = parseTypeFromCsv(typeRaw);
+		const finalSource = source || "CSV import";
+		const finalProperty = property || "—";
+
+		let projectId: string | undefined;
+		if (projectName) {
+			const [pRow] = await db
+				.select({ id: crmProjects.id })
+				.from(crmProjects)
+				.where(
+					sql`lower(${crmProjects.name}) = ${projectName.toLowerCase().trim()}`,
+				)
+				.limit(1);
+			projectId = pRow?.id;
+		}
+
+		const lastContact = parseOptionalDate(lastContactRaw);
+		const nextContact = parseOptionalDate(nextContactRaw);
+
+		const baseInsert: InsertProspect = {
+			name,
+			email,
+			phone,
+			source: finalSource,
+			type: parsedType,
+			property: finalProperty,
+			...(projectId ? { projectId } : {}),
+			status: parsedStatus,
+			stage: parsedStage,
+			leadType: forcedLeadType,
+			...(tags ? { tags } : {}),
+			...(lastContact ? { lastContact } : {}),
+			...(nextContact ? { nextContact } : {}),
+		};
+
+		const validated = insertProspectSchema.safeParse(baseInsert);
+		if (!validated.success) {
+			result.skippedInvalid++;
+			const msg = validated.error.errors.map((e) => e.message).join("; ");
+			result.errors.push({ rowIndex: rowNum, message: msg });
+			continue;
+		}
+
+		try {
+			await createLeadAdmin({
+				...validated.data,
+				agentId: assignAgentId,
+				_actorId: agentId,
 			});
 			result.created++;
 			seenEmail.add(emailNorm);

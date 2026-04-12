@@ -21,6 +21,12 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
 	Dialog,
 	DialogContent,
 	DialogDescription,
@@ -48,12 +54,15 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/tooltip";
 import { authClient } from "@/lib/auth-client";
 import { trpc } from "@/utils/trpc";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
 	RiAddLine,
 	RiAlertLine,
+	RiFileDownloadLine,
+	RiFileUploadLine,
 	RiCalendarLine,
 	RiDashboardLine,
 	RiDeleteBinLine,
@@ -69,12 +78,22 @@ import {
 	RiSearchLine,
 	RiUserLine,
 } from "@remixicon/react";
+import { FileSpreadsheet, FileText } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
+
+import { CrmImportDialog } from "./_components/crm-import-dialog";
+import type { CrmImportMode } from "./_components/crm-import-dialog";
+import {
+	exportProspectsToCsv,
+	exportProspectsToExcelHtml,
+	prospectsToExportRows,
+	type CrmExportProspect,
+} from "./_utils/crm-export";
 
 // Pipeline stages for Kanban board
 type LeadType = "personal" | "company";
@@ -101,6 +120,7 @@ interface Prospect {
 	nextContact: Date | string | null;
 	agentId: string | null; // Can be null for unclaimed company leads
 	agentName?: string | null; // Agent name (from backend join)
+	agentEmail?: string | null;
 	createdAt: Date | string;
 	updatedAt: Date | string;
 }
@@ -191,6 +211,7 @@ type LeadsTab = "my" | "company";
 export default function CRMPage() {
 	const router = useRouter();
 	const queryClient = useQueryClient();
+	const trpcUtils = trpc.useUtils();
 	const { data: session, isPending } = authClient.useSession();
 	const [activeTab, setActiveTab] = useState<LeadsTab>("my"); // My Leads | Company Leads
 	const [viewMode, setViewMode] = useState<ViewMode>("list"); // New: View mode toggle
@@ -214,6 +235,8 @@ export default function CRMPage() {
 	const [prospectToDelete, setProspectToDelete] = useState<Prospect | null>(
 		null,
 	);
+	const [isImportOpen, setIsImportOpen] = useState(false);
+	const [isExporting, setIsExporting] = useState(false);
 	const itemsPerPage = 10;
 
 	// Projects (admin-managed developer projects) for dropdown selection
@@ -252,6 +275,62 @@ export default function CRMPage() {
 
 	const prospects = prospectsData?.prospects || [];
 	const totalPages = prospectsData?.pagination.totalPages || 0;
+
+	const importMode: CrmImportMode =
+		activeTab === "company" ? "company_unclaimed" : "personal_assigned";
+
+	const exportListParams = useMemo(
+		() => ({
+			search: searchQuery || undefined,
+			type:
+				typeFilter !== "all" ? (typeFilter as "tenant" | "buyer") : undefined,
+			property: propertyFilter !== "all" ? propertyFilter : undefined,
+			status:
+				statusFilter !== "all"
+					? (statusFilter as "active" | "inactive" | "pending")
+					: undefined,
+			leadType: activeTab === "company" ? ("company" as const) : undefined,
+			includeCompanyLeads: activeTab === "company",
+			page: 1,
+			limit: 5000,
+			forExport: true as const,
+		}),
+		[searchQuery, typeFilter, propertyFilter, statusFilter, activeTab],
+	);
+
+	const handleExportProspects = useCallback(
+		async (format: "csv" | "excel") => {
+			if (isExporting || !session) return;
+			setIsExporting(true);
+			try {
+				const data = await trpcUtils.crm.list.fetch(exportListParams);
+				const rows = prospectsToExportRows(
+					data.prospects as CrmExportProspect[],
+				);
+				if (rows.length === 0) {
+					toast.error("No prospects to export for the current filters.");
+					return;
+				}
+				const baseName =
+					activeTab === "company"
+						? "crm_company_leads_export"
+						: "crm_my_leads_export";
+				if (format === "csv") exportProspectsToCsv(rows, baseName);
+				else exportProspectsToExcelHtml(rows, baseName);
+				if (data.pagination.total > 5000) {
+					toast.message("Export limit", {
+						description:
+							"Only the first 5,000 matching rows were exported. Narrow filters and export again if needed.",
+					});
+				}
+			} catch (e) {
+				toast.error(e instanceof Error ? e.message : "Export failed");
+			} finally {
+				setIsExporting(false);
+			}
+		},
+		[activeTab, exportListParams, isExporting, session, trpcUtils],
+	);
 
 	// Form setup
 	const form = useForm<ProspectFormValues>({
@@ -566,7 +645,88 @@ export default function CRMPage() {
 								</Button>
 							</div>
 						</div>
-						<div className="flex items-center gap-3">
+						<div className="flex flex-wrap items-center gap-2 sm:gap-3">
+							<div className="inline-flex items-center overflow-hidden rounded-md border border-border/80 bg-muted/30">
+								<Tooltip>
+									<TooltipTrigger asChild>
+										<Button
+											type="button"
+											size="icon"
+											variant="ghost"
+											className="h-8 w-8 rounded-none p-0 text-muted-foreground hover:text-foreground"
+											disabled={isLoadingProspects}
+											aria-label="Import prospects from CSV"
+											onClick={() => setIsImportOpen(true)}
+										>
+											<RiFileUploadLine size={16} aria-hidden />
+										</Button>
+									</TooltipTrigger>
+									<TooltipContent>Import CSV</TooltipContent>
+								</Tooltip>
+								<div className="h-5 w-px bg-border" />
+								<DropdownMenu>
+									<DropdownMenuTrigger asChild>
+										<span
+											className={
+												isLoadingProspects || isExporting
+													? "pointer-events-none inline-flex opacity-50"
+													: "inline-flex"
+											}
+										>
+											<Tooltip>
+												<TooltipTrigger asChild>
+													<Button
+														type="button"
+														size="icon"
+														variant="ghost"
+														className="h-8 w-8 rounded-none p-0 text-muted-foreground hover:text-foreground"
+														disabled={isLoadingProspects || isExporting}
+														aria-label="Export prospects"
+													>
+														<RiFileDownloadLine size={16} aria-hidden />
+													</Button>
+												</TooltipTrigger>
+												<TooltipContent>Export CSV or Excel</TooltipContent>
+											</Tooltip>
+										</span>
+									</DropdownMenuTrigger>
+									<DropdownMenuContent
+										align="end"
+										className="w-fit min-w-0 p-0"
+									>
+										<div className="flex items-center gap-0 p-0">
+											<Tooltip>
+												<TooltipTrigger asChild>
+													<DropdownMenuItem
+														disabled={isLoadingProspects || isExporting}
+														onSelect={() => {
+															void handleExportProspects("csv");
+														}}
+														className="h-9 w-9 gap-0 !px-0 !py-0 justify-center"
+													>
+														<FileText size={15} aria-hidden />
+													</DropdownMenuItem>
+												</TooltipTrigger>
+												<TooltipContent>Export CSV</TooltipContent>
+											</Tooltip>
+											<Tooltip>
+												<TooltipTrigger asChild>
+													<DropdownMenuItem
+														disabled={isLoadingProspects || isExporting}
+														onSelect={() => {
+															void handleExportProspects("excel");
+														}}
+														className="h-9 w-9 gap-0 !px-0 !py-0 justify-center"
+													>
+														<FileSpreadsheet size={15} aria-hidden />
+													</DropdownMenuItem>
+												</TooltipTrigger>
+												<TooltipContent>Export Excel</TooltipContent>
+											</Tooltip>
+										</div>
+									</DropdownMenuContent>
+								</DropdownMenu>
+							</div>
 							{/* View Toggle */}
 							<div className="flex items-center gap-1 rounded-md border bg-muted/50 p-1">
 								<Button
@@ -1696,6 +1856,15 @@ export default function CRMPage() {
 						</div>
 					)}
 				</div>
+				<CrmImportDialog
+					open={isImportOpen}
+					onOpenChange={setIsImportOpen}
+					importMode={importMode}
+					onImported={() => {
+						void queryClient.invalidateQueries({ queryKey: [["crm"]] });
+						void refetchProspects();
+					}}
+				/>
 			</SidebarInset>
 		</SidebarProvider>
 	);
