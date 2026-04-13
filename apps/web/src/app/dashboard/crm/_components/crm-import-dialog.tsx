@@ -1,5 +1,6 @@
 "use client";
 
+import type React from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
@@ -15,8 +16,44 @@ import {
 } from "@/components/ui/dialog";
 import { RiFileUploadLine, RiLoader4Line } from "@remixicon/react";
 import { parseCsvToRecords } from "@/app/admin/leads/_utils/parse-csv";
+import { PIPELINE_STAGES } from "@/app/admin/leads/_components/lead-constants";
 
 export type CrmImportMode = "personal_assigned" | "company_unclaimed";
+
+const STAGE_CODES = PIPELINE_STAGES.map((s) => s.value).join(", ");
+
+function FieldRow({
+	header,
+	required,
+	aliases,
+	notes,
+}: {
+	header: string;
+	required?: boolean;
+	aliases?: string;
+	notes: React.ReactNode;
+}) {
+	return (
+		<div className="border-b border-border/60 py-2 last:border-b-0">
+			<div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+				<span className="font-medium text-foreground">{header}</span>
+				{required && (
+					<span className="text-[10px] font-medium uppercase tracking-wide text-green-600 dark:text-green-500">
+						Required
+					</span>
+				)}
+				{aliases && (
+					<span className="text-muted-foreground text-[11px]">
+						(aliases: {aliases})
+					</span>
+				)}
+			</div>
+			<div className="mt-0.5 text-muted-foreground text-xs leading-snug">
+				{notes}
+			</div>
+		</div>
+	);
+}
 
 export function CrmImportDialog({
 	open,
@@ -116,57 +153,174 @@ export function CrmImportDialog({
 				if (!v) handleClose();
 			}}
 		>
-			<DialogContent className="max-h-[90vh] gap-0 overflow-hidden p-0 sm:max-w-lg">
-				<DialogHeader className="border-b px-6 py-4 text-left">
+			<DialogContent className="flex max-h-[min(90vh,720px)] w-[calc(100vw-1.5rem)] min-h-0 flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl">
+				<DialogHeader className="shrink-0 border-b px-6 py-4 text-left">
 					<DialogTitle className="flex items-center gap-2 text-lg">
 						<RiFileUploadLine className="size-5 text-green-600" aria-hidden />
 						Import prospects (CSV)
 					</DialogTitle>
 					<DialogDescription className="text-left text-sm leading-relaxed">
-						Same column layout as admin export (Name, Email or Contact Email,
-						Phone, etc.). Required per row: name, email, and phone. Duplicates
-						(existing email or phone in the system) are skipped. Imports as:{" "}
-						<strong>{modeLabel}</strong>. CSV agent columns are ignored.
+						First row must be the header with column names below (matching an
+						export from Admin or CRM works). Column names are{" "}
+						<strong>case-insensitive</strong>. Duplicates (email or phone already
+						in the system) are skipped. Imports as:{" "}
+						<strong>{modeLabel}</strong>.
 					</DialogDescription>
 				</DialogHeader>
 
-				<div className="space-y-4 px-6 py-4">
-					<input
-						ref={fileRef}
-						type="file"
-						accept=".csv,text/csv"
-						className="sr-only"
-						onChange={onPickFile}
-					/>
-					<div className="flex flex-wrap items-center gap-2">
-						<Button
-							type="button"
-							variant="outline"
-							size="sm"
-							className="h-9"
-							onClick={() => fileRef.current?.click()}
-							disabled={importMutation.isPending}
-						>
-							Choose file…
-						</Button>
-						{fileName && (
-							<span className="text-muted-foreground text-xs">{fileName}</span>
-						)}
+				<div
+					className={[
+						"min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-6 py-4",
+						/* Minimal scrollbar (Firefox + WebKit) */
+						"[scrollbar-gutter:stable]",
+						"[scrollbar-width:thin]",
+						"[scrollbar-color:hsl(var(--border))_transparent]",
+						"[&::-webkit-scrollbar]:w-1.5",
+						"[&::-webkit-scrollbar-track]:bg-transparent",
+						"[&::-webkit-scrollbar-thumb]:rounded-full",
+						"[&::-webkit-scrollbar-thumb]:bg-border/70",
+						"hover:[&::-webkit-scrollbar-thumb]:bg-border",
+					].join(" ")}
+				>
+					<div className="space-y-4">
+						<div className="rounded-lg border border-border/80 bg-muted/25 px-3 py-2.5">
+							<p className="mb-2 font-medium text-foreground text-sm">
+								CSV columns (exactly what the importer reads)
+							</p>
+							<div>
+								<FieldRow
+									header="Name"
+									required
+									notes="Full name. Minimum 2 characters."
+								/>
+								<FieldRow
+									header="Email"
+									required
+									aliases="Contact Email"
+									notes="Valid email address. Use column header “Email” or “Contact Email”."
+								/>
+								<FieldRow
+									header="Phone"
+									required
+									aliases="Contact Phone"
+									notes="At least 8 characters after cleaning. Digits, spaces, +, -, ( ) only. Use “Phone” or “Contact Phone”."
+								/>
+								<FieldRow
+									header="Property"
+									notes="Property interest or label. If empty, “—” is stored."
+								/>
+								<FieldRow
+									header="Project"
+									aliases="Project Name"
+									notes="Optional. Must match an existing CRM project name exactly (case-insensitive) to link the project; otherwise left blank."
+								/>
+								<FieldRow
+									header="Stage"
+									notes={
+										<>
+											<p>
+												Pipeline stage. Use the same labels as an export (e.g.
+												“New Lead”, “Follow Up For Appt.”) or one of the codes
+												below. Empty defaults to{" "}
+												<code className="rounded bg-muted px-1 py-px text-[11px]">
+													new_lead
+												</code>
+												.
+											</p>
+											<pre className="mt-1.5 whitespace-pre-wrap break-all rounded-md bg-muted/80 p-2 font-mono text-[10px] leading-tight text-muted-foreground">
+												{STAGE_CODES}
+											</pre>
+										</>
+									}
+								/>
+								<FieldRow
+									header="Status"
+									notes="active, inactive, or pending (any common capitalization). Empty defaults to active."
+								/>
+								<FieldRow
+									header="Type"
+									notes="Prospect type: tenant or buyer (owner is treated as buyer). Empty defaults to buyer."
+								/>
+								<FieldRow
+									header="Source"
+									notes="e.g. Website, Referral. If empty, “CSV import” is used."
+								/>
+								<FieldRow
+									header="Tags"
+									notes="Optional free text; use semicolons between multiple tags if you like (same style as export). Not linked to tag IDs."
+								/>
+								<FieldRow
+									header="Last Contact"
+									aliases="last contact"
+									notes="Optional date. Prefer YYYY-MM-DD or ISO date; other formats may work if the browser can parse them."
+								/>
+								<FieldRow
+									header="Next Contact"
+									aliases="next contact"
+									notes="Optional date; same format as Last Contact."
+								/>
+							</div>
+						</div>
+
+						<div className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2.5 text-xs leading-relaxed dark:border-amber-500/25 dark:bg-amber-500/10">
+							<p className="font-medium text-foreground">Agent import rules</p>
+							<ul className="mt-1.5 list-inside list-disc space-y-1 text-muted-foreground">
+								<li>
+									<strong>Agent</strong>, <strong>Agent Email</strong>, and{" "}
+									<strong>Lead Type</strong> columns are{" "}
+									<strong>not applied</strong> — assignment follows your tab (
+									{modeLabel}).
+								</li>
+								<li>
+									<strong>Created At</strong> / <strong>Updated At</strong> from
+									an export file are ignored; the server sets timestamps.
+								</li>
+							</ul>
+						</div>
+
+						<div>
+							<input
+								ref={fileRef}
+								type="file"
+								accept=".csv,text/csv"
+								className="sr-only"
+								onChange={onPickFile}
+							/>
+							<div className="flex flex-wrap items-center gap-2">
+								<Button
+									type="button"
+									variant="outline"
+									size="sm"
+									className="h-9"
+									onClick={() => fileRef.current?.click()}
+									disabled={importMutation.isPending}
+								>
+									Choose file…
+								</Button>
+								{fileName && (
+									<span className="text-muted-foreground text-xs">
+										{fileName}
+									</span>
+								)}
+							</div>
+
+							{parseError && (
+								<p className="mt-2 text-destructive text-sm">{parseError}</p>
+							)}
+
+							{rows.length > 0 && !parseError && (
+								<p className="mt-2 text-muted-foreground text-sm">
+									<span className="font-medium text-foreground">
+										{rows.length}
+									</span>{" "}
+									rows ready to import.
+								</p>
+							)}
+						</div>
 					</div>
-
-					{parseError && (
-						<p className="text-destructive text-sm">{parseError}</p>
-					)}
-
-					{rows.length > 0 && !parseError && (
-						<p className="text-muted-foreground text-sm">
-							<span className="font-medium text-foreground">{rows.length}</span>{" "}
-							rows ready to import.
-						</p>
-					)}
 				</div>
 
-				<DialogFooter className="gap-2 border-t bg-muted/20 px-6 py-4 sm:justify-end">
+				<DialogFooter className="shrink-0 gap-2 border-t bg-muted/20 px-6 py-4 sm:justify-end">
 					<Button
 						type="button"
 						variant="ghost"
