@@ -48,9 +48,10 @@ try {
 		session: {
 			expiresIn: 60 * 60 * 24 * 7, // 7 days
 			updateAge: 60 * 60 * 24, // 1 day
+			// Cookie cache embeds session+user in a cookie (~4KB max). Large fields
+			// (e.g. base64 profile images on `user.image`) exceed the limit and break sign-in.
 			cookieCache: {
-				enabled: true,
-				maxAge: 60 * 60 * 24 * 7, // 7 days
+				enabled: false,
 			},
 		},
 		// ✅ CRITICAL FIX: Proper cross-origin cookie configuration with environment-based security

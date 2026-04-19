@@ -80,7 +80,7 @@ import {
 } from "@remixicon/react";
 import { FileSpreadsheet, FileText } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useRouter } from "next/navigation";
+import { useRedirectUnauthenticated } from "@/hooks/use-redirect-unauthenticated";
 import { useCallback, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
@@ -209,10 +209,10 @@ type ViewMode = "list" | "kanban";
 type LeadsTab = "my" | "company";
 
 export default function CRMPage() {
-	const router = useRouter();
 	const queryClient = useQueryClient();
 	const trpcUtils = trpc.useUtils();
 	const { data: session, isPending } = authClient.useSession();
+	useRedirectUnauthenticated(session, isPending);
 	const [activeTab, setActiveTab] = useState<LeadsTab>("my"); // My Leads | Company Leads
 	const [viewMode, setViewMode] = useState<ViewMode>("list"); // New: View mode toggle
 	const [searchQuery, setSearchQuery] = useState("");
@@ -571,8 +571,7 @@ export default function CRMPage() {
 	}
 
 	if (!session) {
-		router.push("/login");
-		return null;
+		return <LoadingScreen text="Redirecting..." />;
 	}
 
 	return (

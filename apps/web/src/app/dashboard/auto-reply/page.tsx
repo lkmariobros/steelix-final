@@ -39,6 +39,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
+import { useRedirectUnauthenticated } from "@/hooks/use-redirect-unauthenticated";
 import { authClient } from "@/lib/auth-client";
 import { trpc } from "@/utils/trpc";
 import {
@@ -53,7 +54,6 @@ import {
 	RiUserLine,
 } from "@remixicon/react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -71,9 +71,9 @@ interface AutoReplyRule {
 }
 
 export default function AutoReplyPage() {
-	const router = useRouter();
 	const queryClient = useQueryClient();
 	const { data: session, isPending } = authClient.useSession();
+	useRedirectUnauthenticated(session, isPending);
 	const [searchQuery, setSearchQuery] = useState("");
 	const [statusFilter, setStatusFilter] = useState<"all" | "tenant" | "owner">(
 		"all",
@@ -276,8 +276,7 @@ export default function AutoReplyPage() {
 	}
 
 	if (!session) {
-		router.push("/login");
-		return null;
+		return <LoadingScreen text="Redirecting..." />;
 	}
 
 	return (

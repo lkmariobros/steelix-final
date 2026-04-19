@@ -22,6 +22,7 @@ import { LoadingScreen } from "@/components/ui/loading-spinner";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useRedirectUnauthenticated } from "@/hooks/use-redirect-unauthenticated";
 import { authClient } from "@/lib/auth-client";
 import { trpc } from "@/utils/trpc";
 import {
@@ -38,7 +39,6 @@ import {
 	RiUserLine,
 } from "@remixicon/react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -93,10 +93,10 @@ const formatTimestamp = (timestamp: string): string => {
 };
 
 export default function WhatsAppPage() {
-	const router = useRouter();
 	const queryClient = useQueryClient();
 	const { data: session, isPending: isSessionPending } =
 		authClient.useSession();
+	useRedirectUnauthenticated(session, isSessionPending);
 	const [searchQuery, setSearchQuery] = useState("");
 	const [filter, setFilter] = useState<"all" | "unread">("all");
 	const [selectedConversationId, setSelectedConversationId] = useState<
@@ -255,8 +255,7 @@ export default function WhatsAppPage() {
 	}
 
 	if (!session) {
-		router.push("/login");
-		return null;
+		return <LoadingScreen text="Redirecting..." />;
 	}
 
 	return (

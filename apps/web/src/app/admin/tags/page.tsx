@@ -43,6 +43,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { LoadingScreen } from "@/components/ui/loading-spinner";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useRedirectUnauthenticated } from "@/hooks/use-redirect-unauthenticated";
 import { authClient } from "@/lib/auth-client";
 import { trpc } from "@/utils/trpc";
 import {
@@ -57,7 +58,6 @@ import {
 	RiShieldUserLine,
 } from "@remixicon/react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -71,9 +71,9 @@ interface Tag {
 }
 
 export default function AdminTagsPage() {
-	const router = useRouter();
 	const queryClient = useQueryClient();
 	const { data: session, isPending } = authClient.useSession();
+	useRedirectUnauthenticated(session, isPending);
 	const [searchQuery, setSearchQuery] = useState("");
 	const [currentPage, setCurrentPage] = useState(1);
 	const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -195,8 +195,7 @@ export default function AdminTagsPage() {
 
 	// Redirect if not authenticated
 	if (!session) {
-		router.push("/login");
-		return null;
+		return <LoadingScreen text="Redirecting..." />;
 	}
 
 	const formatDate = (date: Date | string) => {

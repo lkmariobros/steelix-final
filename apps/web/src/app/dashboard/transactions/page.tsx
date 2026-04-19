@@ -44,6 +44,7 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useTransactionModalActions } from "@/contexts/transaction-modal-context";
+import { useRedirectUnauthenticated } from "@/hooks/use-redirect-unauthenticated";
 import { authClient } from "@/lib/auth-client";
 import { trpc } from "@/utils/trpc";
 import {
@@ -59,7 +60,6 @@ import {
 	RiRefreshLine,
 	RiTimeLine,
 } from "@remixicon/react";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 // View modes for the transactions page
@@ -74,8 +74,8 @@ const PIPELINE_STATUSES = [
 ] as const;
 
 export default function TransactionsPage() {
-	const router = useRouter();
 	const { data: session, isPending } = authClient.useSession();
+	useRedirectUnauthenticated(session, isPending);
 	const { openCreateModal, openEditModal, openViewModal } =
 		useTransactionModalActions();
 	const [viewMode, setViewMode] = useState<ViewMode>("all");
@@ -140,8 +140,7 @@ export default function TransactionsPage() {
 	}
 
 	if (!session) {
-		router.push("/login");
-		return null;
+		return <LoadingScreen text="Redirecting..." />;
 	}
 
 	// Handle refresh

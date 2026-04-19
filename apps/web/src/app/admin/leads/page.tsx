@@ -40,7 +40,9 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
+import { LoadingScreen } from "@/components/ui/loading-spinner";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useRedirectUnauthenticated } from "@/hooks/use-redirect-unauthenticated";
 import { authClient } from "@/lib/auth-client";
 import { trpc } from "@/utils/trpc";
 import {
@@ -59,7 +61,6 @@ import {
 	RiUserLine,
 } from "@remixicon/react";
 import { FileSpreadsheet, FileText } from "lucide-react";
-import { useRouter } from "next/navigation";
 import type React from "react";
 import { useCallback, useMemo, useState } from "react";
 
@@ -89,8 +90,8 @@ import { KanbanPipelineBoard } from "./_components/kanban-pipeline-board";
 import { ImportLeadsDialog } from "./_components/import-leads-dialog";
 
 export default function AdminLeadsPage() {
-	const router = useRouter();
 	const { data: session, isPending } = authClient.useSession();
+	useRedirectUnauthenticated(session, isPending);
 
 	// ── Filters (all client-side, no backend re-fetch) ──────────────────────
 	const [search, setSearch] = useState("");
@@ -462,8 +463,7 @@ export default function AdminLeadsPage() {
 		);
 	}
 	if (!session) {
-		router.push("/login");
-		return null;
+		return <LoadingScreen text="Redirecting..." />;
 	}
 
 	return (

@@ -18,13 +18,12 @@ import {
 } from "@/components/ui/breadcrumb";
 import { LoadingScreen } from "@/components/ui/loading-spinner";
 import { AdminDashboard } from "@/dashboards/admin";
+import { useRedirectUnauthenticated } from "@/hooks/use-redirect-unauthenticated";
 import { authClient } from "@/lib/auth-client";
 import { RiDashboardLine, RiShieldUserLine } from "@remixicon/react";
-import { useRouter } from "next/navigation";
-
 export default function AdminDashboardPage() {
-	const router = useRouter();
 	const { data: session, isPending } = authClient.useSession();
+	useRedirectUnauthenticated(session, isPending);
 
 	// Show loading while checking authentication
 	if (isPending) {
@@ -33,8 +32,7 @@ export default function AdminDashboardPage() {
 
 	// Redirect to login if not authenticated
 	if (!session) {
-		router.push("/login");
-		return null;
+		return <LoadingScreen text="Redirecting..." />;
 	}
 
 	return (

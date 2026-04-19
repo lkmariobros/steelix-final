@@ -44,6 +44,7 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useRedirectUnauthenticated } from "@/hooks/use-redirect-unauthenticated";
 import { authClient } from "@/lib/auth-client";
 import { trpc } from "@/utils/trpc";
 import {
@@ -57,12 +58,11 @@ import {
 	RiShakeHandsLine,
 	RiUserLine,
 } from "@remixicon/react";
-import { useRouter } from "next/navigation";
 import { useCallback, useMemo, useState } from "react";
 
 export default function AdminReportsPage() {
-	const router = useRouter();
 	const { data: session, isPending } = authClient.useSession();
+	useRedirectUnauthenticated(session, isPending);
 	const [activeTab, setActiveTab] = useState<string>("analytics");
 	const [timeRange, setTimeRange] = useState<string>("30d");
 
@@ -241,8 +241,7 @@ export default function AdminReportsPage() {
 
 	// Redirect if not authenticated
 	if (!session) {
-		router.push("/login");
-		return null;
+		return <LoadingScreen text="Redirecting..." />;
 	}
 
 	// Handle refresh

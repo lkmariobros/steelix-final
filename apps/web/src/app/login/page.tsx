@@ -4,7 +4,8 @@ import { AuthLayout } from "@/components/auth/auth-layout";
 import { ForgotPasswordForm } from "@/components/auth/forgot-password-form";
 import SignInForm from "@/components/sign-in-form";
 import SignUpForm from "@/components/sign-up-form";
-import { useState } from "react";
+import { LoginSessionToast } from "@/app/login/login-session-toast";
+import { Suspense, useState } from "react";
 
 type AuthView = "sign-in" | "sign-up" | "forgot-password";
 
@@ -33,6 +34,9 @@ export default function LoginPage() {
 
 	return (
 		<AuthLayout {...getLayoutProps()}>
+			<Suspense fallback={null}>
+				<LoginSessionToast />
+			</Suspense>
 			{view === "sign-in" && (
 				<SignInForm
 					onSwitchToSignUp={() => setView("sign-up")}

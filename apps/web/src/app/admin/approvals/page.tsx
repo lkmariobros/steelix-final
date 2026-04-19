@@ -42,6 +42,7 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
+import { useRedirectUnauthenticated } from "@/hooks/use-redirect-unauthenticated";
 import { authClient } from "@/lib/auth-client";
 import { trpc } from "@/utils/trpc";
 import {
@@ -53,8 +54,7 @@ import {
 	RiRefreshLine,
 } from "@remixicon/react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 
 // Type for transaction from the queue
@@ -83,9 +83,9 @@ interface ApprovalDialogState {
 }
 
 export default function AdminApprovalsPage() {
-	const router = useRouter();
 	const queryClient = useQueryClient();
 	const { data: session, isPending } = authClient.useSession();
+	useRedirectUnauthenticated(session, isPending);
 	const [statusFilter, setStatusFilter] = useState<string>("submitted");
 	const [page, setPage] = useState(0);
 	const pageSize = 20;
@@ -158,21 +158,13 @@ export default function AdminApprovalsPage() {
 	// Get utils for invalidation after mutations
 	const utils = trpc.useUtils();
 
-	// Handle redirect for unauthenticated users
-	useEffect(() => {
-		if (!isPending && !session) {
-			router.push("/login");
-		}
-	}, [isPending, session, router]);
-
 	// Show loading while checking authentication
 	if (isPending) {
 		return <LoadingScreen text="Loading..." />;
 	}
 
 	if (!session) {
-		router.push("/login");
-		return null;
+		return <LoadingScreen text="Redirecting..." />;
 	}
 
 	// Handle refresh

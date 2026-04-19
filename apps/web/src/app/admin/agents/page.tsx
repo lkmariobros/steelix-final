@@ -33,6 +33,7 @@ import {
 	SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useRedirectUnauthenticated } from "@/hooks/use-redirect-unauthenticated";
 import { authClient } from "@/lib/auth-client";
 import { trpc } from "@/utils/trpc";
 import {
@@ -43,7 +44,6 @@ import {
 	RiTeamLine,
 	RiUserLine,
 } from "@remixicon/react";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 // Agent Tier Management Components
@@ -67,8 +67,8 @@ interface AgentData {
 }
 
 export default function AdminAgentsPage() {
-	const router = useRouter();
 	const { data: session, isPending } = authClient.useSession();
+	useRedirectUnauthenticated(session, isPending);
 	const [statusFilter, setStatusFilter] = useState<string>("active");
 
 	// State for dialogs
@@ -131,8 +131,7 @@ export default function AdminAgentsPage() {
 
 	// Redirect if not authenticated
 	if (!session) {
-		router.push("/login");
-		return null;
+		return <LoadingScreen text="Redirecting..." />;
 	}
 
 	// Handle refresh

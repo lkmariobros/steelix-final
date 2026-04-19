@@ -30,6 +30,7 @@ import { Label } from "@/components/ui/label";
 import { LoadingScreen } from "@/components/ui/loading-spinner";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useRedirectUnauthenticated } from "@/hooks/use-redirect-unauthenticated";
 import { authClient } from "@/lib/auth-client";
 import { compressImageFileToDataUrl } from "@/lib/profile-image";
 import { trpc } from "@/utils/trpc";
@@ -40,14 +41,13 @@ import {
 	RiSettings3Line,
 	RiUploadLine,
 } from "@remixicon/react";
-import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 export default function AgentSettingsPage() {
-	const router = useRouter();
 	const { data: session, isPending, refetch: refetchSession } =
 		authClient.useSession();
+	useRedirectUnauthenticated(session, isPending);
 	const fileInputRef = useRef<HTMLInputElement>(null);
 
 	// Fetch profile data from backend
@@ -259,10 +259,9 @@ export default function AgentSettingsPage() {
 		);
 	}
 
-	// Redirect if not authenticated
+	// Redirect if not authenticated (navigation runs in useRedirectUnauthenticated)
 	if (!session) {
-		router.push("/login");
-		return null;
+		return <LoadingScreen text="Redirecting..." />;
 	}
 
 	// Get initials for avatar fallback

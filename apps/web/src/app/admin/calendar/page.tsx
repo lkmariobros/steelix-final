@@ -49,6 +49,7 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { useRedirectUnauthenticated } from "@/hooks/use-redirect-unauthenticated";
 import { authClient } from "@/lib/auth-client";
 import { trpc } from "@/utils/trpc";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -75,7 +76,6 @@ import {
 	startOfMonth,
 	subMonths,
 } from "date-fns";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
@@ -155,9 +155,9 @@ type EventFormValues = z.infer<typeof eventFormSchema>;
 type AnnouncementFormValues = z.infer<typeof announcementFormSchema>;
 
 export default function AdminCalendarPage() {
-	const router = useRouter();
 	const queryClient = useQueryClient();
 	const { data: session, isPending } = authClient.useSession();
+	useRedirectUnauthenticated(session, isPending);
 	const [viewMode, setViewMode] = useState<"calendar" | "announcements">(
 		"calendar",
 	);
@@ -595,8 +595,7 @@ export default function AdminCalendarPage() {
 	}
 
 	if (!session) {
-		router.push("/login");
-		return null;
+		return <LoadingScreen text="Redirecting..." />;
 	}
 
 	return (
