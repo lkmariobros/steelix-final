@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import type * as React from "react";
 
 import { SearchForm } from "@/components/search-form";
@@ -223,6 +223,16 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 	const router = useRouter();
 	const [isAnnouncementPopoverOpen, setIsAnnouncementPopoverOpen] = useState(false);
 
+	const handleSignOut = useCallback(async () => {
+		await authClient.signOut({
+			fetchOptions: {
+				onSuccess: () => {
+					window.location.href = "/login";
+				},
+			},
+		});
+	}, []);
+
 	// Path-based navigation logic - no role checking in sidebar
 	const isCurrentlyInAdminPortal = pathname.startsWith("/admin");
 
@@ -405,7 +415,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 					{/* Sign Out Button */}
 					<SidebarMenu>
 						<SidebarMenuItem>
-							<SidebarMenuButton className="h-9 gap-4 rounded-md bg-gradient-to-r font-medium hover:bg-transparent hover:from-sidebar-accent hover:to-sidebar-accent/40 data-[active=true]:from-primary/20 data-[active=true]:to-primary/5 [&>svg]:size-auto">
+							<SidebarMenuButton
+								type="button"
+								className="h-9 gap-4 rounded-md bg-gradient-to-r font-medium hover:bg-transparent hover:from-sidebar-accent hover:to-sidebar-accent/40 data-[active=true]:from-primary/20 data-[active=true]:to-primary/5 [&>svg]:size-auto"
+								onClick={() => void handleSignOut()}
+							>
 								<RiLogoutBoxLine
 									className="text-muted-foreground/60 group-data-[active=true]/menu-button:text-primary"
 									size={22}
