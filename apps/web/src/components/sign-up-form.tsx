@@ -1,6 +1,6 @@
 import { authClient } from "@/lib/auth-client"
 import { useForm } from "@tanstack/react-form"
-import { Check, Eye, EyeOff, Loader2, Mail } from "lucide-react"
+import { Eye, EyeOff, Loader2, Mail } from "lucide-react"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import z from "zod/v4"
@@ -24,20 +24,18 @@ export default function SignUpForm({ onSwitchToSignIn }: SignUpFormProps) {
 
 	const form = useForm({
 		defaultValues: {
+			name: "",
 			email: "",
 			password: "",
 		},
 		onSubmit: async ({ value }) => {
-			// Generate 2-character display name from email username
-			const emailUsername = value.email.split("@")[0] || ""
-			const shortName = emailUsername.substring(0, 2).toLowerCase()
+			const displayName = value.name.trim() || value.email.split("@")[0] || "User"
 
 			await authClient.signUp.email(
 				{
 					email: value.email,
 					password: value.password,
-					// Use first 2 characters of email username as display name
-					name: shortName,
+					name: displayName,
 				},
 				{
 					onSuccess: () => {
@@ -52,6 +50,7 @@ export default function SignUpForm({ onSwitchToSignIn }: SignUpFormProps) {
 		},
 		validators: {
 			onSubmit: z.object({
+				name: z.string().min(2, "Name must be at least 2 characters"),
 				email: z.email("Invalid email address"),
 				password: z.string().min(8, "Password must be at least 8 characters"),
 			}),
@@ -70,25 +69,51 @@ export default function SignUpForm({ onSwitchToSignIn }: SignUpFormProps) {
 					e.stopPropagation()
 					void form.handleSubmit()
 				}}
-				className="space-y-5"
+				className="space-y-4"
 			>
+				<form.Field name="name">
+					{(field) => (
+						<div className="space-y-2">
+							<Label htmlFor={field.name} className="text-sm font-medium">
+								Full name
+							</Label>
+							<Input
+								id={field.name}
+								name={field.name}
+								type="text"
+								autoComplete="name"
+								placeholder="As you want it to appear in the app"
+								value={field.state.value}
+								onBlur={field.handleBlur}
+								onChange={(e) => field.handleChange(e.target.value)}
+								className="h-10"
+							/>
+							{field.state.meta.errors.map((error) => (
+								<p key={error?.message} className="text-sm text-red-500">
+									{error?.message}
+								</p>
+							))}
+						</div>
+					)}
+				</form.Field>
+
 				<form.Field name="email">
 					{(field) => (
 						<div className="space-y-2">
-							<Label htmlFor={field.name} className="text-sm font-medium text-slate-700 dark:text-slate-300">
-								Email address
+							<Label htmlFor={field.name} className="text-sm font-medium">
+								Email
 							</Label>
 							<div className="relative">
-								<Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+								<Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
 								<Input
 									id={field.name}
 									name={field.name}
 									type="email"
-									placeholder="name@company.com"
+									placeholder="you@company.com"
 									value={field.state.value}
 									onBlur={field.handleBlur}
 									onChange={(e) => field.handleChange(e.target.value)}
-									className="pl-10 h-11 border-slate-200 dark:border-slate-700 focus:border-orange-500 focus:ring-orange-500"
+									className="h-10 pl-9"
 								/>
 							</div>
 							{field.state.meta.errors.map((error) => (
@@ -110,8 +135,8 @@ export default function SignUpForm({ onSwitchToSignIn }: SignUpFormProps) {
 						]
 						return (
 							<div className="space-y-2">
-								<Label htmlFor={field.name} className="text-sm font-medium text-slate-700 dark:text-slate-300">
-									Create password
+								<Label htmlFor={field.name} className="text-sm font-medium">
+									Password
 								</Label>
 								<div className="relative">
 									<Input
@@ -122,7 +147,7 @@ export default function SignUpForm({ onSwitchToSignIn }: SignUpFormProps) {
 										value={field.state.value}
 										onBlur={field.handleBlur}
 										onChange={(e) => field.handleChange(e.target.value)}
-										className="pr-10 h-11 border-slate-200 dark:border-slate-700 focus:border-orange-500 focus:ring-orange-500"
+										className="h-10 pr-10"
 									/>
 									<button
 										type="button"
@@ -139,16 +164,11 @@ export default function SignUpForm({ onSwitchToSignIn }: SignUpFormProps) {
 								))}
 								{/* Password strength indicators */}
 								{password.length > 0 && (
-									<div className="space-y-1 pt-1">
-										{passwordChecks.map((check) => (
-											<div key={check.label} className="flex items-center gap-2 text-xs">
-												<Check className={`h-3 w-3 ${check.valid ? 'text-green-500' : 'text-slate-300'}`} />
-												<span className={check.valid ? 'text-green-600' : 'text-slate-400'}>
-													{check.label}
-												</span>
-											</div>
-										))}
-									</div>
+									<p className="text-muted-foreground text-xs pt-0.5">
+										{passwordChecks.filter((c) => c.valid).length === passwordChecks.length
+											? "Password looks good."
+											: "Use 8+ characters with a number and an uppercase letter."}
+									</p>
 								)}
 							</div>
 						)
@@ -160,7 +180,7 @@ export default function SignUpForm({ onSwitchToSignIn }: SignUpFormProps) {
 						<Button
 							type="submit"
 							disabled={!state.canSubmit || state.isSubmitting}
-							className="w-full h-11 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-medium shadow-lg shadow-orange-500/25 transition-all duration-200"
+							className="h-10 w-full font-medium"
 						>
 							{state.isSubmitting ? (
 								<>
@@ -175,31 +195,16 @@ export default function SignUpForm({ onSwitchToSignIn }: SignUpFormProps) {
 				</form.Subscribe>
 			</form>
 
-			<p className="text-center text-xs text-slate-500 dark:text-slate-400">
-				By creating an account, you agree to our{" "}
-				<a href="#" className="text-orange-600 hover:text-orange-500">Terms of Service</a>
-				{" "}and{" "}
-				<a href="#" className="text-orange-600 hover:text-orange-500">Privacy Policy</a>
+			<p className="text-center text-muted-foreground text-xs">
+				Already have an account?{" "}
+				<button
+					type="button"
+					onClick={onSwitchToSignIn}
+					className="font-medium text-foreground underline-offset-4 hover:underline"
+				>
+					Sign in
+				</button>
 			</p>
-
-			<div className="relative">
-				<div className="absolute inset-0 flex items-center">
-					<div className="w-full border-t border-slate-200 dark:border-slate-700" />
-				</div>
-				<div className="relative flex justify-center text-sm">
-					<span className="bg-white dark:bg-slate-950 px-4 text-slate-500">
-						Already have an account?
-					</span>
-				</div>
-			</div>
-
-			<Button
-				variant="outline"
-				onClick={onSwitchToSignIn}
-				className="w-full h-11 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-900"
-			>
-				Sign in instead
-			</Button>
 		</div>
 	)
 }

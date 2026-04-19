@@ -70,6 +70,23 @@ const agentPerformanceInput = z.object({
 		.default("monthly"),
 });
 
+/** Profile avatar: http(s) URL or small base64 data URL from client compression */
+const profileImageInput = z
+	.string()
+	.max(480000, "Image data is too large")
+	.refine(
+		(s) => {
+			if (/^data:image\/(jpeg|jpg|png|webp);base64,/.test(s)) return true;
+			try {
+				const u = new URL(s);
+				return u.protocol === "https:" || u.protocol === "http:";
+			} catch {
+				return false;
+			}
+		},
+		{ message: "Invalid image: use a valid URL or a JPEG/PNG/WebP upload" },
+	);
+
 const createGoalInput = z.object({
 	agentId: z.string(),
 	title: z.string().min(1),
@@ -571,17 +588,24 @@ export const agentsRouter = router({
 	updateMyProfile: protectedProcedure
 		.input(
 			z.object({
-				name: z.string().min(1).optional(),
-				image: z.string().url().optional().nullable(),
+				name: z.string().min(1).max(200).optional(),
+				image: z.union([profileImageInput, z.literal(""), z.null()]).optional(),
 			}),
 		)
 		.mutation(async ({ ctx, input }) => {
+			const patch: {
+				name?: string;
+				image?: string | null;
+				updatedAt: Date;
+			} = { updatedAt: new Date() };
+			if (input.name !== undefined) patch.name = input.name;
+			if (input.image !== undefined) {
+				patch.image = input.image === "" ? null : input.image;
+			}
+
 			const [updatedUser] = await db
 				.update(user)
-				.set({
-					...input,
-					updatedAt: new Date(),
-				})
+				.set(patch)
 				.where(eq(user.id, ctx.session.user.id))
 				.returning();
 

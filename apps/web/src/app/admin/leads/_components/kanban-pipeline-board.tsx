@@ -183,7 +183,7 @@ export function KanbanPipelineBoard({
 
 	return (
 		<div className="w-full overflow-x-auto">
-			<div className="flex min-w-max gap-3 pb-2">
+			<div className="flex min-w-max gap-2.5 pb-2">
 				{PIPELINE_STAGES.map((stage) => {
 					const columnLeads = leadsByStage.get(stage.value) ?? [];
 					const isOver = dragOverStage === stage.value;
@@ -192,7 +192,7 @@ export function KanbanPipelineBoard({
 						<div
 							key={stage.value}
 							className={[
-								"flex w-[340px] flex-col gap-2 rounded-lg border bg-muted/10 p-2",
+								"flex w-[280px] flex-col gap-1.5 rounded-lg border bg-muted/10 p-2",
 								isOver ? "border-primary/60 bg-primary/5" : "border-border/60",
 							].join(" ")}
 							onDragOver={(e) => {
@@ -208,12 +208,11 @@ export function KanbanPipelineBoard({
 							onDragLeave={() => setDragOverStage(null)}
 							onDrop={(e) => handleDrop(e, stage.value as PipelineStageValue)}
 						>
-							<div className="flex items-center justify-between gap-2 px-1 pt-1">
-								<div className="flex items-center gap-2">
+							<div className="flex items-center justify-between gap-2 px-0.5 pt-0.5">
+								<div className="flex min-w-0 flex-1 items-center gap-1.5">
 									<StageBadge stage={stage.value} />
-									<span className="text-muted-foreground text-xs">
-										{columnLeads.length}{" "}
-										{columnLeads.length === 1 ? "lead" : "leads"}
+									<span className="text-muted-foreground text-[11px] tabular-nums">
+										{columnLeads.length}
 									</span>
 								</div>
 								{isOver ? (
@@ -221,7 +220,7 @@ export function KanbanPipelineBoard({
 								) : null}
 							</div>
 
-							<div className="flex flex-col gap-2">
+							<div className="flex flex-col gap-1.5">
 								{columnLeads.length === 0 ? (
 									<div className="px-1 text-muted-foreground text-xs italic">
 										{isOver ? "Release to move here" : "No leads in this stage"}
@@ -234,7 +233,7 @@ export function KanbanPipelineBoard({
 											onDragStart={(e) => handleDragStart(e, lead)}
 											onDragEnd={handleDragEnd}
 											className={[
-												"select-none p-3",
+												"select-none p-2.5",
 												updateStageMutation.isPending
 													? "cursor-not-allowed opacity-60"
 													: "cursor-grab",
@@ -249,41 +248,22 @@ export function KanbanPipelineBoard({
 												}
 												onViewLead(lead);
 											}}
-											title={`${lead.name}\n${lead.email}\n${lead.property}`}
+											title={`${lead.name}\n${lead.email}\n${lead.property}\n${lead.agentName ?? "Unassigned"}`}
 										>
-											<div className="flex items-start justify-between gap-3">
-												<div className="text-[11px] text-muted-foreground">
-													{lead.nextContact ? (
-														<span>
-															Next:{" "}
-															<span className="font-medium text-foreground">
-																{formatDate(lead.nextContact)}
-															</span>
-														</span>
-													) : (
-														<span>Next: —</span>
-													)}
+											<div className="flex items-start justify-between gap-2">
+												<div className="min-w-0 flex-1">
+													<div className="line-clamp-2 font-medium text-sm leading-tight">
+														{lead.name}
+													</div>
+													<p className="mt-0.5 truncate text-muted-foreground text-[11px]">
+														{lead.nextContact
+															? `Next ${formatDate(lead.nextContact)}`
+															: "No next contact"}
+														{" · "}
+														{lead.agentName ?? "Unassigned"}
+													</p>
 												</div>
-
 												<StatusBadge status={lead.status} />
-											</div>
-
-											<div className="mt-2 space-y-1">
-												<div className="font-medium text-sm leading-tight">
-													{lead.name}
-												</div>
-												<div className="text-muted-foreground text-xs truncate">
-													{lead.email}
-												</div>
-												<div className="text-muted-foreground text-xs truncate">
-													{lead.property}
-												</div>
-												<div className="text-muted-foreground text-[11px] truncate">
-													Owner:{" "}
-													<span className="text-foreground/90">
-														{lead.agentName ? lead.agentName : "Unassigned"}
-													</span>
-												</div>
 											</div>
 										</Card>
 									))
@@ -295,7 +275,7 @@ export function KanbanPipelineBoard({
 
 				{unknownStages.length > 0 && (
 					<div
-						className="flex w-[340px] flex-col gap-2 rounded-lg border bg-muted/10 p-2"
+						className="flex w-[280px] flex-col gap-1.5 rounded-lg border bg-muted/10 p-2"
 						onDragOver={(e) => {
 							if (updateStageMutation.isPending) return;
 							e.preventDefault();
@@ -319,7 +299,7 @@ export function KanbanPipelineBoard({
 												onDragStart={(e) => handleDragStart(e, lead)}
 												onDragEnd={handleDragEnd}
 												className={[
-													"select-none p-3",
+													"select-none p-2.5",
 													updateStageMutation.isPending
 														? "cursor-not-allowed opacity-60"
 														: "cursor-grab",
@@ -335,39 +315,22 @@ export function KanbanPipelineBoard({
 													}
 													onViewLead(lead);
 												}}
-												title={`${lead.name}\n${lead.email}\n${lead.property}`}
+												title={`${lead.name}\n${lead.email}\n${lead.property}\n${lead.agentName ?? "Unassigned"}`}
 									>
-										<div className="flex items-start justify-between gap-3">
-													<div className="text-[11px] text-muted-foreground">
-														{lead.nextContact ? (
-															<span>
-																Next:{" "}
-																<span className="font-medium text-foreground">
-																	{formatDate(lead.nextContact)}
-																</span>
-															</span>
-														) : (
-															<span>Next: —</span>
-														)}
-													</div>
+										<div className="flex items-start justify-between gap-2">
+											<div className="min-w-0 flex-1">
+												<div className="line-clamp-2 font-medium text-sm leading-tight">
+													{lead.name}
+												</div>
+												<p className="mt-0.5 truncate text-muted-foreground text-[11px]">
+													{lead.nextContact
+														? `Next ${formatDate(lead.nextContact)}`
+														: "No next contact"}
+													{" · "}
+													{lead.agentName ?? "Unassigned"}
+												</p>
+											</div>
 											<StatusBadge status={lead.status} />
-										</div>
-										<div className="mt-2 space-y-1">
-											<div className="font-medium text-sm leading-tight">
-												{lead.name}
-											</div>
-													<div className="text-muted-foreground text-xs truncate">
-												{lead.email}
-											</div>
-											<div className="text-muted-foreground text-xs truncate">
-												{lead.property}
-											</div>
-													<div className="text-muted-foreground text-[11px] truncate">
-														Owner:{" "}
-														<span className="text-foreground/90">
-															{lead.agentName ? lead.agentName : "Unassigned"}
-														</span>
-													</div>
 										</div>
 									</Card>
 								))}

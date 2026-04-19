@@ -31,6 +31,7 @@ import { LoadingScreen } from "@/components/ui/loading-spinner";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { authClient } from "@/lib/auth-client";
+import { compressImageFileToDataUrl } from "@/lib/profile-image";
 import { trpc } from "@/utils/trpc";
 import {
 	RiCheckLine,
@@ -40,12 +41,14 @@ import {
 	RiUploadLine,
 } from "@remixicon/react";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 export default function AgentSettingsPage() {
 	const router = useRouter();
-	const { data: session, isPending } = authClient.useSession();
+	const { data: session, isPending, refetch: refetchSession } =
+		authClient.useSession();
+	const fileInputRef = useRef<HTMLInputElement>(null);
 
 	// Fetch profile data from backend
 	const { data: profileData, isLoading: isProfileLoading } =
@@ -58,9 +61,10 @@ export default function AgentSettingsPage() {
 	const updateProfileMutation = trpc.agents.updateMyProfile.useMutation({
 		onSuccess: () => {
 			toast.success("Profile updated successfully");
-			// Invalidate profile cache to refetch updated data
 			utils.agents.getMyProfile.invalidate();
+			setPendingImage(undefined);
 			setHasChanges(false);
+			refetchSession();
 		},
 		onError: (error) => {
 			toast.error(error.message || "Failed to update profile");
@@ -69,26 +73,48 @@ export default function AgentSettingsPage() {
 
 	// Local state for form - initialized from profile data
 	const [name, setName] = useState("");
+	/** `undefined` = no local image edit; `null` = remove photo; string = new image data URL */
+	const [pendingImage, setPendingImage] = useState<string | null | undefined>(
+		undefined,
+	);
+	const [isCompressingPhoto, setIsCompressingPhoto] = useState(false);
 	const [hasChanges, setHasChanges] = useState(false);
 
-	// Sync profile data to local state when loaded
+	// Sync when the signed-in user changes (avoid clearing unsaved edits on cache refresh)
 	useEffect(() => {
-		if (profileData?.agent) {
-			setName(profileData.agent.name || "");
-		}
-	}, [profileData]);
+		if (!profileData?.agent?.id) return;
+		setName(profileData.agent.name || "");
+		setPendingImage(undefined);
+	}, [profileData?.agent?.id]);
 
-	// Track changes
+	// Track changes (name + optional photo)
 	useEffect(() => {
-		if (profileData?.agent) {
-			setHasChanges(name !== profileData.agent.name);
-		}
-	}, [name, profileData]);
+		if (!profileData?.agent) return;
+		const baselineName = profileData.agent.name || "";
+		const baselineImage = profileData.agent.image ?? null;
+		const nameChanged = name.trim() !== baselineName.trim();
+		const imageChanged =
+			pendingImage !== undefined &&
+			(pendingImage === null
+				? Boolean(baselineImage)
+				: pendingImage !== baselineImage);
+		setHasChanges(nameChanged || imageChanged);
+	}, [name, pendingImage, profileData]);
 
 	// Handle save
 	const handleSave = () => {
-		if (!hasChanges) return;
-		updateProfileMutation.mutate({ name });
+		if (!hasChanges || !profileData?.agent) return;
+		const baselineName = profileData.agent.name || "";
+		const baselineImage = profileData.agent.image ?? null;
+		const payload: { name?: string; image?: string | null } = {};
+		if (name.trim() !== baselineName.trim()) {
+			payload.name = name.trim();
+		}
+		if (pendingImage !== undefined) {
+			payload.image = pendingImage;
+		}
+		if (Object.keys(payload).length === 0) return;
+		updateProfileMutation.mutate(payload);
 	};
 
 	// Handle cancel - reset to original values
@@ -96,8 +122,38 @@ export default function AgentSettingsPage() {
 		if (profileData?.agent) {
 			setName(profileData.agent.name || "");
 		}
+		setPendingImage(undefined);
 		setHasChanges(false);
 	};
+
+	const handlePickPhoto = () => fileInputRef.current?.click();
+
+	const handlePhotoSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+		const file = e.target.files?.[0];
+		e.target.value = "";
+		if (!file) return;
+		setIsCompressingPhoto(true);
+		try {
+			const dataUrl = await compressImageFileToDataUrl(file);
+			setPendingImage(dataUrl);
+		} catch (err) {
+			const msg = err instanceof Error ? err.message : "Could not use this image";
+			toast.error(msg);
+		} finally {
+			setIsCompressingPhoto(false);
+		}
+	};
+
+	const handleRemovePhoto = () => {
+		setPendingImage(null);
+	};
+
+	const avatarSrc =
+		pendingImage === undefined
+			? (profileData?.agent?.image || "")
+			: pendingImage === null
+				? ""
+				: pendingImage;
 
 	// Show loading while checking authentication
 	if (isPending) {
@@ -274,38 +330,71 @@ export default function AgentSettingsPage() {
 								</CardDescription>
 							</CardHeader>
 							<CardContent className="space-y-6">
+								<input
+									ref={fileInputRef}
+									type="file"
+									accept="image/jpeg,image/png,image/webp"
+									className="hidden"
+									onChange={handlePhotoSelected}
+								/>
+
 								{/* Avatar Section */}
-								<div className="flex items-center gap-6">
+								<div className="flex flex-wrap items-center gap-4">
 									<Avatar className="h-20 w-20">
-										<AvatarImage src={profileData?.agent?.image || ""} />
+										<AvatarImage src={avatarSrc || undefined} />
 										<AvatarFallback className="text-lg">
 											{name ? getInitials(name) : "??"}
 										</AvatarFallback>
 									</Avatar>
-									<div className="space-y-2">
-										<Button
-											variant="outline"
-											className="flex items-center gap-2"
-											disabled
-										>
-											<RiUploadLine size={16} />
-											Upload Photo
-										</Button>
-										<p className="text-muted-foreground text-xs">
-											Photo upload coming soon
+									<div className="flex flex-col gap-2">
+										<div className="flex flex-wrap gap-2">
+											<Button
+												type="button"
+												variant="outline"
+												size="sm"
+												className="gap-2"
+												disabled={
+													isCompressingPhoto || updateProfileMutation.isPending
+												}
+												onClick={handlePickPhoto}
+											>
+												<RiUploadLine size={16} />
+												{isCompressingPhoto ? "Processing…" : "Upload photo"}
+											</Button>
+											{(profileData?.agent?.image || pendingImage) &&
+												pendingImage !== null && (
+													<Button
+														type="button"
+														variant="ghost"
+														size="sm"
+														className="text-muted-foreground"
+														disabled={updateProfileMutation.isPending}
+														onClick={handleRemovePhoto}
+													>
+														Remove
+													</Button>
+												)}
+										</div>
+										<p className="text-muted-foreground text-xs max-w-sm">
+											JPEG, PNG, or WebP up to 5MB. Images are resized automatically.
 										</p>
 									</div>
 								</div>
 
 								{/* Name Field */}
 								<div className="space-y-2">
-									<Label htmlFor="name">Full Name</Label>
+									<Label htmlFor="name">Display name</Label>
 									<Input
 										id="name"
 										value={name}
 										onChange={(e) => setName(e.target.value)}
-										placeholder="Enter your full name"
+										placeholder="Name shown in the app"
 									/>
+									<p className="text-muted-foreground text-xs">
+										Use the name you want colleagues and clients to see. It does
+										not have to match your ID unless your office requires it for
+										compliance.
+									</p>
 								</div>
 
 								{/* Email Field - Read Only */}
@@ -368,13 +457,21 @@ export default function AgentSettingsPage() {
 							<Button
 								variant="outline"
 								onClick={handleCancel}
-								disabled={!hasChanges || updateProfileMutation.isPending}
+								disabled={
+									!hasChanges ||
+									updateProfileMutation.isPending ||
+									isCompressingPhoto
+								}
 							>
 								Cancel
 							</Button>
 							<Button
 								onClick={handleSave}
-								disabled={!hasChanges || updateProfileMutation.isPending}
+								disabled={
+									!hasChanges ||
+									updateProfileMutation.isPending ||
+									isCompressingPhoto
+								}
 							>
 								{updateProfileMutation.isPending ? (
 									<>

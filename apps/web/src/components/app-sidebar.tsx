@@ -207,6 +207,17 @@ function AnnouncementNotification({
 	);
 }
 
+function isNavItemActive(pathname: string, url: string): boolean {
+	if (!url || url === "#") return false;
+	if (url === "/admin") {
+		return pathname === "/admin" || pathname === "/admin/";
+	}
+	if (url === "/dashboard") {
+		return pathname === "/dashboard" || pathname === "/dashboard/";
+	}
+	return pathname === url || pathname.startsWith(`${url}/`);
+}
+
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 	const pathname = usePathname();
 	const router = useRouter();
@@ -218,59 +229,64 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 	// Generate navigation based on current portal path only
 	const navigationItems = isCurrentlyInAdminPortal
 		? [
-				// Admin Portal Navigation
 				{
-					title: "Admin Portal",
+					title: "Overview",
 					url: "#",
 					items: [
 						{
-							title: "Dashboard Overview",
+							title: "Dashboard",
 							url: "/admin",
 							icon: RiDashboardLine,
 						},
 						{
-							title: "Commission Approvals",
+							title: "Commission approvals",
 							url: "/admin/approvals",
 							icon: RiCheckboxCircleLine,
 						},
 						{
-							title: "Reports & Analytics",
+							title: "Reports & analytics",
 							url: "/admin/reports",
 							icon: RiBarChartLine,
 						},
+					],
+				},
+				{
+					title: "Management",
+					url: "#",
+					items: [
 						{
-							title: "Agent Management",
+							title: "Agents",
 							url: "/admin/agents",
 							icon: RiTeamLine,
 						},
-					{
-						title: "Leads Management",
-						url: "/admin/leads",
-						icon: RiFileList3Line,
-					},
-					{
-						title: "Tag Management",
-						url: "/admin/tags",
-						icon: RiPriceTagLine,
-					},
-					{
-						title: "Office Calendar",
-						url: "/admin/calendar",
-						icon: RiCalendarLine,
-					},
-				],
-			},
-			{
-				title: "Configuration",
-				url: "#",
-				items: [
-					{
-						title: "Settings",
-						url: "/admin/settings",
-						icon: RiSettings3Line,
-					},
-				],
-			},
+						{
+							title: "Leads",
+							url: "/admin/leads",
+							icon: RiFileList3Line,
+						},
+						{
+							title: "Tags",
+							url: "/admin/tags",
+							icon: RiPriceTagLine,
+						},
+						{
+							title: "Office calendar",
+							url: "/admin/calendar",
+							icon: RiCalendarLine,
+						},
+					],
+				},
+				{
+					title: "Configuration",
+					url: "#",
+					items: [
+						{
+							title: "Settings",
+							url: "/admin/settings",
+							icon: RiSettings3Line,
+						},
+					],
+				},
 			]
 		: [
 				// Agent Portal Navigation
@@ -344,7 +360,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 										<SidebarMenuButton
 											asChild
 											className="group/menu-button h-9 gap-3 rounded-md bg-gradient-to-r font-medium hover:bg-transparent hover:from-sidebar-accent hover:to-sidebar-accent/40 data-[active=true]:from-primary/20 data-[active=true]:to-primary/5 [&>svg]:size-auto"
-											isActive={pathname === menuItem.url}
+											isActive={isNavItemActive(pathname, menuItem.url)}
 										>
 											<a href={menuItem.url} className="relative flex items-center justify-between w-full">
 												<div className="flex items-center gap-3">

@@ -81,20 +81,20 @@ export default function SignInForm({
 				<form.Field name="email">
 					{(field) => (
 						<div className="space-y-2">
-							<Label htmlFor={field.name} className="text-sm font-medium text-slate-700 dark:text-slate-300">
-								Email address
+							<Label htmlFor={field.name} className="text-sm font-medium">
+								Email
 							</Label>
 							<div className="relative">
-								<Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+								<Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
 								<Input
 									id={field.name}
 									name={field.name}
 									type="email"
-									placeholder="name@company.com"
+									placeholder="you@company.com"
 									value={field.state.value}
 									onBlur={field.handleBlur}
 									onChange={(e) => field.handleChange(e.target.value)}
-									className="pl-10 h-11 border-slate-200 dark:border-slate-700 focus:border-orange-500 focus:ring-orange-500"
+									className="h-10 pl-9"
 								/>
 							</div>
 							{field.state.meta.errors.map((error) => (
@@ -110,15 +110,15 @@ export default function SignInForm({
 					{(field) => (
 						<div className="space-y-2">
 							<div className="flex items-center justify-between">
-								<Label htmlFor={field.name} className="text-sm font-medium text-slate-700 dark:text-slate-300">
+								<Label htmlFor={field.name} className="text-sm font-medium">
 									Password
 								</Label>
 								<button
 									type="button"
 									onClick={onForgotPassword}
-									className="text-sm font-medium text-orange-600 hover:text-orange-500 transition-colors"
+									className="text-muted-foreground text-xs hover:text-foreground"
 								>
-									Forgot password?
+									Forgot?
 								</button>
 							</div>
 							<div className="relative">
@@ -130,7 +130,7 @@ export default function SignInForm({
 									value={field.state.value}
 									onBlur={field.handleBlur}
 									onChange={(e) => field.handleChange(e.target.value)}
-									className="pr-10 h-11 border-slate-200 dark:border-slate-700 focus:border-orange-500 focus:ring-orange-500"
+									className="h-10 pr-10"
 								/>
 								<button
 									type="button"
@@ -154,7 +154,7 @@ export default function SignInForm({
 						<Button
 							type="submit"
 							disabled={!state.canSubmit || state.isSubmitting}
-							className="w-full h-11 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-medium shadow-lg shadow-orange-500/25 transition-all duration-200"
+							className="h-10 w-full font-medium"
 						>
 							{state.isSubmitting ? (
 								<>
@@ -169,24 +169,16 @@ export default function SignInForm({
 				</form.Subscribe>
 			</form>
 
-			<div className="relative">
-				<div className="absolute inset-0 flex items-center">
-					<div className="w-full border-t border-slate-200 dark:border-slate-700" />
-				</div>
-				<div className="relative flex justify-center text-sm">
-					<span className="bg-white dark:bg-slate-950 px-4 text-slate-500">
-						New to Steelix?
-					</span>
-				</div>
-			</div>
-
-			<Button
-				variant="outline"
-				onClick={onSwitchToSignUp}
-				className="w-full h-11 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-900"
-			>
-				Create an account
-			</Button>
+			<p className="text-center text-muted-foreground text-xs">
+				No account yet?{" "}
+				<button
+					type="button"
+					onClick={onSwitchToSignUp}
+					className="font-medium text-foreground underline-offset-4 hover:underline"
+				>
+					Create one
+				</button>
+			</p>
 		</div>
 	)
 }

@@ -69,7 +69,7 @@ export function ForgotPasswordForm({ onBackToSignIn }: ForgotPasswordFormProps) 
           <Button
             variant="outline"
             onClick={() => setEmailSent(false)}
-            className="w-full h-11 border-slate-200 dark:border-slate-700"
+            className="h-10 w-full"
           >
             Try another email
           </Button>
@@ -112,7 +112,7 @@ export function ForgotPasswordForm({ onBackToSignIn }: ForgotPasswordFormProps) 
                   value={field.state.value}
                   onBlur={field.handleBlur}
                   onChange={(e) => field.handleChange(e.target.value)}
-                  className="pl-10 h-11 border-slate-200 dark:border-slate-700 focus:border-orange-500 focus:ring-orange-500"
+                  className="h-10 pl-9"
                 />
               </div>
               {field.state.meta.errors.map((error) => (
@@ -129,7 +129,7 @@ export function ForgotPasswordForm({ onBackToSignIn }: ForgotPasswordFormProps) 
             <Button
               type="submit"
               disabled={!state.canSubmit || state.isSubmitting}
-              className="w-full h-11 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-medium shadow-lg shadow-orange-500/25 transition-all duration-200"
+              className="h-10 w-full font-medium"
             >
               {state.isSubmitting ? (
                 <>

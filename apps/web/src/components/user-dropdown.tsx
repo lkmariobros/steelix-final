@@ -10,11 +10,17 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import { authClient } from "@/lib/auth-client";
+import { trpc } from "@/utils/trpc";
 import { RiLogoutBoxLine } from "@remixicon/react";
 import Link from "next/link";
 
 export default function UserDropdown() {
 	const { data: session, isPending } = authClient.useSession();
+
+	// Fresh name/image from DB (session cookie cache can lag after profile save)
+	const { data: profile } = trpc.agents.getMyProfile.useQuery(undefined, {
+		enabled: !!session,
+	});
 
 	// Loading state
 	if (isPending) {
@@ -30,8 +36,8 @@ export default function UserDropdown() {
 		);
 	}
 
-	// Extract dynamic user data
-	const userName = session.user.name || "User";
+	// Prefer profile row over session so avatar/name update immediately after settings save
+	const userName = profile?.agent?.name || session.user.name || "User";
 	const userEmail = session.user.email || "";
 	const userInitials = userName
 		.split(" ")
@@ -56,7 +62,11 @@ export default function UserDropdown() {
 				<Button variant="ghost" className="h-auto p-0 hover:bg-transparent">
 					<Avatar className="size-8">
 						<AvatarImage
-							src={session.user.image || undefined}
+							src={
+								profile?.agent?.image ||
+								session.user.image ||
+								undefined
+							}
 							alt="Profile image"
 						/>
 						<AvatarFallback>{userInitials}</AvatarFallback>

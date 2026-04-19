@@ -16,17 +16,17 @@ export default function LoginPage() {
 			case "sign-in":
 				return {
 					title: "Welcome back",
-					subtitle: "Sign in to your account to continue",
+					subtitle: "Sign in to continue.",
 				};
 			case "sign-up":
 				return {
-					title: "Create your account",
-					subtitle: "Start managing your real estate business today",
+					title: "Create an account",
+					subtitle: "Use your work email and a secure password.",
 				};
 			case "forgot-password":
 				return {
-					title: "Reset your password",
-					subtitle: "Enter your email and we'll send you a reset link",
+					title: "Reset password",
+					subtitle: "We’ll email you a link to set a new password.",
 				};
 		}
 	};

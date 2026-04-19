@@ -5,14 +5,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-	RiUserLine,
 	RiPhoneLine,
-	RiMailLine,
-	RiPriceTagLine,
 	RiEyeLine,
 	RiMessageLine,
-	RiCheckboxCircleLine,
-	RiCloseCircleLine,
 } from "@remixicon/react";
 // Pipeline stages type (shared) - Updated to match client's CRM system
 export type PipelineStage = 
@@ -161,136 +156,136 @@ export function KanbanBoard({
 		setDraggedProspect(null);
 	};
 
+	const tagSummary = (prospect: Prospect) => {
+		const names =
+			prospect.tagNames && prospect.tagNames.length > 0
+				? prospect.tagNames
+				: prospect.tags
+					? prospect.tags.split(",").map((t) => t.trim()).filter(Boolean)
+					: [];
+		if (names.length === 0) return null;
+		if (names.length <= 2) return names;
+		return [...names.slice(0, 2), `+${names.length - 2}`];
+	};
+
 	return (
-		<div className="flex gap-4 overflow-x-auto pb-4">
+		<div className="flex gap-3 overflow-x-auto pb-3">
 			{PIPELINE_STAGES.map((stage) => {
 				const stageProspects = prospectsByStage[stage.id] || [];
 				return (
 					<div
 						key={stage.id}
-						className="flex-shrink-0 w-80"
+						className="w-72 shrink-0"
 						onDragOver={handleDragOver}
 						onDrop={(e) => handleDrop(e, stage.id)}
 					>
 						{/* Column Header */}
 						<div
-							className={`${stage.color} rounded-lg p-3 mb-3 border border-border`}
+							className={`${stage.color} mb-2 rounded-md border border-border px-2 py-2`}
 						>
-							<div className="flex items-center justify-between">
-								<h3 className="font-semibold text-sm">{stage.label}</h3>
-								<Badge variant="secondary" className="text-xs">
+							<div className="flex items-center justify-between gap-2">
+								<h3 className="font-medium text-xs leading-tight">{stage.label}</h3>
+								<Badge variant="secondary" className="h-5 min-w-5 px-1.5 text-[10px] tabular-nums">
 									{stageProspects.length}
 								</Badge>
 							</div>
 						</div>
 
 						{/* Column Content */}
-						<div className="space-y-3 min-h-[400px]">
-							{stageProspects.map((prospect) => (
+						<div className="min-h-[320px] space-y-2">
+							{stageProspects.map((prospect) => {
+								const tags = tagSummary(prospect);
+								const titleHint = `${prospect.name}\n${prospect.email}\n${prospect.phone}`;
+								return (
 								<Card
 									key={prospect.id}
 									draggable
+									title={titleHint}
 									onDragStart={(e) => handleDragStart(e, prospect)}
 									onDragEnd={handleDragEnd}
-									className={`cursor-move hover:shadow-md transition-shadow ${
+									className={`cursor-move transition-shadow hover:shadow-sm ${
 										draggedProspect?.id === prospect.id ? "opacity-50" : ""
 									}`}
 								>
-									<CardContent className="p-4">
-										{/* Lead Type Badge */}
-										<div className="flex items-center justify-between mb-2">
+									<CardContent className="p-2.5">
+										<div className="flex items-start justify-between gap-1.5">
+											<h4 className="line-clamp-2 font-medium text-sm leading-snug">
+												{prospect.name}
+											</h4>
 											{prospect.leadType === "company" && !prospect.agentId ? (
-												<Badge variant="outline" className="text-xs border-purple-500 text-purple-600 dark:text-purple-400">
-													Company Lead
+												<Badge variant="outline" className="h-5 shrink-0 border-purple-500/50 px-1 text-[10px] text-purple-700 dark:text-purple-300">
+													Co.
 												</Badge>
 											) : (
-												<Badge variant="outline" className="text-xs border-blue-500 text-blue-600 dark:text-blue-400">
-													Personal
+												<Badge variant="outline" className="h-5 shrink-0 border-blue-500/50 px-1 text-[10px] text-blue-700 dark:text-blue-300">
+													Ind.
 												</Badge>
 											)}
+										</div>
+
+										<p className="mt-1 truncate text-muted-foreground text-[11px]">
+											<span className="inline-flex items-center gap-1">
+												<RiPhoneLine className="size-3 shrink-0 opacity-70" />
+												{prospect.phone}
+											</span>
+										</p>
+
+										{tags && (
+											<div className="mt-1.5 flex flex-wrap gap-0.5">
+												{tags.map((tag, idx) => (
+													<Badge
+														key={`${tag}-${idx}`}
+														variant="secondary"
+														className="max-w-[5.5rem] truncate px-1 py-0 text-[10px] font-normal"
+													>
+														{tag}
+													</Badge>
+												))}
+											</div>
+										)}
+
+										<div className="mt-2 flex items-center gap-1 border-border border-t pt-1.5">
 											{prospect.leadType === "company" && !prospect.agentId && onClaimLead && (
 												<Button
 													size="sm"
-													variant="outline"
-													className="h-6 text-xs"
-													onClick={() => onClaimLead(prospect.id)}
+													variant="secondary"
+													className="h-7 flex-1 px-2 text-xs"
+													onClick={(e) => {
+														e.stopPropagation();
+														onClaimLead(prospect.id);
+													}}
 												>
 													Claim
 												</Button>
 											)}
-										</div>
-
-										{/* Prospect Name */}
-										<h4 className="font-semibold text-sm mb-2">{prospect.name}</h4>
-
-										{/* Contact Info */}
-										<div className="space-y-1 mb-3 text-xs text-muted-foreground">
-											<div className="flex items-center gap-1.5">
-												<RiPhoneLine className="size-3" />
-												<span>{prospect.phone}</span>
-											</div>
-											<div className="flex items-center gap-1.5">
-												<RiMailLine className="size-3" />
-												<span className="truncate">{prospect.email}</span>
-											</div>
-										</div>
-
-										{/* Tags */}
-										{((prospect.tagNames && prospect.tagNames.length > 0) || (prospect.tags && prospect.tags.trim())) && (
-											<div className="flex flex-wrap gap-1 mb-3">
-												{prospect.tagNames && prospect.tagNames.length > 0
-													? prospect.tagNames.map((tag, idx) => (
-															<Badge
-																key={idx}
-																variant="secondary"
-																className="text-xs"
-															>
-																{tag}
-															</Badge>
-														))
-													: prospect.tags
-														? prospect.tags.split(",").map((tag, idx) => (
-																<Badge
-																	key={idx}
-																	variant="secondary"
-																	className="text-xs"
-																>
-																	{tag.trim()}
-																</Badge>
-															))
-														: null}
-											</div>
-										)}
-
-										{/* Actions */}
-										<div className="flex items-center gap-2 pt-2 border-t">
 											<Button
 												size="sm"
 												variant="ghost"
-												className="h-7 text-xs flex-1"
+												className="h-7 flex-1 px-2 text-xs"
 												onClick={() => onView(prospect)}
 											>
-												<RiEyeLine className="size-3 mr-1" />
-												View
+												<RiEyeLine className="size-3.5" />
+												<span className="sr-only">View</span>
 											</Button>
 											<Button
 												size="sm"
 												variant="ghost"
-												className="h-7 text-xs flex-1"
+												className="h-7 flex-1 px-2 text-xs"
 												onClick={() => onMessage(prospect)}
 											>
-												<RiMessageLine className="size-3 mr-1" />
-												Message
+												<RiMessageLine className="size-3.5" />
+												<span className="sr-only">Message</span>
 											</Button>
 										</div>
 									</CardContent>
 								</Card>
-							))}
+							);
+							})}
 
 							{/* Empty State */}
 							{stageProspects.length === 0 && (
-								<div className="flex items-center justify-center h-32 text-sm text-muted-foreground border-2 border-dashed rounded-lg">
-									No prospects
+								<div className="flex h-24 items-center justify-center rounded-md border border-dashed text-muted-foreground text-xs">
+									Empty
 								</div>
 							)}
 						</div>
