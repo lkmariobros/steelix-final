@@ -17,6 +17,14 @@ import {
 	BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 import { Button } from "@/components/ui/button";
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { LoadingScreen } from "@/components/ui/loading-spinner";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -29,6 +37,7 @@ import {
 	RiAttachmentLine,
 	RiCheckDoubleLine,
 	RiDashboardLine,
+	RiDeleteBinLine,
 	RiInformationLine,
 	RiLoader4Line,
 	RiMessageLine,
@@ -61,6 +70,11 @@ interface Conversation {
 	timestamp: string;
 	messages?: Message[];
 }
+
+type DeleteTarget =
+	| { type: "message"; messageId: string; conversationId: string }
+	| { type: "conversation"; conversationId: string }
+	| null;
 
 // Helper function to format timestamp
 const formatTimestamp = (timestamp: string): string => {
@@ -103,6 +117,7 @@ export default function WhatsAppPage() {
 		string | null
 	>(null);
 	const [messageInput, setMessageInput] = useState("");
+	const [deleteTarget, setDeleteTarget] = useState<DeleteTarget>(null);
 
 	// Fetch conversations with tRPC
 	const {
@@ -214,6 +229,34 @@ export default function WhatsAppPage() {
 		},
 	});
 
+	const deleteMessageMutation = trpc.whatsapp.deleteMessage.useMutation({
+		onSuccess: () => {
+			toast.success("Message deleted");
+			queryClient.invalidateQueries({ queryKey: [["whatsapp", "get"]] });
+			queryClient.invalidateQueries({ queryKey: [["whatsapp", "list"]] });
+			refetchConversation();
+			refetchConversations();
+		},
+		onError: (error) => {
+			toast.error(error.message || "Failed to delete message");
+		},
+	});
+
+	const deleteConversationMutation = trpc.whatsapp.deleteConversation.useMutation({
+		onSuccess: (_data, variables) => {
+			toast.success("Chat deleted");
+			queryClient.invalidateQueries({ queryKey: [["whatsapp", "list"]] });
+			queryClient.invalidateQueries({ queryKey: [["whatsapp", "get"]] });
+			setSelectedConversationId((prev) =>
+				prev === variables.conversationId ? null : prev,
+			);
+			refetchConversations();
+		},
+		onError: (error) => {
+			toast.error(error.message || "Failed to delete chat");
+		},
+	});
+
 	// Auto-select first conversation if none selected
 	useEffect(() => {
 		if (!selectedConversationId && conversations.length > 0) {
@@ -249,6 +292,51 @@ export default function WhatsAppPage() {
 		setSelectedConversationId(conversationId);
 	};
 
+	const handleDeleteMessage = (messageId: string) => {
+		if (!selectedConversationId) return;
+		setDeleteTarget({
+			type: "message",
+			messageId,
+			conversationId: selectedConversationId,
+		});
+	};
+
+	const handleDeleteConversation = () => {
+		if (!selectedConversationId) return;
+		setDeleteTarget({
+			type: "conversation",
+			conversationId: selectedConversationId,
+		});
+	};
+
+	const handleConfirmDelete = () => {
+		if (!deleteTarget) return;
+
+		if (deleteTarget.type === "message") {
+			deleteMessageMutation.mutate(
+				{
+					conversationId: deleteTarget.conversationId,
+					messageId: deleteTarget.messageId,
+				},
+				{
+					onSettled: () => {
+						setDeleteTarget(null);
+					},
+				},
+			);
+			return;
+		}
+
+		deleteConversationMutation.mutate(
+			{ conversationId: deleteTarget.conversationId },
+			{
+				onSettled: () => {
+					setDeleteTarget(null);
+				},
+			},
+		);
+	};
+
 	// Authentication check
 	if (isSessionPending) {
 		return <LoadingScreen text="Loading..." />;
@@ -262,6 +350,60 @@ export default function WhatsAppPage() {
 		<SidebarProvider>
 			<AppSidebar />
 			<SidebarInset className="flex h-screen flex-col overflow-hidden">
+				<Dialog
+					open={deleteTarget !== null}
+					onOpenChange={(open) => {
+						if (!open) setDeleteTarget(null);
+					}}
+				>
+					<DialogContent className="sm:max-w-[420px]">
+						<DialogHeader>
+							<DialogTitle>
+								{deleteTarget?.type === "conversation"
+									? "Delete this chat?"
+									: "Delete this message?"}
+							</DialogTitle>
+							<DialogDescription className="pt-1">
+								{deleteTarget?.type === "conversation"
+									? "This chat will be removed from your inbox. You can’t undo this action from this screen."
+									: "This message will be removed from this conversation view. This action cannot be undone."}
+							</DialogDescription>
+						</DialogHeader>
+						<DialogFooter className="gap-2 sm:gap-2">
+							<Button
+								type="button"
+								variant="outline"
+								onClick={() => setDeleteTarget(null)}
+								disabled={
+									deleteConversationMutation.isPending ||
+									deleteMessageMutation.isPending
+								}
+							>
+								Cancel
+							</Button>
+							<Button
+								type="button"
+								variant="destructive"
+								onClick={handleConfirmDelete}
+								disabled={
+									deleteConversationMutation.isPending ||
+									deleteMessageMutation.isPending
+								}
+							>
+								{deleteConversationMutation.isPending ||
+								deleteMessageMutation.isPending ? (
+									<>
+										<RiLoader4Line className="mr-2 h-4 w-4 animate-spin" />
+										Deleting...
+									</>
+								) : (
+									"Delete"
+								)}
+							</Button>
+						</DialogFooter>
+					</DialogContent>
+				</Dialog>
+
 				{/* Header */}
 				<header className="flex h-16 shrink-0 items-center gap-2 border-b px-4 md:px-6 lg:px-8">
 					<div className="flex flex-1 items-center gap-2 px-3">
@@ -508,6 +650,15 @@ export default function WhatsAppPage() {
 										</div>
 									</div>
 									<div className="flex items-center gap-2">
+										<Button
+											variant="ghost"
+											size="sm"
+											onClick={handleDeleteConversation}
+											disabled={deleteConversationMutation.isPending}
+											title="Delete chat"
+										>
+											<RiDeleteBinLine className="h-4 w-4" />
+										</Button>
 										<Button variant="ghost" size="sm">
 											<RiInformationLine className="h-4 w-4" />
 										</Button>
@@ -530,7 +681,7 @@ export default function WhatsAppPage() {
 														}`}
 													>
 														<div
-															className={`max-w-[70%] rounded-lg px-4 py-2 ${
+															className={`group max-w-[70%] rounded-lg px-4 py-2 ${
 																message.sender === "agent"
 																	? "bg-primary text-primary-foreground"
 																	: "bg-muted"
@@ -559,6 +710,17 @@ export default function WhatsAppPage() {
 																		)}
 																	</>
 																)}
+																<Button
+																	type="button"
+																	variant="ghost"
+																	size="sm"
+																	className="h-5 px-1 opacity-0 transition-opacity group-hover:opacity-100"
+																	onClick={() => handleDeleteMessage(message.id)}
+																	disabled={deleteMessageMutation.isPending}
+																	title="Delete message"
+																>
+																	<RiDeleteBinLine className="size-3" />
+																</Button>
 															</div>
 														</div>
 													</div>

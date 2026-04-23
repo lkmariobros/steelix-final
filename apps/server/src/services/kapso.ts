@@ -26,6 +26,12 @@ interface SendMessageResponse {
 	raw?: unknown;
 }
 
+interface KapsoDeleteResponse {
+	success: boolean;
+	error?: string;
+	raw?: unknown;
+}
+
 function toPreviewString(value: unknown, max = 50): string {
 	if (value == null) return "";
 	if (typeof value === "string") return value.slice(0, max);
@@ -209,6 +215,86 @@ class KapsoClient {
 		};
 	}
 
+	/**
+	 * Best-effort delete for an outbound message in Kapso/Meta.
+	 * Not all providers expose this endpoint; failures are non-fatal for local deletion.
+	 */
+	async deleteMessage(messageId: string): Promise<KapsoDeleteResponse> {
+		const baseMetaUrl = `${this.apiUrl}/meta/whatsapp`;
+		const candidates = [
+			`${baseMetaUrl}/v24.0/${encodeURIComponent(messageId)}`,
+			`${baseMetaUrl}/messages/${encodeURIComponent(messageId)}`,
+		];
+
+		for (const url of candidates) {
+			try {
+				const res = await fetch(url, {
+					method: "DELETE",
+					headers: {
+						"X-API-Key": this.apiKey,
+						Authorization: `Bearer ${this.apiKey}`,
+					},
+				});
+				const text = await res.text();
+				let data: unknown = {};
+				try {
+					data = JSON.parse(text);
+				} catch {
+					data = { raw: text };
+				}
+				if (res.ok) return { success: true, raw: data };
+			} catch (error) {
+				console.warn("⚠️ Kapso deleteMessage endpoint failed:", error);
+			}
+		}
+
+		return {
+			success: false,
+			error: "Kapso delete message endpoint unavailable",
+		};
+	}
+
+	/**
+	 * Best-effort archive/delete for a contact thread in Kapso.
+	 * Used only as remote sync attempt; local archive still proceeds if this fails.
+	 */
+	async archiveConversationByContact(contactId: string): Promise<KapsoDeleteResponse> {
+		const baseMetaUrl = `${this.apiUrl}/meta/whatsapp`;
+		const candidates = [
+			`${baseMetaUrl}/contacts/${encodeURIComponent(contactId)}/archive`,
+			`${baseMetaUrl}/conversations/${encodeURIComponent(contactId)}/archive`,
+		];
+
+		for (const url of candidates) {
+			try {
+				const res = await fetch(url, {
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+						"X-API-Key": this.apiKey,
+						Authorization: `Bearer ${this.apiKey}`,
+					},
+					body: JSON.stringify({ archived: true }),
+				});
+				const text = await res.text();
+				let data: unknown = {};
+				try {
+					data = JSON.parse(text);
+				} catch {
+					data = { raw: text };
+				}
+				if (res.ok) return { success: true, raw: data };
+			} catch (error) {
+				console.warn("⚠️ Kapso archiveConversation endpoint failed:", error);
+			}
+		}
+
+		return {
+			success: false,
+			error: "Kapso archive conversation endpoint unavailable",
+		};
+	}
+
 	verifyWebhookSignature(_payload: string, _signature: string): boolean {
 		// Keep your existing behavior for now
 		// (Implement HMAC when you're ready)
@@ -253,4 +339,9 @@ export function getKapsoClient(): KapsoClient | null {
 	return kapsoClient;
 }
 
-export { KapsoClient, type SendMessageParams, type SendMessageResponse };
+export {
+	KapsoClient,
+	type SendMessageParams,
+	type SendMessageResponse,
+	type KapsoDeleteResponse,
+};

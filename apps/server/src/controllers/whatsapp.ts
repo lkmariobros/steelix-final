@@ -36,6 +36,15 @@ const sendMessageInput = z.object({
 	message: z.string().min(1, "Message cannot be empty"),
 });
 
+const deleteMessageInput = z.object({
+	conversationId: z.string().uuid(),
+	messageId: z.string().uuid(),
+});
+
+const deleteConversationInput = z.object({
+	conversationId: z.string().uuid(),
+});
+
 export const whatsappRouter = router({
 	// List all conversations
 	list: protectedProcedure
@@ -55,6 +64,7 @@ export const whatsappRouter = router({
 				const conditions = [
 					// Only show conversations assigned to this agent or unassigned
 					assignedOrUnassigned ?? sql`false`,
+					eq(whatsappConversations.isArchived, false),
 				];
 
 				console.log("🔍 WhatsApp list query - conditions:", conditions.length);
@@ -143,6 +153,7 @@ export const whatsappRouter = router({
 				.where(
 					and(
 						eq(whatsappConversations.id, id),
+						eq(whatsappConversations.isArchived, false),
 						assignedOrUnassigned ?? sql`false`,
 					),
 				)
@@ -201,6 +212,7 @@ export const whatsappRouter = router({
 					.where(
 						and(
 							eq(whatsappConversations.id, conversationId),
+						eq(whatsappConversations.isArchived, false),
 							assignedOrUnassigned ?? sql`false`,
 						),
 					)
@@ -369,5 +381,119 @@ export const whatsappRouter = router({
 				console.error("❌ WhatsApp send error:", error);
 				throw error;
 			}
+		}),
+
+	// Delete a single message inside a conversation
+	deleteMessage: protectedProcedure
+		.input(deleteMessageInput)
+		.mutation(async ({ input, ctx }) => {
+			const { conversationId, messageId } = input;
+			const agentId = ctx.session.user.id;
+
+			const assignedOrUnassigned = or(
+				eq(whatsappConversations.assignedAgentId, agentId),
+				isNull(whatsappConversations.assignedAgentId),
+			);
+			const [conversation] = await db
+				.select()
+				.from(whatsappConversations)
+				.where(
+					and(
+						eq(whatsappConversations.id, conversationId),
+						eq(whatsappConversations.isArchived, false),
+						assignedOrUnassigned ?? sql`false`,
+					),
+				)
+				.limit(1);
+
+			if (!conversation) {
+				throw new Error("Conversation not found");
+			}
+
+			const [message] = await db
+				.select()
+				.from(whatsappMessages)
+				.where(
+					and(
+						eq(whatsappMessages.id, messageId),
+						eq(whatsappMessages.conversationId, conversationId),
+					),
+				)
+				.limit(1);
+
+			if (!message) {
+				throw new Error("Message not found");
+			}
+
+			// Best-effort remote delete for outbound provider messages.
+			if (message.direction === "outbound" && message.kapsoMessageId) {
+				const kapsoClient = getKapsoClient();
+				if (kapsoClient) {
+					void kapsoClient.deleteMessage(message.kapsoMessageId);
+				}
+			}
+
+			await db.delete(whatsappMessages).where(eq(whatsappMessages.id, messageId));
+
+			// Recompute conversation preview fields from latest remaining message.
+			const [latest] = await db
+				.select()
+				.from(whatsappMessages)
+				.where(eq(whatsappMessages.conversationId, conversationId))
+				.orderBy(desc(whatsappMessages.sentAt))
+				.limit(1);
+
+			await db
+				.update(whatsappConversations)
+				.set({
+					lastMessage: latest?.content ?? "",
+					lastMessageAt: latest?.sentAt ?? null,
+					updatedAt: new Date(),
+				})
+				.where(eq(whatsappConversations.id, conversationId));
+
+			return { success: true, messageId };
+		}),
+
+	// Delete/archive a whole chat thread
+	deleteConversation: protectedProcedure
+		.input(deleteConversationInput)
+		.mutation(async ({ input, ctx }) => {
+			const { conversationId } = input;
+			const agentId = ctx.session.user.id;
+
+			const assignedOrUnassigned = or(
+				eq(whatsappConversations.assignedAgentId, agentId),
+				isNull(whatsappConversations.assignedAgentId),
+			);
+			const [conversation] = await db
+				.select()
+				.from(whatsappConversations)
+				.where(
+					and(
+						eq(whatsappConversations.id, conversationId),
+						eq(whatsappConversations.isArchived, false),
+						assignedOrUnassigned ?? sql`false`,
+					),
+				)
+				.limit(1);
+
+			if (!conversation) {
+				throw new Error("Conversation not found");
+			}
+
+			// Best-effort remote archive/delete sync.
+			const kapsoClient = getKapsoClient();
+			if (kapsoClient && conversation.kapsoContactId) {
+				void kapsoClient.archiveConversationByContact(conversation.kapsoContactId);
+			}
+
+			// Soft delete to keep history/audit while removing from inbox.
+			await db
+				.update(whatsappConversations)
+				.set({ isArchived: true, unreadCount: "0", updatedAt: new Date() })
+				.where(eq(whatsappConversations.id, conversationId));
+
+			return { success: true, conversationId };
 		}),
 });

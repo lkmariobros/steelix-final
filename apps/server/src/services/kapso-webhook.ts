@@ -780,6 +780,7 @@ async function handleIncomingMessage(data: IncomingMessageData) {
 		// Save the auto-reply message as outbound
 		if (autoReplyResult.response && autoReplyResult.ruleId) {
 			await db.insert(whatsappMessages).values({
+				kapsoMessageId: autoReplyResult.providerMessageId,
 				conversationId: conversation.id,
 				content: autoReplyResult.response,
 				direction: "outbound",

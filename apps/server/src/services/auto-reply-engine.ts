@@ -20,6 +20,7 @@ interface AutoReplyResult {
 	matched: boolean;
 	ruleId?: string;
 	response?: string;
+	providerMessageId?: string;
 	error?: string;
 }
 
@@ -123,6 +124,7 @@ export async function processAutoReply(
 					matched: true,
 					ruleId: rule.id,
 					response: rule.response,
+					providerMessageId: sendResult.messageId,
 				};
 			}
 		}
