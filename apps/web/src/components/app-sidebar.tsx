@@ -319,21 +319,21 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 						url: "/dashboard/crm",
 						icon: RiUserLine,
 					},
-					// {
-					// 	title: "WhatsApp",
-					// 	url: "/dashboard/whatsapp",
-					// 	icon: RiMessageLine,
-					// },
-					// {
-					// 	title: "Auto-Reply",
-					// 	url: "/dashboard/auto-reply",
-					// 	icon: RiRobotLine,
-					// },
-					// {
-					// 	title: "Office Calendar",
-					// 	url: "/dashboard/calendar",
-					// 	icon: RiCalendarLine,
-					// },
+					{
+						title: "WhatsApp",
+						url: "/dashboard/whatsapp",
+						icon: RiMessageLine,
+					},
+					{
+						title: "Auto-Reply",
+						url: "/dashboard/auto-reply",
+						icon: RiRobotLine,
+					},
+					{
+						title: "Office Calendar",
+						url: "/dashboard/calendar",
+						icon: RiCalendarLine,
+					},
 				],
 			},
 				{
