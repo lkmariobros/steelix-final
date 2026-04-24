@@ -47,6 +47,14 @@ export default function SignInForm({
 						onError: (error) => {
 							console.error('Sign in error:', error)
 							const errorMessage = error?.error?.message || 'Sign in failed. Please try again.'
+							if (
+								errorMessage.toLowerCase().includes("431") ||
+								errorMessage.toLowerCase().includes("request header fields too large")
+							) {
+								toast.error("Session cookies are oversized. Resetting cookies now...")
+								window.location.href = "/api/clear-auth-session"
+								return
+							}
 							toast.error(errorMessage)
 						},
 					},

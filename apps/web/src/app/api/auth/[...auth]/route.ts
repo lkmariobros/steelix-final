@@ -30,6 +30,15 @@ async function handler(request: Request) {
 	// Get the auth path (everything after /api/auth/)
 	const authPath = url.pathname.replace("/api/auth/", "");
 	const targetUrl = `${BACKEND_URL}/api/auth/${authPath}${url.search}`;
+	const authPathLower = authPath.toLowerCase();
+	const isFreshAuthAction =
+		authPathLower.includes("sign-in") ||
+		authPathLower.includes("signup") ||
+		authPathLower.includes("sign-up") ||
+		authPathLower.includes("register") ||
+		authPathLower.includes("forget-password") ||
+		authPathLower.includes("forgot-password") ||
+		authPathLower.includes("reset-password");
 
 	// Forward all headers, especially cookies
 	const headers = new Headers();
@@ -40,10 +49,14 @@ async function handler(request: Request) {
 		}
 	});
 
-	// Ensure cookies are forwarded
+	// Ensure cookies are forwarded when needed.
+	// For fresh auth actions (sign in/up/reset), old cookies are unnecessary and can
+	// trigger 431 upstream when stale session_data is oversized.
 	const cookies = request.headers.get("cookie");
-	if (cookies) {
+	if (cookies && !isFreshAuthAction) {
 		headers.set("cookie", cookies);
+	} else if (cookies && isFreshAuthAction) {
+		headers.delete("cookie");
 	}
 
 	// Log for debugging
