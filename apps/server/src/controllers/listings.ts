@@ -10,6 +10,7 @@ import {
 import { transactions } from "../models/transactions";
 import { db } from "../utils/db";
 import { protectedProcedure, router } from "../utils/trpc";
+import { sql } from "drizzle-orm";
 
 const listInput = z.object({
 	search: z.string().optional(),
@@ -25,6 +26,7 @@ const linkTransactionInput = z.object({
 	listingId: z.string().uuid(),
 	transactionId: z.string().uuid(),
 });
+const linkedTransactionsInput = z.object({ listingId: z.string().uuid() });
 
 function isListingSchemaOutdatedError(error: unknown): boolean {
 	const e = error as { message?: string };
@@ -208,5 +210,34 @@ export const listingsRouter = router({
 
 		return { success: true };
 	}),
+
+	linkedTransactions: protectedProcedure
+		.input(linkedTransactionsInput)
+		.query(async ({ input, ctx }) => {
+			try {
+				const rows = await db
+					.select({
+						id: transactions.id,
+						status: transactions.status,
+						transactionDate: transactions.transactionDate,
+						updatedAt: transactions.updatedAt,
+						clientData: transactions.clientData,
+						propertyData: transactions.propertyData,
+					})
+					.from(transactions)
+					.where(
+						and(
+							eq(transactions.agentId, ctx.session.user.id),
+							sql`${transactions.propertyData} ->> 'listingId' = ${input.listingId}`
+						)
+					)
+					.orderBy(desc(transactions.updatedAt))
+					.limit(20);
+
+				return { transactions: rows };
+			} catch (error) {
+				mapListingDbError(error);
+			}
+		}),
 });
 
