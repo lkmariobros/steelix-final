@@ -21,6 +21,28 @@ const getBackendUrl = () => {
 
 const BACKEND_URL = getBackendUrl();
 
+function sanitizeCookieHeader(rawCookie: string | null) {
+	if (!rawCookie) return null;
+	const parts = rawCookie
+		.split(";")
+		.map((part) => part.trim())
+		.filter(Boolean);
+	const filtered = parts.filter((part) => {
+		const [name] = part.split("=", 1);
+		// Drop oversized session_data cookies; backend auth uses session_token.
+		if (
+			name === "better-auth.session_data" ||
+			name === "__Secure-better-auth.session_data" ||
+			name.startsWith("better-auth.session_data.") ||
+			name.startsWith("__Secure-better-auth.session_data.")
+		) {
+			return false;
+		}
+		return true;
+	});
+	return filtered.length > 0 ? filtered.join("; ") : null;
+}
+
 async function handler(request: Request) {
 	const url = new URL(request.url);
 
@@ -38,9 +60,11 @@ async function handler(request: Request) {
 	});
 
 	// Ensure cookies are forwarded
-	const cookies = request.headers.get("cookie");
+	const cookies = sanitizeCookieHeader(request.headers.get("cookie"));
 	if (cookies) {
 		headers.set("cookie", cookies);
+	} else {
+		headers.delete("cookie");
 	}
 
 	// Forward request to backend

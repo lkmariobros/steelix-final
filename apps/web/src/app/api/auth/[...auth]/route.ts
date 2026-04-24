@@ -24,6 +24,28 @@ const getBackendUrl = () => {
 
 const BACKEND_URL = getBackendUrl();
 
+function sanitizeCookieHeader(rawCookie: string | null) {
+	if (!rawCookie) return null;
+	const parts = rawCookie
+		.split(";")
+		.map((part) => part.trim())
+		.filter(Boolean);
+	const filtered = parts.filter((part) => {
+		const [name] = part.split("=", 1);
+		// Drop session_data (and chunked variants) to avoid header bloat / 431.
+		if (
+			name === "better-auth.session_data" ||
+			name === "__Secure-better-auth.session_data" ||
+			name.startsWith("better-auth.session_data.") ||
+			name.startsWith("__Secure-better-auth.session_data.")
+		) {
+			return false;
+		}
+		return true;
+	});
+	return filtered.length > 0 ? filtered.join("; ") : null;
+}
+
 async function handler(request: Request) {
 	const url = new URL(request.url);
 
@@ -52,10 +74,10 @@ async function handler(request: Request) {
 	// Ensure cookies are forwarded when needed.
 	// For fresh auth actions (sign in/up/reset), old cookies are unnecessary and can
 	// trigger 431 upstream when stale session_data is oversized.
-	const cookies = request.headers.get("cookie");
+	const cookies = sanitizeCookieHeader(request.headers.get("cookie"));
 	if (cookies && !isFreshAuthAction) {
 		headers.set("cookie", cookies);
-	} else if (cookies && isFreshAuthAction) {
+	} else if (request.headers.get("cookie") && isFreshAuthAction) {
 		headers.delete("cookie");
 	}
 

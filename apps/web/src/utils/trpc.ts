@@ -28,7 +28,11 @@ export const queryClient = new QueryClient({
 	},
 	queryCache: new QueryCache({
 		onError: (error) => {
-			toast.error(error.message, {
+			const message =
+				error.message === "Unexpected end of JSON input"
+					? "Session cookies are stale/oversized. Please sign in again or use Reset session cookies on login."
+					: error.message;
+			toast.error(message, {
 				action: {
 					label: "retry",
 					onClick: () => {
