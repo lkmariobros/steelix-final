@@ -35,6 +35,8 @@ export const initiationSchema = z
 
 // Step 2: Property Schema
 export const propertySchema = z.object({
+	listingId: z.string().uuid().optional(),
+	listingTitle: z.string().optional(),
 	address: z.string().min(1, "Property address is required"),
 	propertyType: z.string().min(1, "Property type is required"),
 	bedrooms: z.number().min(0).optional(),

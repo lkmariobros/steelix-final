@@ -315,6 +315,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 						icon: RiFileTextLine,
 					},
 					{
+						title: "Listings",
+						url: "/dashboard/listings",
+						icon: RiFileList3Line,
+					},
+					{
 						title: "CRM",
 						url: "/dashboard/crm",
 						icon: RiUserLine,

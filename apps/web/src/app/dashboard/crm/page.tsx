@@ -219,6 +219,7 @@ export default function CRMPage() {
 	const [typeFilter, setTypeFilter] = useState("all");
 	const [statusFilter, setStatusFilter] = useState("all");
 	const [propertyFilter, setPropertyFilter] = useState("all");
+	const [overdueOnly, setOverdueOnly] = useState(false);
 	const [currentPage, setCurrentPage] = useState(1);
 	const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
 	const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
@@ -261,6 +262,7 @@ export default function CRMPage() {
 				statusFilter !== "all"
 					? (statusFilter as "active" | "inactive" | "pending")
 					: undefined,
+			overdueOnly: overdueOnly || undefined,
 			leadType: activeTab === "company" ? "company" : undefined,
 			includeCompanyLeads: activeTab === "company",
 			page: currentPage,
@@ -289,13 +291,21 @@ export default function CRMPage() {
 				statusFilter !== "all"
 					? (statusFilter as "active" | "inactive" | "pending")
 					: undefined,
+			overdueOnly: overdueOnly || undefined,
 			leadType: activeTab === "company" ? ("company" as const) : undefined,
 			includeCompanyLeads: activeTab === "company",
 			page: 1,
 			limit: 5000,
 			forExport: true as const,
 		}),
-		[searchQuery, typeFilter, propertyFilter, statusFilter, activeTab],
+		[
+			searchQuery,
+			typeFilter,
+			propertyFilter,
+			statusFilter,
+			overdueOnly,
+			activeTab,
+		],
 	);
 
 	const handleExportProspects = useCallback(
@@ -1544,6 +1554,15 @@ export default function CRMPage() {
 								<SelectItem value="pending">Status: Pending</SelectItem>
 							</SelectContent>
 						</Select>
+						<Button
+							type="button"
+							variant={overdueOnly ? "default" : "outline"}
+							size="sm"
+							onClick={() => setOverdueOnly((prev) => !prev)}
+							className="h-9"
+						>
+							Overdue Follow-up
+						</Button>
 					</div>
 
 					{/* Prospects View - Kanban or List */}

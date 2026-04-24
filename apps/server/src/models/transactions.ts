@@ -60,6 +60,8 @@ export const transactions = pgTable("transactions", {
 	propertyData: jsonb("property_data").$type<{
 		address: string;
 		propertyType: string;
+		listingId?: string;
+		listingTitle?: string;
 		bedrooms?: number;
 		bathrooms?: number;
 		area?: number;
@@ -169,6 +171,8 @@ export const insertTransactionSchema = z.object({
 		.object({
 			address: z.string().min(1, "Address is required"),
 			propertyType: z.string().min(1, "Property type is required"),
+			listingId: z.string().uuid().optional(),
+			listingTitle: z.string().optional(),
 			bedrooms: z.number().optional(),
 			bathrooms: z.number().optional(),
 			area: z.number().optional(),
@@ -242,6 +246,8 @@ export const selectTransactionSchema = z.object({
 		.object({
 			address: z.string(),
 			propertyType: z.string(),
+			listingId: z.string().optional(),
+			listingTitle: z.string().optional(),
 			bedrooms: z.number().optional(),
 			bathrooms: z.number().optional(),
 			area: z.number().optional(),

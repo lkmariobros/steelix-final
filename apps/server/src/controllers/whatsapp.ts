@@ -1,5 +1,6 @@
 import { and, desc, eq, ilike, isNull, or, sql } from "drizzle-orm";
 import { z } from "zod";
+import { prospects } from "../models/crm";
 import {
 	type InsertWhatsappMessage,
 	insertWhatsappMessageSchema,
@@ -366,6 +367,34 @@ export const whatsappRouter = router({
 						updatedAt: new Date(),
 					})
 					.where(eq(whatsappConversations.id, conversationId));
+
+				// Pipeline automation:
+				// Message sent -> lastContact touch + follow-up stage for new leads.
+				if (conversation.prospectId) {
+					const [linkedProspect] = await db
+						.select({ id: prospects.id, stage: prospects.stage })
+						.from(prospects)
+						.where(eq(prospects.id, conversation.prospectId))
+						.limit(1);
+
+					if (linkedProspect) {
+						const followUpDueAt = new Date(
+							Date.now() + 48 * 60 * 60 * 1000,
+						);
+						await db
+							.update(prospects)
+							.set({
+								lastContact: new Date(),
+								nextContact: followUpDueAt,
+								stage:
+									linkedProspect.stage === "new_lead"
+										? "follow_up_in_progress"
+										: linkedProspect.stage,
+								updatedAt: new Date(),
+							})
+							.where(eq(prospects.id, linkedProspect.id));
+					}
+				}
 
 				return {
 					success: true,

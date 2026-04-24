@@ -33,6 +33,7 @@ const listProspectsInput = z.object({
 	type: z.enum(["tenant", "buyer"]).optional(),
 	property: z.string().optional(), // Free text search for property name
 	status: z.enum(["active", "inactive", "pending"]).optional(),
+	overdueOnly: z.boolean().optional(),
 	stage: pipelineStageSchema.optional(), // Filter by pipeline stage
 	leadType: leadTypeSchema.optional(), // Filter by lead type
 	includeCompanyLeads: z.boolean().default(false), // Include unclaimed company leads
@@ -117,6 +118,7 @@ export const crmRouter = router({
 					type,
 					property,
 					status,
+					overdueOnly,
 					stage,
 					leadType,
 					includeCompanyLeads,
@@ -169,6 +171,15 @@ export const crmRouter = router({
 				// Status filter
 				if (status) {
 					conditions.push(eq(prospects.status, status));
+				}
+
+				// Overdue follow-up filter:
+				// nextContact is set and in the past, while lead is still active.
+				if (overdueOnly) {
+					conditions.push(eq(prospects.status, "active"));
+					conditions.push(
+						sql`${prospects.nextContact} is not null and ${prospects.nextContact} <= NOW()`,
+					);
 				}
 
 				// Stage filter (for Kanban board)
@@ -667,10 +678,27 @@ export const crmRouter = router({
 				throw new Error("Prospect not found");
 			}
 
+			// Automation rules:
+			// 1) Meeting scheduled (nextContact set) -> move to appointment stage
+			// 2) Activity contact update from new lead -> move to follow-up stage
+			const effectiveUpdateData: typeof updateData = { ...updateData };
+			if (
+				effectiveUpdateData.nextContact !== undefined &&
+				effectiveUpdateData.stage === undefined
+			) {
+				effectiveUpdateData.stage = "appointment_made";
+			} else if (
+				effectiveUpdateData.lastContact !== undefined &&
+				effectiveUpdateData.stage === undefined &&
+				existing.stage === "new_lead"
+			) {
+				effectiveUpdateData.stage = "follow_up_in_progress";
+			}
+
 			const [updated] = await db
 				.update(prospects)
 				.set({
-					...updateData,
+					...effectiveUpdateData,
 					updatedAt: new Date(),
 				})
 				.where(eq(prospects.id, id))
@@ -884,6 +912,19 @@ export const crmRouter = router({
 					agentId,
 				})
 				.returning();
+
+			// Treat note creation as lead activity contact touchpoint.
+			await db
+				.update(prospects)
+				.set({
+					lastContact: new Date(),
+					stage:
+						prospect.stage === "new_lead"
+							? "follow_up_in_progress"
+							: prospect.stage,
+					updatedAt: new Date(),
+				})
+				.where(eq(prospects.id, prospectId));
 
 			return selectProspectNoteSchema.parse(note);
 		}),

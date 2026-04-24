@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ArrowLeft, ArrowRight, MapPin, Search } from "lucide-react";
+import { ArrowLeft, ArrowRight, MapPin } from "lucide-react";
 import { useForm } from "react-hook-form";
 
 import { Button } from "@/components/ui/button";
@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
+import { trpc } from "@/utils/trpc";
 
 // Issue #10 Fix: Import currency input component
 import { CurrencyInput } from "@/components/currency-input";
@@ -58,6 +59,8 @@ export function StepProperty({
 	const form = useForm<PropertyData>({
 		resolver: zodResolver(propertySchema),
 		defaultValues: {
+			listingId: data?.listingId || undefined,
+			listingTitle: data?.listingTitle || "",
 			address: data?.address || "",
 			propertyType: data?.propertyType || "",
 			bedrooms: data?.bedrooms || undefined,
@@ -82,6 +85,12 @@ export function StepProperty({
 	};
 
 	const watchedValues = form.watch();
+	const { data: listingData } = trpc.listings.list.useQuery({
+		status: "active",
+		listingType: "all",
+		page: 1,
+		limit: 100,
+	});
 
 	return (
 		<div className="space-y-6">
@@ -101,33 +110,57 @@ export function StepProperty({
 							{/* Issue #9 Fix: Required fields note */}
 							<RequiredFieldsNote />
 
-							{/* Property Search/Address */}
+							{/* Project selection */}
 							<FormField
 								control={form.control}
-								name="address"
+								name="listingId"
 								render={({ field }) => (
 									<FormItem>
 										<FormLabel>
-											<RequiredLabel>Property Address</RequiredLabel>
+											<RequiredLabel>Project Selection</RequiredLabel>
 										</FormLabel>
-										<div className="flex gap-2">
-											<FormControl>
-												<Input
-													placeholder="Enter property address"
-													{...field}
-													onChange={(e) => {
-														field.onChange(e);
-														handleFormChange();
-													}}
-													className="flex-1"
-												/>
-											</FormControl>
-											<Button type="button" variant="outline" size="icon">
-												<Search className="h-4 w-4" />
-											</Button>
-										</div>
+										<FormControl>
+											<Select
+												value={field.value}
+												onValueChange={(value) => {
+													field.onChange(value);
+													const selected = listingData?.listings.find((x) => x.id === value);
+													if (selected) {
+														form.setValue("listingTitle", selected.title);
+														form.setValue("address", selected.addressLine1 || selected.title);
+														form.setValue(
+															"propertyType",
+															["apartment", "condo", "commercial", "other"].includes(
+																selected.propertyType,
+															)
+																? selected.propertyType
+																: "other",
+														);
+														form.setValue("price", Number(selected.price));
+														if (selected.bedrooms !== null)
+															form.setValue("bedrooms", selected.bedrooms || undefined);
+														if (selected.bathrooms !== null)
+															form.setValue("bathrooms", selected.bathrooms || undefined);
+														if (selected.builtUpSqft !== null)
+															form.setValue("area", selected.builtUpSqft || undefined);
+													}
+													handleFormChange();
+												}}
+											>
+												<SelectTrigger>
+													<SelectValue placeholder="Select project/listing" />
+												</SelectTrigger>
+												<SelectContent>
+													{(listingData?.listings || []).map((listing) => (
+														<SelectItem key={listing.id} value={listing.id}>
+															{listing.title}
+														</SelectItem>
+													))}
+												</SelectContent>
+											</Select>
+										</FormControl>
 										<FormDescription>
-											Enter the full address or search for the property
+											Admin-managed listing data will auto-fill property and pricing.
 										</FormDescription>
 										<FormMessage />
 									</FormItem>

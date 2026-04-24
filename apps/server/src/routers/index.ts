@@ -10,6 +10,7 @@ import { dashboardRouter } from "../controllers/dashboard";
 import { documentsRouter } from "../controllers/documents";
 import { feedbackRouter } from "../controllers/feedback";
 import { leadTasksRouter } from "../controllers/lead-tasks";
+import { listingsRouter } from "../controllers/listings";
 import { reportsRouter } from "../controllers/reports";
 import { tagsRouter } from "../controllers/tags";
 import { transactionsRouter } from "../controllers/transactions";
@@ -34,6 +35,7 @@ export const appRouter = router({
 	calendar: calendarRouter,
 	feedback: feedbackRouter,
 	leadTasks: leadTasksRouter,
+	listings: listingsRouter,
 });
 
 export type AppRouter = typeof appRouter;
