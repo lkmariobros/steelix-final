@@ -1,10 +1,18 @@
 "use client";
 
 import { Avatar } from "@/components/avatar";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAgentDashboard } from "@/contexts/agent-dashboard-context";
-import { RiAwardLine, RiMedalLine, RiTrophyLine } from "@remixicon/react";
+import { RiAwardLine, RiFireLine, RiMedalLine, RiSparklingLine, RiTrophyLine } from "@remixicon/react";
 
 const formatCurrency = (amount: number): string =>
 	new Intl.NumberFormat("en-US", {
@@ -27,13 +35,33 @@ const RANK_COLORS = [
 ];
 
 export function TeamLeaderboard() {
-	const { teamLeaderboard, isLoading } = useAgentDashboard();
+	const { teamLeaderboard, isLoading, leaderboardPeriod, setLeaderboardPeriod } =
+		useAgentDashboard();
+
+	const header = (
+		<div className="flex items-center justify-between gap-2">
+			<CardTitle>Team Leaderboard</CardTitle>
+			<Select
+				value={leaderboardPeriod}
+				onValueChange={(v) => setLeaderboardPeriod(v as "month" | "30d" | "all")}
+			>
+				<SelectTrigger className="h-8 w-[130px]">
+					<SelectValue placeholder="Period" />
+				</SelectTrigger>
+				<SelectContent>
+					<SelectItem value="month">This month</SelectItem>
+					<SelectItem value="30d">Last 30 days</SelectItem>
+					<SelectItem value="all">All time</SelectItem>
+				</SelectContent>
+			</Select>
+		</div>
+	);
 
 	if (isLoading) {
 		return (
 			<Card>
 				<CardHeader>
-					<CardTitle>Team Leaderboard</CardTitle>
+					{header}
 				</CardHeader>
 				<CardContent>
 					<div className="space-y-4">
@@ -62,7 +90,7 @@ export function TeamLeaderboard() {
 		return (
 			<Card>
 				<CardHeader>
-					<CardTitle>Team Leaderboard</CardTitle>
+					{header}
 				</CardHeader>
 				<CardContent>
 					<p className="text-muted-foreground text-sm">
@@ -89,7 +117,7 @@ export function TeamLeaderboard() {
 	return (
 		<Card>
 			<CardHeader>
-				<CardTitle>Team Leaderboard</CardTitle>
+				{header}
 			</CardHeader>
 			<CardContent>
 				<div className="space-y-4">
@@ -127,8 +155,20 @@ export function TeamLeaderboard() {
 										{agent.agentName}
 									</div>
 									<div className="text-muted-foreground text-xs">
-										{agent.completedDeals} completed · {agent.activeDeals}{" "}
-										active
+										Level {agent.level} · {agent.completedDeals} completed ·{" "}
+										{agent.activeDeals} active
+									</div>
+									<div className="mt-1 flex flex-wrap gap-1">
+										{agent.badges.slice(0, 2).map((badge) => (
+											<Badge
+												key={`${agent.agentId}-${badge}`}
+												variant="secondary"
+												className="h-5 px-1.5 text-[10px]"
+											>
+												<RiSparklingLine className="mr-1 size-3" />
+												{badge}
+											</Badge>
+										))}
 									</div>
 								</div>
 							</div>
@@ -137,7 +177,15 @@ export function TeamLeaderboard() {
 								<div className="font-semibold text-sm">
 									{formatCurrency(agent.totalCommission)}
 								</div>
-								<div className="text-muted-foreground text-xs">commission</div>
+								<div className="text-muted-foreground text-xs">
+									{agent.score.toLocaleString()} pts
+								</div>
+								{agent.streakDays > 0 && (
+									<div className="mt-1 inline-flex items-center gap-1 text-orange-600 text-xs">
+										<RiFireLine className="size-3" />
+										{agent.streakDays}d streak
+									</div>
+								)}
 							</div>
 						</div>
 					))}

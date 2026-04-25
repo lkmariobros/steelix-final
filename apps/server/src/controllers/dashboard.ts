@@ -18,6 +18,10 @@ const dateRangeInput = z.object({
 	endDate: z.coerce.date().optional(),
 });
 
+const leaderboardPeriodInput = z.object({
+	period: z.enum(["month", "30d", "all"]).default("month"),
+});
+
 export const dashboardRouter = router({
 	// Get financial overview for agent dashboard
 	getFinancialOverview: protectedProcedure
@@ -299,8 +303,16 @@ export const dashboardRouter = router({
 		}),
 
 	// Get team leaderboard for competitive element
-	getTeamLeaderboard: protectedProcedure.query(async ({ ctx }) => {
+	getTeamLeaderboard: protectedProcedure
+		.input(leaderboardPeriodInput)
+		.query(async ({ ctx, input }) => {
 		const userId = ctx.session.user.id;
+		const periodCondition =
+			input.period === "all"
+				? sql`TRUE`
+				: input.period === "30d"
+					? sql`${transactions.transactionDate} >= NOW() - INTERVAL '30 days'`
+					: sql`DATE_TRUNC('month', ${transactions.transactionDate}) = DATE_TRUNC('month', NOW())`;
 
 		// Get user's team
 		const userInfo = await db
@@ -308,10 +320,9 @@ export const dashboardRouter = router({
 			.from(user)
 			.where(eq(user.id, userId))
 			.limit(1);
-
-		if (!userInfo[0]?.teamId) {
-			return [];
-		}
+		const whereCondition = userInfo[0]?.teamId
+			? eq(user.teamId, userInfo[0].teamId)
+			: eq(user.id, userId);
 
 		// Get team member performance (PostgreSQL returns strings for aggregates)
 		const rawLeaderboard = await db
@@ -322,22 +333,74 @@ export const dashboardRouter = router({
 				totalCommission: sql<string>`COALESCE(SUM(${transactions.commissionAmount}), 0)`,
 				completedDeals: sql<string>`COUNT(CASE WHEN ${transactions.status} = 'completed' THEN 1 END)`,
 				activeDeals: sql<string>`COUNT(CASE WHEN ${transactions.status} NOT IN ('completed', 'rejected') THEN 1 END)`,
+				submittedDeals: sql<string>`COUNT(CASE WHEN ${transactions.status} = 'submitted' THEN 1 END)`,
+				recentCompletedDeals: sql<string>`COUNT(CASE WHEN ${transactions.status} = 'completed' AND ${transactions.updatedAt} >= NOW() - INTERVAL '7 days' THEN 1 END)`,
 			})
 			.from(user)
-			.leftJoin(transactions, eq(user.id, transactions.agentId))
-			.where(eq(user.teamId, userInfo[0].teamId))
+			.leftJoin(
+				transactions,
+				and(eq(user.id, transactions.agentId), periodCondition),
+			)
+			.where(whereCondition)
 			.groupBy(user.id, user.name, user.image)
-			.orderBy(sql`COALESCE(SUM(${transactions.commissionAmount}), 0) DESC`)
 			.limit(10);
 
-		// Convert string values to numbers
-		const leaderboard = rawLeaderboard.map((item) => ({
+		// Convert string values to numbers and calculate gamification fields
+		const withGamification = rawLeaderboard.map((item) => {
+			const totalCommission = Number(item.totalCommission) || 0;
+			const completedDeals = Number(item.completedDeals) || 0;
+			const activeDeals = Number(item.activeDeals) || 0;
+			const submittedDeals = Number(item.submittedDeals) || 0;
+			const recentCompletedDeals = Number(item.recentCompletedDeals) || 0;
+			const score = Math.round(
+				completedDeals * 100 +
+					activeDeals * 25 +
+					submittedDeals * 40 +
+					totalCommission / 1000 +
+					recentCompletedDeals * 20,
+			);
+			const level = Math.floor(score / 300) + 1;
+			const badges: string[] = [];
+			if (completedDeals >= 1) badges.push("Deal Closer");
+			if (completedDeals >= 5) badges.push("Top Seller");
+			if (totalCommission >= 10000) badges.push("Commission Pro");
+			if (recentCompletedDeals >= 2) badges.push("On Fire");
+			if (activeDeals >= 3) badges.push("Pipeline Builder");
+
+			return {
+				agentId: item.agentId,
+				agentName: item.agentName,
+				agentImage: item.agentImage,
+				totalCommission,
+				completedDeals,
+				activeDeals,
+				score,
+				level,
+				streakDays: recentCompletedDeals * 2,
+				badges,
+			};
+		});
+
+		// Sort by gamification score first, then commission
+		const ranked = withGamification
+			.sort((a, b) => b.score - a.score || b.totalCommission - a.totalCommission)
+			.map((item, index) => ({
+				...item,
+				rank: index + 1,
+			}));
+
+		const leaderboard = ranked.map((item) => ({
 			agentId: item.agentId,
 			agentName: item.agentName,
 			agentImage: item.agentImage,
-			totalCommission: Number(item.totalCommission) || 0,
-			completedDeals: Number(item.completedDeals) || 0,
-			activeDeals: Number(item.activeDeals) || 0,
+			totalCommission: item.totalCommission,
+			completedDeals: item.completedDeals,
+			activeDeals: item.activeDeals,
+			score: item.score,
+			level: item.level,
+			rank: item.rank,
+			streakDays: item.streakDays,
+			badges: item.badges,
 		}));
 
 		return leaderboard;

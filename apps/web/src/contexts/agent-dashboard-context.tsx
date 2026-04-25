@@ -85,6 +85,11 @@ export interface TeamLeaderboardItem {
 	totalCommission: number;
 	completedDeals: number;
 	activeDeals: number;
+	score: number;
+	level: number;
+	rank: number;
+	streakDays: number;
+	badges: string[];
 }
 
 export type TeamLeaderboardData = TeamLeaderboardItem[];
@@ -115,6 +120,7 @@ export interface DownlineAgent {
 }
 
 export type DownlineData = DownlineAgent[];
+export type LeaderboardPeriod = "month" | "30d" | "all";
 
 interface AgentDashboardContextValue {
 	// Date filter
@@ -130,6 +136,8 @@ interface AgentDashboardContextValue {
 	bonusSummary: BonusSummaryData | undefined;
 	uplineInfo: UplineData | null | undefined;
 	downline: DownlineData | undefined;
+	leaderboardPeriod: LeaderboardPeriod;
+	setLeaderboardPeriod: (period: LeaderboardPeriod) => void;
 
 	// State
 	isLoading: boolean;
@@ -158,6 +166,8 @@ export function AgentDashboardProvider({
 	transactionLimit = 8,
 }: AgentDashboardProviderProps) {
 	const [dateRange, setDateRange] = useState<DateRange>({});
+	const [leaderboardPeriod, setLeaderboardPeriod] =
+		useState<LeaderboardPeriod>("month");
 
 	// ── All queries in ONE component → tRPC batches them into ONE HTTP request ──
 
@@ -182,7 +192,7 @@ export function AgentDashboardProvider({
 	);
 
 	const teamLeaderboardQuery = trpc.dashboard.getTeamLeaderboard.useQuery(
-		undefined,
+		{ period: leaderboardPeriod },
 		{ staleTime: 60_000 },
 	);
 
@@ -269,6 +279,8 @@ export function AgentDashboardProvider({
 				bonusSummary: bonusSummaryQuery.data as BonusSummaryData | undefined,
 				uplineInfo: uplineQuery.data as UplineData | null | undefined,
 				downline: downlineQuery.data as DownlineData | undefined,
+				leaderboardPeriod,
+				setLeaderboardPeriod,
 				isLoading,
 				isRefetching,
 				hasError,
