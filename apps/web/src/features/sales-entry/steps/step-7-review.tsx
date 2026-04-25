@@ -300,6 +300,30 @@ export function StepReview({
 							step={2}
 						/>
 						<div className="space-y-3 rounded-lg bg-muted/50 p-4">
+							{data.propertyData?.listingTitle && (
+								<div>
+									<p className="text-muted-foreground text-sm">
+										Project / listing
+									</p>
+									<p className="font-medium">
+										{data.propertyData.listingTitle}
+									</p>
+								</div>
+							)}
+							{data.propertyData?.listingReferralShareType != null &&
+								data.propertyData?.listingReferralShareValue != null && (
+									<div>
+										<p className="text-muted-foreground text-sm">
+											Commission preset (from listing)
+										</p>
+										<p className="font-medium text-sm">
+											{data.propertyData.listingReferralShareType ===
+											"percentage"
+												? `${data.propertyData.listingReferralShareValue}%`
+												: `Fixed ${data.propertyData.listingReferralShareValue}`}
+										</p>
+									</div>
+								)}
 							<div>
 								<p className="text-muted-foreground text-sm">Address</p>
 								<p className="font-medium">

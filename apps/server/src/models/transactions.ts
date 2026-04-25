@@ -62,6 +62,9 @@ export const transactions = pgTable("transactions", {
 		propertyType: string;
 		listingId?: string;
 		listingTitle?: string;
+		/** Snapshot of listing preset commission/referral rule at selection time */
+		listingReferralShareType?: "percentage" | "fixed";
+		listingReferralShareValue?: number;
 		bedrooms?: number;
 		bathrooms?: number;
 		area?: number;
@@ -173,6 +176,8 @@ export const insertTransactionSchema = z.object({
 			propertyType: z.string().min(1, "Property type is required"),
 			listingId: z.string().uuid().optional(),
 			listingTitle: z.string().optional(),
+			listingReferralShareType: z.enum(["percentage", "fixed"]).optional(),
+			listingReferralShareValue: z.number().nonnegative().optional(),
 			bedrooms: z.number().optional(),
 			bathrooms: z.number().optional(),
 			area: z.number().optional(),
@@ -248,6 +253,8 @@ export const selectTransactionSchema = z.object({
 			propertyType: z.string(),
 			listingId: z.string().optional(),
 			listingTitle: z.string().optional(),
+			listingReferralShareType: z.enum(["percentage", "fixed"]).optional(),
+			listingReferralShareValue: z.number().optional(),
 			bedrooms: z.number().optional(),
 			bathrooms: z.number().optional(),
 			area: z.number().optional(),

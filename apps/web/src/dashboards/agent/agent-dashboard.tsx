@@ -3,6 +3,13 @@
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import {
+	Card,
+	CardContent,
+	CardDescription,
+	CardHeader,
+	CardTitle,
+} from "@/components/ui/card";
+import {
 	Popover,
 	PopoverContent,
 	PopoverTrigger,
@@ -20,11 +27,15 @@ import {
 } from "@/contexts/agent-dashboard-context";
 import { useTransactionModalActions } from "@/contexts/transaction-modal-context";
 import {
+	RiCheckboxCircleLine,
 	RiCalendarLine,
+	RiFileList3Line,
 	RiLoader4Line,
 	RiRefreshLine,
 	RiSettings3Line,
+	RiArrowRightLine,
 } from "@remixicon/react";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { FinancialOverview } from "./components/financial-overview";
@@ -36,13 +47,24 @@ import { TransactionOverview } from "./components/transaction-overview";
 // ─── Inner component (consumes context) ──────────────────────────────────────
 
 function DashboardContent() {
+	const router = useRouter();
 	const { openCreateModal } = useTransactionModalActions();
-	const { dateRange, setDateRange, isRefetching, refetch } =
+	const {
+		dateRange,
+		setDateRange,
+		isRefetching,
+		refetch,
+		recentTransactions,
+		salesPipeline,
+	} =
 		useAgentDashboard();
 
 	const [timeFilter, setTimeFilter] = useState<string>("all");
 	const [isCalendarOpen, setIsCalendarOpen] = useState(false);
 	const [currentTime, setCurrentTime] = useState<string>("");
+	const hasAnyTransaction = (recentTransactions?.length ?? 0) > 0;
+	const hasActivePipeline =
+		(salesPipeline?.pipeline?.reduce((sum, item) => sum + item.count, 0) ?? 0) > 0;
 
 	// Avoid hydration mismatch for time display
 	useEffect(() => {
@@ -143,6 +165,69 @@ function DashboardContent() {
 
 			{/* Grid */}
 			<div className="grid gap-6">
+				{!hasAnyTransaction && !hasActivePipeline && (
+					<Card className="col-span-full border-dashed">
+						<CardHeader>
+							<CardTitle>Getting Started Checklist</CardTitle>
+							<CardDescription>
+								Follow these steps to populate your dashboard and start tracking
+								commission performance.
+							</CardDescription>
+						</CardHeader>
+						<CardContent className="grid gap-3 md:grid-cols-3">
+							<div className="rounded-md border p-3">
+								<div className="mb-2 flex items-center gap-2 font-medium text-sm">
+									<RiFileList3Line className="size-4" />
+									1. Add listing / project
+								</div>
+								<p className="mb-3 text-muted-foreground text-xs">
+									Create internal listings so agents can select projects with preset
+									details and referral commission defaults.
+								</p>
+								<Button
+									variant="outline"
+									size="sm"
+									onClick={() => router.push("/dashboard/listings")}
+								>
+									Open Listings
+									<RiArrowRightLine className="ml-2 size-4" />
+								</Button>
+							</div>
+							<div className="rounded-md border p-3">
+								<div className="mb-2 flex items-center gap-2 font-medium text-sm">
+									<RiCheckboxCircleLine className="size-4" />
+									2. Create transaction
+								</div>
+								<p className="mb-3 text-muted-foreground text-xs">
+									Record a sale/lease, select a project in Step 2, and verify
+									commission breakdown in Step 5.
+								</p>
+								<Button size="sm" onClick={() => openCreateModal()}>
+									New Transaction
+									<RiArrowRightLine className="ml-2 size-4" />
+								</Button>
+							</div>
+							<div className="rounded-md border p-3">
+								<div className="mb-2 flex items-center gap-2 font-medium text-sm">
+									<RiCalendarLine className="size-4" />
+									3. Monitor pipeline
+								</div>
+								<p className="mb-3 text-muted-foreground text-xs">
+									After at least one transaction, use date filters and widgets to
+									track pipeline health and pending commissions.
+								</p>
+								<Button
+									variant="outline"
+									size="sm"
+									onClick={() => router.push("/dashboard/transactions")}
+								>
+									View Transactions
+									<RiArrowRightLine className="ml-2 size-4" />
+								</Button>
+							</div>
+						</CardContent>
+					</Card>
+				)}
 				<div className="col-span-full">
 					<FinancialOverview />
 				</div>

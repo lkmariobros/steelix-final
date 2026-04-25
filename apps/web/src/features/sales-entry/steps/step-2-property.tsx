@@ -2,6 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ArrowLeft, ArrowRight, MapPin } from "lucide-react";
+import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 
 import { Button } from "@/components/ui/button";
@@ -43,8 +44,27 @@ import {
 	propertyTypeOptions,
 } from "../transaction-schema";
 
+const NO_PROJECT = "__none__";
+
+/** Map internal listing `property_type` enum to sales form dropdown values */
+function mapListingPropertyTypeToForm(
+	listingPropertyType: string,
+): string {
+	const map: Record<string, string> = {
+		landed: "house",
+		condo: "condo",
+		apartment: "apartment",
+		commercial: "commercial",
+		industrial: "commercial",
+		other: "other",
+	};
+	return map[listingPropertyType] ?? "other";
+}
+
 interface StepPropertyProps {
 	data?: PropertyData;
+	/** Prefer listings that match the transaction (sale vs rent) */
+	listingTypeFilter?: "sale" | "rent" | "all";
 	onUpdate: (data: PropertyData) => void;
 	onNext: () => void;
 	onPrevious: () => void;
@@ -52,6 +72,7 @@ interface StepPropertyProps {
 
 export function StepProperty({
 	data,
+	listingTypeFilter = "all",
 	onUpdate,
 	onNext,
 	onPrevious,
@@ -61,6 +82,8 @@ export function StepProperty({
 		defaultValues: {
 			listingId: data?.listingId || undefined,
 			listingTitle: data?.listingTitle || "",
+			listingReferralShareType: data?.listingReferralShareType,
+			listingReferralShareValue: data?.listingReferralShareValue,
 			address: data?.address || "",
 			propertyType: data?.propertyType || "",
 			bedrooms: data?.bedrooms || undefined,
@@ -85,12 +108,33 @@ export function StepProperty({
 	};
 
 	const watchedValues = form.watch();
+	const listingId = form.watch("listingId");
 	const { data: listingData } = trpc.listings.list.useQuery({
 		status: "active",
-		listingType: "all",
+		listingType: listingTypeFilter,
 		page: 1,
-		limit: 100,
+		limit: 200,
 	});
+
+	const { data: selectedListingDetails } = trpc.listings.getById.useQuery(
+		{ id: listingId! },
+		{ enabled: Boolean(listingId) },
+	);
+
+	// When full listing + referral rule loads, snapshot preset commission fields for step 5
+	useEffect(() => {
+		if (!selectedListingDetails) return;
+		const rule = selectedListingDetails.referralRule;
+		if (rule) {
+			form.setValue("listingReferralShareType", rule.shareType);
+			form.setValue("listingReferralShareValue", Number(rule.shareValue));
+		} else {
+			form.setValue("listingReferralShareType", undefined);
+			form.setValue("listingReferralShareValue", undefined);
+		}
+		queueMicrotask(() => onUpdate(form.getValues()));
+		// eslint-disable-next-line react-hooks/exhaustive-deps -- sync snapshot when listing details load
+	}, [selectedListingDetails]);
 
 	return (
 		<div className="space-y-6">
@@ -98,7 +142,8 @@ export function StepProperty({
 				<CardHeader>
 					<CardTitle>Property Information</CardTitle>
 					<CardDescription>
-						Enter the details of the property involved in this transaction
+						Select an internal project listing to load property details and optional
+						admin commission defaults, or enter a property address manually.
 					</CardDescription>
 				</CardHeader>
 				<CardContent>
@@ -110,31 +155,38 @@ export function StepProperty({
 							{/* Issue #9 Fix: Required fields note */}
 							<RequiredFieldsNote />
 
-							{/* Project selection */}
+							{/* Project selection (internal marketplace) — optional; use address below if none */}
 							<FormField
 								control={form.control}
 								name="listingId"
 								render={({ field }) => (
 									<FormItem>
-										<FormLabel>
-											<RequiredLabel>Project Selection</RequiredLabel>
-										</FormLabel>
+										<FormLabel>Project / listing</FormLabel>
 										<FormControl>
 											<Select
-												value={field.value}
+												value={field.value ?? NO_PROJECT}
 												onValueChange={(value) => {
+													if (value === NO_PROJECT) {
+														field.onChange(undefined);
+														form.setValue("listingTitle", "");
+														form.setValue("listingReferralShareType", undefined);
+														form.setValue("listingReferralShareValue", undefined);
+														handleFormChange();
+														return;
+													}
 													field.onChange(value);
-													const selected = listingData?.listings.find((x) => x.id === value);
+													const selected = listingData?.listings.find(
+														(x) => x.id === value,
+													);
 													if (selected) {
 														form.setValue("listingTitle", selected.title);
-														form.setValue("address", selected.addressLine1 || selected.title);
+														form.setValue(
+															"address",
+															selected.addressLine1 || selected.title,
+														);
 														form.setValue(
 															"propertyType",
-															["apartment", "condo", "commercial", "other"].includes(
-																selected.propertyType,
-															)
-																? selected.propertyType
-																: "other",
+															mapListingPropertyTypeToForm(selected.propertyType),
 														);
 														form.setValue("price", Number(selected.price));
 														if (selected.bedrooms !== null)
@@ -148,9 +200,12 @@ export function StepProperty({
 												}}
 											>
 												<SelectTrigger>
-													<SelectValue placeholder="Select project/listing" />
+													<SelectValue placeholder="Select project (optional)" />
 												</SelectTrigger>
 												<SelectContent>
+													<SelectItem value={NO_PROJECT}>
+														None — enter property manually
+													</SelectItem>
 													{(listingData?.listings || []).map((listing) => (
 														<SelectItem key={listing.id} value={listing.id}>
 															{listing.title}
@@ -160,8 +215,33 @@ export function StepProperty({
 											</Select>
 										</FormControl>
 										<FormDescription>
-											Admin-managed listing data will auto-fill property and pricing.
+											Choose an admin listing to load property details and optional
+											commission preset. Or select “None” and fill the address
+											yourself.
 										</FormDescription>
+										<FormMessage />
+									</FormItem>
+								)}
+							/>
+
+							<FormField
+								control={form.control}
+								name="address"
+								render={({ field }) => (
+									<FormItem>
+										<FormLabel>
+											<RequiredLabel>Property address</RequiredLabel>
+										</FormLabel>
+										<FormControl>
+											<Input
+												placeholder="Full address or location"
+												{...field}
+												onChange={(e) => {
+													field.onChange(e);
+													handleFormChange();
+												}}
+											/>
+										</FormControl>
 										<FormMessage />
 									</FormItem>
 								)}

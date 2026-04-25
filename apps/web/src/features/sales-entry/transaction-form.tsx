@@ -279,6 +279,13 @@ export function TransactionForm({
 				return (
 					<StepProperty
 						data={formData.propertyData}
+						listingTypeFilter={
+							formData.transactionType === "lease"
+								? "rent"
+								: formData.transactionType === "sale"
+									? "sale"
+									: "all"
+						}
 						onUpdate={(data) => handleStepUpdate(2, data)}
 						onNext={goToNextStep}
 						onPrevious={goToPreviousStep}
@@ -322,6 +329,7 @@ export function TransactionForm({
 							breakdown: formData.breakdown,
 						}}
 						propertyPrice={formData.propertyData?.price || 0}
+						propertyData={formData.propertyData}
 						coBrokingData={formData.coBrokingData}
 						onUpdate={(data) => handleStepUpdate(5, data)}
 						onNext={goToNextStep}

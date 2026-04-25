@@ -191,6 +191,12 @@ export const listingsRouter = router({
 			propertyType: listing.propertyType,
 			price: Number(listing.price),
 		};
+		const [activeRule] = await db
+			.select()
+			.from(listingReferralRules)
+			.where(and(eq(listingReferralRules.listingId, listing.id), eq(listingReferralRules.isActive, true)))
+			.limit(1);
+
 		const mergedProperty = {
 			...currentProperty,
 			address: currentProperty.address || listing.addressLine1 || "",
@@ -198,6 +204,10 @@ export const listingsRouter = router({
 			price: currentProperty.price || Number(listing.price),
 			listingId: listing.id,
 			listingTitle: listing.title,
+			...(activeRule && {
+				listingReferralShareType: activeRule.shareType,
+				listingReferralShareValue: Number(activeRule.shareValue),
+			}),
 		};
 
 		await db

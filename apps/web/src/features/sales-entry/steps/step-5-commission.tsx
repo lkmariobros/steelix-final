@@ -13,7 +13,7 @@ import {
 	User,
 	Users,
 } from "lucide-react";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -43,6 +43,7 @@ import { Separator } from "@/components/ui/separator";
 import { trpc } from "@/utils/trpc";
 import {
 	type CommissionData,
+	type PropertyData,
 	calculateCommission,
 	calculateEnhancedCommission,
 	commissionSchema,
@@ -55,6 +56,7 @@ import type { CoBrokingData, RepresentationType } from "../transaction-schema";
 interface StepCommissionProps {
 	data?: CommissionData;
 	propertyPrice: number;
+	propertyData?: PropertyData;
 	coBrokingData?: CoBrokingData["coBrokingData"]; // Co-broker split info from Step 4
 	onUpdate: (data: CommissionData) => void;
 	onNext: () => void;
@@ -64,11 +66,13 @@ interface StepCommissionProps {
 export function StepCommission({
 	data,
 	propertyPrice,
+	propertyData,
 	coBrokingData,
 	onUpdate,
 	onNext,
 	onPrevious,
 }: StepCommissionProps) {
+	const listingPresetAppliedRef = useRef<string | null>(null);
 	// Local state for commission type
 	const [localCommissionType, setLocalCommissionType] = useState<
 		"percentage" | "fixed"
@@ -91,6 +95,37 @@ export function StepCommission({
 			breakdown: data?.breakdown,
 		},
 	});
+
+	// Apply listing admin preset to commission % / fixed amount (once per listing + rule snapshot)
+	useEffect(() => {
+		if (!propertyData?.listingId) return;
+		if (
+			propertyData.listingReferralShareType == null ||
+			propertyData.listingReferralShareValue == null
+		) {
+			return;
+		}
+		const key = `${propertyData.listingId}|${propertyData.listingReferralShareType}|${propertyData.listingReferralShareValue}`;
+		if (listingPresetAppliedRef.current === key) return;
+
+		const current = form.getValues("commissionValue");
+		if (current > 0) {
+			listingPresetAppliedRef.current = key;
+			return;
+		}
+
+		form.setValue("commissionType", propertyData.listingReferralShareType);
+		setLocalCommissionType(propertyData.listingReferralShareType);
+		form.setValue("commissionValue", propertyData.listingReferralShareValue);
+		listingPresetAppliedRef.current = key;
+		queueMicrotask(() => onUpdate(form.getValues()));
+	}, [
+		propertyData?.listingId,
+		propertyData?.listingReferralShareType,
+		propertyData?.listingReferralShareValue,
+		form,
+		onUpdate,
+	]);
 
 	// Fetch real agent tier info from backend
 	const { data: realAgentTierInfo, isLoading: isTierLoading } =
@@ -218,6 +253,23 @@ export function StepCommission({
 
 	return (
 		<div className="space-y-6">
+			{propertyData?.listingId &&
+				propertyData.listingTitle &&
+				propertyData.listingReferralShareType != null &&
+				propertyData.listingReferralShareValue != null && (
+					<Alert>
+						<Info className="h-4 w-4" />
+						<AlertDescription>
+							<span className="font-medium">Project preset: {propertyData.listingTitle}.</span>{" "}
+							Admin commission default:{" "}
+							{propertyData.listingReferralShareType === "percentage"
+								? `${propertyData.listingReferralShareValue}%`
+								: `fixed ${propertyData.listingReferralShareValue}`}{" "}
+							· You can adjust before submit.
+						</AlertDescription>
+					</Alert>
+				)}
+
 			{/* Agent Tier Display */}
 			{agentTierInfo && (
 				<Card className="border-l-4 border-l-blue-500">

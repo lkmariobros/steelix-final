@@ -37,6 +37,9 @@ export const initiationSchema = z
 export const propertySchema = z.object({
 	listingId: z.string().uuid().optional(),
 	listingTitle: z.string().optional(),
+	/** Admin preset from listing; snapshot for commission step + audit */
+	listingReferralShareType: z.enum(["percentage", "fixed"]).optional(),
+	listingReferralShareValue: z.number().nonnegative().optional(),
 	address: z.string().min(1, "Property address is required"),
 	propertyType: z.string().min(1, "Property type is required"),
 	bedrooms: z.number().min(0).optional(),

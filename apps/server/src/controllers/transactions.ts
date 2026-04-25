@@ -24,6 +24,10 @@ const baseTransactionInput = z.object({
 		.object({
 			address: z.string().min(1, "Address is required"),
 			propertyType: z.string().min(1, "Property type is required"),
+			listingId: z.string().uuid().optional(),
+			listingTitle: z.string().optional(),
+			listingReferralShareType: z.enum(["percentage", "fixed"]).optional(),
+			listingReferralShareValue: z.number().nonnegative().optional(),
 			bedrooms: z.number().optional(),
 			bathrooms: z.number().optional(),
 			area: z.number().optional(),
