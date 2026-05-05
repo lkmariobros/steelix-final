@@ -103,9 +103,9 @@ export function TransactionFormModal({
 				description={getModalDescription()}
 				size="full"
 				hasUnsavedChanges={hasUnsavedChanges}
-				className="mx-4"
+				className="mx-4 max-h-[126vh] sm:max-h-[126vh]"
 			>
-				<div className="p-6">
+				<div className="p-4 sm:p-6">
 					<TransactionForm
 						transactionId={transactionId}
 						mode={mode === "view" ? "edit" : mode} // Map view to edit for form compatibility

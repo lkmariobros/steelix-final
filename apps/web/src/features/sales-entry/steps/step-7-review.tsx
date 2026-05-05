@@ -494,7 +494,7 @@ export function StepReview({
 					{/* Commission Information */}
 					<div className="space-y-3">
 						<SectionHeader icon={Calculator} title="Commission" step={5} />
-						<div className="rounded-lg border border-green-200 bg-green-50 p-4">
+						<div className="rounded-lg border bg-muted/30 p-4">
 							<div className="grid grid-cols-1 gap-4 md:grid-cols-3">
 								<div>
 									<p className="text-muted-foreground text-sm">Type</p>
@@ -514,7 +514,7 @@ export function StepReview({
 									<p className="text-muted-foreground text-sm">
 										Total Commission
 									</p>
-									<p className="font-bold text-green-700 text-lg">
+									<p className="font-bold text-foreground text-lg">
 										${data.commissionAmount?.toLocaleString() || "0"}
 									</p>
 								</div>
@@ -549,7 +549,7 @@ export function StepReview({
 									<p className="text-muted-foreground text-sm">
 										Additional Notes
 									</p>
-									<p className="rounded border bg-white p-3 font-medium text-sm">
+									<p className="rounded border bg-background p-3 font-medium text-sm">
 										{data.notes}
 									</p>
 								</div>
@@ -558,13 +558,13 @@ export function StepReview({
 					</div>
 
 					{/* Submission Notice */}
-					<Card className="border-blue-200 bg-blue-50">
+					<Card className="border bg-muted/20">
 						<CardContent className="pt-6">
 							<div className="flex items-start gap-3">
-								<CheckCircle className="mt-0.5 h-5 w-5 text-blue-600" />
-								<div className="text-blue-800">
+								<CheckCircle className="mt-0.5 h-5 w-5 text-primary" />
+								<div>
 									<p className="font-medium">Ready to Submit</p>
-									<p className="text-sm">
+									<p className="text-muted-foreground text-sm">
 										By submitting this transaction, you confirm that all
 										information provided is accurate and complete. The
 										transaction will be sent for administrative review and

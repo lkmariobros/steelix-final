@@ -279,13 +279,10 @@ export function TransactionForm({
 				return (
 					<StepProperty
 						data={formData.propertyData}
-						listingTypeFilter={
-							formData.transactionType === "lease"
-								? "rent"
-								: formData.transactionType === "sale"
-									? "sale"
-									: "all"
-						}
+						// Commission schemes are linked to listings ("blocks").
+						// Showing all active listings prevents "scheme exists but block not selectable"
+						// when the listing type (sale/rent) doesn't match the transaction type.
+						listingTypeFilter="all"
 						onUpdate={(data) => handleStepUpdate(2, data)}
 						onNext={goToNextStep}
 						onPrevious={goToPreviousStep}

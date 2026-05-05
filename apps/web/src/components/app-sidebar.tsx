@@ -46,6 +46,7 @@ import {
 	RiRobotLine,
 	RiPriceTagLine,
 	RiNotificationLine,
+	RiMoneyDollarCircleLine,
 	RiPushpinLine,
 	RiArrowRightLine,
 } from "@remixicon/react";
@@ -307,6 +308,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 							title: "Settings",
 							url: "/admin/settings",
 							icon: RiSettings3Line,
+						},
+						{
+							title: "Commission schemes",
+							url: "/admin/commission-schemes",
+							icon: RiMoneyDollarCircleLine,
 						},
 						{
 							title: "Reports & analytics",

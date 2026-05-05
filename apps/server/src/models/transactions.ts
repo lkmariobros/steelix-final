@@ -30,12 +30,18 @@ export const commissionTypeEnum = pgEnum("commission_type", [
 	"fixed",
 ]);
 export const transactionStatusEnum = pgEnum("transaction_status", [
+	// Legacy statuses (kept for backward compatibility)
 	"draft",
 	"submitted",
 	"under_review",
+	// Prompt 05 canonical statuses
+	"pending",
+	"verified",
 	"approved",
-	"rejected",
+	"commission_released",
 	"completed",
+	"cancelled",
+	"rejected",
 ]);
 
 // Document category enum for file uploads
@@ -49,12 +55,21 @@ export const documentCategoryEnum = pgEnum("document_category", [
 // Main transactions table
 export const transactions = pgTable("transactions", {
 	id: uuid("id").primaryKey().defaultRandom(),
+	/** Client-facing sequential case number e.g. P000711 */
+	caseNo: text("case_no").unique(),
 	agentId: text("agent_id").notNull(), // Will be linked to user ID from auth
 
 	// Step 1: Initiation
 	marketType: marketTypeEnum("market_type").notNull(),
 	transactionType: transactionTypeEnum("transaction_type").notNull(),
 	transactionDate: timestamp("transaction_date").notNull(),
+
+	// Prompt 05: booking + unit identifiers (stored denormalized for fast filtering/reporting)
+	bookingDate: timestamp("booking_date"),
+	projectName: text("project_name"),
+	unitNo: text("unit_no"),
+	/** Reuse listings as "block" reference (commission schemes already link to this) */
+	blockListingId: uuid("block_listing_id"),
 
 	// Step 2: Property
 	propertyData: jsonb("property_data").$type<{
@@ -69,14 +84,21 @@ export const transactions = pgTable("transactions", {
 		bathrooms?: number;
 		area?: number;
 		price: number;
+		/** Prompt 05: SPA + Nett pricing (RM) */
+		spaPrice?: number;
+		nettPrice?: number;
 		description?: string;
 	}>(),
 
 	// Step 3: Client
 	clientData: jsonb("client_data").$type<{
 		name: string;
+		icNo?: string;
 		email?: string;
 		phone: string;
+		address?: string;
+		coBuyerName?: string;
+		coBuyerIc?: string;
 		type: "buyer" | "seller" | "tenant" | "landlord";
 		source: string;
 		notes?: string;
@@ -103,6 +125,42 @@ export const transactions = pgTable("transactions", {
 		precision: 10,
 		scale: 2,
 	}).notNull(),
+
+	/**
+	 * Commission scheme snapshot (locked at submission/approval time).
+	 * Stored for audit + ensures scheme edits don't retroactively change historical transactions.
+	 */
+	commissionSchemeSnapshot: jsonb("commission_scheme_snapshot").$type<{
+		schemeId: string;
+		schemeName: string;
+		shortform: string;
+		projectName: string;
+		blockListingId: string | null;
+		blockListingTitle: string | null;
+		tierId: string;
+		tierName: string;
+		commissionPercent: number;
+		overridePercent: number;
+		incSst: boolean;
+		sstPercent: number;
+		sstBorneBy: "client" | "agent";
+		lockedAt: string;
+	}>(),
+	commissionBreakdown: jsonb("commission_breakdown").$type<{
+		spaPrice: number;
+		nettPrice: number;
+		commissionRatePercent: number;
+		baseCommission: number;
+		grossCommission: number;
+		sstPercent: number;
+		sstAmount: number;
+		agentNetCommission: number;
+	}>(),
+	/** Admin override to agent net commission (optional) */
+	commissionOverrideAgentNet: decimal("commission_override_agent_net", {
+		precision: 12,
+		scale: 2,
+	}),
 
 	// Step 6: Documents
 	documents:
@@ -166,10 +224,15 @@ export const transactionDocuments = pgTable(
 
 // Zod schemas for validation
 export const insertTransactionSchema = z.object({
+	caseNo: z.string().optional(),
 	agentId: z.string(),
 	marketType: z.enum(["primary", "secondary"]),
 	transactionType: z.enum(["sale", "lease", "rental"]),
 	transactionDate: z.coerce.date(),
+	bookingDate: z.coerce.date().optional(),
+	projectName: z.string().optional(),
+	unitNo: z.string().optional(),
+	blockListingId: z.string().uuid().optional(),
 	propertyData: z
 		.object({
 			address: z.string().min(1, "Address is required"),
@@ -182,18 +245,24 @@ export const insertTransactionSchema = z.object({
 			bathrooms: z.number().optional(),
 			area: z.number().optional(),
 			price: z.number().positive("Price must be positive"),
+			spaPrice: z.number().positive().optional(),
+			nettPrice: z.number().positive().optional(),
 			description: z.string().optional(),
 		})
 		.optional(),
 	clientData: z
 		.object({
 			name: z.string().min(1, "Client name is required"),
+			icNo: z.string().optional(),
 			email: z
 				.string()
 				.email("Valid email is required")
 				.optional()
 				.or(z.literal("")),
 			phone: z.string().min(1, "Phone number is required"),
+			address: z.string().optional(),
+			coBuyerName: z.string().optional(),
+			coBuyerIc: z.string().optional(),
 			type: z.enum(["buyer", "seller", "tenant", "landlord"]),
 			source: z.string().min(1, "Client source is required"),
 			notes: z.string().optional(),
@@ -217,6 +286,7 @@ export const insertTransactionSchema = z.object({
 	commissionType: z.enum(["percentage", "fixed"]),
 	commissionValue: z.coerce.number().positive(),
 	commissionAmount: z.coerce.number().positive(),
+	commissionOverrideAgentNet: z.coerce.number().optional(),
 	documents: z
 		.array(
 			z.object({
@@ -234,19 +304,28 @@ export const insertTransactionSchema = z.object({
 			"draft",
 			"submitted",
 			"under_review",
+			"pending",
+			"verified",
 			"approved",
+			"commission_released",
 			"rejected",
 			"completed",
+			"cancelled",
 		])
 		.default("draft"),
 });
 
 export const selectTransactionSchema = z.object({
 	id: z.string(),
+	caseNo: z.string().nullable().optional(),
 	agentId: z.string(),
 	marketType: z.enum(["primary", "secondary"]),
 	transactionType: z.enum(["sale", "lease", "rental"]),
 	transactionDate: z.date(),
+	bookingDate: z.date().nullable().optional(),
+	projectName: z.string().nullable().optional(),
+	unitNo: z.string().nullable().optional(),
+	blockListingId: z.string().nullable().optional(),
 	propertyData: z
 		.object({
 			address: z.string(),
@@ -259,14 +338,20 @@ export const selectTransactionSchema = z.object({
 			bathrooms: z.number().optional(),
 			area: z.number().optional(),
 			price: z.number(),
+			spaPrice: z.number().optional(),
+			nettPrice: z.number().optional(),
 			description: z.string().optional(),
 		})
 		.nullable(),
 	clientData: z
 		.object({
 			name: z.string(),
+			icNo: z.string().optional(),
 			email: z.string(),
 			phone: z.string(),
+			address: z.string().optional(),
+			coBuyerName: z.string().optional(),
+			coBuyerIc: z.string().optional(),
 			type: z.enum(["buyer", "seller", "tenant", "landlord"]),
 			source: z.string(),
 			notes: z.string().optional(),
@@ -284,6 +369,39 @@ export const selectTransactionSchema = z.object({
 	commissionType: z.enum(["percentage", "fixed"]),
 	commissionValue: z.string(), // Decimal fields come as strings from DB
 	commissionAmount: z.string(), // Decimal fields come as strings from DB
+	commissionSchemeSnapshot: z
+		.object({
+			schemeId: z.string(),
+			schemeName: z.string(),
+			shortform: z.string(),
+			projectName: z.string(),
+			blockListingId: z.string().nullable(),
+			blockListingTitle: z.string().nullable(),
+			tierId: z.string(),
+			tierName: z.string(),
+			commissionPercent: z.number(),
+			overridePercent: z.number(),
+			incSst: z.boolean(),
+			sstPercent: z.number(),
+			sstBorneBy: z.enum(["client", "agent"]),
+			lockedAt: z.string(),
+		})
+		.nullable()
+		.optional(),
+	commissionBreakdown: z
+		.object({
+			spaPrice: z.number(),
+			nettPrice: z.number(),
+			commissionRatePercent: z.number(),
+			baseCommission: z.number(),
+			grossCommission: z.number(),
+			sstPercent: z.number(),
+			sstAmount: z.number(),
+			agentNetCommission: z.number(),
+		})
+		.nullable()
+		.optional(),
+	commissionOverrideAgentNet: z.string().nullable().optional(),
 	documents: z
 		.array(
 			z.object({
@@ -300,9 +418,13 @@ export const selectTransactionSchema = z.object({
 		"draft",
 		"submitted",
 		"under_review",
+		"pending",
+		"verified",
 		"approved",
+		"commission_released",
 		"rejected",
 		"completed",
+		"cancelled",
 	]),
 	submittedAt: z.date().nullable(),
 	reviewedAt: z.date().nullable(),

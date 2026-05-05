@@ -4,6 +4,7 @@ import * as approvalsSchema from "../models/approvals";
 import * as authSchema from "../models/auth";
 import * as autoReplySchema from "../models/auto-reply";
 import * as calendarSchema from "../models/calendar";
+import * as commissionSchema from "../models/commission-schemes";
 import * as crmSchema from "../models/crm";
 import * as listingsSchema from "../models/listings";
 import * as reportsSchema from "../models/reports";
@@ -17,6 +18,7 @@ const schema = {
 	...reportsSchema,
 	...crmSchema,
 	...listingsSchema,
+	...commissionSchema,
 	...autoReplySchema,
 	...whatsappSchema,
 	...calendarSchema,

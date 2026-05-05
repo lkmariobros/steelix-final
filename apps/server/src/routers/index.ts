@@ -5,6 +5,7 @@ import { agentsRouter } from "../controllers/agents";
 import { approvalsRouter } from "../controllers/approvals";
 import { autoReplyRouter } from "../controllers/auto-reply";
 import { calendarRouter } from "../controllers/calendar";
+import { commissionSchemesRouter } from "../controllers/commission-schemes";
 import { crmRouter } from "../controllers/crm";
 import { dashboardRouter } from "../controllers/dashboard";
 import { documentsRouter } from "../controllers/documents";
@@ -33,6 +34,7 @@ export const appRouter = router({
 	whatsapp: whatsappRouter,
 	tags: tagsRouter,
 	calendar: calendarRouter,
+	commissionSchemes: commissionSchemesRouter,
 	feedback: feedbackRouter,
 	leadTasks: leadTasksRouter,
 	listings: listingsRouter,

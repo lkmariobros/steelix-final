@@ -33,7 +33,7 @@ const sizeClasses = {
 	md: "max-w-lg",
 	lg: "max-w-2xl",
 	xl: "max-w-4xl",
-	full: "max-w-[95vw] max-h-[95vh] sm:max-w-[90vw] sm:max-h-[90vh]",
+	full: "max-w-[95vw] max-h-[96vh] sm:max-w-[92vw] sm:max-h-[94vh]",
 };
 
 export function EnhancedModal({

@@ -113,8 +113,12 @@ export function StepProperty({
 		status: "active",
 		listingType: listingTypeFilter,
 		page: 1,
-		limit: 200,
+		limit: 100,
 	});
+
+	// If a block/listing exists but doesn't show up here, the common causes are:
+	// - Listing is not "active"
+	// - Listing type doesn't match the transaction type (sale vs rent)
 
 	const { data: selectedListingDetails } = trpc.listings.getById.useQuery(
 		{ id: listingId! },

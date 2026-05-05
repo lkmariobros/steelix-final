@@ -11,8 +11,12 @@ import {
 	calculateEnhancedCommission,
 	logCommissionAudit,
 } from "../services/agent-tier";
+import {
+	calculateSchemeCommission,
+	resolveSchemeForBlockAtDate,
+} from "../services/commission-schemes";
 import { db } from "../utils/db";
-import { protectedProcedure, router } from "../utils/trpc";
+import { adminProcedure, protectedProcedure, router } from "../utils/trpc";
 
 // Base transaction input schema (without validation)
 // All fields are optional to support draft saving with partial data
@@ -171,9 +175,13 @@ const changeStatusInput = z.object({
 		"draft",
 		"submitted",
 		"under_review",
+		"pending",
+		"verified",
 		"approved",
+		"commission_released",
 		"rejected",
 		"completed",
+		"cancelled",
 	]),
 	reviewNotes: z.string().optional(),
 });
@@ -186,12 +194,50 @@ const listTransactionsInput = z.object({
 			"draft",
 			"submitted",
 			"under_review",
+			"pending",
+			"verified",
 			"approved",
+			"commission_released",
 			"rejected",
 			"completed",
+			"cancelled",
 		])
 		.optional(),
 });
+
+const adminListTransactionsInput = z.object({
+	limit: z.number().min(1).max(100).default(20),
+	offset: z.number().min(0).default(0),
+	search: z.string().optional(),
+	caseNo: z.string().optional(),
+	unitNo: z.string().optional(),
+	buyerName: z.string().optional(),
+	projectName: z.string().optional(),
+	blockListingId: z.string().uuid().optional(),
+	agentId: z.string().optional(),
+	status: z
+		.enum([
+			"draft",
+			"submitted",
+			"under_review",
+			"pending",
+			"verified",
+			"approved",
+			"commission_released",
+			"rejected",
+			"completed",
+			"cancelled",
+		])
+		.optional(),
+	dateFrom: z.coerce.date().optional(),
+	dateTo: z.coerce.date().optional(),
+});
+
+function normalizeLegacyStatus(status: string | null | undefined) {
+	if (!status) return status;
+	if (status === "submitted" || status === "under_review") return "pending";
+	return status;
+}
 
 // Enhanced commission calculation input - simplified representation type
 const enhancedCommissionInput = z.object({
@@ -323,7 +369,71 @@ export const transactionsRouter = router({
 				.where(and(...conditions));
 
 			return {
-				transactions: transactionList,
+				transactions: transactionList.map((t: any) => ({
+					...t,
+					status: normalizeLegacyStatus(t.status),
+				})),
+				total: count,
+				hasMore: input.offset + input.limit < count,
+			};
+		}),
+
+	// Admin: list transactions across all agents with filters/search
+	adminList: adminProcedure
+		.input(adminListTransactionsInput)
+		.query(async ({ input }) => {
+			const conditions: any[] = [];
+
+			if (input.status) conditions.push(eq(transactions.status, input.status));
+			if (input.projectName)
+				conditions.push(eq(transactions.projectName, input.projectName));
+			if (input.blockListingId)
+				conditions.push(eq(transactions.blockListingId, input.blockListingId));
+			if (input.agentId) conditions.push(eq(transactions.agentId, input.agentId));
+
+			if (input.caseNo) {
+				const q = `%${input.caseNo.toLowerCase()}%`;
+				conditions.push(sql`lower(${transactions.caseNo}) like ${q}`);
+			}
+			if (input.unitNo) {
+				const q = `%${input.unitNo.toLowerCase()}%`;
+				conditions.push(sql`lower(${transactions.unitNo}) like ${q}`);
+			}
+			if (input.buyerName) {
+				const q = `%${input.buyerName.toLowerCase()}%`;
+				conditions.push(sql`lower(${transactions.clientData}::text) like ${q}`);
+			}
+
+			if (input.search) {
+				const q = `%${input.search.toLowerCase()}%`;
+				conditions.push(
+					sql`(lower(${transactions.caseNo}) like ${q} or lower(${transactions.unitNo}) like ${q} or lower(${transactions.clientData}::text) like ${q})`,
+				);
+			}
+
+			if (input.dateFrom)
+				conditions.push(sql`${transactions.bookingDate} >= ${input.dateFrom}`);
+			if (input.dateTo)
+				conditions.push(sql`${transactions.bookingDate} <= ${input.dateTo}`);
+
+			const rows = await db
+				.select()
+				.from(transactions)
+				.where(conditions.length ? and(...conditions) : undefined)
+				.orderBy(desc(transactions.updatedAt))
+				.limit(input.limit)
+				.offset(input.offset);
+
+			const [{ count }] = await db
+				.select({ count: sql<number>`count(*)` })
+				.from(transactions)
+				.where(conditions.length ? and(...conditions) : undefined);
+
+			return {
+				transactions: rows.map((t: any) => ({
+					...t,
+					status: normalizeLegacyStatus(t.status),
+				})),
 				total: count,
 				hasMore: input.offset + input.limit < count,
 			};
@@ -352,11 +462,74 @@ export const transactionsRouter = router({
 				);
 			}
 
+			// Lock commission scheme snapshot at submission time (if available)
+			let schemePatch: Record<string, unknown> = {};
+			try {
+				const tx = existingTransaction as any;
+				const hasSnapshot = Boolean(tx.commissionSchemeSnapshot);
+				const property = tx.propertyData as
+					| { listingId?: string; price?: number }
+					| null
+					| undefined;
+				if (!hasSnapshot && property?.listingId && property.price) {
+					const resolved = await resolveSchemeForBlockAtDate({
+						blockListingId: property.listingId,
+						at: tx.transactionDate ?? new Date(),
+					});
+					if (resolved) {
+						const { scheme, tier } = resolved;
+						const nettPrice = Number(property.price);
+						const breakdown = calculateSchemeCommission({
+							nettPrice,
+							commissionPercent: tier.commissionPercent,
+							incSst: scheme.incSst,
+							sstPercent: scheme.sstPercent,
+							sstBorneBy: scheme.sstBorneBy,
+						});
+
+						schemePatch = {
+							commissionType: "percentage",
+							commissionValue: tier.commissionPercent.toFixed(2),
+							commissionAmount: breakdown.grossCommission.toFixed(2),
+							commissionSchemeSnapshot: {
+								schemeId: scheme.id,
+								schemeName: scheme.schemeName,
+								shortform: scheme.shortform,
+								projectName: scheme.projectName,
+								blockListingId: scheme.blockListingId,
+								blockListingTitle: scheme.blockListingTitle,
+								tierId: tier.id,
+								tierName: tier.tierName,
+								commissionPercent: tier.commissionPercent,
+								overridePercent: tier.overridePercent,
+								incSst: scheme.incSst,
+								sstPercent: scheme.sstPercent,
+								sstBorneBy: scheme.sstBorneBy,
+								lockedAt: new Date().toISOString(),
+							},
+							commissionBreakdown: {
+								spaPrice: nettPrice,
+								nettPrice,
+								commissionRatePercent: tier.commissionPercent,
+								baseCommission: breakdown.baseCommission,
+								grossCommission: breakdown.grossCommission,
+								sstPercent: scheme.sstPercent,
+								sstAmount: breakdown.sstAmount,
+								agentNetCommission: breakdown.agentNetCommission,
+							},
+						};
+					}
+				}
+			} catch {
+				// If commission scheme tables aren't migrated yet, submission should still work.
+			}
+
 			const [updatedTransaction] = await db
 				.update(transactions)
 				.set({
-					status: "submitted",
+					status: "pending",
 					submittedAt: new Date(),
+					...schemePatch,
 					updatedAt: new Date(),
 				})
 				.where(eq(transactions.id, input.id))
