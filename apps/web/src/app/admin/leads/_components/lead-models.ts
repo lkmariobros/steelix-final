@@ -1,7 +1,7 @@
 export type Lead = {
 	id: string;
 	name: string;
-	email: string;
+	email: string | null;
 	phone: string;
 	source: string;
 	type: "tenant" | "buyer";

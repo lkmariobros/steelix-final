@@ -7,6 +7,7 @@ import {
 import {
 	addNoteToLeadAdmin,
 	assignLeadAdmin,
+	bulkAssignLeadsAdmin,
 	bulkUpdateLeadsStageAdmin,
 	checkLeadDuplicateAdmin,
 	createLeadAdmin,
@@ -64,6 +65,11 @@ const adminBulkUpdateStageInput = z.object({
 	stage: pipelineStageSchema,
 });
 
+const adminBulkAssignInput = z.object({
+	ids: z.array(z.string().uuid()).min(1),
+	agentId: z.string().nullable(),
+});
+
 const adminAddNoteInput = z.object({
 	leadId: z.string().uuid(),
 	content: z.string().min(1, "Note content is required"),
@@ -84,7 +90,10 @@ const adminGetTimelineInput = z.object({
 });
 
 const adminCheckDuplicateInput = z.object({
-	email: z.string().email(),
+	email: z
+		.string()
+		.optional()
+		.transform((v) => (typeof v === "string" ? v.trim() : "")),
 	phone: z.string().min(1),
 	excludeId: z.string().uuid().optional(), // pass when editing an existing lead
 });
@@ -134,7 +143,7 @@ export const adminLeadsRouter = router({
 		.input(adminCheckDuplicateInput)
 		.query(async ({ input }) => {
 			return await checkLeadDuplicateAdmin(
-				input.email,
+				input.email ?? "",
 				input.phone,
 				input.excludeId,
 			);
@@ -195,6 +204,15 @@ export const adminLeadsRouter = router({
 			return await deleteLeadAdmin(input.id);
 		}),
 
+	bulkDelete: adminProcedure
+		.input(z.object({ ids: z.array(z.string().uuid()).min(1) }))
+		.mutation(async ({ input }) => {
+			for (const id of input.ids) {
+				await deleteLeadAdmin(id);
+			}
+			return { deleted: input.ids.length };
+		}),
+
 	/**
 	 * Assign / reassign a lead to an agent (or unassign)
 	 */
@@ -215,6 +233,16 @@ export const adminLeadsRouter = router({
 		.input(adminBulkUpdateStageInput)
 		.mutation(async ({ input }) => {
 			return await bulkUpdateLeadsStageAdmin(input.ids, input.stage);
+		}),
+
+	bulkAssign: adminProcedure
+		.input(adminBulkAssignInput)
+		.mutation(async ({ input, ctx }) => {
+			return await bulkAssignLeadsAdmin(
+				input.ids,
+				input.agentId,
+				ctx.session.user.id,
+			);
 		}),
 
 	/**

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { takeTransactionPrefillOnce } from "../prefill-stash";
 import type {
 	ClientData,
 	CoBrokingData,
@@ -89,6 +90,25 @@ export function useTransactionFormState(
 		data: Partial<CompleteTransactionData>;
 		step: FormStep;
 	} | null>(null);
+
+	useEffect(() => {
+		if (transactionId || mode !== "create") return;
+		const prefill = takeTransactionPrefillOnce();
+		if (!prefill || Object.keys(prefill).length === 0) return;
+		setFormData(() => ({
+			...initialFormData,
+			...prefill,
+			propertyData: {
+				...(initialFormData.propertyData ?? {}),
+				...(prefill.propertyData ?? {}),
+			},
+			clientData: {
+				...(initialFormData.clientData ?? {}),
+				...(prefill.clientData ?? {}),
+			},
+		}));
+		setHasUnsavedChanges(true);
+	}, [transactionId, mode]);
 
 	// Load saved form data from localStorage on mount (Issue #4 fix)
 	useEffect(() => {

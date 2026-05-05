@@ -13,6 +13,7 @@ import { authClient } from "@/lib/auth-client";
 import { trpc } from "@/utils/trpc";
 import { RiLogoutBoxLine } from "@remixicon/react";
 import Link from "next/link";
+import { Badge } from "@/components/ui/badge";
 
 export default function UserDropdown() {
 	const { data: session, isPending } = authClient.useSession();
@@ -39,6 +40,10 @@ export default function UserDropdown() {
 	// Prefer profile row over session so avatar/name update immediately after settings save
 	const userName = profile?.agent?.name || session.user.name || "User";
 	const userEmail = session.user.email || "";
+	const userRole =
+		profile?.agent?.role ||
+		(session.user as { role?: string })?.role ||
+		"agent";
 	const userInitials = userName
 		.split(" ")
 		.map((n) => n[0])
@@ -77,6 +82,11 @@ export default function UserDropdown() {
 				<DropdownMenuLabel className="flex min-w-0 flex-col">
 					<span className="truncate font-medium text-foreground text-sm">
 						{userName}
+					</span>
+					<span className="mt-1">
+						<Badge variant="secondary" className="capitalize">
+							{userRole}
+						</Badge>
 					</span>
 					<span className="truncate font-normal text-muted-foreground text-xs">
 						{userEmail}

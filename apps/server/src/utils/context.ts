@@ -7,7 +7,12 @@ import { db } from "./db";
 
 type UserWithTier = Pick<
 	InferSelectModel<typeof user>,
-	"agentTier" | "companyCommissionSplit" | "agencyId" | "teamId" | "role"
+	| "agentTier"
+	| "companyCommissionSplit"
+	| "agencyId"
+	| "teamId"
+	| "role"
+	| "isActive"
 >;
 
 export type CreateContextOptions = {
@@ -56,6 +61,7 @@ export async function createContext({ context }: CreateContextOptions) {
 			u.agencyId = cached.agencyId;
 			u.teamId = cached.teamId;
 			u.role = cached.role;
+			u.isActive = cached.isActive;
 		} else {
 			// Fetch from DB with a reasonable timeout and retry
 			await fetchAndCacheUser(session);
@@ -80,6 +86,7 @@ async function fetchAndCacheUser(
 					agencyId: user.agencyId,
 					teamId: user.teamId,
 					role: user.role,
+					isActive: user.isActive,
 				})
 				.from(user)
 				.where(eq(user.id, session.user.id))
@@ -102,6 +109,7 @@ async function fetchAndCacheUser(
 				u.agencyId = userData.agencyId;
 				u.teamId = userData.teamId;
 				u.role = userData.role;
+				u.isActive = userData.isActive;
 
 				// Store in cache so subsequent requests skip the DB
 				setCachedUser(session.user.id, userData);

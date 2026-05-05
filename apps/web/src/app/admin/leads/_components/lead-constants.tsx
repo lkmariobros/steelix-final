@@ -13,11 +13,18 @@ import {
 	RiUserLine,
 } from "@remixicon/react";
 
+/** All DB pipeline_stage enum values — used for badges, Kanban lanes, filters. */
 export const PIPELINE_STAGES = [
 	{
 		value: "new_lead",
 		label: "New Lead",
 		color: "bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400",
+	},
+	{
+		value: "contacted",
+		label: "Contacted",
+		color:
+			"bg-purple-100 text-purple-800 dark:bg-purple-900/20 dark:text-purple-400",
 	},
 	{
 		value: "follow_up_in_progress",
@@ -26,15 +33,32 @@ export const PIPELINE_STAGES = [
 			"bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400",
 	},
 	{
+		value: "appointment_set",
+		label: "Appointment Set",
+		color:
+			"bg-orange-100 text-orange-800 dark:bg-orange-900/20 dark:text-orange-400",
+	},
+	{
 		value: "no_pick_reply",
-		label: "No Pick/Reply",
+		label: "No Pick Up & Re-attempt",
 		color: "bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-400",
 	},
 	{
+		value: "reject_project",
+		label: "Reject Project",
+		color: "bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400",
+	},
+	{
+		value: "converted",
+		label: "Converted",
+		color: "bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400",
+	},
+	/* Additional / legacy lanes */
+	{
 		value: "follow_up_for_appointment",
-		label: "Follow Up For Appt.",
+		label: "Follow Up For Appointment",
 		color:
-			"bg-purple-100 text-purple-800 dark:bg-purple-900/20 dark:text-purple-400",
+			"bg-violet-100 text-violet-800 dark:bg-violet-900/20 dark:text-violet-400",
 	},
 	{
 		value: "potential_lead",
@@ -45,17 +69,13 @@ export const PIPELINE_STAGES = [
 		value: "consider_seen",
 		label: "Consider / Seen",
 		color:
-			"bg-orange-100 text-orange-800 dark:bg-orange-900/20 dark:text-orange-400",
+			"bg-indigo-100 text-indigo-800 dark:bg-indigo-900/20 dark:text-indigo-400",
 	},
 	{
 		value: "appointment_made",
 		label: "Appointment Made",
-		color: "bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400",
-	},
-	{
-		value: "reject_project",
-		label: "Reject Project",
-		color: "bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400",
+		color:
+			"bg-amber-100 text-amber-800 dark:bg-amber-900/20 dark:text-amber-400",
 	},
 	{
 		value: "booking_made",
@@ -66,7 +86,7 @@ export const PIPELINE_STAGES = [
 	{
 		value: "spam_fake_lead",
 		label: "Spam / Fake Lead",
-		color: "bg-red-200 text-red-900 dark:bg-red-900/30 dark:text-red-300",
+		color: "bg-neutral-100 text-neutral-800 dark:bg-neutral-900/20 dark:text-neutral-400",
 	},
 ] as const;
 
@@ -79,6 +99,15 @@ export const stageMap: Record<
 > = Object.fromEntries(
 	PIPELINE_STAGES.map((s) => [s.value, s]),
 ) as Record<string, { value: string; label: string; color: string }>;
+
+/** Canonical marketing/source options — admin & agent dropdowns should prefer these values. */
+export const LEAD_SOURCE_OPTIONS = [
+	{ value: "Direct WhatsApp", label: "Direct WhatsApp" },
+	{ value: "Landing Page", label: "Landing Page" },
+	{ value: "Facebook Ad", label: "Facebook Ad" },
+	{ value: "Google Ad", label: "Google Ad" },
+	{ value: "Referral", label: "Referral" },
+] as const;
 
 export const STATUS_OPTIONS = [
 	{ value: "active", label: "Active" },

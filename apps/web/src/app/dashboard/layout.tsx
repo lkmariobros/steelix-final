@@ -1,0 +1,26 @@
+"use client";
+
+import { LoadingScreen } from "@/components/ui/loading-spinner";
+import { useRedirectUnauthenticated } from "@/hooks/use-redirect-unauthenticated";
+import { authClient } from "@/lib/auth-client";
+import { useEffect } from "react";
+
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+	const { data: session, isPending } = authClient.useSession();
+	useRedirectUnauthenticated(session, isPending);
+
+	useEffect(() => {
+		if (isPending) return;
+		if (!session) return;
+		const role = (session.user as { role?: string })?.role ?? "agent";
+		if (role === "admin") {
+			window.location.href = "/admin";
+		}
+	}, [isPending, session]);
+
+	if (isPending) return <LoadingScreen text="Loading..." />;
+	if (!session) return <LoadingScreen text="Redirecting..." />;
+
+	return children;
+}
+

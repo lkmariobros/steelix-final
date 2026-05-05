@@ -16,14 +16,34 @@ export const protectedProcedure = t.procedure.use(({ ctx, next }) => {
 			message: "Authentication required",
 		});
 	}
+	const isActive = (ctx.session.user as { isActive?: boolean | null })?.isActive;
+	if (isActive === false) {
+		throw new TRPCError({
+			code: "FORBIDDEN",
+			message: "Your account has been deactivated. Please contact an admin.",
+		});
+	}
 	return next({ ctx: { ...ctx, session: ctx.session } });
 });
 
-// ─── Admin procedure — all authenticated users have admin access ───────────────
-// Role-based access control is removed per product requirements.
-// All logged-in users may access admin features.
-
 export const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
-	const userRole = (ctx.session.user as { role?: string })?.role ?? "user";
+	const userRole = (ctx.session.user as { role?: string })?.role ?? "agent";
+	if (userRole !== "admin") {
+		throw new TRPCError({
+			code: "FORBIDDEN",
+			message: "Admin access required",
+		});
+	}
+	return next({ ctx: { ...ctx, session: ctx.session, userRole } });
+});
+
+export const agentProcedure = protectedProcedure.use(({ ctx, next }) => {
+	const userRole = (ctx.session.user as { role?: string })?.role ?? "agent";
+	if (userRole === "admin") {
+		throw new TRPCError({
+			code: "FORBIDDEN",
+			message: "Agent access required",
+		});
+	}
 	return next({ ctx: { ...ctx, session: ctx.session, userRole } });
 });

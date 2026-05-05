@@ -4,6 +4,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
 import { trpc } from "@/utils/trpc";
+import { useTransactionModalActions } from "@/contexts/transaction-modal-context";
+import { stashTransactionPrefillOnce } from "@/features/sales-entry/prefill-stash";
 import type { ActivityEventType, Lead } from "./lead-models";
 import {
 	ACTIVITY_CONFIG,
@@ -64,6 +66,7 @@ export function LeadDetailSheet({
 	onRefresh: () => void;
 }) {
 	const queryClient = useQueryClient();
+	const { openCreateModal } = useTransactionModalActions();
 
 	// Input state for the three action types
 	const [activeInput, setActiveInput] = useState<
@@ -180,6 +183,28 @@ export function LeadDetailSheet({
 		}
 	};
 
+	const handleConvertToTransaction = () => {
+		if (lead.stage !== "converted") return;
+		stashTransactionPrefillOnce({
+			clientData: {
+				name: lead.name,
+				email: lead.email ?? "",
+				phone: lead.phone,
+				type: lead.type === "tenant" ? "tenant" : "buyer",
+				source: lead.source,
+				notes: "",
+			},
+			propertyData: {
+				address: lead.property || "",
+				propertyType: lead.projectName || "Property",
+				price: 0,
+				description: lead.tags ?? lead.tagNames.join(", "),
+			},
+		});
+		openCreateModal();
+		toast.success("Transaction form opened with lead details.");
+	};
+
 	const isSubmitting =
 		addNoteMutation.isPending ||
 		logCallMutation.isPending ||
@@ -224,7 +249,7 @@ export function LeadDetailSheet({
 							<CardContent className="grid grid-cols-2 gap-3 text-sm">
 								<div>
 									<span className="text-muted-foreground">Email</span>
-									<p className="truncate font-medium">{lead.email}</p>
+									<p className="truncate font-medium">{lead.email || "—"}</p>
 								</div>
 								<div>
 									<span className="text-muted-foreground">Phone</span>
@@ -314,6 +339,15 @@ export function LeadDetailSheet({
 										)}
 									</Button>
 								</div>
+								{lead.stage === "converted" ? (
+									<Button
+										size="sm"
+										variant="secondary"
+										onClick={handleConvertToTransaction}
+									>
+										Convert to Transaction
+									</Button>
+								) : null}
 							</CardContent>
 						</Card>
 

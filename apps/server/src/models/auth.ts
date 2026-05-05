@@ -51,8 +51,12 @@ export const user = pgTable(
 		id: text("id").primaryKey(),
 		name: text("name").notNull(),
 		email: text("email").notNull().unique(),
+		phone: text("phone"),
 		emailVerified: boolean("email_verified").notNull(),
 		image: text("image"),
+		isActive: boolean("is_active").notNull().default(true),
+		deactivatedAt: timestamp("deactivated_at"),
+		branch: text("branch"),
 		// Hierarchy relationships
 		agencyId: uuid("agency_id").references(() => agencies.id),
 		teamId: uuid("team_id").references(() => teams.id),
@@ -72,6 +76,8 @@ export const user = pgTable(
 	(table) => ({
 		recruitedByIdx: index("idx_user_recruited_by").on(table.recruitedBy),
 		agentTierIdx: index("idx_user_agent_tier").on(table.agentTier),
+		phoneIdx: index("idx_user_phone").on(table.phone),
+		activeIdx: index("idx_user_is_active").on(table.isActive),
 	}),
 );
 

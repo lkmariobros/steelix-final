@@ -9,12 +9,15 @@ import { ThemeProvider } from "./theme-provider";
 import { Toaster } from "./ui/sonner";
 import { httpBatchLink } from "@trpc/client";
 import { useState } from "react";
+import { useInactivityLogout } from "@/hooks/use-inactivity-logout";
 
 export default function Providers({
 	children,
 }: {
 	children: React.ReactNode;
 }) {
+	useInactivityLogout();
+
 	const [trpcClient] = useState(() =>
 		trpc.createClient({
 			links: [

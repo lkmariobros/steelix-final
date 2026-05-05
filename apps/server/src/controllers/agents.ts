@@ -1,4 +1,5 @@
 import { and, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
+import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { commissionApprovals } from "../models/approvals";
 import {
@@ -8,6 +9,7 @@ import {
 	agentActivities,
 	agentGoals,
 	agentTierHistory,
+	account,
 	teams,
 	user,
 } from "../models/auth";
@@ -45,6 +47,11 @@ const updateAgentInput = z.object({
 	id: z.string(),
 	name: z.string().min(1).optional(),
 	email: z.string().email().optional(),
+	phone: z
+		.string()
+		.regex(/^\+60\d{8,11}$/, "Phone must be in Malaysian format (+60...)")
+		.optional(),
+	branch: z.string().min(1).max(120).optional(),
 	role: z.enum(["agent", "team_lead", "admin"]).optional(),
 	agentTier: z
 		.enum([
@@ -59,6 +66,30 @@ const updateAgentInput = z.object({
 	teamId: z.string().uuid().optional(),
 	agencyId: z.string().uuid().optional(),
 	permissions: z.string().optional(),
+});
+
+const createAgentInput = z.object({
+	name: z.string().min(1).max(200),
+	email: z.string().email(),
+	phone: z
+		.string()
+		.regex(/^\+60\d{8,11}$/, "Phone must be in Malaysian format (+60...)")
+		.optional(),
+	password: z.string().min(8),
+	branch: z.string().min(1).max(120).optional(),
+	teamId: z.string().uuid().optional(),
+	agencyId: z.string().uuid().optional(),
+	role: z.enum(["agent", "admin"]).default("agent"),
+});
+
+const resetAgentPasswordInput = z.object({
+	agentId: z.string(),
+	newPassword: z.string().min(8),
+});
+
+const setAgentActiveInput = z.object({
+	agentId: z.string(),
+	isActive: z.boolean(),
 });
 
 const agentPerformanceInput = z.object({
@@ -345,6 +376,98 @@ export const agentsRouter = router({
 			}
 
 			return updatedAgent;
+		}),
+
+	// Create new agent/admin account (admin only)
+	create: adminProcedure.input(createAgentInput).mutation(async ({ ctx, input }) => {
+		const now = new Date();
+		const userId = crypto.randomUUID();
+		const passwordHash = await bcrypt.hash(input.password, 12);
+
+		const [createdUser] = await db
+			.insert(user)
+			.values({
+				id: userId,
+				name: input.name,
+				email: input.email.toLowerCase(),
+				phone: input.phone,
+				branch: input.branch,
+				emailVerified: false,
+				image: null,
+				isActive: true,
+				deactivatedAt: null,
+				agencyId: input.agencyId,
+				teamId: input.teamId,
+				role: input.role,
+				permissions: null,
+				agentTier: "advisor",
+				companyCommissionSplit: 70,
+				tierEffectiveDate: now,
+				tierPromotedBy: ctx.session.user.id,
+				recruitedBy: null,
+				recruitedAt: null,
+				createdAt: now,
+				updatedAt: now,
+			})
+			.returning();
+
+		await db.insert(account).values({
+			id: crypto.randomUUID(),
+			accountId: input.email.toLowerCase(),
+			providerId: "credential",
+			userId,
+			accessToken: null,
+			refreshToken: null,
+			idToken: null,
+			accessTokenExpiresAt: null,
+			refreshTokenExpiresAt: null,
+			scope: null,
+			password: passwordHash,
+			createdAt: now,
+			updatedAt: now,
+		});
+
+		return createdUser;
+	}),
+
+	// Soft deactivate / activate agent (admin only)
+	setActive: adminProcedure
+		.input(setAgentActiveInput)
+		.mutation(async ({ input }) => {
+			const now = new Date();
+			const [updated] = await db
+				.update(user)
+				.set({
+					isActive: input.isActive,
+					deactivatedAt: input.isActive ? null : now,
+					updatedAt: now,
+				})
+				.where(eq(user.id, input.agentId))
+				.returning();
+			if (!updated) throw new Error("Agent not found");
+			return updated;
+		}),
+
+	// Reset agent password (admin only)
+	resetPassword: adminProcedure
+		.input(resetAgentPasswordInput)
+		.mutation(async ({ input }) => {
+			const now = new Date();
+			const passwordHash = await bcrypt.hash(input.newPassword, 12);
+
+			const [updated] = await db
+				.update(account)
+				.set({ password: passwordHash, updatedAt: now })
+				.where(
+					and(
+						eq(account.userId, input.agentId),
+						eq(account.providerId, "credential"),
+					),
+				)
+				.returning();
+
+			if (!updated) throw new Error("Credential account not found");
+			return { ok: true };
 		}),
 
 	// Get agent performance metrics

@@ -77,7 +77,9 @@ export function EditLeadDialog({
 		return () => clearTimeout(t);
 	}, [form.phone]);
 
-	const isValidEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(debouncedEmail);
+	const isValidEmail =
+		debouncedEmail.length === 0 ||
+		/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(debouncedEmail);
 	const isValidPhone = debouncedPhone.length >= 8;
 
 	// excludeId = this lead's own ID — so its own email/phone don't flag as duplicate
@@ -91,10 +93,13 @@ export function EditLeadDialog({
 			{ enabled: !!lead?.id && isValidEmail && isValidPhone, staleTime: 3000 },
 		);
 
-	const hasDuplicate = !!(dupeCheck?.emailTaken || dupeCheck?.phoneTaken);
+	const hasBlockingDuplicate = !!dupeCheck?.emailTaken;
 
 	const updateMutation = trpc.adminLeads.update.useMutation({
 		onSuccess: () => {
+			if (dupeCheck?.phoneTaken) {
+				toast.warning("Phone number already exists. Lead was still saved as requested.");
+			}
 			toast.success("Lead updated successfully");
 			onSuccess();
 			onClose();
@@ -107,7 +112,7 @@ export function EditLeadDialog({
 		if (open && lead) {
 			setForm({
 				name: lead.name,
-				email: lead.email,
+				email: lead.email ?? "",
 				phone: lead.phone,
 				source: lead.source,
 				type: lead.type,
@@ -118,7 +123,7 @@ export function EditLeadDialog({
 				agentId: lead.agentId ?? "__unassigned__",
 			});
 			// Seed debounced values immediately so the check runs on open
-			setDebouncedEmail(lead.email.trim());
+			setDebouncedEmail((lead.email ?? "").trim());
 			setDebouncedPhone(lead.phone.trim());
 		}
 	}, [open, lead]);
@@ -311,18 +316,13 @@ export function EditLeadDialog({
 				</div>
 
 				{/* Summary banner when duplicates detected */}
-				{hasDuplicate && (
+				{(dupeCheck?.emailTaken || dupeCheck?.phoneTaken) && (
 					<div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2.5 text-destructive text-sm">
 						<RiErrorWarningLine className="mt-0.5 size-4 shrink-0" />
 						<span>
-							Cannot save — the{" "}
-							{[
-								dupeCheck?.emailTaken && "email",
-								dupeCheck?.phoneTaken && "phone number",
-							]
-								.filter(Boolean)
-								.join(" and ")}{" "}
-							already belong to another lead.
+							{dupeCheck?.emailTaken
+								? "Cannot save because the email already belongs to another lead."
+								: "This phone number already belongs to another lead. Saving is still allowed."}
 						</span>
 					</div>
 				)}
@@ -332,7 +332,9 @@ export function EditLeadDialog({
 						Cancel
 					</Button>
 					<Button
-						disabled={updateMutation.isPending || hasDuplicate || dupeChecking}
+						disabled={
+							updateMutation.isPending || hasBlockingDuplicate || dupeChecking
+						}
 						onClick={() =>
 							updateMutation.mutate({
 								id: lead.id,

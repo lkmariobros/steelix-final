@@ -76,19 +76,24 @@ export function CreateLeadDialog({
 		return () => clearTimeout(t);
 	}, [form.phone]);
 
-	const isValidEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(debouncedEmail);
+	const isValidEmail =
+		debouncedEmail.length === 0 ||
+		/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(debouncedEmail);
 	const isValidPhone = debouncedPhone.length >= 8;
 
 	const { data: dupeCheck, isFetching: dupeChecking } =
 		trpc.adminLeads.checkDuplicate.useQuery(
 			{ email: debouncedEmail, phone: debouncedPhone },
-			{ enabled: isValidEmail && isValidPhone, staleTime: 3000 },
+			{ enabled: isValidPhone && isValidEmail, staleTime: 3000 },
 		);
 
-	const hasDuplicate = !!(dupeCheck?.emailTaken || dupeCheck?.phoneTaken);
+	const hasBlockingDuplicate = !!dupeCheck?.emailTaken;
 
 	const createMutation = trpc.adminLeads.create.useMutation({
 		onSuccess: () => {
+			if (dupeCheck?.phoneTaken) {
+				toast.warning("Phone number already exists. Lead was still saved as requested.");
+			}
 			toast.success("Lead created successfully");
 			setForm(emptyForm);
 			setDebouncedEmail("");
@@ -136,7 +141,7 @@ export function CreateLeadDialog({
 					</div>
 					{/* Email with duplicate check */}
 					<div className="space-y-1.5">
-						<Label htmlFor="create-email">Email *</Label>
+						<Label htmlFor="create-email">Email</Label>
 						<div className="relative">
 							<Input
 								id="create-email"
@@ -304,18 +309,19 @@ export function CreateLeadDialog({
 				</div>
 
 				{/* Summary banner when duplicates detected */}
-				{hasDuplicate && (
+				{(dupeCheck?.emailTaken || dupeCheck?.phoneTaken) && (
 					<div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2.5 text-destructive text-sm">
 						<RiErrorWarningLine className="mt-0.5 size-4 shrink-0" />
 						<span>
-							This lead cannot be saved — the{" "}
+							{dupeCheck?.emailTaken
+								? "This lead cannot be saved because the email already exists."
+								: "This phone number already exists. Saving is still allowed."}{" "}
 							{[
 								dupeCheck?.emailTaken && "email",
-								dupeCheck?.phoneTaken && "phone number",
+								!dupeCheck?.emailTaken && dupeCheck?.phoneTaken && "phone number",
 							]
 								.filter(Boolean)
-								.join(" and ")}{" "}
-							already exist in the system.
+								.join(" and ")}
 						</span>
 					</div>
 				)}
@@ -327,10 +333,9 @@ export function CreateLeadDialog({
 					<Button
 						disabled={
 							createMutation.isPending ||
-							hasDuplicate ||
+							hasBlockingDuplicate ||
 							dupeChecking ||
 							!form.name ||
-							!form.email ||
 							!form.phone ||
 							!form.source ||
 							!form.property

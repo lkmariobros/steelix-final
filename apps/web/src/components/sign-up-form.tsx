@@ -39,7 +39,7 @@ export default function SignUpForm({ onSwitchToSignIn }: SignUpFormProps) {
 				},
 				{
 					onSuccess: () => {
-						window.location.href = "/dashboard"
+						window.location.href = "/post-login"
 						toast.success("Account created successfully!")
 					},
 					onError: (error) => {

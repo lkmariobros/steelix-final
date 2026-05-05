@@ -6,6 +6,7 @@ import { toast } from "sonner"
 import z from "zod/v4"
 import Loader from "./loader"
 import { Button } from "./ui/button"
+import { Checkbox } from "./ui/checkbox"
 import { Input } from "./ui/input"
 import { Label } from "./ui/label"
 
@@ -30,6 +31,7 @@ export default function SignInForm({
 		defaultValues: {
 			email: "",
 			password: "",
+			rememberMe: true,
 		},
 		onSubmit: async ({ value }) => {
 			try {
@@ -37,12 +39,13 @@ export default function SignInForm({
 					{
 						email: value.email,
 						password: value.password,
+						rememberMe: value.rememberMe,
 					},
 					{
 						onSuccess: () => {
 							toast.success("Sign in successful! Redirecting...")
 							// Use window.location.href for hard refresh to ensure cookies are properly read
-							window.location.href = '/dashboard'
+							window.location.href = "/post-login"
 						},
 						onError: (error) => {
 							console.error('Sign in error:', error)
@@ -68,6 +71,7 @@ export default function SignInForm({
 			onSubmit: z.object({
 				email: z.email("Invalid email address"),
 				password: z.string().min(8, "Password must be at least 8 characters"),
+				rememberMe: z.boolean(),
 			}),
 		},
 	})
@@ -106,8 +110,8 @@ export default function SignInForm({
 								/>
 							</div>
 							{field.state.meta.errors.map((error) => (
-								<p key={error?.message} className="text-sm text-red-500">
-									{error?.message}
+								<p key={String(error)} className="text-sm text-red-500">
+									{String(error)}
 								</p>
 							))}
 						</div>
@@ -149,10 +153,27 @@ export default function SignInForm({
 								</button>
 							</div>
 							{field.state.meta.errors.map((error) => (
-								<p key={error?.message} className="text-sm text-red-500">
-									{error?.message}
+								<p key={String(error)} className="text-sm text-red-500">
+									{String(error)}
 								</p>
 							))}
+						</div>
+					)}
+				</form.Field>
+
+				<form.Field name="rememberMe">
+					{(field) => (
+						<div className="flex items-center justify-between">
+							<div className="flex items-center gap-2">
+								<Checkbox
+									id={field.name}
+									checked={field.state.value}
+									onCheckedChange={(v) => field.handleChange(Boolean(v))}
+								/>
+								<Label htmlFor={field.name} className="text-sm font-medium">
+									Remember me
+								</Label>
+							</div>
 						</div>
 					)}
 				</form.Field>

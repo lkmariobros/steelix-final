@@ -44,14 +44,17 @@ export const prospectStatusEnum = pgEnum("prospect_status", [
 // Pipeline stage enum (for Kanban board) - Updated to match client's CRM system
 export const pipelineStageEnum = pgEnum("pipeline_stage", [
 	"new_lead",
+	"contacted",
 	"follow_up_in_progress",
 	"no_pick_reply",
 	"follow_up_for_appointment",
 	"potential_lead",
 	"consider_seen",
 	"appointment_made",
+	"appointment_set",
 	"reject_project",
 	"booking_made",
+	"converted",
 	"spam_fake_lead",
 ]);
 
@@ -64,7 +67,7 @@ export const prospects = pgTable(
 	{
 		id: uuid("id").primaryKey().defaultRandom(),
 		name: text("name").notNull(),
-		email: text("email").notNull(),
+		email: text("email"),
 		phone: text("phone").notNull(),
 		source: text("source").notNull(), // e.g., "Website", "Social Media", "Referral"
 		type: prospectTypeEnum("type").notNull(),
@@ -78,6 +81,8 @@ export const prospects = pgTable(
 		stage: pipelineStageEnum("stage").default("new_lead").notNull(),
 		// Lead type: personal (agent's own) or company (can be claimed)
 		leadType: leadTypeEnum("lead_type").default("personal").notNull(),
+		// Free-form notes (interest, buyer type, remarks)
+		notes: text("notes"),
 		// Tags for categorization (stored as comma-separated string for simplicity)
 		tags: text("tags"), // e.g., "VIP,Investor,Buyer"
 		lastContact: timestamp("last_contact"),
@@ -175,25 +180,37 @@ export const propertyTypeSchema = z
 export const prospectStatusSchema = z.enum(["active", "inactive", "pending"]);
 export const pipelineStageSchema = z.enum([
 	"new_lead",
+	"contacted",
 	"follow_up_in_progress",
 	"no_pick_reply",
 	"follow_up_for_appointment",
 	"potential_lead",
 	"consider_seen",
 	"appointment_made",
+	"appointment_set",
 	"reject_project",
 	"booking_made",
+	"converted",
 	"spam_fake_lead",
 ]);
 export const leadTypeSchema = z.enum(["personal", "company"]);
 
 export const insertProspectSchema = z.object({
 	name: z.string().min(2, "Name must be at least 2 characters"),
-	email: z.string().email("Please enter a valid email address"),
+	email: z
+		.union([z.string().email("Please enter a valid email address"), z.literal("")])
+		.optional()
+		.transform((v) => {
+			const t = typeof v === "string" ? v.trim() : "";
+			return t === "" ? null : t;
+		}),
 	phone: z
 		.string()
-		.min(8, "Phone number must be at least 8 characters")
-		.regex(/^[\d\s\+\-\(\)]+$/, "Please enter a valid phone number"),
+		.min(8, "Phone number must be at least 8 digits")
+		.regex(
+			/^\+60\d{8,11}$/,
+			"Phone must be in Malaysian format (e.g. +60123456789)",
+		),
 	source: z.string().min(1, "Please select a source"),
 	type: prospectTypeSchema,
 	property: propertyTypeSchema,
@@ -201,6 +218,7 @@ export const insertProspectSchema = z.object({
 	status: prospectStatusSchema,
 	stage: pipelineStageSchema.default("new_lead").optional(),
 	leadType: leadTypeSchema.default("personal").optional(),
+	notes: z.string().max(20000).optional().nullable(),
 	tags: z.string().optional(), // Comma-separated tags
 	lastContact: z.date().optional(),
 	nextContact: z.date().optional(),
@@ -209,7 +227,7 @@ export const insertProspectSchema = z.object({
 export const selectProspectSchema = z.object({
 	id: z.string(),
 	name: z.string(),
-	email: z.string(),
+	email: z.string().nullable(),
 	phone: z.string(),
 	source: z.string(),
 	type: prospectTypeSchema,
@@ -218,6 +236,7 @@ export const selectProspectSchema = z.object({
 	status: prospectStatusSchema,
 	stage: pipelineStageSchema,
 	leadType: leadTypeSchema,
+	notes: z.string().nullable().optional(),
 	tags: z.string().nullable(),
 	lastContact: z.date().nullable(),
 	nextContact: z.date().nullable(),

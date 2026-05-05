@@ -1,5 +1,6 @@
 import type { SQL } from "drizzle-orm";
 import { and, desc, eq, ilike, inArray, isNull, or, sql } from "drizzle-orm";
+import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { user } from "../models/auth";
 import {
@@ -23,7 +24,7 @@ import {
 	updateCrmProjectSchema,
 	updateProspectSchema,
 } from "../models/crm";
-import { importProspectsBulkForAgent } from "../services/leads";
+import { getLeadActivityAdmin, importProspectsBulkForAgent } from "../services/leads";
 import { db } from "../utils/db";
 import { adminProcedure, protectedProcedure, router } from "../utils/trpc";
 
@@ -32,6 +33,10 @@ const listProspectsInput = z.object({
 	search: z.string().optional(),
 	type: z.enum(["tenant", "buyer"]).optional(),
 	property: z.string().optional(), // Free text search for property name
+	source: z.string().optional(),
+	tagId: z.string().uuid().optional(),
+	createdFrom: z.coerce.date().optional(),
+	createdTo: z.coerce.date().optional(),
 	status: z.enum(["active", "inactive", "pending"]).optional(),
 	overdueOnly: z.boolean().optional(),
 	stage: pipelineStageSchema.optional(), // Filter by pipeline stage
@@ -117,6 +122,10 @@ export const crmRouter = router({
 					search,
 					type,
 					property,
+					source,
+					tagId,
+					createdFrom,
+					createdTo,
 					status,
 					overdueOnly,
 					stage,
@@ -150,12 +159,35 @@ export const crmRouter = router({
 				if (search) {
 					const searchConditions = or(
 						ilike(prospects.name, `%${search}%`),
-						ilike(prospects.email, `%${search}%`),
+						sql`coalesce(${prospects.email}, '') ilike ${`%${search}%`}`,
 						ilike(prospects.phone, `%${search}%`),
 					);
 					if (searchConditions) {
 						conditions.push(searchConditions);
 					}
+				}
+
+				if (source?.trim()) {
+					conditions.push(ilike(prospects.source, `%${source.trim()}%`));
+				}
+
+				if (tagId) {
+					conditions.push(
+						inArray(
+							prospects.id,
+							db
+								.select({ id: prospectTags.prospectId })
+								.from(prospectTags)
+								.where(eq(prospectTags.tagId, tagId)),
+						),
+					);
+				}
+
+				if (createdFrom) {
+					conditions.push(sql`${prospects.createdAt} >= ${createdFrom}`);
+				}
+				if (createdTo) {
+					conditions.push(sql`${prospects.createdAt} <= ${createdTo}`);
 				}
 
 				// Type filter
@@ -686,13 +718,13 @@ export const crmRouter = router({
 				effectiveUpdateData.nextContact !== undefined &&
 				effectiveUpdateData.stage === undefined
 			) {
-				effectiveUpdateData.stage = "appointment_made";
+				effectiveUpdateData.stage = "appointment_set";
 			} else if (
 				effectiveUpdateData.lastContact !== undefined &&
 				effectiveUpdateData.stage === undefined &&
 				existing.stage === "new_lead"
 			) {
-				effectiveUpdateData.stage = "follow_up_in_progress";
+				effectiveUpdateData.stage = "contacted";
 			}
 
 			const [updated] = await db
@@ -919,9 +951,7 @@ export const crmRouter = router({
 				.set({
 					lastContact: new Date(),
 					stage:
-						prospect.stage === "new_lead"
-							? "follow_up_in_progress"
-							: prospect.stage,
+						prospect.stage === "new_lead" ? "contacted" : prospect.stage,
 					updatedAt: new Date(),
 				})
 				.where(eq(prospects.id, prospectId));
@@ -970,5 +1000,37 @@ export const crmRouter = router({
 				...selectProspectNoteSchema.parse(n.note),
 				agentName: n.agentName || "Unknown",
 			}));
+		}),
+
+	getActivity: protectedProcedure
+		.input(z.object({ leadId: z.string().uuid() }))
+		.query(async ({ ctx, input }) => {
+			const agentId = ctx.session.user.id;
+			const [row] = await db
+				.select({
+					id: prospects.id,
+					agentId: prospects.agentId,
+					leadType: prospects.leadType,
+				})
+				.from(prospects)
+				.where(eq(prospects.id, input.leadId))
+				.limit(1);
+
+			if (!row) {
+				throw new TRPCError({ code: "NOT_FOUND", message: "Lead not found" });
+			}
+
+			const allowed =
+				row.agentId === agentId ||
+				(row.leadType === "company" && row.agentId === null);
+
+			if (!allowed) {
+				throw new TRPCError({
+					code: "FORBIDDEN",
+					message: "You can only view activity on your own leads",
+				});
+			}
+
+			return await getLeadActivityAdmin(input.leadId);
 		}),
 });

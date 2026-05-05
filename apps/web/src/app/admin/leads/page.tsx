@@ -68,6 +68,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/tooltip";
 
 import { AdminLeadsPageHeader } from "./_components/admin-leads-page-header";
 import { BulkStageDialog } from "./_components/bulk-stage-dialog";
+import { BulkAssignDialog } from "./_components/bulk-assign-dialog";
+import { BulkDeleteDialog } from "./_components/bulk-delete-dialog";
 import { CreateLeadDialog } from "./_components/create-lead-dialog";
 import { DeleteLeadDialog } from "./_components/delete-lead-dialog";
 import { EditLeadDialog } from "./_components/edit-lead-dialog";
@@ -103,7 +105,7 @@ export default function AdminLeadsPage() {
 	const [sortKey, setSortKey] = useState<SortKey>("createdAt");
 	const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
 	const [page, setPage] = useState(1);
-	const [pageSize, setPageSize] = useState(10);
+	const [pageSize, setPageSize] = useState(100);
 	const [viewMode, setViewMode] = useState<"table" | "kanban">("table");
 
 	// ── Dialogs ────────────────────────────────────────────────────────────
@@ -112,6 +114,8 @@ export default function AdminLeadsPage() {
 	const [deleteLead, setDeleteLead] = useState<Lead | null>(null);
 	const [isCreateOpen, setIsCreateOpen] = useState(false);
 	const [isBulkStageOpen, setIsBulkStageOpen] = useState(false);
+	const [isBulkAssignOpen, setIsBulkAssignOpen] = useState(false);
+	const [isBulkDeleteOpen, setIsBulkDeleteOpen] = useState(false);
 	const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 	const [isExporting, setIsExporting] = useState(false);
 	const [isImportOpen, setIsImportOpen] = useState(false);
@@ -165,7 +169,7 @@ export default function AdminLeadsPage() {
 				q &&
 				!(
 					lead.name.toLowerCase().includes(q) ||
-					lead.email.toLowerCase().includes(q) ||
+					(lead.email ?? "").toLowerCase().includes(q) ||
 					lead.phone.toLowerCase().includes(q) ||
 					lead.property.toLowerCase().includes(q)
 				)
@@ -418,7 +422,7 @@ export default function AdminLeadsPage() {
 
 				const exportRows = leadsToExportRows(leads);
 				const baseName =
-					scope === "selected" ? "leads_selected" : "leads_filtered";
+					scope === "selected" ? "leads_export_selected" : "leads_export";
 
 				if (format === "csv") exportToCSV(exportRows, baseName);
 				else exportToExcelHtml(exportRows, baseName);
@@ -808,6 +812,22 @@ export default function AdminLeadsPage() {
 											</Button>
 											<Button
 												size="sm"
+												variant="outline"
+												className="h-7 text-xs"
+												onClick={() => setIsBulkAssignOpen(true)}
+											>
+												Re-assign Agent
+											</Button>
+											<Button
+												size="sm"
+												variant="destructive"
+												className="h-7 text-xs"
+												onClick={() => setIsBulkDeleteOpen(true)}
+											>
+												Delete
+											</Button>
+											<Button
+												size="sm"
 												variant="ghost"
 												className="h-7 text-xs"
 												onClick={() => setSelectedIds(new Set())}
@@ -1156,11 +1176,11 @@ export default function AdminLeadsPage() {
 																{lead.name}
 															</p>
 															<p className="text-muted-foreground text-xs md:hidden">
-																{lead.email}
+																{lead.email ?? "—"}
 															</p>
 														</TableCell>
 														<TableCell className="hidden md:table-cell">
-															<p className="text-sm">{lead.email}</p>
+															<p className="text-sm">{lead.email ?? "—"}</p>
 															<p className="text-muted-foreground text-xs">
 																{lead.phone}
 															</p>
@@ -1484,6 +1504,25 @@ export default function AdminLeadsPage() {
 				selectedIds={Array.from(selectedIds)}
 				open={isBulkStageOpen}
 				onClose={() => setIsBulkStageOpen(false)}
+				onSuccess={() => {
+					handleRefresh();
+					setSelectedIds(new Set());
+				}}
+			/>
+			<BulkAssignDialog
+				selectedIds={Array.from(selectedIds)}
+				open={isBulkAssignOpen}
+				onClose={() => setIsBulkAssignOpen(false)}
+				agents={agents}
+				onSuccess={() => {
+					handleRefresh();
+					setSelectedIds(new Set());
+				}}
+			/>
+			<BulkDeleteDialog
+				selectedIds={Array.from(selectedIds)}
+				open={isBulkDeleteOpen}
+				onClose={() => setIsBulkDeleteOpen(false)}
 				onSuccess={() => {
 					handleRefresh();
 					setSelectedIds(new Set());

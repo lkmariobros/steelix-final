@@ -34,6 +34,7 @@ import {
 	RiBarChartLine,
 	RiCheckboxCircleLine,
 	RiCalendarLine,
+	RiBuildingLine,
 	RiDashboardLine,
 	RiFileList3Line,
 	RiFileTextLine,
@@ -222,6 +223,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 	const pathname = usePathname();
 	const router = useRouter();
 	const [isAnnouncementPopoverOpen, setIsAnnouncementPopoverOpen] = useState(false);
+	const { data: session } = authClient.useSession();
 
 	const handleSignOut = useCallback(async () => {
 		await authClient.signOut({
@@ -233,11 +235,17 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 		});
 	}, []);
 
-	// Path-based navigation logic - no role checking in sidebar
+	const { data: roleCheck } = trpc.admin.checkAdminRole.useQuery(undefined, {
+		enabled: !!session,
+		retry: false,
+	});
+	const sessionRole =
+		(session?.user as { role?: string } | undefined)?.role ?? "agent";
+	const isAdmin = (roleCheck?.role ?? sessionRole) === "admin";
 	const isCurrentlyInAdminPortal = pathname.startsWith("/admin");
 
-	// Generate navigation based on current portal path only
-	const navigationItems = isCurrentlyInAdminPortal
+	// Generate navigation based on role (not URL)
+	const navigationItems = isAdmin
 		? [
 				{
 					title: "Overview",
@@ -249,14 +257,19 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 							icon: RiDashboardLine,
 						},
 						{
+							title: "Leads",
+							url: "/admin/leads",
+							icon: RiFileList3Line,
+						},
+						{
+							title: "Transactions",
+							url: "/admin/reports",
+							icon: RiFileTextLine,
+						},
+						{
 							title: "Commission approvals",
 							url: "/admin/approvals",
 							icon: RiCheckboxCircleLine,
-						},
-						{
-							title: "Reports & analytics",
-							url: "/admin/reports",
-							icon: RiBarChartLine,
 						},
 					],
 				},
@@ -265,14 +278,14 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 					url: "#",
 					items: [
 						{
-							title: "Agents",
+							title: "Agent management",
 							url: "/admin/agents",
 							icon: RiTeamLine,
 						},
 						{
-							title: "Leads",
-							url: "/admin/leads",
-							icon: RiFileList3Line,
+							title: "Projects setup",
+							url: "/admin/projects",
+							icon: RiBuildingLine,
 						},
 						{
 							title: "Tags",
@@ -295,13 +308,18 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 							url: "/admin/settings",
 							icon: RiSettings3Line,
 						},
+						{
+							title: "Reports & analytics",
+							url: "/admin/reports",
+							icon: RiBarChartLine,
+						},
 					],
 				},
 			]
 		: [
 				// Agent Portal Navigation
 				{
-					title: "Agent Dashboard",
+					title: "Agent",
 					url: "#",
 					items: [
 						{
@@ -309,42 +327,42 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 							url: "/dashboard",
 							icon: RiDashboardLine,
 						},
-					{
-						title: "Transactions",
-						url: "/dashboard/transactions",
-						icon: RiFileTextLine,
-					},
-					{
-						title: "Listings",
-						url: "/dashboard/listings",
-						icon: RiFileList3Line,
-					},
-					{
-						title: "CRM",
-						url: "/dashboard/crm",
-						icon: RiUserLine,
-					},
-					{
-						title: "WhatsApp",
-						url: "/dashboard/whatsapp",
-						icon: RiMessageLine,
-					},
-					{
-						title: "Auto-Reply",
-						url: "/dashboard/auto-reply",
-						icon: RiRobotLine,
-					},
-					{
-						title: "Office Calendar",
-						url: "/dashboard/calendar",
-						icon: RiCalendarLine,
-					},
-				],
-			},
+						{
+							title: "My leads",
+							url: "/dashboard/leads",
+							icon: RiFileList3Line,
+						},
+						{
+							title: "My transactions",
+							url: "/dashboard/transactions",
+							icon: RiFileTextLine,
+						},
+						{
+							title: "My commission",
+							url: "/dashboard",
+							icon: RiBarChartLine,
+						},
+					],
+				},
 				{
-					title: "Configuration",
+					title: "Tools",
 					url: "#",
 					items: [
+						{
+							title: "WhatsApp",
+							url: "/dashboard/whatsapp",
+							icon: RiMessageLine,
+						},
+						{
+							title: "Auto-reply",
+							url: "/dashboard/auto-reply",
+							icon: RiRobotLine,
+						},
+						{
+							title: "Calendar",
+							url: "/dashboard/calendar",
+							icon: RiCalendarLine,
+						},
 						{
 							title: "Settings",
 							url: "/dashboard/settings",

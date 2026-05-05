@@ -50,7 +50,7 @@ export interface AdminLeadsFilter {
 export interface LeadWithAgent {
 	id: string;
 	name: string;
-	email: string;
+	email: string | null;
 	phone: string;
 	source: string;
 	type: "tenant" | "buyer";
@@ -119,6 +119,7 @@ async function logActivity(opts: {
  * Get all leads (admin — no agent restriction) with filters and pagination.
  */
 export async function getAllLeadsAdmin(filter: AdminLeadsFilter = {}) {
+	try {
 	const {
 		search,
 		type,
@@ -137,7 +138,7 @@ export async function getAllLeadsAdmin(filter: AdminLeadsFilter = {}) {
 	if (search) {
 		const cond = or(
 			ilike(prospects.name, `%${search}%`),
-			ilike(prospects.email, `%${search}%`),
+			sql`coalesce(${prospects.email}, '') ilike ${`%${search}%`}`,
 			ilike(prospects.phone, `%${search}%`),
 		);
 		if (cond) conditions.push(cond);
@@ -259,6 +260,20 @@ export async function getAllLeadsAdmin(filter: AdminLeadsFilter = {}) {
 			totalPages: Math.ceil(total / limit),
 		},
 	};
+	} catch (e) {
+		const msg = e instanceof Error ? e.message : String(e);
+		// Common when code schema is ahead of the DB schema.
+		if (
+			/column .*notes.* does not exist/i.test(msg) ||
+			/column .*email.* does not exist/i.test(msg) ||
+			/invalid input value for enum pipeline_stage/i.test(msg)
+		) {
+			throw new Error(
+				`Leads query failed because the DB schema is out of date. Please apply the latest leads schema patch (prospects.notes, nullable email, pipeline_stage values). Original error: ${msg}`,
+			);
+		}
+		throw e;
+	}
 }
 
 /**
@@ -465,6 +480,20 @@ export async function assignLeadAdmin(
 	}
 
 	return updated;
+}
+
+/**
+ * Bulk re-assign many leads (each assignment is activity-logged).
+ */
+export async function bulkAssignLeadsAdmin(
+	leadIds: string[],
+	agentId: string | null,
+	actorId: string,
+) {
+	for (const id of leadIds) {
+		await assignLeadAdmin(id, agentId, actorId);
+	}
+	return { success: true as const, updated: leadIds.length };
 }
 
 /**
@@ -704,18 +733,24 @@ export async function checkLeadDuplicateAdmin(
 	const normEmail = email.trim().toLowerCase();
 	const normPhone = phone.trim().replace(/\s+/g, "");
 
-	const [emailRow] = await db
-		.select({ id: prospects.id, name: prospects.name })
-		.from(prospects)
-		.where(
-			excludeId
-				? and(
-						sql`lower(${prospects.email}) = ${normEmail}`,
-						sql`${prospects.id} != ${excludeId}::uuid`,
-					)
-				: sql`lower(${prospects.email}) = ${normEmail}`,
-		)
-		.limit(1);
+	let emailRow: { id: string; name: string } | undefined;
+	if (normEmail) {
+		const [row] = await db
+			.select({ id: prospects.id, name: prospects.name })
+			.from(prospects)
+			.where(
+				excludeId
+					? and(
+							sql`lower(${prospects.email}) = ${normEmail}`,
+							sql`${prospects.id} != ${excludeId}::uuid`,
+						)
+					: sql`lower(${prospects.email}) = ${normEmail}`,
+			)
+			.limit(1);
+		emailRow = row;
+	} else {
+		emailRow = undefined;
+	}
 
 	const [phoneRow] = await db
 		.select({ id: prospects.id, name: prospects.name })
@@ -736,6 +771,16 @@ export async function checkLeadDuplicateAdmin(
 		phoneTaken: !!phoneRow,
 		phoneConflictName: phoneRow?.name ?? null,
 	};
+}
+
+/** Find lead id + owner by normalized phone (spaces stripped). */
+export async function findProspectByNormalizedPhone(normPhone: string) {
+	const [row] = await db
+		.select({ id: prospects.id, agentId: prospects.agentId })
+		.from(prospects)
+		.where(sql`replace(${prospects.phone}, ' ', '') = ${normPhone}`)
+		.limit(1);
+	return row ?? null;
 }
 
 /**
@@ -866,6 +911,18 @@ function normalizePhoneForImport(raw: string): string {
 	return raw.replace(/[^\d\s+\-()]/g, "").trim();
 }
 
+/** Prefer Malaysian +60 format for storage and matching. */
+function normalizeMalaysianPhoneKey(raw: string): string {
+	let d = normalizePhoneForImport(raw).replace(/\s+/g, "");
+	if (d.startsWith("+60")) return d;
+	if (d.startsWith("60") && d.length >= 10) return `+${d}`;
+	if (d.startsWith("0")) return `+60${d.slice(1)}`;
+	const digitsOnly = d.replace(/\D/g, "");
+	if (/^\d{8,11}$/.test(digitsOnly)) return `+60${digitsOnly}`;
+	if (d.startsWith("+")) return d;
+	return digitsOnly ? `+${digitsOnly}` : d;
+}
+
 function parseOptionalDate(raw: string): Date | undefined {
 	const t = raw.trim();
 	if (!t) return undefined;
@@ -882,15 +939,20 @@ function parseStageFromCsv(raw: string): PipelineStage {
 	const n = t.toLowerCase().replace(/[^a-z0-9]+/g, "");
 	const map: Record<string, PipelineStage> = {
 		newlead: "new_lead",
+		contacted: "contacted",
 		followupinprogress: "follow_up_in_progress",
 		nopickreply: "no_pick_reply",
+		nopupreattempt: "no_pick_reply",
+		nopickupreattempt: "no_pick_reply",
 		followupforappt: "follow_up_for_appointment",
 		followupforappointment: "follow_up_for_appointment",
 		potentiallead: "potential_lead",
 		considerseen: "consider_seen",
 		appointmentmade: "appointment_made",
+		appointmentset: "appointment_set",
 		rejectproject: "reject_project",
 		bookingmade: "booking_made",
+		converted: "converted",
 		spamfakelead: "spam_fake_lead",
 	};
 	return map[n] ?? "new_lead";
@@ -921,27 +983,46 @@ function parseLeadTypeFromCsv(raw: string): LeadType {
 	return "personal";
 }
 
+export type LeadImportLineResult = {
+	lineNo: number;
+	identifier: string;
+	object: string;
+	kind: "created" | "updated" | "error" | "warning";
+	message?: string;
+};
+
+export type LeadImportSummary = {
+	total: number;
+	success: number;
+	created: number;
+	updated: number;
+	error: number;
+	warning: number;
+	skippedInvalid: number;
+	lines: LeadImportLineResult[];
+};
+
 /**
- * Import many leads from parsed CSV rows (same column names as export).
- * Skips rows that duplicate an existing email/phone or another row in the file.
+ * Import many leads from parsed CSV rows.
+ * Required: name + phone. Email optional.
+ * If phone already exists → update the lead (upsert) and count as "updated".
  */
 export async function importLeadsBulkAdmin(
 	rows: Record<string, string>[],
 	actorId: string,
-) {
+): Promise<LeadImportSummary> {
 	if (rows.length > IMPORT_MAX_ROWS) {
 		throw new Error(`Import is limited to ${IMPORT_MAX_ROWS} rows per batch.`);
 	}
 
-	const result = {
-		created: 0,
-		skippedDuplicate: 0,
-		skippedInvalid: 0,
-		errors: [] as { rowIndex: number; message: string }[],
-	};
+	const lines: LeadImportLineResult[] = [];
+	let created = 0;
+	let updated = 0;
+	let error = 0;
+	let warning = 0;
+	let skippedInvalid = 0;
 
-	const seenEmail = new Set<string>();
-	const seenPhone = new Set<string>();
+	const seenPhoneNormInFile = new Map<string, number>();
 
 	for (let i = 0; i < rows.length; i++) {
 		const row = rows[i];
@@ -964,6 +1045,7 @@ export async function importLeadsBulkAdmin(
 			"contactphone",
 			"Contact Phone",
 		);
+		const notesRaw = pickCsvField(row, "notes", "Notes", "remarks", "Remarks");
 		const property = pickCsvField(row, "property", "Property");
 		const projectName = pickCsvField(
 			row,
@@ -972,8 +1054,8 @@ export async function importLeadsBulkAdmin(
 			"projectname",
 			"project name",
 		);
-		const stageRaw = pickCsvField(row, "stage", "Stage");
-		const statusRaw = pickCsvField(row, "status", "Status");
+		const stageRaw = pickCsvField(row, "stage", "Stage", "status", "Status");
+		const statusRaw = pickCsvField(row, "status", "Status", "lifecycle", "Lifecycle");
 		const typeRaw = pickCsvField(row, "type", "Type");
 		const leadTypeRaw = pickCsvField(
 			row,
@@ -989,6 +1071,16 @@ export async function importLeadsBulkAdmin(
 			"agentemail",
 			"agent email",
 			"Agent Email",
+			"assigned agent email",
+		);
+		const agentNameRaw = pickCsvField(
+			row,
+			"assigned agent",
+			"Assigned Agent",
+			"agent name",
+			"Agent Name",
+			"agent",
+			"Agent",
 		);
 		const lastContactRaw = pickCsvField(
 			row,
@@ -1003,36 +1095,41 @@ export async function importLeadsBulkAdmin(
 			"Next Contact",
 		);
 
-		if (!name || !email || !phoneRaw) {
-			result.skippedInvalid++;
-			result.errors.push({
-				rowIndex: rowNum,
-				message: "Missing required field (name, email, or phone).",
+		if (!name?.trim() || !phoneRaw?.trim()) {
+			skippedInvalid++;
+			error++;
+			lines.push({
+				lineNo: rowNum,
+				identifier: name?.trim() || "(no name)",
+				object: "Lead",
+				kind: "error",
+				message: "Missing required field (name or phone).",
 			});
 			continue;
 		}
 
-		const phone = normalizePhoneForImport(phoneRaw);
-		const emailNorm = email.trim().toLowerCase();
+		const phone = normalizeMalaysianPhoneKey(phoneRaw);
 		const phoneNorm = phone.replace(/\s+/g, "");
 
-		if (seenEmail.has(emailNorm) || seenPhone.has(phoneNorm)) {
-			result.skippedDuplicate++;
-			continue;
+		const firstLine = seenPhoneNormInFile.get(phoneNorm);
+		if (firstLine !== undefined) {
+			warning++;
+			lines.push({
+				lineNo: rowNum,
+				identifier: name.trim(),
+				object: "Lead",
+				kind: "warning",
+				message: `Duplicate phone also on row ${firstLine}; updating same record.`,
+			});
+		} else {
+			seenPhoneNormInFile.set(phoneNorm, rowNum);
 		}
 
-		const dup = await checkLeadDuplicateAdmin(email, phone);
-		if (dup.emailTaken || dup.phoneTaken) {
-			result.skippedDuplicate++;
-			continue;
-		}
+		const emailNorm = email.trim().toLowerCase();
 
-		const parsedStage = parseStageFromCsv(stageRaw);
-		const parsedStatus = parseStatusFromCsv(statusRaw);
-		const parsedType = parseTypeFromCsv(typeRaw);
-		const parsedLeadType = parseLeadTypeFromCsv(leadTypeRaw);
-		const finalSource = source || "CSV import";
-		const finalProperty = property || "—";
+		const dup = emailNorm
+			? await checkLeadDuplicateAdmin(email, phone)
+			: { emailTaken: false, phoneTaken: false, emailConflictName: null, phoneConflictName: null };
 
 		let projectId: string | undefined;
 		if (projectName) {
@@ -1056,14 +1153,33 @@ export async function importLeadsBulkAdmin(
 				)
 				.limit(1);
 			agentId = uRow?.id ?? null;
+		} else if (agentNameRaw.trim()) {
+			const want = agentNameRaw.toLowerCase().trim();
+			const [uRow] = await db
+				.select({ id: user.id })
+				.from(user)
+				.where(sql`lower(trim(${user.name})) = ${want}`)
+				.limit(1);
+			agentId = uRow?.id ?? null;
 		}
+
+		const parsedStage = parseStageFromCsv(stageRaw);
+		const parsedStatus = parseStatusFromCsv(statusRaw);
+		const parsedType = parseTypeFromCsv(typeRaw);
+		const parsedLeadType = parseLeadTypeFromCsv(leadTypeRaw);
+		const finalSource = source?.trim() || "CSV import";
+		const finalProperty = property?.trim() || "—";
 
 		const lastContact = parseOptionalDate(lastContactRaw);
 		const nextContact = parseOptionalDate(nextContactRaw);
 
-		const baseInsert: InsertProspect = {
-			name,
-			email,
+		const notesVal = notesRaw.trim() ? notesRaw.trim() : null;
+
+		const existing = await findProspectByNormalizedPhone(phoneNorm);
+
+		const baseUpsert = {
+			name: name.trim(),
+			email: emailNorm === "" ? null : emailNorm,
 			phone,
 			source: finalSource,
 			type: parsedType,
@@ -1072,38 +1188,91 @@ export async function importLeadsBulkAdmin(
 			status: parsedStatus,
 			stage: parsedStage,
 			leadType: parsedLeadType,
-			...(tags ? { tags } : {}),
+			...(tags?.trim() ? { tags: tags.trim() } : {}),
+			...(notesVal ? { notes: notesVal } : {}),
 			...(lastContact ? { lastContact } : {}),
 			...(nextContact ? { nextContact } : {}),
 		};
 
-		const validated = insertProspectSchema.safeParse(baseInsert);
+		const validated = insertProspectSchema.safeParse(baseUpsert);
 		if (!validated.success) {
-			result.skippedInvalid++;
+			skippedInvalid++;
+			error++;
 			const msg = validated.error.errors.map((e) => e.message).join("; ");
-			result.errors.push({ rowIndex: rowNum, message: msg });
+			lines.push({
+				lineNo: rowNum,
+				identifier: name.trim(),
+				object: "Lead",
+				kind: "error",
+				message: msg,
+			});
 			continue;
 		}
 
 		try {
-			await createLeadAdmin({
-				...validated.data,
-				agentId: agentId ?? undefined,
-				_actorId: actorId,
-			});
-			result.created++;
-			seenEmail.add(emailNorm);
-			seenPhone.add(phoneNorm);
+			if (existing) {
+				await updateLeadAdmin(existing.id, {
+					...validated.data,
+					_actorId: actorId,
+				});
+				if (agentId !== null) {
+					await assignLeadAdmin(existing.id, agentId, actorId);
+				}
+				updated++;
+				lines.push({
+					lineNo: rowNum,
+					identifier: name.trim(),
+					object: "Lead",
+					kind: "updated",
+				});
+			} else {
+				if (emailNorm && dup.emailTaken) {
+					warning++;
+					lines.push({
+						lineNo: rowNum,
+						identifier: name.trim(),
+						object: "Lead",
+						kind: "warning",
+						message: `Email already used by “${dup.emailConflictName ?? "another lead"}”; creating/updating by phone only.`,
+					});
+				}
+				await createLeadAdmin({
+					...validated.data,
+					agentId: agentId ?? undefined,
+					_actorId: actorId,
+				});
+				created++;
+				lines.push({
+					lineNo: rowNum,
+					identifier: name.trim(),
+					object: "Lead",
+					kind: "created",
+				});
+			}
 		} catch (e) {
-			result.skippedInvalid++;
-			result.errors.push({
-				rowIndex: rowNum,
-				message: e instanceof Error ? e.message : "Insert failed",
+			skippedInvalid++;
+			error++;
+			lines.push({
+				lineNo: rowNum,
+				identifier: name.trim(),
+				object: "Lead",
+				kind: "error",
+				message: e instanceof Error ? e.message : "Save failed",
 			});
 		}
 	}
 
-	return result;
+	const success = created + updated;
+	return {
+		total: rows.length,
+		success,
+		created,
+		updated,
+		error,
+		warning,
+		skippedInvalid,
+		lines,
+	};
 }
 
 export type AgentProspectCsvImportMode =
@@ -1126,13 +1295,11 @@ export async function importProspectsBulkForAgent(
 
 	const result = {
 		created: 0,
+		updated: 0,
 		skippedDuplicate: 0,
 		skippedInvalid: 0,
 		errors: [] as { rowIndex: number; message: string }[],
 	};
-
-	const seenEmail = new Set<string>();
-	const seenPhone = new Set<string>();
 
 	const forcedLeadType: LeadType =
 		mode === "company_unclaimed" ? "company" : "personal";
@@ -1160,6 +1327,7 @@ export async function importProspectsBulkForAgent(
 			"contactphone",
 			"Contact Phone",
 		);
+		const notesRaw = pickCsvField(row, "notes", "Notes", "remarks", "Remarks");
 		const property = pickCsvField(row, "property", "Property");
 		const projectName = pickCsvField(
 			row,
@@ -1186,35 +1354,27 @@ export async function importProspectsBulkForAgent(
 			"Next Contact",
 		);
 
-		if (!name || !email || !phoneRaw) {
+		if (!name?.trim() || !phoneRaw?.trim()) {
 			result.skippedInvalid++;
 			result.errors.push({
 				rowIndex: rowNum,
-				message: "Missing required field (name, email, or phone).",
+				message: "Missing required field (name or phone).",
 			});
 			continue;
 		}
 
-		const phone = normalizePhoneForImport(phoneRaw);
-		const emailNorm = email.trim().toLowerCase();
+		const phone = normalizeMalaysianPhoneKey(phoneRaw);
 		const phoneNorm = phone.replace(/\s+/g, "");
+		const emailNorm = email.trim().toLowerCase();
+		const notesVal = notesRaw.trim() ? notesRaw.trim() : null;
 
-		if (seenEmail.has(emailNorm) || seenPhone.has(phoneNorm)) {
-			result.skippedDuplicate++;
-			continue;
-		}
-
-		const dup = await checkLeadDuplicateAdmin(email, phone);
-		if (dup.emailTaken || dup.phoneTaken) {
-			result.skippedDuplicate++;
-			continue;
-		}
+		const existing = await findProspectByNormalizedPhone(phoneNorm);
 
 		const parsedStage = parseStageFromCsv(stageRaw);
 		const parsedStatus = parseStatusFromCsv(statusRaw);
 		const parsedType = parseTypeFromCsv(typeRaw);
-		const finalSource = source || "CSV import";
-		const finalProperty = property || "—";
+		const finalSource = source?.trim() || "CSV import";
+		const finalProperty = property?.trim() || "—";
 
 		let projectId: string | undefined;
 		if (projectName) {
@@ -1231,9 +1391,9 @@ export async function importProspectsBulkForAgent(
 		const lastContact = parseOptionalDate(lastContactRaw);
 		const nextContact = parseOptionalDate(nextContactRaw);
 
-		const baseInsert: InsertProspect = {
-			name,
-			email,
+		const baseUpsert = {
+			name: name.trim(),
+			email: emailNorm === "" ? null : emailNorm,
 			phone,
 			source: finalSource,
 			type: parsedType,
@@ -1242,12 +1402,13 @@ export async function importProspectsBulkForAgent(
 			status: parsedStatus,
 			stage: parsedStage,
 			leadType: forcedLeadType,
-			...(tags ? { tags } : {}),
+			...(tags?.trim() ? { tags: tags.trim() } : {}),
+			...(notesVal ? { notes: notesVal } : {}),
 			...(lastContact ? { lastContact } : {}),
 			...(nextContact ? { nextContact } : {}),
 		};
 
-		const validated = insertProspectSchema.safeParse(baseInsert);
+		const validated = insertProspectSchema.safeParse(baseUpsert);
 		if (!validated.success) {
 			result.skippedInvalid++;
 			const msg = validated.error.errors.map((e) => e.message).join("; ");
@@ -1256,19 +1417,58 @@ export async function importProspectsBulkForAgent(
 		}
 
 		try {
-			await createLeadAdmin({
-				...validated.data,
-				agentId: assignAgentId,
-				_actorId: agentId,
-			});
-			result.created++;
-			seenEmail.add(emailNorm);
-			seenPhone.add(phoneNorm);
+			if (existing) {
+				if (mode === "personal_assigned") {
+					if (
+						existing.agentId !== null &&
+						existing.agentId !== undefined &&
+						existing.agentId !== agentId
+					) {
+						result.skippedInvalid++;
+						result.errors.push({
+							rowIndex: rowNum,
+							message:
+								"Phone belongs to another agent’s lead — cannot overwrite via import.",
+						});
+						continue;
+					}
+					await updateLeadAdmin(existing.id, {
+						...validated.data,
+						_actorId: agentId,
+					});
+					await assignLeadAdmin(existing.id, agentId, agentId);
+					result.updated++;
+				} else {
+					if (existing.agentId !== null && existing.agentId !== undefined) {
+						result.skippedInvalid++;
+						result.errors.push({
+							rowIndex: rowNum,
+							message:
+								"Phone already tied to an assigned lead — cannot upsert into company pool.",
+						});
+						continue;
+					}
+					await updateLeadAdmin(existing.id, {
+						...validated.data,
+						leadType: "company",
+						_actorId: agentId,
+					});
+					result.updated++;
+				}
+			} else {
+				await createLeadAdmin({
+					...validated.data,
+					leadType: forcedLeadType,
+					agentId: assignAgentId ?? undefined,
+					_actorId: agentId,
+				});
+				result.created++;
+			}
 		} catch (e) {
 			result.skippedInvalid++;
 			result.errors.push({
 				rowIndex: rowNum,
-				message: e instanceof Error ? e.message : "Insert failed",
+				message: e instanceof Error ? e.message : "Save failed",
 			});
 		}
 	}
