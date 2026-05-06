@@ -130,11 +130,13 @@ export function CommissionApprovalQueue({
 
 	const submitApprovalDecision = () => {
 		if (!dialogState.transaction || !dialogState.action) return;
+		const notes = dialogState.reviewNotes.trim();
+		if (!notes) return;
 		setDialogState((prev) => ({ ...prev, isSubmitting: true }));
 		processApprovalMutation.mutate({
 			transactionId: dialogState.transaction.id,
 			action: dialogState.action,
-			reviewNotes: dialogState.reviewNotes || undefined,
+			reviewNotes: notes,
 		});
 	};
 
@@ -361,7 +363,12 @@ export function CommissionApprovalQueue({
 			</Card>
 
 			{/* Approval Dialog */}
-			<Dialog open={dialogState.isOpen} onOpenChange={closeDialog}>
+			<Dialog
+				open={dialogState.isOpen}
+				onOpenChange={(open) => {
+					if (!open) closeDialog();
+				}}
+			>
 				<DialogContent>
 					<DialogHeader>
 						<DialogTitle>
@@ -390,17 +397,14 @@ export function CommissionApprovalQueue({
 					<div className="space-y-4">
 						<div>
 							<label htmlFor="review-notes" className="font-medium text-sm">
-								Review Notes{" "}
-								{dialogState.action === "reject" && (
-									<span className="text-red-500">*</span>
-								)}
+								Review notes <span className="text-red-500">*</span>
 							</label>
 							<Textarea
 								id="review-notes"
 								placeholder={
 									dialogState.action === "approve"
-										? "Optional notes about the approval..."
-										: "Please provide a reason for rejection..."
+										? "Required: e.g. verified booking docs, pricing checked…"
+										: "Required: reason for rejection (shown to the agent)…"
 								}
 								value={dialogState.reviewNotes}
 								onChange={(e) =>
@@ -425,9 +429,7 @@ export function CommissionApprovalQueue({
 						<Button
 							onClick={submitApprovalDecision}
 							disabled={
-								dialogState.isSubmitting ||
-								(dialogState.action === "reject" &&
-									!dialogState.reviewNotes.trim())
+								dialogState.isSubmitting || !dialogState.reviewNotes.trim()
 							}
 							className={
 								dialogState.action === "approve"

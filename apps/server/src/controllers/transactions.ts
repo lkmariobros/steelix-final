@@ -463,6 +463,39 @@ export const transactionsRouter = router({
 			};
 		}),
 
+	/** Admin read-only access to any transaction (for approvals / support). */
+	adminGetById: adminProcedure
+		.input(transactionIdInput)
+		.query(async ({ input }) => {
+			try {
+				const [row] = await db
+					.select()
+					.from(transactions)
+					.where(eq(transactions.id, input.id))
+					.limit(1);
+
+				if (!row) {
+					throw new TRPCError({
+						code: "NOT_FOUND",
+						message: "Transaction not found",
+					});
+				}
+
+				return {
+					...row,
+					status: normalizeLegacyStatus(row.status),
+				};
+			} catch (e) {
+				if (isTransactionsSchemaOutdatedError(e)) {
+					throw new TRPCError({
+						code: "INTERNAL_SERVER_ERROR",
+						message: transactionsSchemaOutdatedMessage(),
+					});
+				}
+				throw e;
+			}
+		}),
+
 	// Submit transaction for review
 	submit: protectedProcedure
 		.input(transactionIdInput)

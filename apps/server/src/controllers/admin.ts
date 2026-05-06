@@ -25,7 +25,11 @@ const dateRangeInput = z.object({
 const commissionApprovalInput = z.object({
 	transactionId: z.string().uuid(),
 	action: z.enum(["approve", "reject"]),
-	reviewNotes: z.string().optional(),
+	/** Required for both approve and reject (audit trail). */
+	reviewNotes: z
+		.string()
+		.min(1, "Review notes are required")
+		.max(5000),
 });
 
 const agentFilterInput = z.object({
@@ -115,11 +119,20 @@ export const adminRouter = router({
 					clientData: transactions.clientData,
 					propertyData: transactions.propertyData,
 					transactionType: transactions.transactionType,
+					marketType: transactions.marketType,
+					transactionDate: transactions.transactionDate,
 					commissionAmount: transactions.commissionAmount,
 					commissionValue: transactions.commissionValue,
+					commissionBreakdown: transactions.commissionBreakdown,
 					status: transactions.status,
 					submittedAt: transactions.submittedAt,
 					createdAt: transactions.createdAt,
+					caseNo: transactions.caseNo,
+					bookingDate: transactions.bookingDate,
+					projectName: transactions.projectName,
+					unitNo: transactions.unitNo,
+					blockListingId: transactions.blockListingId,
+					notes: transactions.notes,
 					// Join agent info
 					agentName: user.name,
 					agentEmail: user.email,

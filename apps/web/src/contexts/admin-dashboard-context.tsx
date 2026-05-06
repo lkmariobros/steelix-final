@@ -47,19 +47,33 @@ export interface CommissionApprovalItem {
 		type?: string;
 		source?: string;
 		notes?: string;
+		icNo?: string;
+		address?: string;
 	} | null;
 	propertyData: {
 		address?: string;
 		propertyType?: string;
 		price?: number;
+		listingTitle?: string;
+		spaPrice?: number;
+		nettPrice?: number;
 	} | null;
 	transactionType: string;
+	marketType?: string | null;
+	transactionDate?: Date | string | null;
 	commissionAmount: string | null;
 	commissionValue?: string | null;
+	commissionBreakdown?: unknown;
 	status: string | null;
 	submittedAt: Date | string | null;
 	createdAt: Date | string;
 	reviewNotes?: string | null;
+	caseNo?: string | null;
+	bookingDate?: Date | string | null;
+	projectName?: string | null;
+	unitNo?: string | null;
+	blockListingId?: string | null;
+	notes?: string | null;
 }
 
 export interface CommissionQueueData {

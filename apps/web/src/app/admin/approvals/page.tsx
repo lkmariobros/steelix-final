@@ -40,6 +40,7 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { useRedirectUnauthenticated } from "@/hooks/use-redirect-unauthenticated";
@@ -50,6 +51,7 @@ import {
 	RiCheckboxCircleLine,
 	RiCloseLine,
 	RiDashboardLine,
+	RiFileList3Line,
 	RiLoader4Line,
 	RiRefreshLine,
 } from "@remixicon/react";
@@ -57,20 +59,234 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
 
-// Type for transaction from the queue
+// Type for transaction from the queue (matches getCommissionApprovalQueue select)
 interface QueueTransaction {
 	id: string;
 	agentId: string | null;
-	clientData: { name?: string; email?: string; phone?: string } | null;
-	propertyData: { address?: string; price?: number } | null;
+	clientData: {
+		name?: string;
+		email?: string;
+		phone?: string;
+		icNo?: string;
+		address?: string;
+		type?: string;
+	} | null;
+	propertyData: {
+		address?: string;
+		propertyType?: string;
+		price?: number;
+		listingTitle?: string;
+		spaPrice?: number;
+		nettPrice?: number;
+	} | null;
 	transactionType: string;
+	marketType?: string | null;
+	transactionDate?: Date | string | null;
 	commissionAmount: string | null;
 	commissionValue: string | null;
+	commissionBreakdown?: Record<string, unknown> | null;
 	status: string | null;
 	submittedAt: Date | string | null;
 	createdAt: Date | string;
 	agentName: string | null;
 	agentEmail: string | null;
+	caseNo?: string | null;
+	bookingDate?: Date | string | null;
+	projectName?: string | null;
+	unitNo?: string | null;
+	blockListingId?: string | null;
+	notes?: string | null;
+}
+
+function formatRm(amount: string | number | null | undefined) {
+	if (amount === null || amount === undefined || amount === "") return "—";
+	const num = typeof amount === "string" ? Number.parseFloat(amount) : amount;
+	if (Number.isNaN(num)) return "—";
+	return new Intl.NumberFormat("en-MY", {
+		style: "currency",
+		currency: "MYR",
+		minimumFractionDigits: 2,
+	}).format(num);
+}
+
+function queueStatusBadgeClass(status: string | null | undefined) {
+	const s = status ?? "";
+	if (s === "pending" || s === "submitted")
+		return "bg-amber-500/15 text-amber-700 dark:text-amber-400";
+	if (s === "verified" || s === "under_review")
+		return "bg-sky-500/15 text-sky-700 dark:text-sky-400";
+	return "bg-muted text-muted-foreground";
+}
+
+function DetailRow({
+	label,
+	value,
+}: {
+	label: string;
+	value: string | number | null | undefined;
+}) {
+	const display =
+		value === null || value === undefined || value === "" ? "—" : String(value);
+	return (
+		<div className="min-w-0">
+			<div className="text-muted-foreground text-xs">{label}</div>
+			<div className="break-words text-sm">{display}</div>
+		</div>
+	);
+}
+
+function TransactionReadOnlyDetail({
+	tx,
+	formatDate,
+}: {
+	tx: {
+		id: string;
+		caseNo?: string | null;
+		bookingDate?: Date | string | null;
+		projectName?: string | null;
+		unitNo?: string | null;
+		blockListingId?: string | null;
+		transactionDate?: Date | string | null;
+		marketType?: string | null;
+		transactionType?: string | null;
+		status?: string | null;
+		commissionAmount?: string | null;
+		commissionValue?: string | null;
+		commissionType?: string | null;
+		notes?: string | null;
+		propertyData?: QueueTransaction["propertyData"] | null;
+		clientData?: QueueTransaction["clientData"] | null;
+		commissionBreakdown?: Record<string, unknown> | null;
+		isCoBroking?: boolean | null;
+		coBrokingData?: Record<string, unknown> | null;
+		documents?: { name?: string; type?: string }[] | null;
+	};
+	formatDate: (d: Date | string | null | undefined) => string;
+}) {
+	const prop = tx.propertyData;
+	const client = tx.clientData;
+	const bd = tx.commissionBreakdown;
+	const spa = prop?.spaPrice ?? prop?.price;
+	const nett = prop?.nettPrice ?? prop?.price;
+
+	return (
+		<div className="space-y-6 pr-3">
+			<section className="space-y-2">
+				<h4 className="font-semibold text-foreground text-sm">
+					Deal &amp; property
+				</h4>
+				<div className="grid gap-3 sm:grid-cols-2">
+					<DetailRow label="Case no." value={tx.caseNo ?? undefined} />
+					<DetailRow label="Status" value={tx.status ?? undefined} />
+					<DetailRow
+						label="Booking date"
+						value={formatDate(tx.bookingDate ?? tx.transactionDate)}
+					/>
+					<DetailRow label="Project" value={tx.projectName ?? undefined} />
+					<DetailRow label="Block / listing" value={prop?.listingTitle} />
+					<DetailRow label="Unit no." value={tx.unitNo ?? undefined} />
+					<DetailRow
+						label="SPA price (RM)"
+						value={spa !== undefined ? formatRm(spa) : undefined}
+					/>
+					<DetailRow
+						label="Nett price (RM)"
+						value={nett !== undefined ? formatRm(nett) : undefined}
+					/>
+					<DetailRow label="Property address" value={prop?.address} />
+					<DetailRow label="Property type" value={prop?.propertyType} />
+					<DetailRow label="Market" value={tx.marketType ?? undefined} />
+					<DetailRow label="Transaction type" value={tx.transactionType} />
+				</div>
+			</section>
+
+			<section className="space-y-2">
+				<h4 className="font-semibold text-foreground text-sm">Buyer / client</h4>
+				<div className="grid gap-3 sm:grid-cols-2">
+					<DetailRow label="Name" value={client?.name} />
+					<DetailRow label="IC No." value={client?.icNo} />
+					<DetailRow label="Phone" value={client?.phone} />
+					<DetailRow label="Email" value={client?.email} />
+					<DetailRow label="Type" value={client?.type} />
+					<DetailRow label="Address" value={client?.address} />
+				</div>
+			</section>
+
+			<section className="space-y-2">
+				<h4 className="font-semibold text-foreground text-sm">Commission</h4>
+				<div className="grid gap-3 sm:grid-cols-2">
+					<DetailRow label="Commission type" value={tx.commissionType} />
+					<DetailRow label="Rate / value" value={tx.commissionValue} />
+					<DetailRow label="Commission amount" value={tx.commissionAmount} />
+				</div>
+				{bd && Object.keys(bd).length > 0 ? (
+					<div className="mt-2 rounded-md border bg-muted/30 p-3 text-sm">
+						<div className="mb-1 font-medium text-xs">Breakdown snapshot</div>
+						<div className="grid gap-2 sm:grid-cols-2">
+							{typeof bd.spaPrice === "number" ? (
+								<DetailRow label="SPA" value={formatRm(bd.spaPrice)} />
+							) : null}
+							{typeof bd.nettPrice === "number" ? (
+								<DetailRow label="Nett" value={formatRm(bd.nettPrice)} />
+							) : null}
+							{typeof bd.commissionRatePercent === "number" ? (
+								<DetailRow
+									label="Rate %"
+									value={`${bd.commissionRatePercent}%`}
+								/>
+							) : null}
+							{typeof bd.grossCommission === "number" ? (
+								<DetailRow
+									label="Gross"
+									value={formatRm(bd.grossCommission)}
+								/>
+							) : null}
+							{typeof bd.sstAmount === "number" ? (
+								<DetailRow label="SST" value={formatRm(bd.sstAmount)} />
+							) : null}
+							{typeof bd.agentNetCommission === "number" ? (
+								<DetailRow
+									label="Net to agent"
+									value={formatRm(bd.agentNetCommission)}
+								/>
+							) : null}
+						</div>
+					</div>
+				) : null}
+			</section>
+
+			{tx.isCoBroking && tx.coBrokingData ? (
+				<section className="space-y-2">
+					<h4 className="font-semibold text-foreground text-sm">Co-broking</h4>
+					<pre className="max-h-40 overflow-auto rounded-md border bg-muted/30 p-3 text-xs">
+						{JSON.stringify(tx.coBrokingData, null, 2)}
+					</pre>
+				</section>
+			) : null}
+
+			{tx.notes?.trim() ? (
+				<section className="space-y-2">
+					<h4 className="font-semibold text-foreground text-sm">Notes</h4>
+					<p className="whitespace-pre-wrap text-muted-foreground text-sm">
+						{tx.notes}
+					</p>
+				</section>
+			) : null}
+
+			{tx.documents && tx.documents.length > 0 ? (
+				<section className="space-y-2">
+					<h4 className="font-semibold text-foreground text-sm">Documents</h4>
+					<ul className="list-inside list-disc text-sm">
+						{tx.documents.map((d, i) => (
+							<li key={`${d.name ?? "doc"}-${i}`}>
+								{d.name ?? "File"} {d.type ? `(${d.type})` : ""}
+							</li>
+						))}
+					</ul>
+				</section>
+			) : null}
+		</div>
+	);
 }
 
 // Dialog state type
@@ -98,6 +314,15 @@ export default function AdminApprovalsPage() {
 		reviewNotes: "",
 		isSubmitting: false,
 	});
+
+	const [detailTransactionId, setDetailTransactionId] = useState<string | null>(
+		null,
+	);
+
+	const detailQuery = trpc.transactions.adminGetById.useQuery(
+		{ id: detailTransactionId ?? "" },
+		{ enabled: Boolean(detailTransactionId) },
+	);
 
 	// Fetch approvals data from transactions table (like dashboard widget)
 	const {
@@ -199,13 +424,18 @@ export default function AdminApprovalsPage() {
 	// Submit approval decision
 	const submitApprovalDecision = async () => {
 		if (!dialogState.transaction || !dialogState.action) return;
+		const notes = dialogState.reviewNotes.trim();
+		if (!notes) {
+			toast.error("Review notes are required");
+			return;
+		}
 
 		setDialogState((prev) => ({ ...prev, isSubmitting: true }));
 
 		processApprovalMutation.mutate({
 			transactionId: dialogState.transaction.id,
 			action: dialogState.action,
-			reviewNotes: dialogState.reviewNotes || undefined,
+			reviewNotes: notes,
 		});
 	};
 
@@ -447,68 +677,135 @@ export default function AdminApprovalsPage() {
 							) : approvalsData?.transactions &&
 								approvalsData.transactions.length > 0 ? (
 								<div className="space-y-4">
-									{approvalsData.transactions.map((transaction) => (
-										<div
-											key={transaction.id}
-											className="flex items-center justify-between rounded-lg border p-4 transition-colors hover:bg-muted/50"
-										>
-											<div className="space-y-1">
-												<div className="flex items-center gap-2">
-													<span className="font-medium">
-														{transaction.agentName || "Unknown Agent"}
-													</span>
-													<span
-														className={`rounded-full px-2 py-1 text-xs ${
-															transaction.status === "submitted"
-																? "bg-yellow-100 text-yellow-800"
-																: transaction.status === "under_review"
-																	? "bg-blue-100 text-blue-800"
-																	: "bg-gray-100 text-gray-800"
-														}`}
-													>
-														{transaction.status?.replace("_", " ") || "pending"}
-													</span>
-													<span className="rounded-full bg-purple-100 px-2 py-1 text-purple-800 text-xs">
-														{transaction.transactionType}
-													</span>
+									{approvalsData.transactions.map((transaction) => {
+										const prop = transaction.propertyData;
+										const spa =
+											prop?.spaPrice ?? prop?.price ?? undefined;
+										const nett = prop?.nettPrice ?? prop?.price ?? undefined;
+										const blockLabel =
+											prop?.listingTitle?.trim() || "—";
+										return (
+											<div
+												key={transaction.id}
+												className="flex flex-col gap-4 rounded-lg border p-4 transition-colors hover:bg-muted/50 lg:flex-row lg:items-start lg:justify-between"
+											>
+												<div className="min-w-0 flex-1 space-y-2">
+													<div className="flex flex-wrap items-center gap-2">
+														<span className="font-medium">
+															{transaction.agentName || "Unknown Agent"}
+														</span>
+														{transaction.caseNo ? (
+															<span className="rounded-md bg-muted px-2 py-0.5 font-mono text-xs">
+																{transaction.caseNo}
+															</span>
+														) : null}
+														<span
+															className={`rounded-full px-2 py-1 text-xs ${queueStatusBadgeClass(transaction.status)}`}
+														>
+															{transaction.status?.replace(/_/g, " ") ||
+																"pending"}
+														</span>
+														<span className="rounded-full bg-violet-500/15 px-2 py-1 text-violet-800 text-xs dark:text-violet-300">
+															{transaction.transactionType} ·{" "}
+															{transaction.marketType ?? "—"}
+														</span>
+													</div>
+													<div className="grid gap-x-6 gap-y-1 text-sm sm:grid-cols-2">
+														<p>
+															<span className="text-muted-foreground">
+																Booking date:{" "}
+															</span>
+															{formatDate(
+																transaction.bookingDate ??
+																	transaction.transactionDate,
+															)}
+														</p>
+														<p>
+															<span className="text-muted-foreground">
+																Project:{" "}
+															</span>
+															{transaction.projectName?.trim() || "—"}
+														</p>
+														<p>
+															<span className="text-muted-foreground">
+																Block:{" "}
+															</span>
+															{blockLabel}
+														</p>
+														<p>
+															<span className="text-muted-foreground">
+																Unit:{" "}
+															</span>
+															{transaction.unitNo?.trim() || "—"}
+														</p>
+														<p>
+															<span className="text-muted-foreground">
+																SPA (nett):{" "}
+															</span>
+															{formatRm(spa)} / {formatRm(nett)}
+														</p>
+														<p>
+															<span className="text-muted-foreground">
+																Commission:{" "}
+															</span>
+															{formatCurrency(transaction.commissionAmount)}
+															{transaction.submittedAt
+																? ` · submitted ${formatDate(transaction.submittedAt)}`
+																: null}
+														</p>
+													</div>
+													<p className="text-muted-foreground text-sm">
+														<span className="text-foreground">Buyer: </span>
+														{transaction.clientData?.name || "Unknown"}
+														{transaction.clientData?.phone
+															? ` · ${transaction.clientData.phone}`
+															: ""}
+														<span className="text-foreground"> · </span>
+														{prop?.address || "No property address"}
+													</p>
+													{transaction.notes?.trim() ? (
+														<p className="border-s-2 border-muted ps-3 text-muted-foreground text-sm italic">
+															Agent notes: {transaction.notes}
+														</p>
+													) : null}
 												</div>
-												<p className="text-muted-foreground text-sm">
-													{formatCurrency(transaction.commissionAmount)}{" "}
-													commission
-													{transaction.submittedAt &&
-														` • ${formatDate(transaction.submittedAt)}`}
-												</p>
-												<p className="text-muted-foreground text-sm">
-													Client: {transaction.clientData?.name || "Unknown"} •
-													Property: {transaction.propertyData?.address || "N/A"}
-												</p>
+												<div className="flex shrink-0 flex-wrap gap-2">
+													<Button
+														size="sm"
+														variant="secondary"
+														onClick={() =>
+															setDetailTransactionId(transaction.id)
+														}
+													>
+														<RiFileList3Line className="mr-1 h-4 w-4" />
+														View details
+													</Button>
+													<Button
+														size="sm"
+														variant="outline"
+														className="text-green-600 hover:bg-green-50 hover:text-green-700 dark:hover:bg-green-950/30"
+														onClick={() =>
+															handleApprovalAction(transaction, "approve")
+														}
+													>
+														<RiCheckLine className="mr-1 h-4 w-4" />
+														Approve
+													</Button>
+													<Button
+														size="sm"
+														variant="outline"
+														className="text-red-600 hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-950/30"
+														onClick={() =>
+															handleApprovalAction(transaction, "reject")
+														}
+													>
+														<RiCloseLine className="mr-1 h-4 w-4" />
+														Reject
+													</Button>
+												</div>
 											</div>
-											<div className="flex gap-2">
-												<Button
-													size="sm"
-													variant="outline"
-													className="text-green-600 hover:bg-green-50 hover:text-green-700"
-													onClick={() =>
-														handleApprovalAction(transaction, "approve")
-													}
-												>
-													<RiCheckLine className="mr-1 h-4 w-4" />
-													Approve
-												</Button>
-												<Button
-													size="sm"
-													variant="outline"
-													className="text-red-600 hover:bg-red-50 hover:text-red-700"
-													onClick={() =>
-														handleApprovalAction(transaction, "reject")
-													}
-												>
-													<RiCloseLine className="mr-1 h-4 w-4" />
-													Reject
-												</Button>
-											</div>
-										</div>
-									))}
+										);
+									})}
 
 									{/* Pagination Controls */}
 									{(approvalsData.totalCount > pageSize || page > 0) && (
@@ -566,50 +863,71 @@ export default function AdminApprovalsPage() {
 				</div>
 
 				{/* Approval Confirmation Dialog */}
-				<Dialog open={dialogState.isOpen} onOpenChange={closeDialog}>
+				<Dialog
+					open={dialogState.isOpen}
+					onOpenChange={(open) => {
+						if (!open) closeDialog();
+					}}
+				>
 					<DialogContent>
 						<DialogHeader>
 							<DialogTitle>
 								{dialogState.action === "approve" ? "Approve" : "Reject"}{" "}
 								Commission
 							</DialogTitle>
-							<DialogDescription>
-								{dialogState.transaction && (
-									<>
-										{dialogState.action === "approve" ? "Approve" : "Reject"}{" "}
-										commission for{" "}
-										<strong>
-											{dialogState.transaction.clientData?.name ||
-												"Unknown Client"}
-										</strong>{" "}
-										by{" "}
-										<strong>
-											{dialogState.transaction.agentName || "Unknown Agent"}
-										</strong>
-										<br />
-										Commission Amount:{" "}
-										<strong>
-											{formatCurrency(dialogState.transaction.commissionAmount)}
-										</strong>
-									</>
-								)}
+							<DialogDescription asChild>
+								<div className="space-y-1 text-sm">
+									{dialogState.transaction ? (
+										<>
+											<p>
+												{dialogState.action === "approve" ? "Approve" : "Reject"}{" "}
+												commission for{" "}
+												<strong>
+													{dialogState.transaction.clientData?.name ||
+														"Unknown Client"}
+												</strong>{" "}
+												(submitted by{" "}
+												<strong>
+													{dialogState.transaction.agentName || "Unknown Agent"}
+												</strong>
+												).
+											</p>
+											{dialogState.transaction.caseNo ? (
+												<p>
+													Case{" "}
+													<span className="font-mono">
+														{dialogState.transaction.caseNo}
+													</span>
+													{dialogState.transaction.projectName
+														? ` · ${dialogState.transaction.projectName}`
+														: ""}
+												</p>
+											) : null}
+											<p>
+												Commission:{" "}
+												<strong>
+													{formatCurrency(
+														dialogState.transaction.commissionAmount,
+													)}
+												</strong>
+											</p>
+										</>
+									) : null}
+								</div>
 							</DialogDescription>
 						</DialogHeader>
 
 						<div className="space-y-4">
 							<div>
 								<label htmlFor="review-notes" className="font-medium text-sm">
-									Review Notes{" "}
-									{dialogState.action === "reject" && (
-										<span className="text-red-500">*</span>
-									)}
+									Review notes <span className="text-red-500">*</span>
 								</label>
 								<Textarea
 									id="review-notes"
 									placeholder={
 										dialogState.action === "approve"
-											? "Optional notes about the approval..."
-											: "Please provide a reason for rejection..."
+											? "Required: e.g. verified booking, SPA & nett price checked…"
+											: "Required: rejection reason (agent will see this)…"
 									}
 									value={dialogState.reviewNotes}
 									onChange={(e) =>
@@ -619,8 +937,12 @@ export default function AdminApprovalsPage() {
 										}))
 									}
 									className="mt-1"
-									rows={3}
+									rows={4}
 								/>
+								<p className="mt-1 text-muted-foreground text-xs">
+									Notes are stored on the transaction for audit and agent
+									visibility.
+								</p>
 							</div>
 						</div>
 
@@ -633,11 +955,9 @@ export default function AdminApprovalsPage() {
 								Cancel
 							</Button>
 							<Button
-								onClick={submitApprovalDecision}
+								onClick={() => void submitApprovalDecision()}
 								disabled={
-									dialogState.isSubmitting ||
-									(dialogState.action === "reject" &&
-										!dialogState.reviewNotes.trim())
+									dialogState.isSubmitting || !dialogState.reviewNotes.trim()
 								}
 								className={
 									dialogState.action === "approve"
@@ -657,6 +977,36 @@ export default function AdminApprovalsPage() {
 								)}
 							</Button>
 						</DialogFooter>
+					</DialogContent>
+				</Dialog>
+
+				{/* Full transaction read-only detail (admin) */}
+				<Dialog
+					open={detailTransactionId !== null}
+					onOpenChange={(open) => {
+						if (!open) setDetailTransactionId(null);
+					}}
+				>
+					<DialogContent className="max-h-[90vh] max-w-2xl gap-0 p-0">
+						<DialogHeader className="p-6 pb-2">
+							<DialogTitle>Transaction details</DialogTitle>
+							<DialogDescription>
+								Read-only view for review. Use Approve / Reject from the queue.
+							</DialogDescription>
+						</DialogHeader>
+						<ScrollArea className="max-h-[65vh] px-6 pb-6">
+							{detailQuery.isLoading ? (
+								<div className="flex justify-center py-12">
+									<RiLoader4Line className="h-8 w-8 animate-spin text-muted-foreground" />
+								</div>
+							) : detailQuery.error ? (
+								<p className="text-destructive text-sm">
+									{detailQuery.error.message}
+								</p>
+							) : detailQuery.data ? (
+								<TransactionReadOnlyDetail tx={detailQuery.data} formatDate={formatDate} />
+							) : null}
+						</ScrollArea>
 					</DialogContent>
 				</Dialog>
 			</SidebarInset>

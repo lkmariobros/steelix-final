@@ -47,6 +47,19 @@ function formatRm(n: number) {
 	}).format(n);
 }
 
+function toNumber(v: unknown) {
+	if (typeof v === "number") return v;
+	if (typeof v === "string") {
+		const n = Number.parseFloat(v);
+		return Number.isNaN(n) ? 0 : n;
+	}
+	return 0;
+}
+
+const GRID_STROKE = "#334155"; // slate-700
+const TICK_COLOR = "#94a3b8"; // slate-400
+const BAR_FILL = "#60a5fa"; // blue-400
+
 export default function AdminAgentCommissionReportPage() {
 	const { agentId } = useParams<{ agentId: string }>();
 	const { data: session, isPending } = authClient.useSession();
@@ -138,14 +151,47 @@ export default function AdminAgentCommissionReportPage() {
 							) : (
 								<ResponsiveContainer width="100%" height="100%">
 									<BarChart data={chartData} margin={{ left: 8, right: 8 }}>
-										<CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-										<XAxis dataKey="month" tick={{ fontSize: 11 }} />
-										<YAxis tick={{ fontSize: 11 }} />
-										<Tooltip
-											formatter={(v: number) => formatRm(v)}
-											labelFormatter={(l) => `Month ${l}`}
+										<CartesianGrid
+											strokeDasharray="3 3"
+											stroke={GRID_STROKE}
+											opacity={0.6}
 										/>
-										<Bar dataKey="amount" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+										<XAxis
+											dataKey="month"
+											tick={{ fontSize: 11, fill: TICK_COLOR, fontWeight: 500 }}
+											axisLine={{ stroke: GRID_STROKE }}
+											tickLine={false}
+											dy={6}
+										/>
+										<YAxis
+											tick={{ fontSize: 11, fill: TICK_COLOR, fontWeight: 500 }}
+											axisLine={false}
+											tickLine={false}
+											width={44}
+										/>
+										<Tooltip
+											cursor={{ fill: "#0b1220", opacity: 0.35 }}
+											contentStyle={{
+												background: "#0b1220",
+												border: "1px solid #1f2937",
+												borderRadius: 8,
+												color: "#e5e7eb",
+												boxShadow:
+													"0 10px 30px -15px rgba(0,0,0,0.5)",
+											}}
+											labelStyle={{
+												color: "#94a3b8",
+												fontSize: 12,
+											}}
+											itemStyle={{ color: "#e5e7eb" }}
+											formatter={(v) => formatRm(toNumber(v))}
+											labelFormatter={(l) => `Month ${String(l)}`}
+										/>
+										<Bar
+											dataKey="amount"
+											fill={BAR_FILL}
+											radius={[4, 4, 0, 0]}
+										/>
 									</BarChart>
 								</ResponsiveContainer>
 							)}
