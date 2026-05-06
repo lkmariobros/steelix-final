@@ -28,7 +28,7 @@ export type PipelineStage =
 interface Prospect {
 	id: string;
 	name: string;
-	email: string;
+	email: string | null;
 	phone: string;
 	source: string;
 	type: "tenant" | "buyer";
@@ -201,7 +201,7 @@ export function KanbanBoard({
 						<div className="min-h-[320px] space-y-2">
 							{stageProspects.map((prospect) => {
 								const tags = tagSummary(prospect);
-								const titleHint = `${prospect.name}\n${prospect.email}\n${prospect.phone}`;
+								const titleHint = `${prospect.name}\n${prospect.email ?? ""}\n${prospect.phone}`;
 								return (
 								<Card
 									key={prospect.id}

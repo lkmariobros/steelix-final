@@ -33,6 +33,11 @@ export type CommissionSchemeResolved = {
 	tiers: CommissionTierResolved[];
 };
 
+function toPgDate(d: Date) {
+	// drizzle `date()` expects YYYY-MM-DD (string)
+	return d.toISOString().slice(0, 10);
+}
+
 export async function listCommissionSchemesAdmin(opts: {
 	search?: string;
 	projectName?: string;
@@ -204,8 +209,8 @@ export async function createCommissionSchemeAdmin(input: {
 			tierName: t.tierName,
 			commissionPercent: String(t.commissionPercent),
 			overridePercent: String(t.overridePercent ?? 0),
-			effectiveFrom: t.effectiveFrom,
-			effectiveTo: t.effectiveTo ?? null,
+			effectiveFrom: toPgDate(t.effectiveFrom),
+			effectiveTo: t.effectiveTo ? toPgDate(t.effectiveTo) : null,
 			isActive: t.isActive,
 		})),
 	);
@@ -272,8 +277,8 @@ export async function updateCommissionSchemeAdmin(input: {
 				tierName: t.tierName,
 				commissionPercent: String(t.commissionPercent),
 				overridePercent: String(t.overridePercent ?? 0),
-				effectiveFrom: t.effectiveFrom,
-				effectiveTo: t.effectiveTo ?? null,
+				effectiveFrom: toPgDate(t.effectiveFrom),
+				effectiveTo: t.effectiveTo ? toPgDate(t.effectiveTo) : null,
 				isActive: t.isActive,
 			})),
 		);

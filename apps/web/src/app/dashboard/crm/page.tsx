@@ -103,7 +103,7 @@ type LeadType = "personal" | "company";
 interface Prospect {
 	id: string;
 	name: string;
-	email: string;
+	email: string | null;
 	phone: string;
 	source: string;
 	type: "tenant" | "buyer";

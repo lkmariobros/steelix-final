@@ -217,7 +217,7 @@ export default function AdminAgentCommissionReportPage() {
 												<TableCell className="font-mono text-sm">{p.caseNo ?? "—"}</TableCell>
 												<TableCell>{p.projectName ?? "—"}</TableCell>
 												<TableCell className="text-right">
-													{formatRm(p.netCommission)}
+													{formatRm(toNumber(p.netCommission))}
 												</TableCell>
 												<TableCell>{p.status}</TableCell>
 											</TableRow>

@@ -472,7 +472,7 @@ export default function AdminApprovalsPage() {
 	};
 
 	// Format date
-	const formatDate = (date: Date | string | null) => {
+	const formatDate = (date: Date | string | null | undefined) => {
 		if (!date) return "N/A";
 		return new Date(date).toLocaleDateString("en-US", {
 			month: "short",

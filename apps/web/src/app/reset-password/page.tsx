@@ -8,11 +8,11 @@ import { authClient } from "@/lib/auth-client";
 import { useForm } from "@tanstack/react-form";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { useSearchParams } from "next/navigation";
-import { useMemo, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
 import { toast } from "sonner";
 import z from "zod/v4";
 
-export default function ResetPasswordPage() {
+function ResetPasswordForm() {
 	const searchParams = useSearchParams();
 	const token = useMemo(() => searchParams.get("token") || "", [searchParams]);
 	const [showPassword, setShowPassword] = useState(false);
@@ -125,6 +125,22 @@ export default function ResetPasswordPage() {
 				</form>
 			)}
 		</AuthLayout>
+	);
+}
+
+export default function ResetPasswordPage() {
+	return (
+		<Suspense
+			fallback={
+				<AuthLayout title="Set a new password" subtitle="Loading reset link…">
+					<div className="flex justify-center py-8">
+						<Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+					</div>
+				</AuthLayout>
+			}
+		>
+			<ResetPasswordForm />
+		</Suspense>
 	);
 }
 
