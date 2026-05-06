@@ -11,6 +11,7 @@ import {
 	uuid,
 } from "drizzle-orm/pg-core";
 import { z } from "zod";
+import { user } from "./auth";
 
 // Enums for transaction types
 export const marketTypeEnum = pgEnum("market_type", ["primary", "secondary"]);
@@ -58,6 +59,8 @@ export const transactions = pgTable("transactions", {
 	/** Client-facing sequential case number e.g. P000711 */
 	caseNo: text("case_no").unique(),
 	agentId: text("agent_id").notNull(), // Will be linked to user ID from auth
+	/** Optional team leader receiving override commission line (Prompt 06) */
+	teamLeaderAgentId: text("team_leader_agent_id").references(() => user.id),
 
 	// Step 1: Initiation
 	marketType: marketTypeEnum("market_type").notNull(),
@@ -226,6 +229,7 @@ export const transactionDocuments = pgTable(
 export const insertTransactionSchema = z.object({
 	caseNo: z.string().optional(),
 	agentId: z.string(),
+	teamLeaderAgentId: z.string().optional(),
 	marketType: z.enum(["primary", "secondary"]),
 	transactionType: z.enum(["sale", "lease", "rental"]),
 	transactionDate: z.coerce.date(),
@@ -319,6 +323,7 @@ export const selectTransactionSchema = z.object({
 	id: z.string(),
 	caseNo: z.string().nullable().optional(),
 	agentId: z.string(),
+	teamLeaderAgentId: z.string().nullable().optional(),
 	marketType: z.enum(["primary", "secondary"]),
 	transactionType: z.enum(["sale", "lease", "rental"]),
 	transactionDate: z.date(),

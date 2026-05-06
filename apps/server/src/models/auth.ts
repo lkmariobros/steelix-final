@@ -52,6 +52,9 @@ export const user = pgTable(
 		name: text("name").notNull(),
 		email: text("email").notNull().unique(),
 		phone: text("phone"),
+		/** Payout profile (Prompt 06) */
+		bankName: text("bank_name"),
+		bankAccountNo: text("bank_account_no"),
 		emailVerified: boolean("email_verified").notNull(),
 		image: text("image"),
 		isActive: boolean("is_active").notNull().default(true),

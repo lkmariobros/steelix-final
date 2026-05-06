@@ -101,15 +101,19 @@ export default function TransactionsPage() {
 			limit: pageSize,
 			offset: currentPage * pageSize,
 			status:
-				effectiveStatusFilter === "all" || effectiveStatusFilter === "pending"
+				effectiveStatusFilter === "all"
 					? undefined
 					: (effectiveStatusFilter as
 							| "draft"
+							| "pending"
+							| "verified"
 							| "submitted"
 							| "under_review"
 							| "approved"
+							| "commission_released"
 							| "rejected"
-							| "completed"),
+							| "completed"
+							| "cancelled"),
 		},
 		{
 			enabled: !!session,
@@ -177,6 +181,34 @@ export default function TransactionsPage() {
 					<Badge variant="outline">
 						<RiTimeLine className="mr-1 h-3 w-3" />
 						Submitted
+					</Badge>
+				);
+			case "pending":
+				return (
+					<Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-900">
+						<RiTimeLine className="mr-1 h-3 w-3" />
+						Pending
+					</Badge>
+				);
+			case "verified":
+				return (
+					<Badge variant="secondary" className="bg-sky-100 text-sky-900">
+						<RiCheckLine className="mr-1 h-3 w-3" />
+						Verified
+					</Badge>
+				);
+			case "commission_released":
+				return (
+					<Badge variant="default" className="bg-emerald-100 text-emerald-900">
+						<RiCheckLine className="mr-1 h-3 w-3" />
+						Commission released
+					</Badge>
+				);
+			case "cancelled":
+				return (
+					<Badge variant="secondary" className="bg-muted text-muted-foreground">
+						<RiAlertLine className="mr-1 h-3 w-3" />
+						Cancelled
 					</Badge>
 				);
 			case "rejected":
@@ -322,6 +354,7 @@ export default function TransactionsPage() {
 										<SelectContent>
 											<SelectItem value="all">All Transactions</SelectItem>
 											<SelectItem value="draft">Draft</SelectItem>
+											<SelectItem value="pending">Pending</SelectItem>
 											<SelectItem value="submitted">Submitted</SelectItem>
 											<SelectItem value="under_review">Under Review</SelectItem>
 											<SelectItem value="approved">Approved</SelectItem>
@@ -500,9 +533,12 @@ export default function TransactionsPage() {
 												transactionsData?.transactions.filter(
 													(t) =>
 														t.status &&
-														["draft", "submitted", "under_review"].includes(
-															t.status,
-														),
+														[
+															"pending",
+															"verified",
+															"submitted",
+															"under_review",
+														].includes(t.status),
 												).length || 0
 											)}
 										</div>

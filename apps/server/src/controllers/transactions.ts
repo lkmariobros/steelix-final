@@ -1,3 +1,4 @@
+import { TRPCError } from "@trpc/server";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import {
@@ -16,6 +17,10 @@ import {
 	resolveSchemeForBlockAtDate,
 } from "../services/commission-schemes";
 import { db } from "../utils/db";
+import {
+	isTransactionsSchemaOutdatedError,
+	transactionsSchemaOutdatedMessage,
+} from "../utils/transactions-schema-hint";
 import { adminProcedure, protectedProcedure, router } from "../utils/trpc";
 
 // Base transaction input schema (without validation)
@@ -326,22 +331,32 @@ export const transactionsRouter = router({
 	getById: protectedProcedure
 		.input(transactionIdInput)
 		.query(async ({ ctx, input }) => {
-			const [transaction] = await db
-				.select()
-				.from(transactions)
-				.where(
-					and(
-						eq(transactions.id, input.id),
-						eq(transactions.agentId, ctx.session.user.id),
-					),
-				)
-				.limit(1);
+			try {
+				const [transaction] = await db
+					.select()
+					.from(transactions)
+					.where(
+						and(
+							eq(transactions.id, input.id),
+							eq(transactions.agentId, ctx.session.user.id),
+						),
+					)
+					.limit(1);
 
-			if (!transaction) {
-				throw new Error("Transaction not found or access denied");
+				if (!transaction) {
+					throw new Error("Transaction not found or access denied");
+				}
+
+				return transaction;
+			} catch (e) {
+				if (isTransactionsSchemaOutdatedError(e)) {
+					throw new TRPCError({
+						code: "INTERNAL_SERVER_ERROR",
+						message: transactionsSchemaOutdatedMessage(),
+					});
+				}
+				throw e;
 			}
-
-			return transaction;
 		}),
 
 	// List transactions for the current user
@@ -354,28 +369,37 @@ export const transactionsRouter = router({
 				conditions.push(eq(transactions.status, input.status));
 			}
 
-			const transactionList = await db
-				.select()
-				.from(transactions)
-				.where(and(...conditions))
-				.orderBy(desc(transactions.updatedAt))
-				.limit(input.limit)
-				.offset(input.offset);
+			try {
+				const transactionList = await db
+					.select()
+					.from(transactions)
+					.where(and(...conditions))
+					.orderBy(desc(transactions.updatedAt))
+					.limit(input.limit)
+					.offset(input.offset);
 
-			// Get total count for pagination
-			const [{ count }] = await db
-				.select({ count: sql<number>`count(*)` })
-				.from(transactions)
-				.where(and(...conditions));
+				const [{ count }] = await db
+					.select({ count: sql<number>`count(*)` })
+					.from(transactions)
+					.where(and(...conditions));
 
-			return {
-				transactions: transactionList.map((t: any) => ({
-					...t,
-					status: normalizeLegacyStatus(t.status),
-				})),
-				total: count,
-				hasMore: input.offset + input.limit < count,
-			};
+				return {
+					transactions: transactionList.map((t: any) => ({
+						...t,
+						status: normalizeLegacyStatus(t.status),
+					})),
+					total: count,
+					hasMore: input.offset + input.limit < count,
+				};
+			} catch (e) {
+				if (isTransactionsSchemaOutdatedError(e)) {
+					throw new TRPCError({
+						code: "INTERNAL_SERVER_ERROR",
+						message: transactionsSchemaOutdatedMessage(),
+					});
+				}
+				throw e;
+			}
 		}),
 
 	// Admin: list transactions across all agents with filters/search

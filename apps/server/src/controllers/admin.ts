@@ -12,6 +12,7 @@ import {
 	user,
 } from "../models/auth";
 import { transactions } from "../models/transactions";
+import { ensurePayoutsForApprovedTransaction } from "../services/commission-payouts";
 import { db } from "../utils/db";
 import { adminProcedure, protectedProcedure, router } from "../utils/trpc";
 
@@ -62,7 +63,9 @@ export const adminRouter = router({
 			z.object({
 				limit: z.number().min(1).max(100).default(20),
 				offset: z.number().min(0).default(0),
-				status: z.enum(["submitted", "under_review"]).optional(),
+				status: z
+					.enum(["submitted", "under_review", "pending", "verified"])
+					.optional(),
 			}),
 		)
 		.query(async ({ ctx, input }) => {
@@ -78,7 +81,7 @@ export const adminRouter = router({
 			} else {
 				// Default to pending approvals
 				whereConditions.push(
-					sql`${transactions.status} IN ('submitted', 'under_review')`,
+					sql`${transactions.status} IN ('submitted', 'under_review', 'pending', 'verified')`,
 				);
 			}
 
@@ -155,7 +158,7 @@ export const adminRouter = router({
 				.where(
 					and(
 						eq(transactions.id, input.transactionId),
-						sql`${transactions.status} IN ('submitted', 'under_review')`,
+						sql`${transactions.status} IN ('submitted', 'under_review', 'pending', 'verified')`,
 					),
 				)
 				.limit(1);
@@ -198,6 +201,14 @@ export const adminRouter = router({
 				})
 				.where(eq(transactions.id, input.transactionId))
 				.returning();
+
+			if (newStatus === "approved" && updatedTransaction) {
+				try {
+					await ensurePayoutsForApprovedTransaction(updatedTransaction);
+				} catch (e) {
+					console.warn("ensurePayoutsForApprovedTransaction:", e);
+				}
+			}
 
 			return updatedTransaction;
 		}),

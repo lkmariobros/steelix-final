@@ -272,6 +272,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 							url: "/admin/approvals",
 							icon: RiCheckboxCircleLine,
 						},
+						{
+							title: "Commission payout",
+							url: "/admin/commissions",
+							icon: RiMoneyDollarCircleLine,
+						},
 					],
 				},
 				{
@@ -344,9 +349,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 							icon: RiFileTextLine,
 						},
 						{
-							title: "My commission",
-							url: "/dashboard",
-							icon: RiBarChartLine,
+							title: "My commissions",
+							url: "/dashboard/commissions",
+							icon: RiMoneyDollarCircleLine,
 						},
 					],
 				},

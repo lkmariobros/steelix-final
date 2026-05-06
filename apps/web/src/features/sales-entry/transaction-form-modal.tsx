@@ -107,6 +107,11 @@ export function TransactionFormModal({
 			>
 				<div className="p-4 sm:p-6">
 					<TransactionForm
+						key={
+							isOpen
+								? `${transactionId ?? "new"}-${mode === "view" ? "edit" : mode}`
+								: "closed"
+						}
 						transactionId={transactionId}
 						mode={mode === "view" ? "edit" : mode} // Map view to edit for form compatibility
 						onSubmit={handleFormSubmit}

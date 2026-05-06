@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
+import { trpc } from "@/utils/trpc";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { takeTransactionPrefillOnce } from "../prefill-stash";
 import type {
 	ClientData,
@@ -9,6 +10,7 @@ import type {
 	PropertyData,
 	RepresentationType,
 } from "../transaction-schema";
+import { mapTransactionRowToFormData } from "./transaction-mapper";
 
 // Local storage keys for auto-save (Issue #4 fix)
 const FORM_STORAGE_KEY = "transaction-form-draft";
@@ -90,23 +92,68 @@ export function useTransactionFormState(
 		data: Partial<CompleteTransactionData>;
 		step: FormStep;
 	} | null>(null);
+	const lastHydratedIdRef = useRef<string | null>(null);
+
+	const shouldHydrateFromServer =
+		Boolean(transactionId) && (mode === "edit" || mode === "resume");
+
+	const { data: loadedTransaction, isLoading: isLoadingTransaction } =
+		trpc.transactions.getById.useQuery(
+			{ id: transactionId ?? "" },
+			{ enabled: shouldHydrateFromServer },
+		);
+
+	useEffect(() => {
+		if (!shouldHydrateFromServer || !transactionId || !loadedTransaction) {
+			return;
+		}
+		if (loadedTransaction.id !== transactionId) return;
+		if (lastHydratedIdRef.current === transactionId) return;
+
+		lastHydratedIdRef.current = transactionId;
+		const mapped = mapTransactionRowToFormData(loadedTransaction);
+		setFormData({
+			...initialFormData,
+			...mapped,
+			propertyData: {
+				...(initialFormData.propertyData ?? {}),
+				...(mapped.propertyData ?? {}),
+			},
+			clientData: {
+				...(initialFormData.clientData ?? {}),
+				...(mapped.clientData ?? {}),
+			},
+		} as Partial<CompleteTransactionData>);
+		setCurrentStep(getNextIncompleteStep(mapped));
+		setHasUnsavedChanges(false);
+	}, [
+		shouldHydrateFromServer,
+		transactionId,
+		loadedTransaction,
+	]);
+
+	useEffect(() => {
+		lastHydratedIdRef.current = null;
+	}, [transactionId]);
 
 	useEffect(() => {
 		if (transactionId || mode !== "create") return;
 		const prefill = takeTransactionPrefillOnce();
 		if (!prefill || Object.keys(prefill).length === 0) return;
-		setFormData(() => ({
-			...initialFormData,
-			...prefill,
-			propertyData: {
-				...(initialFormData.propertyData ?? {}),
-				...(prefill.propertyData ?? {}),
-			},
-			clientData: {
-				...(initialFormData.clientData ?? {}),
-				...(prefill.clientData ?? {}),
-			},
-		}));
+		setFormData(() =>
+			({
+				...initialFormData,
+				...prefill,
+				propertyData: {
+					...(initialFormData.propertyData ?? {}),
+					...(prefill.propertyData ?? {}),
+				},
+				clientData: {
+					...(initialFormData.clientData ?? {}),
+					...(prefill.clientData ?? {}),
+				},
+			}) as Partial<CompleteTransactionData>,
+		);
 		setHasUnsavedChanges(true);
 	}, [transactionId, mode]);
 
@@ -273,12 +320,18 @@ export function useTransactionFormState(
 		setHasUnsavedChanges(false);
 	}, []);
 
+	const isHydratingTransaction =
+		shouldHydrateFromServer && isLoadingTransaction;
+
 	return {
 		// State
 		currentStep,
 		formData,
 		isLoading,
 		hasUnsavedChanges,
+		isHydratingTransaction,
+		/** Present when editing/resuming and getById loaded; used to avoid re-submitting non-drafts */
+		serverTransactionStatus: loadedTransaction?.status,
 		// Issue #4: Recovery dialog state
 		showRecoveryDialog,
 		recoveredData,

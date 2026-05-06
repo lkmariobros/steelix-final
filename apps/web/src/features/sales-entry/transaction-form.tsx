@@ -26,6 +26,7 @@ import { type FormStep, stepConfig } from "./transaction-schema";
 import {
 	calculateProgress,
 	getCompletedSteps,
+	isFormReadyForSubmission,
 	useTransactionFormState,
 } from "./utils/form-state";
 
@@ -55,11 +56,21 @@ export function TransactionForm({
 }: TransactionFormProps) {
 	const queryClient = useQueryClient();
 
+	const [localTxId, setLocalTxId] = useState<string | undefined>();
+
+	useEffect(() => {
+		setLocalTxId(undefined);
+	}, [transactionId]);
+
+	const effectiveTxId = transactionId ?? localTxId;
+
 	const {
 		currentStep,
 		formData,
 		isLoading,
 		hasUnsavedChanges,
+		isHydratingTransaction,
+		serverTransactionStatus,
 		updateStepData,
 		goToStep,
 		goToNextStep,
@@ -74,7 +85,7 @@ export function TransactionForm({
 
 	// Issue #3 Fix: Use document upload hook for temp document migration
 	const { migrateDocuments, tempDocuments, clearTempDocuments } =
-		useDocumentUpload(transactionId);
+		useDocumentUpload(effectiveTxId);
 
 	// ✅ REAL tRPC mutations for comprehensive transaction data flow
 	const createTransaction = trpc.transactions.create.useMutation({
@@ -137,19 +148,46 @@ export function TransactionForm({
 				draftData.coBrokingData = undefined;
 			}
 
-			if (transactionId) {
+			let savedId: string | undefined;
+
+			if (effectiveTxId) {
 				await updateTransaction.mutateAsync({
-					id: transactionId,
+					id: effectiveTxId,
 					...draftData,
 				});
+				savedId = effectiveTxId;
 				toast.success("Draft updated successfully");
 			} else {
 				const newTransaction = await createTransaction.mutateAsync(draftData);
+				setLocalTxId(newTransaction.id);
+				savedId = newTransaction.id;
 				toast.success("Draft saved successfully");
-				// In a real app, you might want to update the URL with the new transaction ID
-				console.log("New transaction created:", newTransaction.id);
 			}
-			clearAutoSave();
+
+			const canAutoSubmit =
+				serverTransactionStatus === undefined ||
+				serverTransactionStatus === "draft";
+
+			if (
+				savedId &&
+				canAutoSubmit &&
+				isFormReadyForSubmission(formData)
+			) {
+				try {
+					if (tempDocuments.length > 0) {
+						await migrateDocuments(savedId);
+					}
+					await submitTransaction.mutateAsync({ id: savedId });
+					toast.success("Transaction submitted for review");
+					clearAutoSave();
+					clearTempDocuments();
+					onSubmit?.();
+				} catch {
+					// submitTransaction / migrate already toasts
+				}
+			} else {
+				clearAutoSave();
+			}
 		} catch (error) {
 			console.error("Save draft error:", error);
 			// Error handling is now done in mutation onError callbacks
@@ -157,11 +195,17 @@ export function TransactionForm({
 			setIsSaving(false);
 		}
 	}, [
-		transactionId,
+		effectiveTxId,
 		formData,
 		updateTransaction,
 		createTransaction,
+		submitTransaction,
+		serverTransactionStatus,
+		tempDocuments,
+		migrateDocuments,
 		clearAutoSave,
+		clearTempDocuments,
+		onSubmit,
 	]);
 
 	// Clean form data for submission
@@ -189,7 +233,7 @@ export function TransactionForm({
 	const handleSubmit = useCallback(async () => {
 		setIsLoading(true);
 		try {
-			let finalTransactionId = transactionId;
+			let finalTransactionId = effectiveTxId;
 
 			// Validate form data before submission
 			if (
@@ -205,15 +249,16 @@ export function TransactionForm({
 			const cleanedFormData = prepareFormDataForSubmission(formData);
 
 			// Create or update the transaction first
-			if (transactionId) {
+			if (effectiveTxId) {
 				await updateTransaction.mutateAsync({
-					id: transactionId,
+					id: effectiveTxId,
 					...cleanedFormData,
 				});
 			} else {
 				const newTransaction =
 					await createTransaction.mutateAsync(cleanedFormData);
 				finalTransactionId = newTransaction.id;
+				setLocalTxId(newTransaction.id);
 			}
 
 			// Issue #3 Fix: Migrate temp documents to the new transaction
@@ -236,7 +281,7 @@ export function TransactionForm({
 			setIsLoading(false);
 		}
 	}, [
-		transactionId,
+		effectiveTxId,
 		formData,
 		updateTransaction,
 		createTransaction,
@@ -339,7 +384,7 @@ export function TransactionForm({
 						data={{
 							documents: formData.documents,
 							notes: formData.notes,
-							transactionId,
+							transactionId: effectiveTxId,
 						}}
 						onUpdate={(data) => handleStepUpdate(6, data)}
 						onNext={goToNextStep}
@@ -360,6 +405,14 @@ export function TransactionForm({
 				return null;
 		}
 	};
+
+	if (isHydratingTransaction) {
+		return (
+			<div className="flex min-h-[240px] items-center justify-center p-6">
+				<Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+			</div>
+		);
+	}
 
 	return (
 		<div className="mx-auto max-w-4xl space-y-6 p-6">

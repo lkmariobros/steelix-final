@@ -5,6 +5,7 @@ import { agentsRouter } from "../controllers/agents";
 import { approvalsRouter } from "../controllers/approvals";
 import { autoReplyRouter } from "../controllers/auto-reply";
 import { calendarRouter } from "../controllers/calendar";
+import { commissionPayoutsRouter } from "../controllers/commission-payouts";
 import { commissionSchemesRouter } from "../controllers/commission-schemes";
 import { crmRouter } from "../controllers/crm";
 import { dashboardRouter } from "../controllers/dashboard";
@@ -35,6 +36,7 @@ export const appRouter = router({
 	tags: tagsRouter,
 	calendar: calendarRouter,
 	commissionSchemes: commissionSchemesRouter,
+	commissionPayouts: commissionPayoutsRouter,
 	feedback: feedbackRouter,
 	leadTasks: leadTasksRouter,
 	listings: listingsRouter,

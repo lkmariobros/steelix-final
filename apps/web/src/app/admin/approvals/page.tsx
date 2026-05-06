@@ -86,7 +86,7 @@ export default function AdminApprovalsPage() {
 	const queryClient = useQueryClient();
 	const { data: session, isPending } = authClient.useSession();
 	useRedirectUnauthenticated(session, isPending);
-	const [statusFilter, setStatusFilter] = useState<string>("submitted");
+	const [statusFilter, setStatusFilter] = useState<string>("all");
 	const [page, setPage] = useState(0);
 	const pageSize = 20;
 
@@ -111,7 +111,11 @@ export default function AdminApprovalsPage() {
 			status:
 				statusFilter === "all"
 					? undefined
-					: (statusFilter as "submitted" | "under_review"),
+					: (statusFilter as
+							| "submitted"
+							| "under_review"
+							| "pending"
+							| "verified"),
 		},
 		{
 			enabled: !!session,
@@ -143,6 +147,9 @@ export default function AdminApprovalsPage() {
 				});
 				queryClient.invalidateQueries({
 					queryKey: [["admin", "getDashboardSummary"]],
+				});
+				queryClient.invalidateQueries({
+					queryKey: [["commissionPayouts"]],
 				});
 
 				closeDialog();
@@ -305,9 +312,11 @@ export default function AdminApprovalsPage() {
 									<SelectValue placeholder="Filter by status" />
 								</SelectTrigger>
 								<SelectContent>
-									<SelectItem value="submitted">Pending Review</SelectItem>
-									<SelectItem value="under_review">Under Review</SelectItem>
-									<SelectItem value="all">All Pending</SelectItem>
+									<SelectItem value="all">All pending (queue)</SelectItem>
+									<SelectItem value="pending">Pending</SelectItem>
+									<SelectItem value="verified">Verified</SelectItem>
+									<SelectItem value="submitted">Submitted (legacy)</SelectItem>
+									<SelectItem value="under_review">Under review (legacy)</SelectItem>
 								</SelectContent>
 							</Select>
 
