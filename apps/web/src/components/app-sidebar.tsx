@@ -240,13 +240,39 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 		enabled: !!session,
 		retry: false,
 	});
-	const sessionRole =
-		(session?.user as { role?: string } | undefined)?.role ?? "agent";
-	const isAdmin = (roleCheck?.role ?? sessionRole) === "admin";
+	const sessionRoles =
+		(session?.user as { roles?: string[]; role?: string } | undefined)?.roles ??
+		[
+			((session?.user as { role?: string } | undefined)?.role ?? "agent") as string,
+		];
+	const roles = roleCheck?.roles ?? sessionRoles;
+	const canAdmin = roleCheck?.hasAdminAccess ?? roles.includes("admin");
+	const canAgent = roleCheck?.hasAgentAccess ?? roles.includes("agent");
 	const isCurrentlyInAdminPortal = pathname.startsWith("/admin");
 
+	const portalSwitch =
+		canAdmin && canAgent ? (
+			<div className="px-2 pt-2">
+				<Button
+					variant="outline"
+					size="sm"
+					className="w-full justify-between"
+					onClick={() =>
+						router.push(isCurrentlyInAdminPortal ? "/dashboard" : "/admin")
+					}
+				>
+					<span>
+						{isCurrentlyInAdminPortal
+							? "Switch to Agent Portal"
+							: "Switch to Admin Portal"}
+					</span>
+					<RiArrowRightLine className="size-4" />
+				</Button>
+			</div>
+		) : null;
+
 	// Generate navigation based on role (not URL)
-	const navigationItems = isAdmin
+	const navigationItems = canAdmin && (!isCurrentlyInAdminPortal ? !canAgent : true)
 		? [
 				{
 					title: "Overview",
@@ -391,6 +417,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 				<SearchForm className="mt-3" />
 			</SidebarHeader>
 			<SidebarContent>
+				{portalSwitch}
 				{/* We create a SidebarGroup for each parent. */}
 				{navigationItems.map((item) => (
 					<SidebarGroup key={item.title}>

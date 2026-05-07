@@ -27,23 +27,41 @@ export const protectedProcedure = t.procedure.use(({ ctx, next }) => {
 });
 
 export const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
-	const userRole = (ctx.session.user as { role?: string })?.role ?? "agent";
-	if (userRole !== "admin") {
+	const roles =
+		(ctx.session.user as { roles?: string[] | null; role?: string | null })
+			?.roles ??
+		(((ctx.session.user as { role?: string | null })?.role ?? "agent") as string
+			? [(ctx.session.user as { role?: string | null })?.role ?? "agent"]
+			: ["agent"]);
+	const hasAdmin = roles.includes("admin");
+	const userRole = hasAdmin ? "admin" : roles.includes("team_lead") ? "team_lead" : "agent";
+	if (!hasAdmin) {
 		throw new TRPCError({
 			code: "FORBIDDEN",
 			message: "Admin access required",
 		});
 	}
-	return next({ ctx: { ...ctx, session: ctx.session, userRole } });
+	return next({ ctx: { ...ctx, session: ctx.session, userRole, userRoles: roles } });
 });
 
 export const agentProcedure = protectedProcedure.use(({ ctx, next }) => {
-	const userRole = (ctx.session.user as { role?: string })?.role ?? "agent";
-	if (userRole === "admin") {
+	const roles =
+		(ctx.session.user as { roles?: string[] | null; role?: string | null })
+			?.roles ??
+		(((ctx.session.user as { role?: string | null })?.role ?? "agent") as string
+			? [(ctx.session.user as { role?: string | null })?.role ?? "agent"]
+			: ["agent"]);
+	const hasAgent = roles.includes("agent");
+	const userRole = roles.includes("admin")
+		? "admin"
+		: roles.includes("team_lead")
+			? "team_lead"
+			: "agent";
+	if (!hasAgent) {
 		throw new TRPCError({
 			code: "FORBIDDEN",
 			message: "Agent access required",
 		});
 	}
-	return next({ ctx: { ...ctx, session: ctx.session, userRole } });
+	return next({ ctx: { ...ctx, session: ctx.session, userRole, userRoles: roles } });
 });

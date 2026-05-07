@@ -384,6 +384,8 @@ export const agentsRouter = router({
 		const userId = crypto.randomUUID();
 		const passwordHash = await bcrypt.hash(input.password, 12);
 
+		const roles = input.role === "admin" ? (["admin", "agent"] as const) : (["agent"] as const);
+
 		const [createdUser] = await db
 			.insert(user)
 			.values({
@@ -399,6 +401,7 @@ export const agentsRouter = router({
 				agencyId: input.agencyId,
 				teamId: input.teamId,
 				role: input.role,
+				roles: [...roles],
 				permissions: null,
 				agentTier: "advisor",
 				companyCommissionSplit: 70,

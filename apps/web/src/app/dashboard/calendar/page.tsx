@@ -183,7 +183,10 @@ export default function CalendarPage() {
 	);
 
 	// Check if user is admin
-	const isAdmin = (session?.user as { role?: string })?.role === "admin";
+	const isAdmin =
+		(session?.user as { roles?: string[]; role?: string })?.roles?.includes(
+			"admin",
+		) ?? (session?.user as { role?: string })?.role === "admin";
 
 	// Fetch all events for calendar view (needed for monthly display)
 	const { data: allEventsData, isLoading: isLoadingEvents } =

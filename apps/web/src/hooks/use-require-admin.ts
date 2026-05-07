@@ -25,7 +25,9 @@ export function useRequireAdmin() {
 		if (!session) return;
 		if (isRoleLoading) return;
 		if (roleCheck && !roleCheck.hasAdminAccess) {
-			router.replace("/dashboard");
+			// If they can act as agent, send to agent portal; otherwise deny.
+			if (roleCheck.hasAgentAccess) router.replace("/dashboard");
+			else router.replace("/login");
 		}
 	}, [isPending, session, isRoleLoading, roleCheck, router]);
 

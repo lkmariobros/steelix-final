@@ -47,17 +47,27 @@ export const adminRouter = router({
 		const { eq } = await import("drizzle-orm");
 
 		const [userRecord] = await db
-			.select({ role: user.role })
+			.select({ role: user.role, roles: user.roles })
 			.from(user)
 			.where(eq(user.id, ctx.session.user.id))
 			.limit(1);
 
-		const userRole = userRecord?.role;
-		const isAdmin = userRole === "admin";
+		const roles =
+			userRecord?.roles ??
+			(userRecord?.role ? [userRecord.role] : ["agent"]);
+		const userRole = roles.includes("admin")
+			? "admin"
+			: roles.includes("team_lead")
+				? "team_lead"
+				: "agent";
+		const isAdmin = roles.includes("admin");
+		const isAgent = roles.includes("agent");
 
 		return {
 			hasAdminAccess: isAdmin,
+			hasAgentAccess: isAgent,
 			role: userRole,
+			roles,
 		};
 	}),
 

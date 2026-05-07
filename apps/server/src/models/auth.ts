@@ -11,6 +11,7 @@ import {
 	timestamp,
 	uuid,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 // Agent tier enum for commission calculations
 export const agentTierEnum = pgEnum("agent_tier", [
@@ -64,6 +65,14 @@ export const user = pgTable(
 		agencyId: uuid("agency_id").references(() => agencies.id),
 		teamId: uuid("team_id").references(() => teams.id),
 		role: text("role").default("agent"), // 'agent', 'team_lead', 'admin'
+		/**
+		 * Multi-role support (Option A): a user can be both admin and agent.
+		 * Source of truth moving forward; keep legacy `role` for backward compatibility.
+		 */
+		roles: text("roles")
+			.array()
+			.notNull()
+			.default(sql`ARRAY['agent']::text[]`),
 		permissions: text("permissions"), // JSON string for role permissions
 		// Agent tier system for commission calculations
 		agentTier: agentTierEnum("agent_tier").default("advisor"),

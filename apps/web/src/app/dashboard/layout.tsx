@@ -12,8 +12,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 	useEffect(() => {
 		if (isPending) return;
 		if (!session) return;
-		const role = (session.user as { role?: string })?.role ?? "agent";
-		if (role === "admin") {
+		const roles =
+			(session.user as { roles?: string[]; role?: string })?.roles ??
+			[((session.user as { role?: string })?.role ?? "agent") as string];
+		// If user is admin-only (no agent role), send them to admin portal.
+		if (roles.includes("admin") && !roles.includes("agent")) {
 			window.location.href = "/admin";
 		}
 	}, [isPending, session]);

@@ -21,8 +21,11 @@ export default function PostLoginPage() {
 		}
 		if (isLoading) return;
 
-		const role = roleCheck?.role ?? (session.user as { role?: string })?.role ?? "agent";
-		window.location.href = role === "admin" ? "/admin" : "/dashboard";
+		const roles =
+			roleCheck?.roles ??
+			((session.user as { roles?: string[]; role?: string })?.roles ??
+				[((session.user as { role?: string })?.role ?? "agent") as string]);
+		window.location.href = roles.includes("admin") ? "/admin" : "/dashboard";
 	}, [isPending, session, isLoading, roleCheck]);
 
 	return <LoadingScreen text="Signing you in..." />;
