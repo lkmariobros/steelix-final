@@ -1,13 +1,8 @@
 "use client";
 
-import { AppSidebar } from "@/components/app-sidebar";
 import { HeaderActions } from "@/components/header-actions";
 import { Separator } from "@/components/separator";
-import {
-	SidebarInset,
-	SidebarProvider,
-	SidebarTrigger,
-} from "@/components/sidebar";
+import { SidebarTrigger } from "@/components/sidebar";
 import {
 	Table,
 	TableBody,
@@ -42,7 +37,6 @@ import {
 } from "@/components/ui/select";
 import { LoadingScreen } from "@/components/ui/loading-spinner";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useRedirectUnauthenticated } from "@/hooks/use-redirect-unauthenticated";
 import { authClient } from "@/lib/auth-client";
 import { trpc } from "@/utils/trpc";
 import {
@@ -92,8 +86,7 @@ import { KanbanPipelineBoard } from "./_components/kanban-pipeline-board";
 import { ImportLeadsDialog } from "./_components/import-leads-dialog";
 
 export default function AdminLeadsPage() {
-	const { data: session, isPending } = authClient.useSession();
-	useRedirectUnauthenticated(session, isPending);
+	const { data: session } = authClient.useSession();
 
 	// ── Filters (all client-side, no backend re-fetch) ──────────────────────
 	const [search, setSearch] = useState("");
@@ -458,64 +451,47 @@ export default function AdminLeadsPage() {
 		});
 	};
 
-	// Guard
-	if (isPending) {
-		return (
-			<div className="flex h-screen items-center justify-center">
-				<RiLoader4Line className="size-8 animate-spin text-primary" />
-			</div>
-		);
-	}
-	if (!session) {
-		return <LoadingScreen text="Redirecting..." />;
-	}
-
 	return (
-		<SidebarProvider>
-			<AppSidebar />
-			<SidebarInset className="overflow-hidden px-4 md:px-6 lg:px-8">
-				{/* Header */}
-				<header className="flex h-16 shrink-0 items-center gap-2 border-b">
-					<div className="flex flex-1 items-center gap-2 px-3">
-						<SidebarTrigger className="-ms-4" />
-						<Separator
-							orientation="vertical"
-							className="mr-2 data-[orientation=vertical]:h-4"
-						/>
-						<Breadcrumb>
-							<BreadcrumbList>
-								<BreadcrumbItem className="hidden md:block">
-									<BreadcrumbLink href="/admin">
-										<RiDashboardLine size={22} aria-hidden="true" />
-										<span className="sr-only">Dashboard</span>
-									</BreadcrumbLink>
-								</BreadcrumbItem>
-								<BreadcrumbSeparator className="hidden md:block" />
-								<BreadcrumbItem className="hidden md:block">
-									<BreadcrumbLink
-										href="/admin"
-										className="flex items-center gap-1"
-									>
-										<RiShieldUserLine size={16} />
-										Admin Portal
-									</BreadcrumbLink>
-								</BreadcrumbItem>
-								<BreadcrumbSeparator className="hidden md:block" />
-								<BreadcrumbItem>
-									<BreadcrumbPage className="flex items-center gap-2">
-										<RiFileList3Line size={20} aria-hidden="true" />
-										Leads Management
-									</BreadcrumbPage>
-								</BreadcrumbItem>
-							</BreadcrumbList>
-						</Breadcrumb>
-					</div>
-					<div className="ml-auto flex gap-3">
-						<HeaderActions />
-					</div>
-				</header>
+		<>
+			{/* Header */}
+			<header className="flex h-16 shrink-0 items-center gap-2 border-b">
+				<div className="flex flex-1 items-center gap-2 px-3">
+					<SidebarTrigger className="-ms-4" />
+					<Separator
+						orientation="vertical"
+						className="mr-2 data-[orientation=vertical]:h-4"
+					/>
+					<Breadcrumb>
+						<BreadcrumbList>
+							<BreadcrumbItem className="hidden md:block">
+								<BreadcrumbLink href="/admin">
+									<RiDashboardLine size={22} aria-hidden="true" />
+									<span className="sr-only">Dashboard</span>
+								</BreadcrumbLink>
+							</BreadcrumbItem>
+							<BreadcrumbSeparator className="hidden md:block" />
+							<BreadcrumbItem className="hidden md:block">
+								<BreadcrumbLink href="/admin" className="flex items-center gap-1">
+									<RiShieldUserLine size={16} />
+									Admin Portal
+								</BreadcrumbLink>
+							</BreadcrumbItem>
+							<BreadcrumbSeparator className="hidden md:block" />
+							<BreadcrumbItem>
+								<BreadcrumbPage className="flex items-center gap-2">
+									<RiFileList3Line size={20} aria-hidden="true" />
+									Leads Management
+								</BreadcrumbPage>
+							</BreadcrumbItem>
+						</BreadcrumbList>
+					</Breadcrumb>
+				</div>
+				<div className="ml-auto flex gap-3">
+					<HeaderActions />
+				</div>
+			</header>
 
-				<div className="flex flex-1 flex-col gap-6 py-6">
+			<div className="flex flex-1 flex-col gap-6 py-6">
 					<AdminLeadsPageHeader
 						isLoading={isLoading}
 						leadCount={allLeads.length}
@@ -1471,7 +1447,6 @@ export default function AdminLeadsPage() {
 						</CardContent>
 					</Card>
 				</div>
-			</SidebarInset>
 
 			{/* Dialogs & Sheets */}
 			<LeadDetailSheet
@@ -1533,6 +1508,6 @@ export default function AdminLeadsPage() {
 				onOpenChange={setIsImportOpen}
 				onImported={handleRefresh}
 			/>
-		</SidebarProvider>
+		</>
 	);
 }

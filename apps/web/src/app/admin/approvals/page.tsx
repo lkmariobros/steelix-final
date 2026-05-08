@@ -1,6 +1,5 @@
 "use client";
 
-import { AppSidebar } from "@/components/app-sidebar";
 import {
 	Dialog,
 	DialogContent,
@@ -12,8 +11,6 @@ import {
 import { HeaderActions } from "@/components/header-actions";
 import { Separator } from "@/components/separator";
 import {
-	SidebarInset,
-	SidebarProvider,
 	SidebarTrigger,
 } from "@/components/sidebar";
 import {
@@ -32,7 +29,6 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@/components/ui/card";
-import { LoadingScreen } from "@/components/ui/loading-spinner";
 import {
 	Select,
 	SelectContent,
@@ -43,7 +39,6 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
-import { useRedirectUnauthenticated } from "@/hooks/use-redirect-unauthenticated";
 import { authClient } from "@/lib/auth-client";
 import { trpc } from "@/utils/trpc";
 import {
@@ -300,8 +295,7 @@ interface ApprovalDialogState {
 
 export default function AdminApprovalsPage() {
 	const queryClient = useQueryClient();
-	const { data: session, isPending } = authClient.useSession();
-	useRedirectUnauthenticated(session, isPending);
+	const { data: session } = authClient.useSession();
 	const [statusFilter, setStatusFilter] = useState<string>("all");
 	const [page, setPage] = useState(0);
 	const pageSize = 20;
@@ -390,15 +384,6 @@ export default function AdminApprovalsPage() {
 	// Get utils for invalidation after mutations
 	const utils = trpc.useUtils();
 
-	// Show loading while checking authentication
-	if (isPending) {
-		return <LoadingScreen text="Loading..." />;
-	}
-
-	if (!session) {
-		return <LoadingScreen text="Redirecting..." />;
-	}
-
 	// Handle refresh
 	const handleRefresh = async () => {
 		await Promise.all([
@@ -482,9 +467,7 @@ export default function AdminApprovalsPage() {
 	};
 
 	return (
-		<SidebarProvider>
-			<AppSidebar />
-			<SidebarInset className="overflow-hidden px-4 md:px-6 lg:px-8">
+		<>
 				<header className="flex h-16 shrink-0 items-center gap-2 border-b">
 					<div className="flex flex-1 items-center gap-2 px-3">
 						<SidebarTrigger className="-ms-4" />
@@ -1009,7 +992,6 @@ export default function AdminApprovalsPage() {
 						</ScrollArea>
 					</DialogContent>
 				</Dialog>
-			</SidebarInset>
-		</SidebarProvider>
+		</>
 	);
 }

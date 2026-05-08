@@ -1,6 +1,5 @@
 "use client";
 
-import { AppSidebar } from "@/components/app-sidebar";
 import {
 	Dialog,
 	DialogContent,
@@ -10,7 +9,7 @@ import {
 } from "@/components/dialog";
 import { HeaderActions } from "@/components/header-actions";
 import { Separator } from "@/components/separator";
-import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/sidebar";
+import { SidebarTrigger } from "@/components/sidebar";
 import {
 	Breadcrumb,
 	BreadcrumbItem,
@@ -24,7 +23,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { LoadingScreen } from "@/components/ui/loading-spinner";
 import {
 	Select,
 	SelectContent,
@@ -33,7 +31,6 @@ import {
 	SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { useRedirectUnauthenticated } from "@/hooks/use-redirect-unauthenticated";
 import { authClient } from "@/lib/auth-client";
 import { trpc } from "@/utils/trpc";
 import {
@@ -57,8 +54,7 @@ function formatRm(n: number | string) {
 export default function CommissionPayoutDetailPage() {
 	const params = useParams();
 	const id = params.id as string;
-	const { data: session, isPending } = authClient.useSession();
-	useRedirectUnauthenticated(session, isPending);
+	const { data: session } = authClient.useSession();
 
 	const q = trpc.commissionPayouts.adminGet.useQuery(
 		{ id },
@@ -119,18 +115,12 @@ export default function CommissionPayoutDetailPage() {
 		onError: (e) => toast.error(e.message),
 	});
 
-	if (isPending) return <LoadingScreen text="Loading..." />;
-	if (!session) return <LoadingScreen text="Redirecting..." />;
-
 	const row = q.data;
 	if (q.isLoading || !row) {
 		return (
-			<SidebarProvider>
-				<AppSidebar />
-				<SidebarInset className="px-4 py-8">
-					<p className="text-muted-foreground">Loading…</p>
-				</SidebarInset>
-			</SidebarProvider>
+			<div className="px-4 py-8">
+				<p className="text-muted-foreground">Loading…</p>
+			</div>
 		);
 	}
 
@@ -138,9 +128,7 @@ export default function CommissionPayoutDetailPage() {
 	const scheme = p.commissionSchemeSnapshot as Record<string, unknown> | null;
 
 	return (
-		<SidebarProvider>
-			<AppSidebar />
-			<SidebarInset className="overflow-hidden px-4 md:px-6 lg:px-8">
+		<>
 				<header className="flex h-16 shrink-0 items-center gap-2 border-b">
 					<div className="flex flex-1 items-center gap-2 px-3">
 						<SidebarTrigger className="-ms-4" />
@@ -425,7 +413,6 @@ export default function CommissionPayoutDetailPage() {
 						</DialogFooter>
 					</DialogContent>
 				</Dialog>
-			</SidebarInset>
-		</SidebarProvider>
+		</>
 	);
 }

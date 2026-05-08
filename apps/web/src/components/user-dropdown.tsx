@@ -21,6 +21,8 @@ export default function UserDropdown() {
 	// Fresh name/image from DB (session cookie cache can lag after profile save)
 	const { data: profile } = trpc.agents.getMyProfile.useQuery(undefined, {
 		enabled: !!session,
+		staleTime: 3 * 60 * 1000,
+		gcTime: 15 * 60 * 1000,
 	});
 
 	// Loading state

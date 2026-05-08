@@ -1,11 +1,8 @@
 "use client";
 
-import { AppSidebar } from "@/components/app-sidebar";
 import { HeaderActions } from "@/components/header-actions";
 import { Separator } from "@/components/separator";
 import {
-	SidebarInset,
-	SidebarProvider,
 	SidebarTrigger,
 } from "@/components/sidebar";
 import {
@@ -41,9 +38,7 @@ import {
 	DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { LoadingScreen } from "@/components/ui/loading-spinner";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useRedirectUnauthenticated } from "@/hooks/use-redirect-unauthenticated";
 import { authClient } from "@/lib/auth-client";
 import { trpc } from "@/utils/trpc";
 import {
@@ -72,8 +67,7 @@ interface Tag {
 
 export default function AdminTagsPage() {
 	const queryClient = useQueryClient();
-	const { data: session, isPending } = authClient.useSession();
-	useRedirectUnauthenticated(session, isPending);
+	const { data: session } = authClient.useSession();
 	const [searchQuery, setSearchQuery] = useState("");
 	const [currentPage, setCurrentPage] = useState(1);
 	const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -188,16 +182,6 @@ export default function AdminTagsPage() {
 		deleteTagMutation.mutate({ id: selectedTag.id });
 	};
 
-	// Show loading while checking authentication
-	if (isPending) {
-		return <LoadingScreen text="Loading..." />;
-	}
-
-	// Redirect if not authenticated
-	if (!session) {
-		return <LoadingScreen text="Redirecting..." />;
-	}
-
 	const formatDate = (date: Date | string) => {
 		const d = typeof date === "string" ? new Date(date) : date;
 		return d.toLocaleDateString("en-US", {
@@ -208,9 +192,7 @@ export default function AdminTagsPage() {
 	};
 
 	return (
-		<SidebarProvider>
-			<AppSidebar />
-			<SidebarInset className="overflow-hidden px-4 md:px-6 lg:px-8">
+		<>
 				<header className="flex h-16 shrink-0 items-center gap-2 border-b">
 					<div className="flex flex-1 items-center gap-2 px-3">
 						<SidebarTrigger className="-ms-4" />
@@ -678,7 +660,6 @@ export default function AdminTagsPage() {
 						</DialogContent>
 					</Dialog>
 				</div>
-			</SidebarInset>
-		</SidebarProvider>
+		</>
 	);
 }

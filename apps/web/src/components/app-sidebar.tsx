@@ -236,13 +236,27 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 		});
 	}, []);
 
-	const { data: roleCheck } = trpc.admin.checkAdminRole.useQuery(undefined, {
-		enabled: !!session,
-		retry: false,
-	});
+	const sessionRoleRaw =
+		(session?.user as { role?: string | null } | undefined)?.role ?? "";
 	const sessionRole =
-		(session?.user as { role?: string } | undefined)?.role ?? "agent";
-	const isAdmin = (roleCheck?.role ?? sessionRole) === "admin";
+		sessionRoleRaw === "admin" ||
+		sessionRoleRaw === "agent" ||
+		sessionRoleRaw === "team_lead"
+			? sessionRoleRaw
+			: "";
+	const needsRoleQuery =
+		!!session &&
+		sessionRole !== "admin" &&
+		sessionRole !== "agent" &&
+		sessionRole !== "team_lead";
+
+	const { data: roleCheck } = trpc.admin.checkAdminRole.useQuery(undefined, {
+		enabled: needsRoleQuery,
+		retry: false,
+		staleTime: 5 * 60 * 1000,
+	});
+	const effectiveRole = sessionRole || roleCheck?.role || "agent";
+	const isAdmin = effectiveRole === "admin";
 	const isCurrentlyInAdminPortal = pathname.startsWith("/admin");
 
 	// Generate navigation based on role (not URL)

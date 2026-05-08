@@ -8,10 +8,20 @@ import { useEffect } from "react";
 export default function PostLoginPage() {
 	const { data: session, isPending } = authClient.useSession();
 
-	const { data: roleCheck, isLoading } = trpc.admin.checkAdminRole.useQuery(undefined, {
-		enabled: !!session,
-		retry: false,
-	});
+	const sessionRoleRaw = (session?.user as { role?: string | null })?.role ?? "";
+	const hasKnownRole =
+		sessionRoleRaw === "admin" ||
+		sessionRoleRaw === "agent" ||
+		sessionRoleRaw === "team_lead";
+
+	const { data: roleCheck, isLoading } = trpc.admin.checkAdminRole.useQuery(
+		undefined,
+		{
+			enabled: !!session && !hasKnownRole,
+			retry: false,
+			staleTime: 5 * 60 * 1000,
+		},
+	);
 
 	useEffect(() => {
 		if (isPending) return;
@@ -19,11 +29,12 @@ export default function PostLoginPage() {
 			window.location.href = "/login";
 			return;
 		}
-		if (isLoading) return;
+		if (!hasKnownRole && isLoading) return;
 
-		const role = roleCheck?.role ?? (session.user as { role?: string })?.role ?? "agent";
+		const role =
+			hasKnownRole ? sessionRoleRaw : (roleCheck?.role ?? "agent");
 		window.location.href = role === "admin" ? "/admin" : "/dashboard";
-	}, [isPending, session, isLoading, roleCheck]);
+	}, [isPending, session, hasKnownRole, isLoading, roleCheck, sessionRoleRaw]);
 
 	return <LoadingScreen text="Signing you in..." />;
 }

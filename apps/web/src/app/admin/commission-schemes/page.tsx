@@ -1,9 +1,8 @@
 "use client";
 
-import { AppSidebar } from "@/components/app-sidebar";
 import { HeaderActions } from "@/components/header-actions";
 import { Separator } from "@/components/separator";
-import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/sidebar";
+import { SidebarTrigger } from "@/components/sidebar";
 import {
 	Breadcrumb,
 	BreadcrumbItem,
@@ -22,8 +21,6 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
-import { LoadingScreen } from "@/components/ui/loading-spinner";
-import { useRedirectUnauthenticated } from "@/hooks/use-redirect-unauthenticated";
 import { authClient } from "@/lib/auth-client";
 import { trpc } from "@/utils/trpc";
 import {
@@ -45,8 +42,7 @@ import { SchemeFormDialog } from "./_components/scheme-form-dialog";
 import { SchemeTiersRow } from "./_components/scheme-tiers-row";
 
 export default function CommissionSchemesAdminPage() {
-	const { data: session, isPending } = authClient.useSession();
-	useRedirectUnauthenticated(session, isPending);
+	const { data: session } = authClient.useSession();
 
 	const [search, setSearch] = useState("");
 	const [projectFilter, setProjectFilter] = useState("__all__");
@@ -108,13 +104,8 @@ export default function CommissionSchemesAdminPage() {
 	};
 
 
-	if (isPending) return <LoadingScreen text="Loading..." />;
-	if (!session) return <LoadingScreen text="Redirecting..." />;
-
 	return (
-		<SidebarProvider>
-			<AppSidebar />
-			<SidebarInset className="overflow-hidden px-4 md:px-6 lg:px-8">
+		<>
 				<header className="flex h-16 shrink-0 items-center gap-2 border-b">
 					<div className="flex flex-1 items-center gap-2 px-3">
 						<SidebarTrigger className="-ms-4" />
@@ -366,8 +357,7 @@ export default function CommissionSchemesAdminPage() {
 					schemeId={editId}
 					onSaved={() => void listQuery.refetch()}
 				/>
-			</SidebarInset>
-		</SidebarProvider>
+		</>
 	);
 }
 

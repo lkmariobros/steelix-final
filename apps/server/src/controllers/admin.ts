@@ -39,12 +39,19 @@ const agentFilterInput = z.object({
 });
 
 export const adminRouter = router({
-	// Check if user has admin role (lightweight endpoint for role validation)
+	// Role validation — prefer session (already merged in createContext) to skip an extra DB round-trip.
 	checkAdminRole: protectedProcedure.query(async ({ ctx }) => {
-		// Get user role from database
-		const { db } = await import("../utils/db");
-		const { user } = await import("../models/auth");
-		const { eq } = await import("drizzle-orm");
+		const fromSession = (ctx.session.user as { role?: string | null }).role;
+		if (
+			fromSession === "admin" ||
+			fromSession === "agent" ||
+			fromSession === "team_lead"
+		) {
+			return {
+				hasAdminAccess: fromSession === "admin",
+				role: fromSession,
+			};
+		}
 
 		const [userRecord] = await db
 			.select({ role: user.role })
@@ -52,11 +59,9 @@ export const adminRouter = router({
 			.where(eq(user.id, ctx.session.user.id))
 			.limit(1);
 
-		const userRole = userRecord?.role;
-		const isAdmin = userRole === "admin";
-
+		const userRole = userRecord?.role ?? "agent";
 		return {
-			hasAdminAccess: isAdmin,
+			hasAdminAccess: userRole === "admin",
 			role: userRole,
 		};
 	}),

@@ -1,11 +1,8 @@
 "use client";
 
-import { AppSidebar } from "@/components/app-sidebar";
 import { HeaderActions } from "@/components/header-actions";
 import { Separator } from "@/components/separator";
 import {
-	SidebarInset,
-	SidebarProvider,
 	SidebarTrigger,
 } from "@/components/sidebar";
 import {
@@ -24,7 +21,6 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@/components/ui/card";
-import { LoadingScreen } from "@/components/ui/loading-spinner";
 import {
 	Select,
 	SelectContent,
@@ -43,7 +39,6 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useRedirectUnauthenticated } from "@/hooks/use-redirect-unauthenticated";
 import { authClient } from "@/lib/auth-client";
 import { trpc } from "@/utils/trpc";
 import {
@@ -81,8 +76,7 @@ interface AgentData {
 }
 
 export default function AdminAgentsPage() {
-	const { data: session, isPending } = authClient.useSession();
-	useRedirectUnauthenticated(session, isPending);
+	const { data: session } = authClient.useSession();
 	const [statusFilter, setStatusFilter] = useState<string>("active");
 
 	// State for dialogs
@@ -181,25 +175,13 @@ export default function AdminAgentsPage() {
 			enabled: !!session,
 		});
 
-	// Show loading while checking authentication
-	if (isPending) {
-		return <LoadingScreen text="Loading..." />;
-	}
-
-	// Redirect if not authenticated
-	if (!session) {
-		return <LoadingScreen text="Redirecting..." />;
-	}
-
 	// Handle refresh
 	const handleRefresh = async () => {
 		await Promise.all([refetchAgents(), utils.agents.getStats.invalidate()]);
 	};
 
 	return (
-		<SidebarProvider>
-			<AppSidebar />
-			<SidebarInset className="overflow-hidden px-4 md:px-6 lg:px-8">
+		<>
 				<header className="flex h-16 shrink-0 items-center gap-2 border-b">
 					<div className="flex flex-1 items-center gap-2 px-3">
 						<SidebarTrigger className="-ms-4" />
@@ -526,7 +508,6 @@ export default function AdminAgentsPage() {
 						</Card>
 					</div>
 				</div>
-			</SidebarInset>
 
 			{/* Agent Management Dialog */}
 			{selectedAgent && (
@@ -665,6 +646,6 @@ export default function AdminAgentsPage() {
 					</DialogFooter>
 				</DialogContent>
 			</Dialog>
-		</SidebarProvider>
+		</>
 	);
 }

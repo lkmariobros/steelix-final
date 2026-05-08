@@ -1,9 +1,8 @@
 "use client";
 
-import { AppSidebar } from "@/components/app-sidebar";
 import { HeaderActions } from "@/components/header-actions";
 import { Separator } from "@/components/separator";
-import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/sidebar";
+import { SidebarTrigger } from "@/components/sidebar";
 import {
 	Table,
 	TableBody,
@@ -22,8 +21,6 @@ import {
 } from "@/components/ui/breadcrumb";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { LoadingScreen } from "@/components/ui/loading-spinner";
-import { useRedirectUnauthenticated } from "@/hooks/use-redirect-unauthenticated";
 import { authClient } from "@/lib/auth-client";
 import { trpc } from "@/utils/trpc";
 import { RiArrowLeftLine, RiDashboardLine } from "@remixicon/react";
@@ -62,8 +59,7 @@ const BAR_FILL = "#60a5fa"; // blue-400
 
 export default function AdminAgentCommissionReportPage() {
 	const { agentId } = useParams<{ agentId: string }>();
-	const { data: session, isPending } = authClient.useSession();
-	useRedirectUnauthenticated(session, isPending);
+	const { data: session } = authClient.useSession();
 
 	const report = trpc.commissionPayouts.adminAgentReport.useQuery(
 		{ agentId },
@@ -75,9 +71,6 @@ export default function AdminAgentCommissionReportPage() {
 		{ enabled: !!session && !!agentId },
 	);
 
-	if (isPending) return <LoadingScreen text="Loading..." />;
-	if (!session) return <LoadingScreen text="Redirecting..." />;
-
 	const name = agentQ.data?.agent.name ?? agentId;
 	const chartData = (report.data?.byMonth ?? []).map((m) => ({
 		month: m.month,
@@ -85,9 +78,7 @@ export default function AdminAgentCommissionReportPage() {
 	}));
 
 	return (
-		<SidebarProvider>
-			<AppSidebar />
-			<SidebarInset className="overflow-hidden px-4 md:px-6 lg:px-8">
+		<>
 				<header className="flex h-16 shrink-0 items-center gap-2 border-b">
 					<div className="flex flex-1 items-center gap-2 px-3">
 						<SidebarTrigger className="-ms-4" />
@@ -228,7 +219,6 @@ export default function AdminAgentCommissionReportPage() {
 						</CardContent>
 					</Card>
 				</div>
-			</SidebarInset>
-		</SidebarProvider>
+		</>
 	);
 }
