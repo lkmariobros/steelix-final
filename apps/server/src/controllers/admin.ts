@@ -14,6 +14,7 @@ import {
 import { transactions } from "../models/transactions";
 import { ensurePayoutsForApprovedTransaction } from "../services/commission-payouts";
 import { db } from "../utils/db";
+import { resolveUserRole } from "../utils/rbac";
 import { adminProcedure, protectedProcedure, router } from "../utils/trpc";
 
 // Input schemas for admin operations
@@ -39,35 +40,12 @@ const agentFilterInput = z.object({
 });
 
 export const adminRouter = router({
-	// Check if user has admin role (lightweight endpoint for role validation)
+	// Authoritative role for UI guards — always resolved server-side (DB-backed).
 	checkAdminRole: protectedProcedure.query(async ({ ctx }) => {
-		// Get user role from database
-		const { db } = await import("../utils/db");
-		const { user } = await import("../models/auth");
-		const { eq } = await import("drizzle-orm");
-
-		const [userRecord] = await db
-			.select({ role: user.role, roles: user.roles })
-			.from(user)
-			.where(eq(user.id, ctx.session.user.id))
-			.limit(1);
-
-		const roles =
-			userRecord?.roles ??
-			(userRecord?.role ? [userRecord.role] : ["agent"]);
-		const userRole = roles.includes("admin")
-			? "admin"
-			: roles.includes("team_lead")
-				? "team_lead"
-				: "agent";
-		const isAdmin = roles.includes("admin");
-		const isAgent = roles.includes("agent");
-
+		const userRole = await resolveUserRole(ctx);
 		return {
-			hasAdminAccess: isAdmin,
-			hasAgentAccess: isAgent,
+			hasAdminAccess: userRole === "admin",
 			role: userRole,
-			roles,
 		};
 	}),
 

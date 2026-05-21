@@ -52,6 +52,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useRedirectUnauthenticated } from "@/hooks/use-redirect-unauthenticated";
 import { authClient } from "@/lib/auth-client";
+import { useUserRole } from "@/hooks/use-user-role";
 import { trpc } from "@/utils/trpc";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
@@ -182,11 +183,7 @@ export default function CalendarPage() {
 		null,
 	);
 
-	// Check if user is admin
-	const isAdmin =
-		(session?.user as { roles?: string[]; role?: string })?.roles?.includes(
-			"admin",
-		) ?? (session?.user as { role?: string })?.role === "admin";
+	const { isAdmin } = useUserRole();
 
 	// Fetch all events for calendar view (needed for monthly display)
 	const { data: allEventsData, isLoading: isLoadingEvents } =

@@ -1,4 +1,5 @@
 import { drizzle } from "drizzle-orm/node-postgres";
+import type { PoolConfig } from "pg";
 import { Pool } from "pg";
 import * as approvalsSchema from "../models/approvals";
 import * as authSchema from "../models/auth";
@@ -26,78 +27,218 @@ const schema = {
 	...calendarSchema,
 };
 
-// ✅ PERFORMANCE: Connection pooling for better database performance
-// This reuses connections instead of creating new ones for each request
-const connectionString = process.env.DATABASE_URL || "";
+const globalForPool = globalThis as typeof globalThis & {
+	__steelixPgPool?: Pool;
+};
 
-// Detect if using Supabase Supavisor transaction mode (port 6543)
-const isTransactionMode = connectionString.includes(":6543");
+/**
+ * Normalize DATABASE_URL for hosted poolers (Supabase Supavisor, etc.).
+ * - Transaction pool (port 6543): append `pgbouncer=true` (required for node-postgres).
+ * - Session pool (port 5432): leave URL as-is; prepared statements are supported.
+ */
+function augmentDatabaseUrl(raw: string): string {
+	if (!raw.trim()) return raw;
+	try {
+		const u = new URL(raw);
+		const port = u.port || "5432";
+		const isTransactionPort = port === "6543";
 
-// Pool configuration optimized for different environments
-// Supavisor transaction mode has strict connection limits
-const maxConnections = isTransactionMode ? 1 : 10; // Only 1 connection for Supavisor Session mode
-const minConnections = isTransactionMode ? 0 : 2; // Don't keep idle connections for transaction mode
-
-const pool = new Pool({
-	connectionString,
-	max: maxConnections,
-	min: minConnections,
-	idleTimeoutMillis: isTransactionMode ? 10000 : 30000, // 10s for transaction mode, 30s otherwise
-	connectionTimeoutMillis: 10000, // Increased to 10 seconds for better reliability
-	statement_timeout: 30000, // 30 second query timeout
-	query_timeout: 30000, // 30 second query timeout
-	// Supavisor transaction mode doesn't support prepared statements
-	...(isTransactionMode && {
-		allowExitOnIdle: true,
-	}),
-});
-
-// Log pool configuration on startup (helpful for debugging)
-console.log("🔗 Database pool initialized:", {
-	max: maxConnections,
-	min: minConnections,
-	isTransactionMode,
-	hasConnectionString: !!connectionString,
-	idleTimeoutMillis: isTransactionMode ? 10000 : 30000,
-	connectionTimeoutMillis: 10000,
-});
-
-// Handle pool errors gracefully
-pool.on("error", (err) => {
-	console.error("❌ Unexpected database pool error:", err);
-	// Don't crash the app on pool errors - let queries handle their own errors
-});
-
-// Monitor pool lifecycle
-pool.on("connect", (_client) => {
-	console.log("✅ New database connection established");
-});
-
-pool.on("remove", (_client) => {
-	console.log("🔄 Database connection removed from pool");
-});
-
-// Log pool stats periodically in development (every 5 minutes)
-if (process.env.NODE_ENV !== "production") {
-	setInterval(
-		() => {
-			console.log("📊 Database pool stats:", {
-				totalCount: pool.totalCount,
-				idleCount: pool.idleCount,
-				waitingCount: pool.waitingCount,
-			});
-		},
-		5 * 60 * 1000,
-	); // Every 5 minutes
+		if (isTransactionPort && !u.searchParams.has("pgbouncer")) {
+			u.searchParams.set("pgbouncer", "true");
+		}
+		return u.toString();
+	} catch {
+		return raw;
+	}
 }
 
-// Create Drizzle instance with the pool
-// Note: If using Supavisor transaction mode, prepared statements are handled by pg.Pool
+function isLocalDatabase(urlStr: string): boolean {
+	try {
+		const u = new URL(urlStr);
+		const h = u.hostname.toLowerCase();
+		return h === "localhost" || h === "127.0.0.1" || h === "::1";
+	} catch {
+		return false;
+	}
+}
+
+function isSupabasePooler(connectionString: string): boolean {
+	return (
+		connectionString.includes("pooler.supabase.com") ||
+		connectionString.includes(".pooler.supabase.com")
+	);
+}
+
+/**
+ * TLS for node-postgres `Pool`.
+ *
+ * Do NOT auto-enable `ssl: { rejectUnauthorized: false }` for remote hosts.
+ * With Supabase Supavisor (pooler.supabase.com:5432) that misconfiguration causes
+ * ~15s connection acquire timeouts and "Connection terminated unexpectedly" on
+ * Better Auth session lookups — exactly the GET /api/auth/get-session 500 symptom.
+ *
+ * Default: omit `ssl` and let the connection string / host handle TLS.
+ * Opt in with DATABASE_SSL=true only when your provider requires an explicit Pool.ssl object.
+ */
+function resolvePoolSsl(connectionString: string): PoolConfig["ssl"] | undefined {
+	const mode = process.env.DATABASE_SSL?.toLowerCase();
+
+	if (mode === "false") return false;
+	if (mode !== "true") return undefined;
+
+	// Supabase session pooler works without Pool.ssl; forcing it breaks connectivity.
+	if (isSupabasePooler(connectionString)) return undefined;
+
+	if (isLocalDatabase(connectionString)) return undefined;
+
+	const strict =
+		process.env.DATABASE_SSL_REJECT_UNAUTHORIZED?.toLowerCase() === "true";
+	return { rejectUnauthorized: strict };
+}
+
+function isTransientConnectionError(error: unknown): boolean {
+	const err = error as Error & { code?: string };
+	const msg = err?.message ?? "";
+	return (
+		msg.includes("Connection terminated") ||
+		msg.includes("connection timeout") ||
+		msg.includes("ECONNRESET") ||
+		msg.includes("ECONNREFUSED") ||
+		msg.includes("ETIMEDOUT") ||
+		msg.includes("MaxClientsInSessionMode") ||
+		err?.code === "57P01" ||
+		err?.code === "XX000" ||
+		err?.code === "53300"
+	);
+}
+
+/** Retry once on stale pooler connections (idle disconnect / half-open TCP). */
+function attachQueryRetry(pool: Pool) {
+	const original = pool.query.bind(pool);
+
+	pool.query = ((...args: Parameters<Pool["query"]>) => {
+		const callback = args[args.length - 1];
+		if (typeof callback === "function") {
+			return original(...args);
+		}
+
+		const run = () => original(...(args as [string, unknown[]?]));
+		const attempt = async (n: number): Promise<ReturnType<typeof original>> => {
+			try {
+				return await run();
+			} catch (error) {
+				if (!isTransientConnectionError(error) || n >= 2) throw error;
+				await new Promise((r) => setTimeout(r, 75 * 2 ** n));
+				return attempt(n + 1);
+			}
+		};
+
+		return attempt(0);
+	}) as Pool["query"];
+}
+
+function buildPoolConfig(): PoolConfig {
+	const rawUrl = process.env.DATABASE_URL || "";
+	const connectionString = augmentDatabaseUrl(rawUrl);
+
+	const isPooler =
+		connectionString.includes(":6543") || isSupabasePooler(connectionString);
+
+	const maxFromEnv = Number.parseInt(process.env.DATABASE_POOL_MAX ?? "", 10);
+	// IMPORTANT: max=1 serializes auth + tRPC and queues until connectionTimeoutMillis.
+	const defaultMax = isPooler ? 8 : 10;
+	const maxConnections =
+		Number.isFinite(maxFromEnv) && maxFromEnv > 0
+			? Math.min(maxFromEnv, 100)
+			: defaultMax;
+
+	// Avoid eager connects on pooler startup (reduces MaxClientsInSessionMode spikes on hot reload).
+	const minConnections = isPooler ? 0 : Math.min(2, maxConnections);
+
+	const connectTimeout = Number.parseInt(
+		process.env.DATABASE_CONNECT_TIMEOUT_MS ?? "15000",
+		10,
+	);
+
+	const ssl = resolvePoolSsl(connectionString);
+
+	const cfg: PoolConfig = {
+		connectionString,
+		max: maxConnections,
+		min: minConnections,
+		idleTimeoutMillis: isPooler ? 60_000 : 30_000,
+		connectionTimeoutMillis: Number.isFinite(connectTimeout)
+			? connectTimeout
+			: 15_000,
+		keepAlive: true,
+		keepAliveInitialDelayMillis: 10_000,
+		application_name: process.env.DATABASE_APPLICATION_NAME || "steelix-server",
+		statement_timeout: 30_000,
+		query_timeout: 30_000,
+		ssl,
+		maxLifetimeSeconds: isPooler ? 30 * 60 : 60 * 60,
+	};
+
+	if (process.env.DATABASE_ALLOW_EXIT_ON_IDLE === "true") {
+		cfg.allowExitOnIdle = true;
+	}
+
+	return cfg;
+}
+
+const poolConfig = buildPoolConfig();
+
+function createPool(): Pool {
+	const existing = globalForPool.__steelixPgPool;
+	if (existing && !(existing as Pool & { ended?: boolean }).ended) {
+		return existing;
+	}
+
+	if (existing) {
+		existing.end().catch(() => undefined);
+	}
+
+	const next = new Pool(poolConfig);
+	attachQueryRetry(next);
+	globalForPool.__steelixPgPool = next;
+	return next;
+}
+
+const pool = createPool();
+
+console.log("🔗 Database pool initialized:", {
+	max: poolConfig.max,
+	min: poolConfig.min,
+	connectionTimeoutMillis: poolConfig.connectionTimeoutMillis,
+	hasConnectionString: !!(process.env.DATABASE_URL && process.env.DATABASE_URL.length > 0),
+	supabasePooler: isSupabasePooler(poolConfig.connectionString ?? ""),
+	transactionPooler: poolConfig.connectionString?.includes(":6543") ?? false,
+	sslMode: poolConfig.ssl === false ? "off" : poolConfig.ssl ? "explicit" : "default",
+});
+
+pool.on("error", (err) => {
+	const e = err as Error & { code?: string };
+	console.error("❌ Unexpected database pool error:", e.message, e.code ?? "");
+});
+
+if (process.env.NODE_ENV !== "production") {
+	pool.on("connect", () => {
+		console.log("✅ New database connection established");
+	});
+	pool.on("remove", () => {
+		console.log("🔄 Database connection removed from pool");
+	});
+}
+
+export async function closeDatabasePool(): Promise<void> {
+	const p = globalForPool.__steelixPgPool;
+	globalForPool.__steelixPgPool = undefined;
+	if (p) await p.end();
+}
+
 export const db = drizzle(pool, { schema });
 
-// Export pool for graceful shutdown if needed
 export { pool };
 
-// Export types for use in other files
 export type Database = typeof db;
 export type Schema = typeof schema;

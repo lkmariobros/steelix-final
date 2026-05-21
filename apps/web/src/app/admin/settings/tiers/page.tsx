@@ -1,11 +1,8 @@
 "use client";
 
 import { TierConfigurationManager } from "@/components/admin/tier-configuration-manager";
-import { AppSidebar } from "@/components/app-sidebar";
 import { HeaderActions } from "@/components/header-actions";
 import {
-	SidebarInset,
-	SidebarProvider,
 	SidebarTrigger,
 } from "@/components/sidebar";
 import {
@@ -16,27 +13,14 @@ import {
 	BreadcrumbPage,
 	BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
-import { LoadingScreen } from "@/components/ui/loading-spinner";
 import { Separator } from "@/components/ui/separator";
-import { useRedirectUnauthenticated } from "@/hooks/use-redirect-unauthenticated";
 import { authClient } from "@/lib/auth-client";
 import { RiDashboardLine, RiSettings3Line } from "@remixicon/react";
 export default function TierConfigurationPage() {
-	const { data: session, isPending } = authClient.useSession();
-	useRedirectUnauthenticated(session, isPending);
-
-	if (isPending) {
-		return <LoadingScreen text="Loading..." />;
-	}
-
-	if (!session) {
-		return <LoadingScreen text="Redirecting..." />;
-	}
+	authClient.useSession();
 
 	return (
-		<SidebarProvider>
-			<AppSidebar />
-			<SidebarInset className="overflow-hidden px-4 md:px-6 lg:px-8">
+		<>
 				<header className="flex h-16 shrink-0 items-center gap-2 border-b">
 					<div className="flex flex-1 items-center gap-2 px-3">
 						<SidebarTrigger className="-ms-4" />
@@ -89,7 +73,6 @@ export default function TierConfigurationPage() {
 						<TierConfigurationManager />
 					</div>
 				</div>
-			</SidebarInset>
-		</SidebarProvider>
+		</>
 	);
 }

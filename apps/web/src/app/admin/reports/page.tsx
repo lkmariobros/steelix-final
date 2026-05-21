@@ -1,11 +1,8 @@
 "use client";
 
-import { AppSidebar } from "@/components/app-sidebar";
 import { HeaderActions } from "@/components/header-actions";
 import { Separator } from "@/components/separator";
 import {
-	SidebarInset,
-	SidebarProvider,
 	SidebarTrigger,
 } from "@/components/sidebar";
 import {
@@ -34,7 +31,6 @@ import {
 	CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { LoadingScreen } from "@/components/ui/loading-spinner";
 import {
 	Select,
 	SelectContent,
@@ -44,7 +40,6 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useRedirectUnauthenticated } from "@/hooks/use-redirect-unauthenticated";
 import { authClient } from "@/lib/auth-client";
 import { trpc } from "@/utils/trpc";
 import {
@@ -61,8 +56,7 @@ import {
 import { useCallback, useMemo, useState } from "react";
 
 export default function AdminReportsPage() {
-	const { data: session, isPending } = authClient.useSession();
-	useRedirectUnauthenticated(session, isPending);
+	const { data: session } = authClient.useSession();
 	const [activeTab, setActiveTab] = useState<string>("analytics");
 	const [timeRange, setTimeRange] = useState<string>("30d");
 
@@ -234,16 +228,6 @@ export default function AdminReportsPage() {
 		exportToCSV(exportData, "client_export");
 	}, [clientData, exportToCSV]);
 
-	// Show loading while checking authentication
-	if (isPending) {
-		return <LoadingScreen text="Loading..." />;
-	}
-
-	// Redirect if not authenticated
-	if (!session) {
-		return <LoadingScreen text="Redirecting..." />;
-	}
-
 	// Handle refresh
 	const handleRefresh = async () => {
 		await Promise.all([
@@ -255,9 +239,7 @@ export default function AdminReportsPage() {
 	};
 
 	return (
-		<SidebarProvider>
-			<AppSidebar />
-			<SidebarInset className="overflow-hidden px-4 md:px-6 lg:px-8">
+		<>
 				<header className="flex h-16 shrink-0 items-center gap-2 border-b">
 					<div className="flex flex-1 items-center gap-2 px-3">
 						<SidebarTrigger className="-ms-4" />
@@ -998,7 +980,6 @@ export default function AdminReportsPage() {
 						</TabsContent>
 					</Tabs>
 				</div>
-			</SidebarInset>
-		</SidebarProvider>
+		</>
 	);
 }

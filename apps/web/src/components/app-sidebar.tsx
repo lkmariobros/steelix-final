@@ -26,6 +26,7 @@ import {
 	PopoverTrigger,
 } from "@/components/ui/popover";
 import { authClient } from "@/lib/auth-client";
+import { useUserRole } from "@/hooks/use-user-role";
 import { trpc } from "@/utils/trpc";
 import { TeamSwitcher } from "@/components/team-switcher";
 import { useRouter } from "next/navigation";
@@ -236,43 +237,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 		});
 	}, []);
 
-	const { data: roleCheck } = trpc.admin.checkAdminRole.useQuery(undefined, {
-		enabled: !!session,
-		retry: false,
-	});
-	const sessionRoles =
-		(session?.user as { roles?: string[]; role?: string } | undefined)?.roles ??
-		[
-			((session?.user as { role?: string } | undefined)?.role ?? "agent") as string,
-		];
-	const roles = roleCheck?.roles ?? sessionRoles;
-	const canAdmin = roleCheck?.hasAdminAccess ?? roles.includes("admin");
-	const canAgent = roleCheck?.hasAgentAccess ?? roles.includes("agent");
+	const { hasAdminAccess: isAdmin } = useUserRole();
 	const isCurrentlyInAdminPortal = pathname.startsWith("/admin");
 
-	const portalSwitch =
-		canAdmin && canAgent ? (
-			<div className="px-2 pt-2">
-				<Button
-					variant="outline"
-					size="sm"
-					className="w-full justify-between"
-					onClick={() =>
-						router.push(isCurrentlyInAdminPortal ? "/dashboard" : "/admin")
-					}
-				>
-					<span>
-						{isCurrentlyInAdminPortal
-							? "Switch to Agent Portal"
-							: "Switch to Admin Portal"}
-					</span>
-					<RiArrowRightLine className="size-4" />
-				</Button>
-			</div>
-		) : null;
-
 	// Generate navigation based on role (not URL)
-	const navigationItems = canAdmin && (!isCurrentlyInAdminPortal ? !canAgent : true)
+	const navigationItems = isAdmin
 		? [
 				{
 					title: "Overview",
@@ -417,7 +386,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 				<SearchForm className="mt-3" />
 			</SidebarHeader>
 			<SidebarContent>
-				{portalSwitch}
 				{/* We create a SidebarGroup for each parent. */}
 				{navigationItems.map((item) => (
 					<SidebarGroup key={item.title}>

@@ -45,6 +45,16 @@ try {
 		emailAndPassword: {
 			enabled: true,
 		},
+		user: {
+			additionalFields: {
+				role: {
+					type: "string",
+					required: false,
+					defaultValue: "agent",
+					input: false,
+				},
+			},
+		},
 		session: {
 			expiresIn: 60 * 60 * 24 * 7, // 7 days
 			updateAge: 60 * 60 * 24, // 1 day
@@ -106,10 +116,8 @@ try {
 
 							const isFirstUser = existingUsersCount.count === 0;
 
-							// Assign role(s) based on whether this is the first user
-							// First user becomes admin + agent so they can use both portals.
+							// Assign role based on whether this is the first user
 							const role = isFirstUser ? "admin" : "agent";
-							const roles = isFirstUser ? ["admin", "agent"] : ["agent"];
 
 							console.log(
 								`🔐 User creation: ${userData.email} - Role: ${role} (First user: ${isFirstUser})`,
@@ -119,7 +127,6 @@ try {
 								data: {
 									...userData,
 									role: role,
-									roles,
 								},
 							};
 						} catch (error) {
@@ -129,7 +136,6 @@ try {
 								data: {
 									...userData,
 									role: "agent",
-									roles: ["agent"],
 								},
 							};
 						}

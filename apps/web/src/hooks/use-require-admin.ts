@@ -1,9 +1,8 @@
 "use client";
 
-import { authClient } from "@/lib/auth-client";
-import { trpc } from "@/utils/trpc";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
+import { useUserRole } from "@/hooks/use-user-role";
 
 /**
  * Guard for Admin-only pages.
@@ -12,32 +11,21 @@ import { useEffect } from "react";
  */
 export function useRequireAdmin() {
 	const router = useRouter();
-	const { data: session, isPending } = authClient.useSession();
-
-	const { data: roleCheck, isLoading: isRoleLoading } =
-		trpc.admin.checkAdminRole.useQuery(undefined, {
-			enabled: !!session,
-			retry: false,
-		});
+	const { session, hasAdminAccess, isChecking, isSessionPending } =
+		useUserRole();
 
 	useEffect(() => {
-		if (isPending) return;
+		if (isSessionPending) return;
 		if (!session) return;
-		if (isRoleLoading) return;
-		if (roleCheck && !roleCheck.hasAdminAccess) {
-			// If they can act as agent, send to agent portal; otherwise deny.
-			if (roleCheck.hasAgentAccess) router.replace("/dashboard");
-			else router.replace("/login");
+		if (isChecking) return;
+		if (!hasAdminAccess) {
+			router.replace("/dashboard");
 		}
-	}, [isPending, session, isRoleLoading, roleCheck, router]);
-
-	const isChecking = isPending || (!!session && isRoleLoading);
-	const isAdmin = !!session && !!roleCheck?.hasAdminAccess;
+	}, [isSessionPending, session, isChecking, hasAdminAccess, router]);
 
 	return {
 		session,
-		isChecking,
-		isAdmin,
+		isChecking: isSessionPending || isChecking,
+		isAdmin: !!session && hasAdminAccess,
 	};
 }
-

@@ -6,8 +6,12 @@ import { logger } from "hono/logger";
 import { appRouter } from "./routers/index";
 import { debugRoutes } from "./routes/debug";
 import { webhookRoutes } from "./routes/webhooks";
+import { eq } from "drizzle-orm";
+import { user } from "./models/auth";
 import { auth } from "./utils/auth";
 import { createContext } from "./utils/context";
+import { db } from "./utils/db";
+import { isAppRole } from "./utils/rbac";
 import { startServer } from "./utils/server";
 
 const app = new Hono();
@@ -58,6 +62,39 @@ app.use(
 );
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
+
+/** DB-backed role for middleware / proxies when session JSON omits custom fields. */
+app.get("/api/auth/me-role", async (c) => {
+	try {
+		const session = await auth.api.getSession({ headers: c.req.raw.headers });
+		if (!session?.user?.id) {
+			return c.json({ hasAdminAccess: false, role: null }, 401);
+		}
+
+		const fromSession = (session.user as { role?: string | null }).role;
+		if (isAppRole(fromSession)) {
+			return c.json({
+				role: fromSession,
+				hasAdminAccess: fromSession === "admin",
+			});
+		}
+
+		const [record] = await db
+			.select({ role: user.role })
+			.from(user)
+			.where(eq(user.id, session.user.id))
+			.limit(1);
+
+		const role = isAppRole(record?.role) ? record.role : "agent";
+		return c.json({
+			role,
+			hasAdminAccess: role === "admin",
+		});
+	} catch (error) {
+		console.error("❌ me-role error:", error);
+		return c.json({ hasAdminAccess: false, role: null }, 500);
+	}
+});
 
 app.all("/api/auth/*", async (c) => {
 	try {

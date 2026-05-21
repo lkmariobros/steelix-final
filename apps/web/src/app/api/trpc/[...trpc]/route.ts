@@ -6,6 +6,8 @@
  * all requests same-origin from the browser's perspective.
  */
 
+export const runtime = "nodejs";
+
 // Use localhost for development, production URL for production
 // Use 127.0.0.1 instead of localhost for better Windows compatibility
 const getBackendUrl = () => {

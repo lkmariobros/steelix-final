@@ -1,32 +1,22 @@
 "use client";
 
 import { LoadingScreen } from "@/components/ui/loading-spinner";
-import { authClient } from "@/lib/auth-client";
-import { trpc } from "@/utils/trpc";
+import { useUserRole } from "@/hooks/use-user-role";
 import { useEffect } from "react";
 
 export default function PostLoginPage() {
-	const { data: session, isPending } = authClient.useSession();
-
-	const { data: roleCheck, isLoading } = trpc.admin.checkAdminRole.useQuery(undefined, {
-		enabled: !!session,
-		retry: false,
-	});
+	const { session, role, isChecking, isSessionPending } = useUserRole();
 
 	useEffect(() => {
-		if (isPending) return;
+		if (isSessionPending) return;
 		if (!session) {
 			window.location.href = "/login";
 			return;
 		}
-		if (isLoading) return;
+		if (isChecking) return;
 
-		const roles =
-			roleCheck?.roles ??
-			((session.user as { roles?: string[]; role?: string })?.roles ??
-				[((session.user as { role?: string })?.role ?? "agent") as string]);
-		window.location.href = roles.includes("admin") ? "/admin" : "/dashboard";
-	}, [isPending, session, isLoading, roleCheck]);
+		window.location.href = role === "admin" ? "/admin" : "/dashboard";
+	}, [isSessionPending, session, isChecking, role]);
 
 	return <LoadingScreen text="Signing you in..." />;
 }
