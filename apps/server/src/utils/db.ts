@@ -112,20 +112,22 @@ function isTransientConnectionError(error: unknown): boolean {
 	);
 }
 
-/** Retry once on stale pooler connections (idle disconnect / half-open TCP). */
-function attachQueryRetry(pool: Pool) {
-	const original = pool.query.bind(pool);
+/**
+ * Retry promise-based queries on stale pooler connections.
+ * Callback-style pool.query overloads pass through unchanged (drizzle uses promises).
+ */
+function attachQueryRetry(pool: Pool): void {
+	const original = pool.query.bind(pool) as (...args: unknown[]) => unknown;
 
-	pool.query = ((...args: Parameters<Pool["query"]>) => {
-		const callback = args[args.length - 1];
-		if (typeof callback === "function") {
+	pool.query = ((...args: unknown[]) => {
+		const lastArg = args[args.length - 1];
+		if (typeof lastArg === "function") {
 			return original(...args);
 		}
 
-		const run = () => original(...(args as [string, unknown[]?]));
-		const attempt = async (n: number): Promise<ReturnType<typeof original>> => {
+		const attempt = async (n: number): Promise<unknown> => {
 			try {
-				return await run();
+				return await original(...args);
 			} catch (error) {
 				if (!isTransientConnectionError(error) || n >= 2) throw error;
 				await new Promise((r) => setTimeout(r, 75 * 2 ** n));
