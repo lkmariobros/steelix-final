@@ -63,5 +63,5 @@ export const agentProcedure = protectedProcedure.use(({ ctx, next }) => {
 			message: "Agent access required",
 		});
 	}
-	return next({ ctx: { ...ctx, session: ctx.session, userRole, userRoles: roles } });
+	return next({ ctx: { ...ctx, session: ctx.session, userRole } });
 });

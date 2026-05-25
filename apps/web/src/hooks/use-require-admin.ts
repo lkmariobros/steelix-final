@@ -1,7 +1,6 @@
 "use client";
 
-import { authClient } from "@/lib/auth-client";
-import { usePortalAccess } from "@/hooks/use-portal-access";
+import { useUserRole } from "@/hooks/use-user-role";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
@@ -12,26 +11,20 @@ import { useEffect } from "react";
  */
 export function useRequireAdmin() {
 	const router = useRouter();
-	const { data: session, isPending } = authClient.useSession();
-
-	const { canAdmin, isRoleLoading } = usePortalAccess();
+	const { session, hasAdminAccess, isChecking, isSessionPending } = useUserRole();
 
 	useEffect(() => {
-		if (isPending) return;
+		if (isSessionPending) return;
 		if (!session) return;
-		if (isRoleLoading) return;
-		if (!canAdmin) {
+		if (isChecking) return;
+		if (!hasAdminAccess) {
 			router.replace("/dashboard");
 		}
-	}, [isPending, session, isRoleLoading, canAdmin, router]);
-
-	const isChecking = isPending || (!!session && isRoleLoading);
-	const isAdmin = !!session && canAdmin;
+	}, [isSessionPending, session, isChecking, hasAdminAccess, router]);
 
 	return {
 		session,
-		isChecking,
-		isAdmin,
+		isChecking: isSessionPending || isChecking,
+		isAdmin: !!session && hasAdminAccess,
 	};
 }
-

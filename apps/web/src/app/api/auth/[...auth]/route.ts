@@ -9,6 +9,10 @@
  * as first-party cookies (same domain), which mobile browsers accept.
  */
 
+// Required: this route must run in Node.js so it can reliably proxy to a local backend
+// during development. Edge runtime can throw EACCES when fetching localhost on Windows.
+export const runtime = "nodejs";
+
 // Use localhost for development, production URL for production
 // Use 127.0.0.1 instead of localhost for better Windows compatibility
 const getBackendUrl = () => {

@@ -1,4 +1,5 @@
 import type { Hono } from "hono";
+import { closeDatabasePool } from "./db";
 
 const port = process.env.PORT || 8080;
 
@@ -142,5 +143,5 @@ function startNodeServer(app: Hono) {
 function shutdown(stop: () => void) {
 	console.log("🛑 Shutting down gracefully…");
 	stop();
-	process.exit(0);
+	void closeDatabasePool().finally(() => process.exit(0));
 }

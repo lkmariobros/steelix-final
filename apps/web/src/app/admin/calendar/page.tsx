@@ -1,12 +1,7 @@
 "use client";
 
-import { AppSidebar } from "@/components/app-sidebar";
 import { HeaderActions } from "@/components/header-actions";
-import {
-	SidebarInset,
-	SidebarProvider,
-	SidebarTrigger,
-} from "@/components/sidebar";
+import { SidebarTrigger } from "@/components/sidebar";
 import { Badge } from "@/components/ui/badge";
 import {
 	Breadcrumb,
@@ -37,7 +32,6 @@ import {
 	FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { LoadingScreen } from "@/components/ui/loading-spinner";
 import {
 	Select,
 	SelectContent,
@@ -49,7 +43,6 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { useRedirectUnauthenticated } from "@/hooks/use-redirect-unauthenticated";
 import { authClient } from "@/lib/auth-client";
 import { trpc } from "@/utils/trpc";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -156,8 +149,7 @@ type AnnouncementFormValues = z.infer<typeof announcementFormSchema>;
 
 export default function AdminCalendarPage() {
 	const queryClient = useQueryClient();
-	const { data: session, isPending } = authClient.useSession();
-	useRedirectUnauthenticated(session, isPending);
+	const { data: session } = authClient.useSession();
 	const [viewMode, setViewMode] = useState<"calendar" | "announcements">(
 		"calendar",
 	);
@@ -589,19 +581,8 @@ export default function AdminCalendarPage() {
 		}
 	};
 
-	// Authentication check
-	if (isPending) {
-		return <LoadingScreen text="Loading..." />;
-	}
-
-	if (!session) {
-		return <LoadingScreen text="Redirecting..." />;
-	}
-
 	return (
-		<SidebarProvider>
-			<AppSidebar />
-			<SidebarInset className="overflow-hidden px-4 md:px-6 lg:px-8">
+		<>
 				<header className="flex h-16 shrink-0 items-center gap-2 border-b">
 					<div className="flex flex-1 items-center gap-2 px-3">
 						<SidebarTrigger className="-ms-4" />
@@ -1466,7 +1447,6 @@ export default function AdminCalendarPage() {
 						</Form>
 					</DialogContent>
 				</Dialog>
-			</SidebarInset>
-		</SidebarProvider>
+		</>
 	);
 }

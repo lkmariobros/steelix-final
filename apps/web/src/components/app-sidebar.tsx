@@ -26,7 +26,8 @@ import {
 	PopoverTrigger,
 } from "@/components/ui/popover";
 import { authClient } from "@/lib/auth-client";
-import { usePortalAccess } from "@/hooks/use-portal-access";
+import { useUserRole } from "@/hooks/use-user-role";
+import { PORTAL_PATHS } from "@/lib/user-role";
 import { trpc } from "@/utils/trpc";
 import { TeamSwitcher } from "@/components/team-switcher";
 import { useRouter } from "next/navigation";
@@ -237,18 +238,22 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 		});
 	}, []);
 
-	const { canAdmin } = usePortalAccess();
+	const { hasAdminAccess } = useUserRole();
 	const isCurrentlyInAdminPortal = pathname.startsWith("/admin");
 
 	const portalSwitch =
-		canAdmin ? (
+		hasAdminAccess ? (
 			<div className="px-2 pt-2">
 				<Button
 					variant="outline"
 					size="sm"
 					className="w-full justify-between"
 					onClick={() =>
-						router.push(isCurrentlyInAdminPortal ? "/dashboard" : "/admin")
+						window.location.assign(
+							isCurrentlyInAdminPortal
+								? PORTAL_PATHS.agent
+								: PORTAL_PATHS.admin,
+						)
 					}
 				>
 					<span>
@@ -262,7 +267,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 		) : null;
 
 	// Navigation follows the active portal (URL), not role alone
-	const navigationItems = isCurrentlyInAdminPortal && canAdmin
+	const navigationItems = isCurrentlyInAdminPortal && hasAdminAccess
 		? [
 				{
 					title: "Overview",
@@ -407,7 +412,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 				<SearchForm className="mt-3" />
 			</SidebarHeader>
 			<SidebarContent>
-				{portalSwitch}
 				{/* We create a SidebarGroup for each parent. */}
 				{navigationItems.map((item) => (
 					<SidebarGroup key={item.title}>

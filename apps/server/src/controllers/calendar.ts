@@ -14,7 +14,7 @@ import {
 	updateCalendarEventSchema,
 } from "../models/calendar";
 import { db } from "../utils/db";
-import { protectedProcedure, router } from "../utils/trpc";
+import { adminProcedure, protectedProcedure, router } from "../utils/trpc";
 
 // List calendar events input schema
 const listEventsInput = z.object({
@@ -374,21 +374,9 @@ export const calendarRouter = router({
 			};
 		}),
 
-	// Create announcement (admin only)
-	createAnnouncement: protectedProcedure
+	createAnnouncement: adminProcedure
 		.input(createAnnouncementInput)
 		.mutation(async ({ input, ctx }) => {
-			// Check if user is admin
-			const [currentUser] = await db
-				.select()
-				.from(user)
-				.where(eq(user.id, ctx.session.user.id))
-				.limit(1);
-
-			if (currentUser?.role !== "admin") {
-				throw new Error("Only admins can create announcements");
-			}
-
 			const [created] = await db
 				.insert(announcements)
 				.values({
@@ -400,22 +388,10 @@ export const calendarRouter = router({
 			return created;
 		}),
 
-	// Update announcement (admin only)
-	updateAnnouncement: protectedProcedure
+	updateAnnouncement: adminProcedure
 		.input(updateAnnouncementInput)
-		.mutation(async ({ input, ctx }) => {
+		.mutation(async ({ input }) => {
 			const { id, ...updateData } = input;
-
-			// Check if user is admin
-			const [currentUser] = await db
-				.select()
-				.from(user)
-				.where(eq(user.id, ctx.session.user.id))
-				.limit(1);
-
-			if (currentUser?.role !== "admin") {
-				throw new Error("Only admins can update announcements");
-			}
 
 			const [updated] = await db
 				.update(announcements)
@@ -433,22 +409,10 @@ export const calendarRouter = router({
 			return updated;
 		}),
 
-	// Delete announcement (admin only)
-	deleteAnnouncement: protectedProcedure
+	deleteAnnouncement: adminProcedure
 		.input(deleteAnnouncementInput)
-		.mutation(async ({ input, ctx }) => {
+		.mutation(async ({ input }) => {
 			const { id } = input;
-
-			// Check if user is admin
-			const [currentUser] = await db
-				.select()
-				.from(user)
-				.where(eq(user.id, ctx.session.user.id))
-				.limit(1);
-
-			if (currentUser?.role !== "admin") {
-				throw new Error("Only admins can delete announcements");
-			}
 
 			await db.delete(announcements).where(eq(announcements.id, id));
 

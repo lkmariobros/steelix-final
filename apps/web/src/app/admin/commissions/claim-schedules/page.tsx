@@ -1,9 +1,8 @@
 "use client";
 
-import { AppSidebar } from "@/components/app-sidebar";
 import { HeaderActions } from "@/components/header-actions";
 import { Separator } from "@/components/separator";
-import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/sidebar";
+import { SidebarTrigger } from "@/components/sidebar";
 import {
 	Table,
 	TableBody,
@@ -24,8 +23,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { LoadingScreen } from "@/components/ui/loading-spinner";
-import { useRedirectUnauthenticated } from "@/hooks/use-redirect-unauthenticated";
 import { authClient } from "@/lib/auth-client";
 import { trpc } from "@/utils/trpc";
 import { RiArrowLeftLine, RiDashboardLine } from "@remixicon/react";
@@ -34,8 +31,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 export default function ClaimSchedulesPage() {
-	const { data: session, isPending } = authClient.useSession();
-	useRedirectUnauthenticated(session, isPending);
+	const { data: session } = authClient.useSession();
 
 	const list = trpc.commissionPayouts.claimSchedulesList.useQuery(
 		{},
@@ -66,13 +62,8 @@ export default function ClaimSchedulesPage() {
 		onError: (e) => toast.error(e.message),
 	});
 
-	if (isPending) return <LoadingScreen text="Loading..." />;
-	if (!session) return <LoadingScreen text="Redirecting..." />;
-
 	return (
-		<SidebarProvider>
-			<AppSidebar />
-			<SidebarInset className="overflow-hidden px-4 md:px-6 lg:px-8">
+		<>
 				<header className="flex h-16 shrink-0 items-center gap-2 border-b">
 					<div className="flex flex-1 items-center gap-2 px-3">
 						<SidebarTrigger className="-ms-4" />
@@ -213,7 +204,6 @@ export default function ClaimSchedulesPage() {
 						</CardContent>
 					</Card>
 				</div>
-			</SidebarInset>
-		</SidebarProvider>
+		</>
 	);
 }
