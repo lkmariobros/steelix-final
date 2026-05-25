@@ -23,6 +23,7 @@ import {
 import { usePathname, useRouter } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
 import { useKeyboardNavigation } from "@/hooks/use-keyboard-navigation";
+import { usePortalAccess } from "@/hooks/use-portal-access";
 
 interface TeamSwitcherProps {
 	teams?: {
@@ -38,6 +39,7 @@ export function TeamSwitcher({ teams = [] }: TeamSwitcherProps) {
 
 	// Authentication
 	const { data: session, isPending: isSessionPending } = authClient.useSession();
+	const { canAdmin } = usePortalAccess();
 
 	// Determine current portal
 	const isInAdminPortal = pathname.startsWith("/admin");
@@ -166,27 +168,28 @@ export function TeamSwitcher({ teams = [] }: TeamSwitcherProps) {
 								)}
 							</DropdownMenuItem>
 
-							{/* Admin Portal - Available to all users */}
-							<DropdownMenuItem
-								onClick={handleNavigateToAdmin}
-								className="gap-2 p-2 focus:bg-sidebar-accent focus:text-sidebar-accent-foreground"
-								disabled={isInAdminPortal}
-								role="menuitem"
-								aria-label="Switch to Admin Portal"
-								tabIndex={0}
-							>
-								<RiShieldUserLine
-									className="opacity-60"
-									size={16}
-									aria-hidden="true"
-								/>
-								<div className="font-medium">Admin Portal</div>
-								{isInAdminPortal && (
-									<span className="ml-auto text-muted-foreground text-xs">
-										Current
-									</span>
-								)}
-							</DropdownMenuItem>
+							{canAdmin && (
+								<DropdownMenuItem
+									onClick={handleNavigateToAdmin}
+									className="gap-2 p-2 focus:bg-sidebar-accent focus:text-sidebar-accent-foreground"
+									disabled={isInAdminPortal}
+									role="menuitem"
+									aria-label="Switch to Admin Portal"
+									tabIndex={0}
+								>
+									<RiShieldUserLine
+										className="opacity-60"
+										size={16}
+										aria-hidden="true"
+									/>
+									<div className="font-medium">Admin Portal</div>
+									{isInAdminPortal && (
+										<span className="ml-auto text-muted-foreground text-xs">
+											Current
+										</span>
+									)}
+								</DropdownMenuItem>
+							)}
 						</>
 					)}
 

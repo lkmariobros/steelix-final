@@ -15,6 +15,12 @@ import { transactions } from "../models/transactions";
 import { ensurePayoutsForApprovedTransaction } from "../services/commission-payouts";
 import { db } from "../utils/db";
 import { adminProcedure, protectedProcedure, router } from "../utils/trpc";
+import {
+	getEffectiveRoles,
+	getPrimaryRole,
+	hasAdminAccess,
+	hasAgentAccess,
+} from "../utils/user-roles";
 
 // Input schemas for admin operations
 const dateRangeInput = z.object({
@@ -52,20 +58,12 @@ export const adminRouter = router({
 			.where(eq(user.id, ctx.session.user.id))
 			.limit(1);
 
-		const roles =
-			userRecord?.roles ??
-			(userRecord?.role ? [userRecord.role] : ["agent"]);
-		const userRole = roles.includes("admin")
-			? "admin"
-			: roles.includes("team_lead")
-				? "team_lead"
-				: "agent";
-		const isAdmin = roles.includes("admin");
-		const isAgent = roles.includes("agent");
+		const roles = getEffectiveRoles(userRecord ?? {});
+		const userRole = getPrimaryRole(userRecord ?? {});
 
 		return {
-			hasAdminAccess: isAdmin,
-			hasAgentAccess: isAgent,
+			hasAdminAccess: hasAdminAccess(userRecord ?? {}),
+			hasAgentAccess: hasAgentAccess(userRecord ?? {}),
 			role: userRole,
 			roles,
 		};

@@ -1,5 +1,11 @@
 import { TRPCError, initTRPC } from "@trpc/server";
 import type { Context } from "./context";
+import {
+	getEffectiveRoles,
+	getPrimaryRole,
+	hasAdminAccess,
+	hasAgentAccess,
+} from "./user-roles";
 
 export const t = initTRPC.context<Context>().create();
 
@@ -27,14 +33,13 @@ export const protectedProcedure = t.procedure.use(({ ctx, next }) => {
 });
 
 export const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
-	const roles =
-		(ctx.session.user as { roles?: string[] | null; role?: string | null })
-			?.roles ??
-		(((ctx.session.user as { role?: string | null })?.role ?? "agent") as string
-			? [(ctx.session.user as { role?: string | null })?.role ?? "agent"]
-			: ["agent"]);
-	const hasAdmin = roles.includes("admin");
-	const userRole = hasAdmin ? "admin" : roles.includes("team_lead") ? "team_lead" : "agent";
+	const user = ctx.session.user as {
+		roles?: string[] | null;
+		role?: string | null;
+	};
+	const roles = getEffectiveRoles(user);
+	const hasAdmin = hasAdminAccess(user);
+	const userRole = getPrimaryRole(user);
 	if (!hasAdmin) {
 		throw new TRPCError({
 			code: "FORBIDDEN",
@@ -45,18 +50,13 @@ export const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
 });
 
 export const agentProcedure = protectedProcedure.use(({ ctx, next }) => {
-	const roles =
-		(ctx.session.user as { roles?: string[] | null; role?: string | null })
-			?.roles ??
-		(((ctx.session.user as { role?: string | null })?.role ?? "agent") as string
-			? [(ctx.session.user as { role?: string | null })?.role ?? "agent"]
-			: ["agent"]);
-	const hasAgent = roles.includes("agent");
-	const userRole = roles.includes("admin")
-		? "admin"
-		: roles.includes("team_lead")
-			? "team_lead"
-			: "agent";
+	const user = ctx.session.user as {
+		roles?: string[] | null;
+		role?: string | null;
+	};
+	const roles = getEffectiveRoles(user);
+	const hasAgent = hasAgentAccess(user);
+	const userRole = getPrimaryRole(user);
 	if (!hasAgent) {
 		throw new TRPCError({
 			code: "FORBIDDEN",
