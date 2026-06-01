@@ -6,9 +6,11 @@ import { db } from "../utils/db";
 /** Business date for reporting (falls back to createdAt). */
 export const transactionDateExpr = sql`COALESCE(${transactions.transactionDate}, ${transactions.createdAt})`;
 
+export type DateTruncUnit = "day" | "week" | "month" | "quarter" | "year";
+
 export function periodTypeToDateTrunc(
 	periodType: "daily" | "weekly" | "monthly" | "quarterly" | "yearly",
-): "day" | "week" | "month" | "quarter" | "year" {
+): DateTruncUnit {
 	switch (periodType) {
 		case "daily":
 			return "day";
@@ -20,6 +22,25 @@ export function periodTypeToDateTrunc(
 			return "year";
 		default:
 			return "month";
+	}
+}
+
+/**
+ * date_trunc() unit must be a SQL literal — binding it as $1 breaks GROUP BY
+ * matching and can fail at runtime when reused across SELECT/GROUP BY/ORDER BY.
+ */
+export function transactionPeriodTrunc(unit: DateTruncUnit) {
+	switch (unit) {
+		case "day":
+			return sql<string>`date_trunc('day', ${transactionDateExpr})`;
+		case "week":
+			return sql<string>`date_trunc('week', ${transactionDateExpr})`;
+		case "quarter":
+			return sql<string>`date_trunc('quarter', ${transactionDateExpr})`;
+		case "year":
+			return sql<string>`date_trunc('year', ${transactionDateExpr})`;
+		default:
+			return sql<string>`date_trunc('month', ${transactionDateExpr})`;
 	}
 }
 
@@ -113,7 +134,7 @@ export async function getPerformanceAnalyticsFromTransactions(input: {
 
 	const whereClause = and(...conditions);
 
-	const periodExpr = sql<string>`date_trunc(${dateTrunc}, ${transactionDateExpr})`;
+	const periodExpr = transactionPeriodTrunc(dateTrunc);
 
 	const periodRows = await db
 		.select({

@@ -14,6 +14,8 @@ import {
 	buildTransactionDateConditions,
 	getPerformanceAnalyticsFromTransactions,
 	getTopPerformersFromTransactions,
+	transactionPeriodTrunc,
+	type DateTruncUnit,
 } from "../services/reports-analytics";
 import { db } from "../utils/db";
 import { adminProcedure, protectedProcedure, router } from "../utils/trpc";
@@ -355,8 +357,7 @@ export const reportsRouter = router({
 				conditions.push(inArray(transactions.agentId, input.agentIds));
 			}
 
-			// Build date truncation based on groupBy
-			const dateTrunc =
+			const dateTrunc: DateTruncUnit =
 				input.groupBy === "day"
 					? "day"
 					: input.groupBy === "week"
@@ -367,9 +368,11 @@ export const reportsRouter = router({
 								? "quarter"
 								: "year";
 
+			const periodExpr = transactionPeriodTrunc(dateTrunc);
+
 			const analyticsData = await db
 				.select({
-					period: sql<string>`date_trunc(${dateTrunc}, ${transactions.createdAt})::date`,
+					period: periodExpr,
 					totalTransactions: sql<number>`count(*)`,
 					completedTransactions: sql<number>`count(*) filter (where ${transactions.status} = 'completed')`,
 					totalCommission: sql<number>`sum(cast(${transactions.commissionAmount} as decimal))`,
@@ -381,8 +384,8 @@ export const reportsRouter = router({
 				})
 				.from(transactions)
 				.where(and(...conditions))
-				.groupBy(sql`date_trunc(${dateTrunc}, ${transactions.createdAt})`)
-				.orderBy(sql`date_trunc(${dateTrunc}, ${transactions.createdAt})`);
+				.groupBy(periodExpr)
+				.orderBy(periodExpr);
 
 			// Get status breakdown
 			const statusBreakdown = await db
