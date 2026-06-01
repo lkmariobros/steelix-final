@@ -1,16 +1,20 @@
 import { and, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import { z } from "zod";
 import { commissionApprovals } from "../models/approvals";
-import { agencies, teams, user } from "../models/auth";
+import { user } from "../models/auth";
 import {
 	PERFORMANCE_PERIODS,
 	REPORT_EXPIRY_DAYS,
 	insertReportSchema,
-	performanceMetrics,
 	reports,
 	selectReportSchema,
 } from "../models/reports";
 import { transactions } from "../models/transactions";
+import {
+	buildTransactionDateConditions,
+	getPerformanceAnalyticsFromTransactions,
+	getTopPerformersFromTransactions,
+} from "../services/reports-analytics";
 import { db } from "../utils/db";
 import { adminProcedure, protectedProcedure, router } from "../utils/trpc";
 
@@ -216,16 +220,11 @@ export const reportsRouter = router({
 	getDashboardStats: adminProcedure
 		.input(dashboardStatsInput)
 		.query(async ({ input }) => {
-			const conditions = [];
+			const conditions = buildTransactionDateConditions(
+				input.startDate,
+				input.endDate,
+			);
 			const userConditions = [];
-
-			// Date range conditions
-			if (input.startDate) {
-				conditions.push(gte(transactions.createdAt, input.startDate));
-			}
-			if (input.endDate) {
-				conditions.push(lte(transactions.createdAt, input.endDate));
-			}
 
 			// Filter conditions
 			if (input.agencyId) {
@@ -312,31 +311,13 @@ export const reportsRouter = router({
 
 			const [agentStats] = await agentStatsQuery;
 
-			// Get top performers (last 30 days)
-			const thirtyDaysAgo = new Date();
-			thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-			const topPerformersQuery = db
-				.select({
-					agentId: performanceMetrics.agentId,
-					agentName: user.name,
-					totalTransactions: performanceMetrics.totalTransactions,
-					totalCommission: performanceMetrics.totalCommission,
-					conversionRate: performanceMetrics.conversionRate,
-				})
-				.from(performanceMetrics)
-				.leftJoin(user, eq(performanceMetrics.agentId, user.id))
-				.where(
-					and(
-						eq(performanceMetrics.periodType, "monthly"),
-						gte(performanceMetrics.periodStart, thirtyDaysAgo),
-						...(userConditions.length > 0 ? userConditions : []),
-					),
-				)
-				.orderBy(desc(performanceMetrics.totalCommission))
-				.limit(10);
-
-			const topPerformers = await topPerformersQuery;
+			const topPerformers = await getTopPerformersFromTransactions({
+				startDate: input.startDate,
+				endDate: input.endDate,
+				agencyId: input.agencyId,
+				teamId: input.teamId,
+				limit: 10,
+			});
 
 			return {
 				transactions: transactionStats,
@@ -346,120 +327,11 @@ export const reportsRouter = router({
 			};
 		}),
 
-	// Get performance analytics (admin only)
+	// Get performance analytics (admin only) — computed from live transactions
 	getPerformanceAnalytics: adminProcedure
 		.input(performanceAnalyticsInput)
 		.query(async ({ input }) => {
-			const conditions = [
-				eq(performanceMetrics.periodType, input.periodType),
-				gte(performanceMetrics.periodStart, input.startDate),
-				lte(performanceMetrics.periodEnd, input.endDate),
-			];
-
-			if (input.agentIds && input.agentIds.length > 0) {
-				conditions.push(inArray(performanceMetrics.agentId, input.agentIds));
-			}
-
-			// If team or agency filters are provided, join with user table
-			const query = db
-				.select({
-					metrics: performanceMetrics,
-					agent: {
-						id: user.id,
-						name: user.name,
-						email: user.email,
-						agentTier: user.agentTier,
-					},
-					team: {
-						id: teams.id,
-						name: teams.name,
-					},
-					agency: {
-						id: agencies.id,
-						name: agencies.name,
-					},
-				})
-				.from(performanceMetrics)
-				.leftJoin(user, eq(performanceMetrics.agentId, user.id))
-				.leftJoin(teams, eq(user.teamId, teams.id))
-				.leftJoin(agencies, eq(user.agencyId, agencies.id));
-
-			if (input.teamIds && input.teamIds.length > 0) {
-				conditions.push(inArray(user.teamId, input.teamIds));
-			}
-			if (input.agencyIds && input.agencyIds.length > 0) {
-				conditions.push(inArray(user.agencyId, input.agencyIds));
-			}
-
-			const performanceData = await query
-				.where(and(...conditions))
-				.orderBy(desc(performanceMetrics.periodStart));
-
-			// Aggregate data by period
-			const aggregatedData = performanceData.reduce(
-				(acc, item) => {
-					const periodKey = item.metrics.periodStart
-						.toISOString()
-						.split("T")[0];
-					if (!acc[periodKey]) {
-						acc[periodKey] = {
-							period: periodKey,
-							totalTransactions: 0,
-							totalCommission: 0,
-							averageCommission: 0,
-							agentCount: 0,
-							agents: [],
-						};
-					}
-
-					acc[periodKey].totalTransactions += item.metrics.totalTransactions;
-					acc[periodKey].totalCommission += Number.parseFloat(
-						item.metrics.totalCommission,
-					);
-					acc[periodKey].agentCount += 1;
-					acc[periodKey].agents.push({
-						...item.agent,
-						metrics: item.metrics,
-						team: item.team,
-						agency: item.agency,
-					});
-
-					return acc;
-				},
-				{} as Record<
-					string,
-					{
-						period: string;
-						totalCommission: number;
-						totalTransactions: number;
-						agentCount: number;
-						averageCommission?: number;
-						agents: unknown[];
-					}
-				>,
-			);
-
-			// Calculate averages
-			for (const period of Object.values(aggregatedData)) {
-				period.averageCommission = period.totalCommission / period.agentCount;
-			}
-
-			return {
-				periods: Object.values(aggregatedData),
-				summary: {
-					totalPeriods: Object.keys(aggregatedData).length,
-					totalAgents: new Set(performanceData.map((p) => p.metrics.agentId))
-						.size,
-					overallCommission: Object.values(aggregatedData).reduce(
-						(sum, p) => sum + p.totalCommission,
-						0,
-					),
-					overallTransactions: Object.values(aggregatedData).reduce(
-						(sum, p) => sum + p.totalTransactions,
-						0,
-					),
-				},
-			};
+			return getPerformanceAnalyticsFromTransactions(input);
 		}),
 
 	// Get transaction analytics (admin only)

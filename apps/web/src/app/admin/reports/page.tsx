@@ -41,6 +41,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { authClient } from "@/lib/auth-client";
+import { formatCurrency } from "@/lib/format-currency";
 import { trpc } from "@/utils/trpc";
 import {
 	RiBarChartLine,
@@ -355,10 +356,9 @@ export default function AdminReportsPage() {
 										</CardHeader>
 										<CardContent>
 											<div className="font-bold text-2xl">
-												$
-												{(
-													dashboardStats?.transactions?.totalCommission || 0
-												).toLocaleString()}
+												{formatCurrency(
+													dashboardStats?.transactions?.totalCommission,
+												)}
 											</div>
 											<p className="text-muted-foreground text-xs">
 												Total commission value
@@ -387,10 +387,9 @@ export default function AdminReportsPage() {
 										</CardHeader>
 										<CardContent>
 											<div className="font-bold text-2xl">
-												$
-												{(
-													dashboardStats?.transactions?.averageCommission || 0
-												).toLocaleString()}
+												{formatCurrency(
+													dashboardStats?.transactions?.averageCommission,
+												)}
 											</div>
 											<p className="text-muted-foreground text-xs">
 												Average per transaction
@@ -467,60 +466,125 @@ export default function AdminReportsPage() {
 												))}
 											</div>
 										</div>
-									) : performanceAnalytics?.periods &&
-										performanceAnalytics.periods.length > 0 ? (
+									) : (performanceAnalytics?.periods &&
+											performanceAnalytics.periods.length > 0) ||
+										(performanceAnalytics?.transactions &&
+											performanceAnalytics.transactions.length > 0) ? (
 										<div className="space-y-6">
-											<div>
-												<h4 className="mb-3 font-medium">
-													Performance Overview
-												</h4>
-												<div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-													{performanceAnalytics.periods
-														.slice(0, 6)
-														.map((metric, idx) => (
-															<div
-																key={
-																	("periodStart" in metric
-																		? String(metric.periodStart)
-																		: metric.period) ?? idx
-																}
-																className="rounded-lg border p-4"
-															>
-																<div className="mb-2 flex items-center justify-between">
-																	<span className="font-medium text-sm">
-																		Period Performance
-																	</span>
-																	<span className="text-muted-foreground text-xs">
-																		{"periodStart" in metric &&
-																		metric.periodStart
-																			? new Date(
-																					metric.periodStart as string,
-																				).toLocaleDateString()
-																			: (metric.period ?? "N/A")}
-																	</span>
-																</div>
-																<div className="space-y-1">
-																	<div className="font-semibold text-lg">
-																		$
-																		{Number(
-																			("totalCommissionEarned" in metric
-																				? metric.totalCommissionEarned
-																				: metric.totalCommission) || 0,
-																		).toLocaleString()}
+											{(performanceAnalytics.periods ?? []).length > 0 && (
+												<div>
+													<h4 className="mb-3 font-medium">
+														Performance Overview
+													</h4>
+													<div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+														{(performanceAnalytics.periods ?? [])
+															.slice(0, 6)
+															.map((metric, idx) => (
+																<div
+																	key={metric.periodStart ?? metric.period ?? idx}
+																	className="rounded-lg border p-4"
+																>
+																	<div className="mb-2 flex items-center justify-between">
+																		<span className="font-medium text-sm">
+																			Period Performance
+																		</span>
+																		<span className="text-muted-foreground text-xs">
+																			{metric.periodStart
+																				? new Date(
+																						metric.periodStart,
+																					).toLocaleDateString()
+																				: (metric.period ?? "N/A")}
+																		</span>
 																	</div>
-																	<div className="text-muted-foreground text-sm">
-																		{Number(
-																			"transactionCount" in metric
-																				? metric.transactionCount
-																				: metric.totalTransactions || 0,
-																		)}{" "}
-																		transactions
+																	<div className="space-y-1">
+																		<div className="font-semibold text-lg">
+																			{formatCurrency(metric.totalCommission)}
+																		</div>
+																		<div className="text-muted-foreground text-sm">
+																			{metric.totalTransactions || 0}{" "}
+																			transactions
+																		</div>
 																	</div>
 																</div>
-															</div>
-														))}
+															))}
+													</div>
 												</div>
-											</div>
+											)}
+
+											{performanceAnalytics?.transactions &&
+												performanceAnalytics.transactions.length > 0 && (
+													<div>
+														<h4 className="mb-3 font-medium">
+															Transactions in period
+														</h4>
+														<div className="overflow-x-auto rounded-lg border">
+															<table className="w-full text-sm">
+																<thead className="border-b bg-muted/50">
+																	<tr>
+																		<th className="px-3 py-2 text-left font-medium">
+																			Case / Agent
+																		</th>
+																		<th className="px-3 py-2 text-left font-medium">
+																			Client / Property
+																		</th>
+																		<th className="px-3 py-2 text-left font-medium">
+																			Status
+																		</th>
+																		<th className="px-3 py-2 text-right font-medium">
+																			Commission
+																		</th>
+																		<th className="px-3 py-2 text-right font-medium">
+																			Date
+																		</th>
+																	</tr>
+																</thead>
+																<tbody>
+																	{(performanceAnalytics.transactions ?? [])
+																		.slice(0, 20)
+																		.map((txn) => (
+																			<tr
+																				key={txn.id}
+																				className="border-b last:border-0"
+																			>
+																				<td className="px-3 py-2">
+																					<div className="font-medium">
+																						{txn.caseNo || txn.id.slice(0, 8)}
+																					</div>
+																					<div className="text-muted-foreground text-xs">
+																						{txn.agentName || "—"}
+																					</div>
+																				</td>
+																				<td className="px-3 py-2">
+																					<div>{txn.clientName || "—"}</div>
+																					<div className="text-muted-foreground text-xs">
+																						{txn.propertyAddress || "—"}
+																					</div>
+																				</td>
+																				<td className="px-3 py-2 capitalize">
+																					{txn.status?.replace(/_/g, " ") ||
+																						"—"}
+																				</td>
+																				<td className="px-3 py-2 text-right font-medium">
+																					{formatCurrency(txn.commissionAmount)}
+																				</td>
+																				<td className="px-3 py-2 text-right text-muted-foreground">
+																					{txn.transactionDate
+																						? new Date(
+																								txn.transactionDate,
+																							).toLocaleDateString()
+																						: txn.createdAt
+																							? new Date(
+																									txn.createdAt,
+																								).toLocaleDateString()
+																							: "—"}
+																				</td>
+																			</tr>
+																		))}
+																</tbody>
+															</table>
+														</div>
+													</div>
+												)}
 
 											<div>
 												<h4 className="mb-3 font-medium">Top Performers</h4>
@@ -549,10 +613,9 @@ export default function AdminReportsPage() {
 																</div>
 																<div className="text-right">
 																	<div className="font-semibold">
-																		$
-																		{Number(
-																			performer.totalCommission || 0,
-																		).toLocaleString()}
+																		{formatCurrency(
+																			performer.totalCommission,
+																		)}
 																	</div>
 																	<div className="text-muted-foreground text-sm">
 																		Commission earned
@@ -700,10 +763,7 @@ export default function AdminReportsPage() {
 																{t.coBrokingData?.commissionSplit || 0}%
 															</TableCell>
 															<TableCell className="text-right font-medium">
-																$
-																{Number(
-																	t.commissionAmount || 0,
-																).toLocaleString()}
+																{formatCurrency(t.commissionAmount)}
 															</TableCell>
 															<TableCell>
 																<Badge
@@ -753,10 +813,9 @@ export default function AdminReportsPage() {
 													Total Commission
 												</div>
 												<div className="font-bold text-2xl">
-													$
-													{Number(
-														coBrokingData.summary.totalCoBrokingCommission || 0,
-													).toLocaleString()}
+													{formatCurrency(
+														coBrokingData.summary.totalCoBrokingCommission,
+													)}
 												</div>
 											</div>
 											<div className="rounded-lg border p-4">
@@ -907,14 +966,13 @@ export default function AdminReportsPage() {
 																{c.transactions?.length || 0}
 															</TableCell>
 															<TableCell className="text-right font-medium">
-																$
-																{c.transactions
-																	?.reduce(
+																{formatCurrency(
+																	c.transactions?.reduce(
 																		(sum, t) =>
 																			sum + Number(t.commissionAmount || 0),
 																		0,
-																	)
-																	.toLocaleString()}
+																	),
+																)}
 															</TableCell>
 														</TableRow>
 													))}
