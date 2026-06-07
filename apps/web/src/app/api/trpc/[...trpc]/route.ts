@@ -1,15 +1,14 @@
 /**
- * tRPC Proxy Route
- *
- * This proxies tRPC requests from the frontend to the backend server.
- * This solves cross-origin cookie issues on mobile browsers by making
- * all requests same-origin from the browser's perspective.
+ * tRPC Proxy Route — same-origin proxy to the backend API.
  */
 
 export const runtime = "nodejs";
 
-// Use localhost for development, production URL for production
-// Use 127.0.0.1 instead of localhost for better Windows compatibility
+import {
+	stripAcceptEncoding,
+	toProxyResponse,
+} from "@/lib/proxy-response";
+
 const getBackendUrl = () => {
 	if (process.env.NEXT_PUBLIC_SERVER_URL) {
 		return process.env.NEXT_PUBLIC_SERVER_URL;
@@ -17,7 +16,6 @@ const getBackendUrl = () => {
 	if (process.env.NODE_ENV === "production") {
 		return "https://steelix-final-production.up.railway.app";
 	}
-	// Use 127.0.0.1 for better Windows compatibility
 	return "http://127.0.0.1:8080";
 };
 
@@ -31,7 +29,6 @@ function sanitizeCookieHeader(rawCookie: string | null) {
 		.filter(Boolean);
 	const filtered = parts.filter((part) => {
 		const [name] = part.split("=", 1);
-		// Drop oversized session_data cookies; backend auth uses session_token.
 		if (
 			name === "better-auth.session_data" ||
 			name === "__Secure-better-auth.session_data" ||
@@ -47,21 +44,16 @@ function sanitizeCookieHeader(rawCookie: string | null) {
 
 async function handler(request: Request) {
 	const url = new URL(request.url);
-
-	// Get the tRPC path (everything after /api/trpc/)
 	const trpcPath = url.pathname.replace("/api/trpc/", "");
 	const targetUrl = `${BACKEND_URL}/trpc/${trpcPath}${url.search}`;
 
-	// Forward all headers, especially cookies
 	const headers = new Headers();
 	request.headers.forEach((value, key) => {
-		// Skip host header as it will be set by fetch
 		if (key.toLowerCase() !== "host") {
 			headers.set(key, value);
 		}
 	});
 
-	// Ensure cookies are forwarded
 	const cookies = sanitizeCookieHeader(request.headers.get("cookie"));
 	if (cookies) {
 		headers.set("cookie", cookies);
@@ -69,7 +61,7 @@ async function handler(request: Request) {
 		headers.delete("cookie");
 	}
 
-	// Forward request to backend
+	stripAcceptEncoding(headers);
 
 	try {
 		const response = await fetch(targetUrl, {
@@ -79,24 +71,13 @@ async function handler(request: Request) {
 				request.method !== "GET" && request.method !== "HEAD"
 					? await request.text()
 					: undefined,
-			// Don't follow redirects - let client handle them
 			redirect: "manual",
 		});
 
-		// Create response with all headers from backend
-		const responseHeaders = new Headers();
-		response.headers.forEach((value, key) => {
-			// Forward set-cookie headers to establish session
-			responseHeaders.append(key, value);
-		});
-
-		// Add CORS headers for same-origin
-		responseHeaders.set("Access-Control-Allow-Credentials", "true");
-
-		return new Response(response.body, {
-			status: response.status,
-			statusText: response.statusText,
-			headers: responseHeaders,
+		return toProxyResponse(response, {
+			extraHeaders: {
+				"Access-Control-Allow-Credentials": "true",
+			},
 		});
 	} catch (error) {
 		console.error("tRPC proxy error:", error);
@@ -105,7 +86,6 @@ async function handler(request: Request) {
 		const errorDetails =
 			error instanceof Error && "cause" in error ? String(error.cause) : "";
 
-		// Provide helpful error message if backend is not reachable
 		if (
 			errorMessage.includes("fetch failed") ||
 			errorMessage.includes("EACCES") ||
@@ -114,8 +94,7 @@ async function handler(request: Request) {
 			return new Response(
 				JSON.stringify({
 					error: "Backend server not reachable",
-					details: `Cannot connect to ${BACKEND_URL}. Please ensure the backend server is running on port 8080.`,
-					hint: 'Run "cd apps/server && bun dev" to start the backend server. If the issue persists, check Windows Firewall settings.',
+					details: `Cannot connect to ${BACKEND_URL}. Please ensure the backend server is running.`,
 				}),
 				{ status: 502, headers: { "Content-Type": "application/json" } },
 			);
@@ -132,14 +111,12 @@ async function handler(request: Request) {
 	}
 }
 
-// Handle all HTTP methods
 export const GET = handler;
 export const POST = handler;
 export const PUT = handler;
 export const PATCH = handler;
 export const DELETE = handler;
 
-// Handle preflight requests
 export async function OPTIONS(request: Request) {
 	return new Response(null, {
 		status: 204,

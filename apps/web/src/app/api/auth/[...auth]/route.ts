@@ -1,20 +1,17 @@
 /**
  * Auth Proxy Route
  *
- * This proxies Better Auth requests from the frontend to the backend server.
- * This solves cross-origin cookie issues on mobile browsers by making
- * all requests same-origin from the browser's perspective.
- *
- * The backend sets cookies, and this proxy forwards them to the client
- * as first-party cookies (same domain), which mobile browsers accept.
+ * Proxies Better Auth requests to the backend as same-origin requests so
+ * session cookies work on mobile and production (Vercel → Railway).
  */
 
-// Required: this route must run in Node.js so it can reliably proxy to a local backend
-// during development. Edge runtime can throw EACCES when fetching localhost on Windows.
 export const runtime = "nodejs";
 
-// Use localhost for development, production URL for production
-// Use 127.0.0.1 instead of localhost for better Windows compatibility
+import {
+	stripAcceptEncoding,
+	toProxyResponse,
+} from "@/lib/proxy-response";
+
 const getBackendUrl = () => {
 	if (process.env.NEXT_PUBLIC_SERVER_URL) {
 		return process.env.NEXT_PUBLIC_SERVER_URL;
@@ -22,7 +19,6 @@ const getBackendUrl = () => {
 	if (process.env.NODE_ENV === "production") {
 		return "https://steelix-final-production.up.railway.app";
 	}
-	// Use 127.0.0.1 for better Windows compatibility
 	return "http://127.0.0.1:8080";
 };
 
@@ -36,7 +32,6 @@ function sanitizeCookieHeader(rawCookie: string | null) {
 		.filter(Boolean);
 	const filtered = parts.filter((part) => {
 		const [name] = part.split("=", 1);
-		// Drop session_data (and chunked variants) to avoid header bloat / 431.
 		if (
 			name === "better-auth.session_data" ||
 			name === "__Secure-better-auth.session_data" ||
@@ -50,10 +45,22 @@ function sanitizeCookieHeader(rawCookie: string | null) {
 	return filtered.length > 0 ? filtered.join("; ") : null;
 }
 
+function modifySetCookie(raw: string): string {
+	return raw
+		.replace(/;\s*SameSite=None/gi, "; SameSite=Lax")
+		.replace(/;\s*Domain=[^;]+/gi, "");
+}
+
+function getSetCookies(response: Response): string[] {
+	if (typeof response.headers.getSetCookie === "function") {
+		return response.headers.getSetCookie();
+	}
+	const single = response.headers.get("set-cookie");
+	return single ? [single] : [];
+}
+
 async function handler(request: Request) {
 	const url = new URL(request.url);
-
-	// Get the auth path (everything after /api/auth/)
 	const authPath = url.pathname.replace("/api/auth/", "");
 	const targetUrl = `${BACKEND_URL}/api/auth/${authPath}${url.search}`;
 	const authPathLower = authPath.toLowerCase();
@@ -66,18 +73,13 @@ async function handler(request: Request) {
 		authPathLower.includes("forgot-password") ||
 		authPathLower.includes("reset-password");
 
-	// Forward all headers, especially cookies
 	const headers = new Headers();
 	request.headers.forEach((value, key) => {
-		// Skip host header as it will be set by fetch
 		if (key.toLowerCase() !== "host") {
 			headers.set(key, value);
 		}
 	});
 
-	// Ensure cookies are forwarded when needed.
-	// For fresh auth actions (sign in/up/reset), old cookies are unnecessary and can
-	// trigger 431 upstream when stale session_data is oversized.
 	const cookies = sanitizeCookieHeader(request.headers.get("cookie"));
 	if (cookies && !isFreshAuthAction) {
 		headers.set("cookie", cookies);
@@ -85,10 +87,7 @@ async function handler(request: Request) {
 		headers.delete("cookie");
 	}
 
-	// Log for debugging
-	console.log(`🔐 Auth proxy: ${request.method} ${authPath}`);
-	console.log(`🔐 Target URL: ${targetUrl}`);
-	console.log(`🔐 BACKEND_URL: ${BACKEND_URL}`);
+	stripAcceptEncoding(headers);
 
 	try {
 		const response = await fetch(targetUrl, {
@@ -101,41 +100,23 @@ async function handler(request: Request) {
 			redirect: "manual",
 		});
 
-		// Create response with all headers from backend
-		const responseHeaders = new Headers();
-
-		response.headers.forEach((value, key) => {
-			const lowerKey = key.toLowerCase();
-
-			// Handle Set-Cookie specially - need to modify for same-origin
-			if (lowerKey === "set-cookie") {
-				// Parse and modify the cookie to work as first-party
-				let modifiedCookie = value;
-
-				// Remove SameSite=None since we're now same-origin
-				modifiedCookie = modifiedCookie.replace(
-					/;\s*SameSite=None/gi,
-					"; SameSite=Lax",
-				);
-
-				// Remove domain restriction if present (let it default to current domain)
-				modifiedCookie = modifiedCookie.replace(/;\s*Domain=[^;]+/gi, "");
-
-				responseHeaders.append("Set-Cookie", modifiedCookie);
-			} else {
-				responseHeaders.set(key, value);
-			}
+		const proxyResponse = await toProxyResponse(response, {
+			onHeader: (key) =>
+				key.toLowerCase() === "set-cookie" ? "skip" : "default",
+			extraHeaders: {
+				"Access-Control-Allow-Credentials": "true",
+			},
 		});
 
-		// Add CORS headers
-		responseHeaders.set("Access-Control-Allow-Credentials", "true");
+		const outHeaders = new Headers(proxyResponse.headers);
+		for (const cookie of getSetCookies(response)) {
+			outHeaders.append("Set-Cookie", modifySetCookie(cookie));
+		}
 
-		console.log(`🔐 Auth proxy response: ${response.status}`);
-
-		return new Response(response.body, {
-			status: response.status,
-			statusText: response.statusText,
-			headers: responseHeaders,
+		return new Response(proxyResponse.body, {
+			status: proxyResponse.status,
+			statusText: proxyResponse.statusText,
+			headers: outHeaders,
 		});
 	} catch (error) {
 		console.error("Auth proxy error:", error);
@@ -144,7 +125,6 @@ async function handler(request: Request) {
 		const errorDetails =
 			error instanceof Error && "cause" in error ? String(error.cause) : "";
 
-		// Provide helpful error message if backend is not reachable
 		if (
 			errorMessage.includes("fetch failed") ||
 			errorMessage.includes("EACCES") ||
@@ -153,8 +133,7 @@ async function handler(request: Request) {
 			return new Response(
 				JSON.stringify({
 					error: "Backend server not reachable",
-					details: `Cannot connect to ${BACKEND_URL}. Please ensure the backend server is running on port 8080.`,
-					hint: 'Run "cd apps/server && bun dev" to start the backend server. If the issue persists, check Windows Firewall settings.',
+					details: `Cannot connect to ${BACKEND_URL}. Please ensure the backend server is running.`,
 				}),
 				{ status: 502, headers: { "Content-Type": "application/json" } },
 			);
@@ -171,14 +150,12 @@ async function handler(request: Request) {
 	}
 }
 
-// Handle all HTTP methods
 export const GET = handler;
 export const POST = handler;
 export const PUT = handler;
 export const PATCH = handler;
 export const DELETE = handler;
 
-// Handle preflight requests
 export async function OPTIONS(request: Request) {
 	return new Response(null, {
 		status: 204,
