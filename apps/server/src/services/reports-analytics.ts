@@ -25,6 +25,7 @@ export function periodTypeToDateTrunc(
 	}
 }
 
+
 /**
  * date_trunc() unit must be a SQL literal — binding it as $1 breaks GROUP BY
  * matching and can fail at runtime when reused across SELECT/GROUP BY/ORDER BY.
