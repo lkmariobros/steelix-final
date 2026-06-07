@@ -38,7 +38,9 @@ export function useUserRole() {
 		isAdministrator(role) ||
 		sessionHasAdminRole;
 	const isAdmin = hasAdminAccess;
-	const isChecking = isSessionPending || (!!session && isRoleQueryLoading);
+	// Session resolution only — role query enriches UI but must not block navigation
+	const isChecking = isSessionPending;
+	const isRoleLoading = !!session && isRoleQueryLoading;
 
 	return {
 		session,
@@ -47,6 +49,7 @@ export function useUserRole() {
 		isAdmin,
 		isAgentPortalUser: !hasAdminAccess,
 		isChecking,
+		isRoleLoading,
 		isSessionPending,
 	};
 }

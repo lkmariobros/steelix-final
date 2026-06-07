@@ -4,7 +4,6 @@ import { Eye, EyeOff, Loader2, Mail } from "lucide-react"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import z from "zod/v4"
-import Loader from "./loader"
 import { Button } from "./ui/button"
 import { Input } from "./ui/input"
 import { Label } from "./ui/label"
@@ -16,11 +15,18 @@ interface SignUpFormProps {
 export default function SignUpForm({ onSwitchToSignIn }: SignUpFormProps) {
 	const [isClient, setIsClient] = useState(false)
 	const [showPassword, setShowPassword] = useState(false)
-	const { isPending } = authClient.useSession()
+	const { data: session, isPending } = authClient.useSession()
 
 	useEffect(() => {
 		setIsClient(true)
 	}, [])
+
+	useEffect(() => {
+		if (!isClient || isPending) return
+		if (session?.user) {
+			window.location.href = "/post-login"
+		}
+	}, [isClient, isPending, session])
 
 	const form = useForm({
 		defaultValues: {
@@ -57,8 +63,16 @@ export default function SignUpForm({ onSwitchToSignIn }: SignUpFormProps) {
 		},
 	})
 
-	if (isClient && isPending) {
-		return <Loader />
+	if (!isClient) {
+		return null
+	}
+
+	if (session?.user) {
+		return (
+			<div className="flex items-center justify-center py-8">
+				<Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+			</div>
+		)
 	}
 
 	return (
