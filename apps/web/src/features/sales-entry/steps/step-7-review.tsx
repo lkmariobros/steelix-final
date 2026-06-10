@@ -41,6 +41,8 @@ import {
 	marketTypeOptions,
 	propertyTypeOptions,
 	representationTypeOptions,
+	sectionToFormStep,
+	stepConfig,
 	transactionTypeOptions,
 } from "../transaction-schema";
 
@@ -87,11 +89,11 @@ export function StepReview({
 	const validateFormData = (): ValidationError[] => {
 		const errors: ValidationError[] = [];
 
-		// Step 1: Transaction Details
+		// Deal & Property — transaction details
 		if (!data.marketType) {
 			errors.push({
-				step: 1,
-				stepTitle: "Transaction Details",
+				step: sectionToFormStep(1),
+				stepTitle: stepConfig[0].title,
 				field: "Market Type",
 				message: "Please select a market type",
 				severity: "error",
@@ -99,8 +101,8 @@ export function StepReview({
 		}
 		if (!data.transactionType) {
 			errors.push({
-				step: 1,
-				stepTitle: "Transaction Details",
+				step: sectionToFormStep(1),
+				stepTitle: stepConfig[0].title,
 				field: "Transaction Type",
 				message: "Please select a transaction type",
 				severity: "error",
@@ -108,19 +110,18 @@ export function StepReview({
 		}
 		if (!data.transactionDate) {
 			errors.push({
-				step: 1,
-				stepTitle: "Transaction Details",
+				step: sectionToFormStep(1),
+				stepTitle: stepConfig[0].title,
 				field: "Transaction Date",
 				message: "Please select a transaction date",
 				severity: "error",
 			});
 		}
 
-		// Step 2: Property Details
 		if (!data.propertyData?.address) {
 			errors.push({
-				step: 2,
-				stepTitle: "Property Details",
+				step: sectionToFormStep(2),
+				stepTitle: stepConfig[0].title,
 				field: "Address",
 				message: "Property address is required",
 				severity: "error",
@@ -128,8 +129,8 @@ export function StepReview({
 		}
 		if (!data.propertyData?.price || data.propertyData.price <= 0) {
 			errors.push({
-				step: 2,
-				stepTitle: "Property Details",
+				step: sectionToFormStep(2),
+				stepTitle: stepConfig[0].title,
 				field: "Price",
 				message: "Property price must be greater than 0",
 				severity: "error",
@@ -137,19 +138,18 @@ export function StepReview({
 		}
 		if (!data.propertyData?.propertyType) {
 			errors.push({
-				step: 2,
-				stepTitle: "Property Details",
+				step: sectionToFormStep(2),
+				stepTitle: stepConfig[0].title,
 				field: "Property Type",
 				message: "Please select a property type",
 				severity: "error",
 			});
 		}
 
-		// Step 3: Client Information
 		if (!data.clientData?.name) {
 			errors.push({
-				step: 3,
-				stepTitle: "Client Information",
+				step: sectionToFormStep(3),
+				stepTitle: stepConfig[1].title,
 				field: "Client Name",
 				message: "Client name is required",
 				severity: "error",
@@ -157,8 +157,8 @@ export function StepReview({
 		}
 		if (!data.clientData?.email) {
 			errors.push({
-				step: 3,
-				stepTitle: "Client Information",
+				step: sectionToFormStep(3),
+				stepTitle: stepConfig[1].title,
 				field: "Email",
 				message: "Client email is required",
 				severity: "error",
@@ -166,19 +166,18 @@ export function StepReview({
 		}
 		if (!data.clientData?.phone) {
 			errors.push({
-				step: 3,
-				stepTitle: "Client Information",
+				step: sectionToFormStep(3),
+				stepTitle: stepConfig[1].title,
 				field: "Phone",
 				message: "Client phone is required",
 				severity: "error",
 			});
 		}
 
-		// Step 5: Commission
 		if (!data.commissionValue || data.commissionValue <= 0) {
 			errors.push({
-				step: 5,
-				stepTitle: "Commission",
+				step: sectionToFormStep(5),
+				stepTitle: stepConfig[2].title,
 				field: "Commission Value",
 				message: "Commission value must be greater than 0",
 				severity: "error",
@@ -188,8 +187,8 @@ export function StepReview({
 		// Warnings (non-blocking)
 		if (!data.notes) {
 			errors.push({
-				step: 6,
-				stepTitle: "Documents & Notes",
+				step: sectionToFormStep(6),
+				stepTitle: stepConfig[2].title,
 				field: "Notes",
 				message: "Consider adding notes for this transaction",
 				severity: "warning",
@@ -260,7 +259,7 @@ export function StepReview({
 						<SectionHeader
 							icon={Calendar}
 							title="Transaction Details"
-							step={1}
+							step={sectionToFormStep(1)}
 						/>
 						<div className="grid grid-cols-1 gap-4 rounded-lg bg-muted/50 p-4 md:grid-cols-3">
 							<div>
@@ -297,7 +296,7 @@ export function StepReview({
 						<SectionHeader
 							icon={MapPin}
 							title="Property Information"
-							step={2}
+							step={sectionToFormStep(2)}
 						/>
 						<div className="space-y-3 rounded-lg bg-muted/50 p-4">
 							{data.propertyData?.listingTitle && (
@@ -375,7 +374,11 @@ export function StepReview({
 
 					{/* Client Information */}
 					<div className="space-y-3">
-						<SectionHeader icon={User} title="Client Information" step={3} />
+						<SectionHeader
+							icon={User}
+							title="Client Information"
+							step={sectionToFormStep(3)}
+						/>
 						<div className="space-y-3 rounded-lg bg-muted/50 p-4">
 							<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
 								<div>
@@ -421,7 +424,7 @@ export function StepReview({
 						<SectionHeader
 							icon={Building}
 							title="Representation & Co-Broking"
-							step={4}
+							step={sectionToFormStep(4)}
 						/>
 						<div className="rounded-lg bg-muted/50 p-4">
 							{/* Issue #1 Fix: Show unified representation type */}
@@ -493,7 +496,11 @@ export function StepReview({
 
 					{/* Commission Information */}
 					<div className="space-y-3">
-						<SectionHeader icon={Calculator} title="Commission" step={5} />
+						<SectionHeader
+							icon={Calculator}
+							title="Commission"
+							step={sectionToFormStep(5)}
+						/>
 						<div className="rounded-lg border bg-muted/30 p-4">
 							<div className="grid grid-cols-1 gap-4 md:grid-cols-3">
 								<div>
@@ -526,7 +533,11 @@ export function StepReview({
 
 					{/* Documents & Notes */}
 					<div className="space-y-3">
-						<SectionHeader icon={FileText} title="Documents & Notes" step={6} />
+						<SectionHeader
+							icon={FileText}
+							title="Documents & Notes"
+							step={sectionToFormStep(6)}
+						/>
 						<div className="space-y-3 rounded-lg bg-muted/50 p-4">
 							<div>
 								<p className="text-muted-foreground text-sm">Documents</p>
@@ -585,7 +596,7 @@ export function StepReview({
 							disabled={isLoading}
 						>
 							<ArrowLeft className="h-4 w-4" />
-							Back to Documents
+							Back to Commission & Documents
 						</Button>
 						{/* Issue #7 Fix: Use validation before submit */}
 						<Button

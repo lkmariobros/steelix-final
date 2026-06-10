@@ -61,7 +61,9 @@ function mapListingPropertyTypeToForm(
 	return map[listingPropertyType] ?? "other";
 }
 
-interface StepPropertyProps {
+import type { StepNavigationOptions } from "./step-nav";
+
+interface StepPropertyProps extends StepNavigationOptions {
 	data?: PropertyData;
 	/** Prefer listings that match the transaction (sale vs rent) */
 	listingTypeFilter?: "sale" | "rent" | "all";
@@ -76,6 +78,11 @@ export function StepProperty({
 	onUpdate,
 	onNext,
 	onPrevious,
+	hideNavigation = false,
+	hidePrevious = false,
+	nextLabel = "Continue to Client Details",
+	previousLabel = "Back to Initiation",
+	beforeNext,
 }: StepPropertyProps) {
 	const form = useForm<PropertyData>({
 		resolver: zodResolver(propertySchema),
@@ -95,6 +102,7 @@ export function StepProperty({
 	});
 
 	const handleSubmit = (formData: PropertyData) => {
+		if (beforeNext && !beforeNext()) return;
 		onUpdate(formData);
 		onNext();
 	};
@@ -489,26 +497,31 @@ export function StepProperty({
 								</Card>
 							)}
 
-							{/* Navigation */}
-							<div className="flex justify-between">
-								<Button
-									type="button"
-									variant="outline"
-									onClick={onPrevious}
-									className="flex items-center gap-2"
+							{!hideNavigation && (
+								<div
+									className={`flex ${hidePrevious ? "justify-end" : "justify-between"}`}
 								>
-									<ArrowLeft className="h-4 w-4" />
-									Back to Initiation
-								</Button>
-								<Button
-									type="submit"
-									className="flex items-center gap-2"
-									disabled={!form.formState.isValid}
-								>
-									Continue to Client Details
-									<ArrowRight className="h-4 w-4" />
-								</Button>
-							</div>
+									{!hidePrevious && (
+										<Button
+											type="button"
+											variant="outline"
+											onClick={onPrevious}
+											className="flex items-center gap-2"
+										>
+											<ArrowLeft className="h-4 w-4" />
+											{previousLabel}
+										</Button>
+									)}
+									<Button
+										type="submit"
+										className="flex items-center gap-2"
+										disabled={!form.formState.isValid}
+									>
+										{nextLabel}
+										<ArrowRight className="h-4 w-4" />
+									</Button>
+								</div>
+							)}
 						</form>
 					</Form>
 				</CardContent>

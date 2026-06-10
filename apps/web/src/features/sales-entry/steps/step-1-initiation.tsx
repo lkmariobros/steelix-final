@@ -43,8 +43,9 @@ import {
 	marketTypeOptions,
 	transactionTypeOptions,
 } from "../transaction-schema";
+import type { StepNavigationOptions } from "./step-nav";
 
-interface StepInitiationProps {
+interface StepInitiationProps extends StepNavigationOptions {
 	data: Partial<CompleteTransactionData>;
 	onUpdate: (data: InitiationData) => void;
 	onNext: () => void;
@@ -54,6 +55,8 @@ export function StepInitiation({
 	data,
 	onUpdate,
 	onNext,
+	hideNavigation = false,
+	nextLabel = "Continue to Property Details",
 }: StepInitiationProps) {
 	const form = useForm<InitiationData>({
 		resolver: zodResolver(initiationSchema),
@@ -67,10 +70,10 @@ export function StepInitiation({
 	// Auto-save on form changes (moved before useEffect to fix ReferenceError)
 	const handleFormChange = useCallback(() => {
 		const values = form.getValues();
-		if (form.formState.isValid) {
+		if (hideNavigation || form.formState.isValid) {
 			onUpdate(values);
 		}
-	}, [form, onUpdate]);
+	}, [form, onUpdate, hideNavigation]);
 
 	const handleSubmit = useCallback(
 		(formData: InitiationData) => {
@@ -294,17 +297,18 @@ export function StepInitiation({
 								</Card>
 							)}
 
-							{/* Navigation */}
-							<div className="flex justify-end">
-								<Button
-									type="submit"
-									className="flex items-center gap-2"
-									disabled={!form.formState.isValid}
-								>
-									Continue to Property Details
-									<ArrowRight className="h-4 w-4" />
-								</Button>
-							</div>
+							{!hideNavigation && (
+								<div className="flex justify-end">
+									<Button
+										type="submit"
+										className="flex items-center gap-2"
+										disabled={!form.formState.isValid}
+									>
+										{nextLabel}
+										<ArrowRight className="h-4 w-4" />
+									</Button>
+								</div>
+							)}
 						</form>
 					</Form>
 				</CardContent>

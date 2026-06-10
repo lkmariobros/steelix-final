@@ -1,14 +1,17 @@
 import { trpc } from "@/utils/trpc";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { takeTransactionPrefillOnce } from "../prefill-stash";
-import type {
-	ClientData,
-	CoBrokingData,
-	CompleteTransactionData,
-	DocumentsData,
-	FormStep,
-	PropertyData,
-	RepresentationType,
+import {
+	FORM_STEP_COUNT,
+	type ClientData,
+	type CoBrokingData,
+	type CompleteTransactionData,
+	type DocumentsData,
+	type FormStep,
+	normalizeFormStep,
+	type PropertyData,
+	type RepresentationType,
+	type SectionStep,
 } from "../transaction-schema";
 import { mapTransactionRowToFormData } from "./transaction-mapper";
 
@@ -167,7 +170,7 @@ export function useTransactionFormState(
 				try {
 					const parsedData = deserializeFormData(savedData);
 					const parsedStep = savedStep
-						? (Number.parseInt(savedStep, 10) as FormStep)
+						? normalizeFormStep(Number.parseInt(savedStep, 10))
 						: 1;
 
 					// Check if there's meaningful data to recover
@@ -237,7 +240,7 @@ export function useTransactionFormState(
 
 	// Update specific step data (Issue #1 fix - unified representation type handling)
 	const updateStepData = useCallback(
-		(step: FormStep, data: Record<string, unknown>) => {
+		(step: SectionStep, data: Record<string, unknown>) => {
 			switch (step) {
 				case 1:
 					updateFormData({
@@ -297,7 +300,9 @@ export function useTransactionFormState(
 	}, []);
 
 	const goToNextStep = useCallback(() => {
-		setCurrentStep((prev) => Math.min(prev + 1, 7) as FormStep);
+		setCurrentStep(
+			(prev) => Math.min(prev + 1, FORM_STEP_COUNT) as FormStep,
+		);
 	}, []);
 
 	const goToPreviousStep = useCallback(() => {
@@ -353,7 +358,7 @@ export function useTransactionFormState(
 
 // Progress calculation
 export function calculateProgress(currentStep: FormStep): number {
-	return (currentStep / 7) * 100;
+	return (currentStep / FORM_STEP_COUNT) * 100;
 }
 
 // Step completion check
@@ -362,52 +367,32 @@ export function getCompletedSteps(
 ): FormStep[] {
 	const completed: FormStep[] = [];
 
-	// Step 1: Initiation
-	if (
+	// Step 1: Deal & Property
+	const dealComplete =
 		formData.marketType &&
 		formData.transactionType &&
-		formData.transactionDate
-	) {
-		completed.push(1);
-	}
-
-	// Step 2: Property
-	if (
+		formData.transactionDate &&
 		formData.propertyData?.address &&
 		formData.propertyData?.propertyType &&
-		formData.propertyData?.price
-	) {
-		completed.push(2);
-	}
+		formData.propertyData?.price;
+	if (dealComplete) completed.push(1);
 
-	// Step 3: Client (email now optional)
-	if (
+	// Step 2: Client & Representation (co-broking fields validated on submit)
+	const clientComplete =
 		formData.clientData?.name &&
 		formData.clientData?.phone &&
-		formData.clientData?.type
-	) {
-		completed.push(3);
-	}
+		formData.clientData?.type;
+	if (clientComplete) completed.push(2);
 
-	// Step 4: Co-Broking (always considered complete as it's optional)
-	completed.push(4);
-
-	// Step 5: Commission
-	if (
+	// Step 3: Commission & Documents (documents optional)
+	const commissionComplete =
 		formData.commissionType &&
 		formData.commissionValue !== undefined &&
-		formData.commissionAmount !== undefined
-	) {
-		completed.push(5);
-	}
+		formData.commissionAmount !== undefined;
+	if (commissionComplete) completed.push(3);
 
-	// Step 6: Documents (optional, so always complete)
-	completed.push(6);
-
-	// Step 7: Review (complete if all previous steps are complete)
-	if (completed.length >= 6) {
-		completed.push(7);
-	}
+	// Step 4: Review (complete when prior steps are done)
+	if (completed.length >= 3) completed.push(4);
 
 	return completed;
 }
@@ -417,7 +402,7 @@ export function isFormReadyForSubmission(
 	formData: Partial<CompleteTransactionData>,
 ): boolean {
 	const completedSteps = getCompletedSteps(formData);
-	return completedSteps.length === 7;
+	return completedSteps.length === FORM_STEP_COUNT;
 }
 
 // Get next incomplete step
@@ -426,11 +411,11 @@ export function getNextIncompleteStep(
 ): FormStep {
 	const completedSteps = getCompletedSteps(formData);
 
-	for (let step = 1; step <= 7; step++) {
+	for (let step = 1; step <= FORM_STEP_COUNT; step++) {
 		if (!completedSteps.includes(step as FormStep)) {
 			return step as FormStep;
 		}
 	}
 
-	return 7; // All steps complete, go to review
+	return FORM_STEP_COUNT;
 }

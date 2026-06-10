@@ -35,8 +35,9 @@ import {
 	useDocumentUpload,
 } from "@/hooks/use-document-upload";
 import { type DocumentsData, documentsSchema } from "../transaction-schema";
+import type { StepNavigationOptions } from "./step-nav";
 
-interface StepDocumentsProps {
+interface StepDocumentsProps extends StepNavigationOptions {
 	data?: DocumentsData;
 	onUpdate: (data: DocumentsData) => void;
 	onNext: () => void;
@@ -48,6 +49,11 @@ export function StepDocuments({
 	onUpdate,
 	onNext,
 	onPrevious,
+	hideNavigation = false,
+	hidePrevious = false,
+	nextLabel = "Continue to Review",
+	previousLabel = "Back to Commission",
+	beforeNext,
 }: StepDocumentsProps) {
 	const [selectedCategory, setSelectedCategory] =
 		useState<DocumentCategory>("contract");
@@ -85,6 +91,7 @@ export function StepDocuments({
 	});
 
 	const handleSubmit = (formData: DocumentsData) => {
+		if (beforeNext && !beforeNext()) return;
 		const updatedData = {
 			...formData,
 			documents: documents,
@@ -414,26 +421,31 @@ export function StepDocuments({
 								</Card>
 							)}
 
-							{/* Navigation */}
-							<div className="flex justify-between">
-								<Button
-									type="button"
-									variant="outline"
-									onClick={onPrevious}
-									className="flex items-center gap-2"
+							{!hideNavigation && (
+								<div
+									className={`flex ${hidePrevious ? "justify-end" : "justify-between"}`}
 								>
-									<ArrowLeft className="h-4 w-4" />
-									Back to Commission
-								</Button>
-								<Button
-									type="submit"
-									className="flex items-center gap-2"
-									disabled={isUploading}
-								>
-									Continue to Review
-									<ArrowRight className="h-4 w-4" />
-								</Button>
-							</div>
+									{!hidePrevious && (
+										<Button
+											type="button"
+											variant="outline"
+											onClick={onPrevious}
+											className="flex items-center gap-2"
+										>
+											<ArrowLeft className="h-4 w-4" />
+											{previousLabel}
+										</Button>
+									)}
+									<Button
+										type="submit"
+										className="flex items-center gap-2"
+										disabled={isUploading}
+									>
+										{nextLabel}
+										<ArrowRight className="h-4 w-4" />
+									</Button>
+								</div>
+							)}
 						</form>
 					</Form>
 				</CardContent>

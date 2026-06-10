@@ -199,8 +199,8 @@ function DashboardContent() {
 									2. Create transaction
 								</div>
 								<p className="mb-3 text-muted-foreground text-xs">
-									Record a sale/lease, select a project in Step 2, and verify
-									commission breakdown in Step 5.
+									Record a sale/lease, select a project in Step 1, and verify
+									commission breakdown in Step 3.
 								</p>
 								<Button size="sm" onClick={() => openCreateModal()}>
 									New Transaction

@@ -52,8 +52,10 @@ import {
 } from "../transaction-schema";
 import type { CoBrokingData, RepresentationType } from "../transaction-schema";
 
+import type { StepNavigationOptions } from "./step-nav";
+
 // Issue #1 Fix: Updated props to receive representation type from Step 4
-interface StepCommissionProps {
+interface StepCommissionProps extends StepNavigationOptions {
 	data?: CommissionData;
 	propertyPrice: number;
 	propertyData?: PropertyData;
@@ -71,6 +73,7 @@ export function StepCommission({
 	onUpdate,
 	onNext,
 	onPrevious,
+	hideNavigation = false,
 }: StepCommissionProps) {
 	const listingPresetAppliedRef = useRef<string | null>(null);
 	// Local state for commission type
@@ -730,26 +733,27 @@ export function StepCommission({
 								</Card>
 							)}
 
-							{/* Navigation */}
-							<div className="flex justify-between">
-								<Button
-									type="button"
-									variant="outline"
-									onClick={onPrevious}
-									className="flex items-center gap-2"
-								>
-									<ArrowLeft className="h-4 w-4" />
-									Back to Co-Broking
-								</Button>
-								<Button
-									type="submit"
-									className="flex items-center gap-2"
-									disabled={!form.formState.isValid || propertyPrice === 0}
-								>
-									Continue to Documents
-									<ArrowRight className="h-4 w-4" />
-								</Button>
-							</div>
+							{!hideNavigation && (
+								<div className="flex justify-between">
+									<Button
+										type="button"
+										variant="outline"
+										onClick={onPrevious}
+										className="flex items-center gap-2"
+									>
+										<ArrowLeft className="h-4 w-4" />
+										Back to Co-Broking
+									</Button>
+									<Button
+										type="submit"
+										className="flex items-center gap-2"
+										disabled={!form.formState.isValid || propertyPrice === 0}
+									>
+										Continue to Documents
+										<ArrowRight className="h-4 w-4" />
+									</Button>
+								</div>
+							)}
 						</form>
 					</Form>
 				</CardContent>

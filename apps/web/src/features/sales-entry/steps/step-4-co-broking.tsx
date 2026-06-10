@@ -45,8 +45,10 @@ import {
 	representationTypeOptions,
 } from "../transaction-schema";
 
+import type { StepNavigationOptions } from "./step-nav";
+
 // Props for representation step - now includes market type for context-aware display
-interface StepCoBrokingProps {
+interface StepCoBrokingProps extends StepNavigationOptions {
 	data?: CoBrokingData;
 	marketType?: "primary" | "secondary";
 	onUpdate: (data: CoBrokingData) => void;
@@ -61,6 +63,11 @@ export function StepCoBroking({
 	onUpdate,
 	onNext,
 	onPrevious,
+	hideNavigation = false,
+	hidePrevious = false,
+	nextLabel = "Continue to Commission",
+	previousLabel = "Back to Client",
+	beforeNext,
 }: StepCoBrokingProps) {
 	const form = useForm<CoBrokingData>({
 		resolver: zodResolver(createCoBrokingSchema()),
@@ -80,6 +87,7 @@ export function StepCoBroking({
 	});
 
 	const handleSubmit = (formData: CoBrokingData) => {
+		if (beforeNext && !beforeNext()) return;
 		// Validation is handled by Zod schema via zodResolver
 		// Derive isCoBroking from representationType for backward compatibility
 		const updatedData = {
@@ -435,22 +443,27 @@ export function StepCoBroking({
 								</Card>
 							)}
 
-							{/* Navigation */}
-							<div className="flex justify-between">
-								<Button
-									type="button"
-									variant="outline"
-									onClick={onPrevious}
-									className="flex items-center gap-2"
+							{!hideNavigation && (
+								<div
+									className={`flex ${hidePrevious ? "justify-end" : "justify-between"}`}
 								>
-									<ArrowLeft className="h-4 w-4" />
-									Back to Client
-								</Button>
-								<Button type="submit" className="flex items-center gap-2">
-									Continue to Commission
-									<ArrowRight className="h-4 w-4" />
-								</Button>
-							</div>
+									{!hidePrevious && (
+										<Button
+											type="button"
+											variant="outline"
+											onClick={onPrevious}
+											className="flex items-center gap-2"
+										>
+											<ArrowLeft className="h-4 w-4" />
+											{previousLabel}
+										</Button>
+									)}
+									<Button type="submit" className="flex items-center gap-2">
+										{nextLabel}
+										<ArrowRight className="h-4 w-4" />
+									</Button>
+								</div>
+							)}
 						</form>
 					</Form>
 				</CardContent>

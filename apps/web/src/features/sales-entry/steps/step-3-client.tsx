@@ -41,7 +41,9 @@ import {
 	clientTypeOptions,
 } from "../transaction-schema";
 
-interface StepClientProps {
+import type { StepNavigationOptions } from "./step-nav";
+
+interface StepClientProps extends StepNavigationOptions {
 	data?: ClientData;
 	marketType?: "primary" | "secondary";
 	transactionType?: "sale" | "lease";
@@ -57,6 +59,7 @@ export function StepClient({
 	onUpdate,
 	onNext,
 	onPrevious,
+	hideNavigation = false,
 }: StepClientProps) {
 	const form = useForm<ClientData>({
 		resolver: zodResolver(clientSchema),
@@ -73,10 +76,10 @@ export function StepClient({
 	// Auto-save on form changes (moved before useEffect to fix ReferenceError)
 	const handleFormChange = useCallback(() => {
 		const values = form.getValues();
-		if (form.formState.isValid) {
+		if (hideNavigation || form.formState.isValid) {
 			onUpdate(values);
 		}
-	}, [form, onUpdate]);
+	}, [form, onUpdate, hideNavigation]);
 
 	const handleSubmit = (formData: ClientData) => {
 		onUpdate(formData);
@@ -415,26 +418,27 @@ export function StepClient({
 								</Card>
 							)}
 
-							{/* Navigation */}
-							<div className="flex justify-between">
-								<Button
-									type="button"
-									variant="outline"
-									onClick={onPrevious}
-									className="flex items-center gap-2"
-								>
-									<ArrowLeft className="h-4 w-4" />
-									Back to Property
-								</Button>
-								<Button
-									type="submit"
-									className="flex items-center gap-2"
-									disabled={!form.formState.isValid}
-								>
-									Continue to Co-Broking
-									<ArrowRight className="h-4 w-4" />
-								</Button>
-							</div>
+							{!hideNavigation && (
+								<div className="flex justify-between">
+									<Button
+										type="button"
+										variant="outline"
+										onClick={onPrevious}
+										className="flex items-center gap-2"
+									>
+										<ArrowLeft className="h-4 w-4" />
+										Back to Property
+									</Button>
+									<Button
+										type="submit"
+										className="flex items-center gap-2"
+										disabled={!form.formState.isValid}
+									>
+										Continue to Co-Broking
+										<ArrowRight className="h-4 w-4" />
+									</Button>
+								</div>
+							)}
 						</form>
 					</Form>
 				</CardContent>

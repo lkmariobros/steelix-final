@@ -22,7 +22,12 @@ import { CheckCircle, Circle, Loader2, Save } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 
-import { type FormStep, stepConfig } from "./transaction-schema";
+import {
+	FORM_STEP_COUNT,
+	type FormStep,
+	type SectionStep,
+	stepConfig,
+} from "./transaction-schema";
 import {
 	calculateProgress,
 	getCompletedSteps,
@@ -30,13 +35,9 @@ import {
 	useTransactionFormState,
 } from "./utils/form-state";
 
-// Import step components (we'll create these next)
-import { StepInitiation } from "./steps/step-1-initiation";
-import { StepProperty } from "./steps/step-2-property";
-import { StepClient } from "./steps/step-3-client";
-import { StepCoBroking } from "./steps/step-4-co-broking";
-import { StepCommission } from "./steps/step-5-commission";
-import { StepDocuments } from "./steps/step-6-documents";
+import { StepDealAndProperty } from "./steps/step-1-deal-property";
+import { StepClientAndRepresentation } from "./steps/step-2-client-representation";
+import { StepCommissionAndDocuments } from "./steps/step-3-commission-documents";
 import { StepReview } from "./steps/step-7-review";
 
 interface TransactionFormProps {
@@ -132,7 +133,7 @@ export function TransactionForm({
 
 	// Handle step data updates
 	const handleStepUpdate = useCallback(
-		(step: FormStep, data: Record<string, unknown>) => {
+		(step: SectionStep, data: Record<string, unknown>) => {
 			updateStepData(step, data);
 		},
 		[updateStepData],
@@ -309,95 +310,47 @@ export function TransactionForm({
 		}
 	}, [hasUnsavedChanges, resetForm, onCancel]);
 
-	// Render step content
+	// Render step content (4-step wizard)
 	const renderStepContent = () => {
 		switch (currentStep) {
 			case 1:
 				return (
-					<StepInitiation
-						data={formData}
-						onUpdate={(data) => handleStepUpdate(1, data)}
+					<StepDealAndProperty
+						formData={formData}
+						onUpdateInitiation={(data) => handleStepUpdate(1, data)}
+						onUpdateProperty={(data) => handleStepUpdate(2, data)}
 						onNext={goToNextStep}
+						onPrevious={goToPreviousStep}
 					/>
 				);
 			case 2:
 				return (
-					<StepProperty
-						data={formData.propertyData}
-						// Commission schemes are linked to listings ("blocks").
-						// Showing all active listings prevents "scheme exists but block not selectable"
-						// when the listing type (sale/rent) doesn't match the transaction type.
-						listingTypeFilter="all"
-						onUpdate={(data) => handleStepUpdate(2, data)}
+					<StepClientAndRepresentation
+						formData={formData}
+						onUpdateClient={(data) => handleStepUpdate(3, data)}
+						onUpdateCoBroking={(data) => handleStepUpdate(4, data)}
 						onNext={goToNextStep}
 						onPrevious={goToPreviousStep}
 					/>
 				);
 			case 3:
 				return (
-					<StepClient
-						data={formData.clientData}
-						marketType={formData.marketType}
-						transactionType={formData.transactionType}
-						onUpdate={(data) => handleStepUpdate(3, data)}
+					<StepCommissionAndDocuments
+						formData={formData}
+						transactionId={effectiveTxId}
+						onUpdateCommission={(data) => handleStepUpdate(5, data)}
+						onUpdateDocuments={(data) => handleStepUpdate(6, data)}
 						onNext={goToNextStep}
 						onPrevious={goToPreviousStep}
 					/>
 				);
 			case 4:
 				return (
-					<StepCoBroking
-						data={{
-							representationType: formData.representationType ?? "direct",
-							isCoBroking: formData.isCoBroking ?? false,
-							coBrokingData: formData.coBrokingData,
-						}}
-						marketType={formData.marketType}
-						onUpdate={(data) => handleStepUpdate(4, data)}
-						onNext={goToNextStep}
-						onPrevious={goToPreviousStep}
-					/>
-				);
-			case 5:
-				return (
-					<StepCommission
-						data={{
-							commissionType: formData.commissionType ?? "percentage",
-							commissionValue: formData.commissionValue ?? 0,
-							commissionAmount: formData.commissionAmount ?? 0,
-							representationType: formData.representationType ?? "direct",
-							agentTier: formData.agentTier,
-							companyCommissionSplit: formData.companyCommissionSplit,
-							breakdown: formData.breakdown,
-						}}
-						propertyPrice={formData.propertyData?.price || 0}
-						propertyData={formData.propertyData}
-						coBrokingData={formData.coBrokingData}
-						onUpdate={(data) => handleStepUpdate(5, data)}
-						onNext={goToNextStep}
-						onPrevious={goToPreviousStep}
-					/>
-				);
-			case 6:
-				return (
-					<StepDocuments
-						data={{
-							documents: formData.documents,
-							notes: formData.notes,
-							transactionId: effectiveTxId,
-						}}
-						onUpdate={(data) => handleStepUpdate(6, data)}
-						onNext={goToNextStep}
-						onPrevious={goToPreviousStep}
-					/>
-				);
-			case 7:
-				return (
 					<StepReview
 						data={formData}
 						onSubmit={handleSubmit}
 						onPrevious={goToPreviousStep}
-						onEditStep={goToStep} // Issue #2 Fix: Allow editing from review
+						onEditStep={goToStep}
 						isLoading={isLoading}
 					/>
 				);
@@ -466,7 +419,8 @@ export function TransactionForm({
 			<Card>
 				<CardHeader>
 					<CardTitle className="flex items-center gap-2">
-						Step {currentStep} of 7: {stepConfig[currentStep - 1].title}
+						Step {currentStep} of {FORM_STEP_COUNT}:{" "}
+						{stepConfig[currentStep - 1].title}
 					</CardTitle>
 					<CardDescription>
 						{stepConfig[currentStep - 1].description}
@@ -476,7 +430,7 @@ export function TransactionForm({
 					<Tabs value={currentStep.toString()} className="w-full">
 						{/* Issue #5 Fix: Mobile-friendly step navigation */}
 						{/* Desktop: Full tabs */}
-						<TabsList className="hidden w-full grid-cols-7 md:grid">
+						<TabsList className="hidden w-full md:grid md:grid-cols-4">
 							{stepConfig.map(({ step, title }) => (
 								<TabsTrigger
 									key={step}

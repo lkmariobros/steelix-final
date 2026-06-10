@@ -231,15 +231,20 @@ export const completeTransactionSchema = z
 		},
 	);
 
-// Individual step schemas for validation
-export const stepSchemas = {
+// Legacy section schemas (data sections within the 4-step wizard)
+export const sectionSchemas = {
 	1: initiationSchema,
 	2: propertySchema,
 	3: clientSchema,
 	4: coBrokingSchema,
 	5: commissionSchema,
 	6: documentsSchema,
-	7: z.object({}), // Review step has no additional validation
+} as const;
+
+/** @deprecated Use sectionSchemas — kept for internal references */
+export const stepSchemas = {
+	...sectionSchemas,
+	7: z.object({}),
 } as const;
 
 // TypeScript types
@@ -251,8 +256,13 @@ export type CommissionData = z.infer<typeof commissionSchema>;
 export type DocumentsData = z.infer<typeof documentsSchema>;
 export type CompleteTransactionData = z.infer<typeof completeTransactionSchema>;
 
-// Form step type
-export type FormStep = 1 | 2 | 3 | 4 | 5 | 6 | 7;
+// Wizard UI step type (4 steps)
+export type FormStep = 1 | 2 | 3 | 4;
+
+/** Data sections within the wizard (unchanged from the original 7-step flow). */
+export type SectionStep = 1 | 2 | 3 | 4 | 5 | 6;
+
+export const FORM_STEP_COUNT = 4 as const;
 
 // Transaction status types
 export type TransactionStatus =
@@ -329,20 +339,42 @@ export const clientSourceOptions = [
 	{ value: "other", label: "Other" },
 ] as const;
 
-// Step configuration
+// Step configuration (4-step wizard)
 export const stepConfig = [
-	{ step: 1, title: "Initiation", description: "Basic transaction details" },
-	{ step: 2, title: "Property", description: "Property information" },
-	{ step: 3, title: "Client", description: "Client details" },
 	{
-		step: 4,
-		title: "Representation",
-		description: "How you represent this deal",
+		step: 1,
+		title: "Deal & Property",
+		description: "Transaction type, date, and property details",
 	},
-	{ step: 5, title: "Commission", description: "Commission calculation" },
-	{ step: 6, title: "Documents", description: "Upload documents" },
-	{ step: 7, title: "Review", description: "Review and submit" },
+	{
+		step: 2,
+		title: "Client & Representation",
+		description: "Client information and how you represent the deal",
+	},
+	{
+		step: 3,
+		title: "Commission & Documents",
+		description: "Commission calculation and supporting documents",
+	},
+	{ step: 4, title: "Review", description: "Review and submit" },
 ] as const;
+
+/** Map a legacy 7-step index (or saved draft step) to the 4-step wizard. */
+export function normalizeFormStep(step: number): FormStep {
+	if (step >= 1 && step <= FORM_STEP_COUNT) return step as FormStep;
+	if (step <= 2) return 1;
+	if (step <= 4) return 2;
+	if (step <= 6) return 3;
+	return 4;
+}
+
+/** Map a data section (1–6) to the wizard step used for edit navigation. */
+export function sectionToFormStep(section: number): FormStep {
+	if (section <= 2) return 1;
+	if (section <= 4) return 2;
+	if (section <= 6) return 3;
+	return 4;
+}
 
 // Helper functions
 export function getStepTitle(step: FormStep): string {
@@ -358,17 +390,39 @@ export function isStepValid(
 	data: Partial<CompleteTransactionData>,
 ): boolean {
 	try {
-		if (step === 7) return true; // Review step is always valid if we reach it
+		if (step === 4) return true;
 
-		const schema = stepSchemas[step];
-		if (step === 2) {
-			schema.parse(data.propertyData);
-		} else if (step === 3) {
-			schema.parse(data.clientData);
-		} else {
-			schema.parse(data);
+		switch (step) {
+			case 1:
+				initiationSchema.parse({
+					marketType: data.marketType,
+					transactionType: data.transactionType,
+					transactionDate: data.transactionDate,
+				});
+				propertySchema.parse(data.propertyData);
+				return true;
+			case 2:
+				clientSchema.parse(data.clientData);
+				coBrokingSchema.parse({
+					representationType: data.representationType ?? "direct",
+					isCoBroking: data.isCoBroking,
+					coBrokingData: data.coBrokingData,
+				});
+				return true;
+			case 3:
+				commissionSchema.parse({
+					commissionType: data.commissionType,
+					commissionValue: data.commissionValue,
+					commissionAmount: data.commissionAmount,
+					representationType: data.representationType,
+					agentTier: data.agentTier,
+					companyCommissionSplit: data.companyCommissionSplit,
+					breakdown: data.breakdown,
+				});
+				return true;
+			default:
+				return false;
 		}
-		return true;
 	} catch {
 		return false;
 	}
