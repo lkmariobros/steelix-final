@@ -121,9 +121,16 @@ export const TYPE_OPTIONS = [
 ] as const;
 
 export const LEAD_TYPE_OPTIONS = [
-	{ value: "personal", label: "Personal" },
-	{ value: "company", label: "Company" },
+	{ value: "personal", label: "Personal Lead" },
+	{ value: "company", label: "Company Lead" },
 ] as const;
+
+export function formatLeadTypeLabel(
+	leadType: "personal" | "company" | string,
+): string {
+	const match = LEAD_TYPE_OPTIONS.find((o) => o.value === leadType);
+	return match?.label ?? String(leadType);
+}
 
 export const PAGE_SIZE_OPTIONS = [10, 25, 50, 100] as const;
 

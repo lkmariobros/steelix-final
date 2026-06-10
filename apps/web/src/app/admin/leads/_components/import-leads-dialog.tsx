@@ -39,6 +39,7 @@ type LeadFieldKey =
 	| "source"
 	| "notes"
 	| "tags"
+	| "leadType"
 	| "agent"
 	| "skip";
 
@@ -49,6 +50,7 @@ const FIELD_OPTIONS: Array<{ key: LeadFieldKey; label: string }> = [
 	{ key: "source", label: "Source" },
 	{ key: "notes", label: "Notes" },
 	{ key: "tags", label: "Tags" },
+	{ key: "leadType", label: "Lead Type" },
 	{ key: "agent", label: "Assigned Agent" },
 	{ key: "skip", label: "Skip column" },
 ];
@@ -113,6 +115,7 @@ export function ImportLeadsDialog({
 		source: true,
 		notes: true,
 		tags: true,
+		leadType: true,
 		agent: true,
 	});
 	const [importResult, setImportResult] = useState<
@@ -197,6 +200,12 @@ export function ImportLeadsDialog({
 				else if (n === "source") seed[h] = "source";
 				else if (n === "notes" || n.includes("remark")) seed[h] = "notes";
 				else if (n === "tags" || n.includes("tag")) seed[h] = "tags";
+				else if (
+					n === "leadtype" ||
+					n === "lead type" ||
+					n === "lead_type"
+				)
+					seed[h] = "leadType";
 				else if (n.includes("agent")) seed[h] = "agent";
 				else seed[h] = "skip";
 			}
@@ -252,6 +261,7 @@ export function ImportLeadsDialog({
 
 				// Map to server import aliases
 				if (field === "agent") next["Assigned Agent"] = v;
+				else if (field === "leadType") next["Lead Type"] = v;
 				else next[field] = v;
 			}
 			out.push(next);
@@ -296,8 +306,10 @@ export function ImportLeadsDialog({
 						Import leads
 					</DialogTitle>
 					<DialogDescription className="text-left text-sm leading-relaxed">
-						Upload a CSV, map columns, review, then import. Leads are{" "}
-						<strong>upserted by phone</strong> (existing phone → Updated).
+						Upload a CSV, map columns, review, then import. Only{" "}
+						<strong>Name</strong> and <strong>Phone</strong> are required. Leads
+						are <strong>upserted by phone</strong> (existing phone → Updated).
+						Email is optional.
 					</DialogDescription>
 				</DialogHeader>
 
@@ -407,6 +419,21 @@ export function ImportLeadsDialog({
 									Once uploaded, you’ll map columns to lead fields and preview the
 									first 5 rows before importing.
 								</p>
+								<ul className="mt-2 list-disc space-y-1 pl-4 text-muted-foreground text-xs">
+									<li>
+										<strong>Tags:</strong> match Tag Management names (e.g.{" "}
+										<code className="text-foreground">Breeze Hill Lead</code>
+										). Separate multiple tags with{" "}
+										<code className="text-foreground">;</code> or{" "}
+										<code className="text-foreground">,</code>.
+									</li>
+									<li>
+										<strong>Lead Type:</strong>{" "}
+										<code className="text-foreground">Personal Lead</code> or{" "}
+										<code className="text-foreground">Company Lead</code> (defaults
+										to Personal Lead if empty).
+									</li>
+								</ul>
 							</div>
 						</TabsContent>
 
@@ -423,7 +450,9 @@ export function ImportLeadsDialog({
 												Step 2 — Column mapping
 											</p>
 											<p className="text-muted-foreground text-xs">
-												Map each CSV column to a lead field (or skip it).
+												Map each CSV column to a lead field (or skip it). Tags and
+												Lead Type are optional — use “Skip empty” to leave existing
+												values unchanged on update.
 											</p>
 										</div>
 										{mappingWarnings.length > 0 ? (

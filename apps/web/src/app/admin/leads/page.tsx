@@ -69,6 +69,7 @@ import { DeleteLeadDialog } from "./_components/delete-lead-dialog";
 import { EditLeadDialog } from "./_components/edit-lead-dialog";
 import {
 	LEAD_TYPE_OPTIONS,
+	formatLeadTypeLabel,
 	PAGE_SIZE_OPTIONS,
 	PIPELINE_STAGES,
 	STATUS_OPTIONS,
@@ -76,7 +77,11 @@ import {
 	stageMap,
 } from "./_components/lead-constants";
 import { LeadDetailSheet } from "./_components/lead-detail-sheet";
-import type { Lead, SortKey } from "./_components/lead-models";
+import {
+	type Lead,
+	type SortKey,
+	getLeadDisplayTags,
+} from "./_components/lead-models";
 import { StageBadge, StatusBadge } from "./_components/lead-ui";
 import { LeadsCharts } from "./_components/leads-charts";
 import { SortHeader } from "./_components/sort-header";
@@ -164,7 +169,10 @@ export default function AdminLeadsPage() {
 					lead.name.toLowerCase().includes(q) ||
 					(lead.email ?? "").toLowerCase().includes(q) ||
 					lead.phone.toLowerCase().includes(q) ||
-					lead.property.toLowerCase().includes(q)
+					lead.property.toLowerCase().includes(q) ||
+					lead.source.toLowerCase().includes(q) ||
+					getLeadDisplayTags(lead).some((t) => t.toLowerCase().includes(q)) ||
+					(lead.notes ?? "").toLowerCase().includes(q)
 				)
 			)
 				return false;
@@ -289,7 +297,7 @@ export default function AdminLeadsPage() {
 			"Agent": lead.agentName ?? "Unassigned",
 			"Agent Email": lead.agentEmail ?? "",
 			"Type": capitalizeForExport(lead.type),
-			"Lead Type": capitalizeForExport(lead.leadType),
+			"Lead Type": formatLeadTypeLabel(lead.leadType),
 			"Source": lead.source ?? "",
 			"Tags": (lead.tagNames?.length ? lead.tagNames.join("; ") : lead.tags) ?? "",
 			"Last Contact": formatDateForExport(lead.lastContact),
@@ -729,8 +737,8 @@ export default function AdminLeadsPage() {
 									{leadTypeFilter !== "__all__" && (
 										<span className="inline-flex items-center gap-1 rounded-md border bg-muted/60 px-2 py-0.5 text-xs">
 											Lead Type:{" "}
-											<span className="font-medium capitalize">
-												{leadTypeFilter}
+											<span className="font-medium">
+												{formatLeadTypeLabel(leadTypeFilter)}
 											</span>
 											<button
 												type="button"
@@ -1084,7 +1092,7 @@ export default function AdminLeadsPage() {
 														Contact
 													</TableHead>
 													<TableHead className="hidden lg:table-cell">
-														Property
+														Tags
 													</TableHead>
 													<SortHeader
 														label="Stage"
@@ -1108,7 +1116,7 @@ export default function AdminLeadsPage() {
 														onSort={handleSort}
 													/>
 													<TableHead className="hidden xl:table-cell">
-														Type
+														Lead Type
 													</TableHead>
 													<SortHeader
 														label="Created"
@@ -1160,19 +1168,33 @@ export default function AdminLeadsPage() {
 															<p className="text-muted-foreground text-xs">
 																{lead.phone}
 															</p>
+															<p
+																className="max-w-[180px] truncate text-muted-foreground text-xs"
+																title={lead.source}
+															>
+																{lead.source?.trim() || "—"}
+															</p>
 														</TableCell>
 														<TableCell className="hidden lg:table-cell">
-															<p
-																className="max-w-[140px] truncate text-sm"
-																title={lead.property}
-															>
-																{lead.property}
-															</p>
-															{lead.projectName && (
-																<p className="max-w-[140px] truncate text-muted-foreground text-xs">
-																	{lead.projectName}
-																</p>
-															)}
+															{(() => {
+																const tags = getLeadDisplayTags(lead);
+																if (tags.length === 0) {
+																	return (
+																		<p className="text-muted-foreground text-sm">
+																			—
+																		</p>
+																	);
+																}
+																const label = tags.join(", ");
+																return (
+																	<p
+																		className="max-w-[160px] truncate text-sm"
+																		title={label}
+																	>
+																		{label}
+																	</p>
+																);
+															})()}
 														</TableCell>
 														<TableCell>
 															<StageBadge stage={lead.stage} />
@@ -1201,9 +1223,8 @@ export default function AdminLeadsPage() {
 															)}
 														</TableCell>
 														<TableCell className="hidden xl:table-cell">
-															<p className="text-xs capitalize">{lead.type}</p>
-															<p className="text-muted-foreground text-xs capitalize">
-																{lead.leadType}
+															<p className="text-xs">
+																{formatLeadTypeLabel(lead.leadType)}
 															</p>
 														</TableCell>
 														<TableCell className="whitespace-nowrap text-muted-foreground text-xs">

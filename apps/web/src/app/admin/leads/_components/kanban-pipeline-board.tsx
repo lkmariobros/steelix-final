@@ -248,7 +248,7 @@ export function KanbanPipelineBoard({
 												}
 												onViewLead(lead);
 											}}
-											title={`${lead.name}\n${lead.email}\n${lead.property}\n${lead.agentName ?? "Unassigned"}`}
+											title={`${lead.name}\n${lead.email}\n${lead.source}\n${lead.agentName ?? "Unassigned"}`}
 										>
 											<div className="flex items-start justify-between gap-2">
 												<div className="min-w-0 flex-1">
@@ -315,7 +315,7 @@ export function KanbanPipelineBoard({
 													}
 													onViewLead(lead);
 												}}
-												title={`${lead.name}\n${lead.email}\n${lead.property}\n${lead.agentName ?? "Unassigned"}`}
+												title={`${lead.name}\n${lead.email}\n${lead.source}\n${lead.agentName ?? "Unassigned"}`}
 									>
 										<div className="flex items-start justify-between gap-2">
 											<div className="min-w-0 flex-1">

@@ -19,9 +19,21 @@ export type Lead = {
 	agentEmail: string | null;
 	tagIds: string[];
 	tagNames: string[];
+	notes: string | null;
 	createdAt: Date | string;
 	updatedAt: Date | string;
 };
+
+export function getLeadDisplayTags(
+	lead: Pick<Lead, "tagNames" | "tags">,
+): string[] {
+	if (lead.tagNames.length > 0) return lead.tagNames;
+	if (!lead.tags?.trim()) return [];
+	return lead.tags
+		.split(/[;,]/)
+		.map((t) => t.trim())
+		.filter(Boolean);
+}
 
 export type SortKey =
 	| "name"

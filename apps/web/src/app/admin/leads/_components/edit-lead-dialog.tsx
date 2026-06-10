@@ -271,6 +271,9 @@ export function EditLeadDialog({
 					</div>
 					<div className="space-y-1.5">
 						<Label>Lead Type</Label>
+						<p className="text-muted-foreground text-xs">
+							Admin only — agents cannot change lead type after creation.
+						</p>
 						<Select
 							value={form.leadType}
 							onValueChange={(v) =>

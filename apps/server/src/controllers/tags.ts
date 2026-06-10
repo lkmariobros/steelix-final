@@ -11,6 +11,7 @@ import {
 	selectCrmTagSchema,
 	updateCrmTagSchema,
 } from "../models/crm";
+import { importTagsBulkAdmin } from "../services/tags";
 import { db } from "../utils/db";
 import { adminProcedure, protectedProcedure, router } from "../utils/trpc";
 
@@ -35,6 +36,10 @@ const updateTagInput = updateCrmTagSchema;
 // Delete tag input schema
 const deleteTagInput = z.object({
 	id: z.string().uuid(),
+});
+
+const importTagsInput = z.object({
+	rows: z.array(z.record(z.string())).max(500),
 });
 
 export const tagsRouter = router({
@@ -175,6 +180,13 @@ export const tagsRouter = router({
 				.returning();
 
 			return selectCrmTagSchema.parse(updated);
+		}),
+
+	// Bulk import tags from parsed CSV rows (admin only)
+	importCsv: adminProcedure
+		.input(importTagsInput)
+		.mutation(async ({ input, ctx }) => {
+			return await importTagsBulkAdmin(input.rows, ctx.session.user.id);
 		}),
 
 	// Delete a tag (admin only)

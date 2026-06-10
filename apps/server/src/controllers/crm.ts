@@ -688,7 +688,7 @@ export const crmRouter = router({
 	update: protectedProcedure
 		.input(updateProspectInput)
 		.mutation(async ({ input, ctx }) => {
-			const { id, tagIds, ...updateData } = input;
+			const { id, tagIds, leadType: _leadType, ...updateData } = input;
 			const agentId = ctx.session.user.id;
 
 			// Verify prospect belongs to the agent OR is an unclaimed company lead

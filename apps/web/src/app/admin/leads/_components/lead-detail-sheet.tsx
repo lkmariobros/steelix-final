@@ -6,9 +6,14 @@ import { toast } from "sonner";
 import { trpc } from "@/utils/trpc";
 import { useTransactionModalActions } from "@/contexts/transaction-modal-context";
 import { stashTransactionPrefillOnce } from "@/features/sales-entry/prefill-stash";
-import type { ActivityEventType, Lead } from "./lead-models";
+import {
+	type ActivityEventType,
+	type Lead,
+	getLeadDisplayTags,
+} from "./lead-models";
 import {
 	ACTIVITY_CONFIG,
+	formatLeadTypeLabel,
 	PIPELINE_STAGES,
 	type PipelineStageValue,
 } from "./lead-constants";
@@ -145,6 +150,13 @@ export function LeadDetailSheet({
 
 	if (!lead) return null;
 
+	const activeLead = (detail?.lead ?? lead) as Lead;
+	const displayTags = getLeadDisplayTags(activeLead);
+	const displayNotes =
+		activeLead.notes?.trim() ||
+		detail?.notes?.[0]?.content?.trim() ||
+		null;
+
 	const formatDate = (d: Date | string | null) => {
 		if (!d) return "—";
 		try {
@@ -184,21 +196,21 @@ export function LeadDetailSheet({
 	};
 
 	const handleConvertToTransaction = () => {
-		if (lead.stage !== "converted") return;
+		if (activeLead.stage !== "converted") return;
 		stashTransactionPrefillOnce({
 			clientData: {
-				name: lead.name,
-				email: lead.email ?? "",
-				phone: lead.phone,
-				type: lead.type === "tenant" ? "tenant" : "buyer",
-				source: lead.source,
-				notes: "",
+				name: activeLead.name,
+				email: activeLead.email ?? "",
+				phone: activeLead.phone,
+				type: activeLead.type === "tenant" ? "tenant" : "buyer",
+				source: activeLead.source,
+				notes: displayNotes ?? "",
 			},
 			propertyData: {
-				address: lead.property || "",
-				propertyType: lead.projectName || "Property",
+				address: activeLead.property || "",
+				propertyType: activeLead.projectName || "Property",
 				price: 0,
-				description: lead.tags ?? lead.tagNames.join(", "),
+				description: displayTags.join(", "),
 			},
 		});
 		openCreateModal();
@@ -228,14 +240,14 @@ export function LeadDetailSheet({
 				<SheetHeader className="mb-4">
 					<SheetTitle className="flex items-center gap-2">
 						<RiUserLine size={20} />
-						{lead.name}
+						{activeLead.name}
 					</SheetTitle>
 					<SheetDescription>
 						Lead details, activity timeline, and management actions
 					</SheetDescription>
 				</SheetHeader>
 
-				{isLoading ? (
+				{isLoading && !detail ? (
 					<div className="flex items-center justify-center py-12">
 						<RiLoader4Line className="size-6 animate-spin text-muted-foreground" />
 					</div>
@@ -249,44 +261,56 @@ export function LeadDetailSheet({
 							<CardContent className="grid grid-cols-2 gap-3 text-sm">
 								<div>
 									<span className="text-muted-foreground">Email</span>
-									<p className="truncate font-medium">{lead.email || "—"}</p>
+									<p className="truncate font-medium">
+										{activeLead.email || "—"}
+									</p>
 								</div>
 								<div>
 									<span className="text-muted-foreground">Phone</span>
-									<p className="font-medium">{lead.phone}</p>
+									<p className="font-medium">{activeLead.phone}</p>
 								</div>
 								<div>
 									<span className="text-muted-foreground">Source</span>
-									<p className="font-medium">{lead.source}</p>
-								</div>
-								<div>
-									<span className="text-muted-foreground">Type</span>
-									<p className="font-medium capitalize">{lead.type}</p>
-								</div>
-								<div>
-									<span className="text-muted-foreground">Property</span>
-									<p className="font-medium">{lead.property}</p>
+									<p className="font-medium">
+										{activeLead.source?.trim() || "—"}
+									</p>
 								</div>
 								<div>
 									<span className="text-muted-foreground">Lead Type</span>
-									<p className="font-medium capitalize">{lead.leadType}</p>
+									<p className="font-medium">
+										{formatLeadTypeLabel(activeLead.leadType)}
+									</p>
 								</div>
-								<div>
-									<span className="text-muted-foreground">Last Contact</span>
-									<p className="font-medium">{formatDate(lead.lastContact)}</p>
+								<div className="col-span-2">
+									<span className="text-muted-foreground">Tags</span>
+									{displayTags.length > 0 ? (
+										<div className="mt-1 flex flex-wrap gap-1.5">
+											{displayTags.map((tag) => (
+												<Badge key={tag} variant="secondary">
+													{tag}
+												</Badge>
+											))}
+										</div>
+									) : (
+										<p className="font-medium">—</p>
+									)}
 								</div>
-								<div>
-									<span className="text-muted-foreground">Next Contact</span>
-									<p className="font-medium">{formatDate(lead.nextContact)}</p>
+								<div className="col-span-2">
+									<span className="text-muted-foreground">Notes</span>
+									<p className="mt-0.5 whitespace-pre-line font-medium leading-relaxed">
+										{displayNotes || "—"}
+									</p>
 								</div>
 								<div>
 									<span className="text-muted-foreground">Created</span>
-									<p className="font-medium">{formatDate(lead.createdAt)}</p>
+									<p className="font-medium">
+										{formatDate(activeLead.createdAt)}
+									</p>
 								</div>
 								<div>
 									<span className="text-muted-foreground">Assigned Agent</span>
 									<p className="font-medium">
-										{lead.agentName ?? "Unassigned"}
+										{activeLead.agentName ?? "Unassigned"}
 									</p>
 								</div>
 							</CardContent>
@@ -299,12 +323,12 @@ export function LeadDetailSheet({
 							</CardHeader>
 							<CardContent className="space-y-3">
 								<div className="flex items-center gap-2">
-									<StageBadge stage={lead.stage} />
-									<StatusBadge status={lead.status} />
+									<StageBadge stage={activeLead.stage} />
+									<StatusBadge status={activeLead.status} />
 								</div>
 								<div className="flex gap-2">
 									<Select
-										value={newStage || lead.stage}
+										value={newStage || activeLead.stage}
 										onValueChange={setNewStage}
 									>
 										<SelectTrigger className="flex-1">
@@ -322,7 +346,7 @@ export function LeadDetailSheet({
 										size="sm"
 										disabled={
 											!newStage ||
-											newStage === lead.stage ||
+											newStage === activeLead.stage ||
 											updateStageMutation.isPending
 										}
 										onClick={() =>
@@ -339,7 +363,7 @@ export function LeadDetailSheet({
 										)}
 									</Button>
 								</div>
-								{lead.stage === "converted" ? (
+								{activeLead.stage === "converted" ? (
 									<Button
 										size="sm"
 										variant="secondary"
@@ -358,7 +382,7 @@ export function LeadDetailSheet({
 							</CardHeader>
 							<CardContent className="flex gap-2">
 								<Select
-									value={assignAgentId || lead.agentId || "__unassigned__"}
+									value={assignAgentId || activeLead.agentId || "__unassigned__"}
 									onValueChange={setAssignAgentId}
 								>
 									<SelectTrigger className="flex-1">
@@ -377,7 +401,7 @@ export function LeadDetailSheet({
 									size="sm"
 									disabled={
 										!assignAgentId ||
-										assignAgentId === (lead.agentId ?? "__unassigned__") ||
+										assignAgentId === (activeLead.agentId ?? "__unassigned__") ||
 										assignMutation.isPending
 									}
 									onClick={() =>
@@ -398,22 +422,6 @@ export function LeadDetailSheet({
 								</Button>
 							</CardContent>
 						</Card>
-
-						{/* Tags */}
-						{lead.tagNames.length > 0 && (
-							<Card>
-								<CardHeader className="pb-3">
-									<CardTitle className="text-sm">Tags</CardTitle>
-								</CardHeader>
-								<CardContent className="flex flex-wrap gap-1.5">
-									{lead.tagNames.map((tag) => (
-										<Badge key={tag} variant="secondary">
-											{tag}
-										</Badge>
-									))}
-								</CardContent>
-							</Card>
-						)}
 
 						{/* ── Tasks & Follow-ups ── */}
 						<LeadTasksCard leadId={lead.id} />

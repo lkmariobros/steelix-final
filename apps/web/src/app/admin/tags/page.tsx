@@ -47,6 +47,7 @@ import {
 	RiDeleteBinLine,
 	RiEditLine,
 	RiLoader4Line,
+	RiFileUploadLine,
 	RiPriceTagLine,
 	RiRefreshLine,
 	RiSearchLine,
@@ -55,6 +56,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
+import { ImportTagsDialog } from "./_components/import-tags-dialog";
 
 interface Tag {
 	id: string;
@@ -73,6 +75,7 @@ export default function AdminTagsPage() {
 	const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
 	const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 	const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+	const [isImportOpen, setIsImportOpen] = useState(false);
 	const [selectedTag, setSelectedTag] = useState<Tag | null>(null);
 	const [tagName, setTagName] = useState("");
 	const itemsPerPage = 20;
@@ -239,13 +242,19 @@ export default function AdminTagsPage() {
 								data and run automations
 							</p>
 						</div>
-						<Button
-							onClick={handleAddClick}
-							className="bg-green-600 hover:bg-green-700"
-						>
-							<RiAddLine className="mr-2 h-4 w-4" />
-							Create Tag
-						</Button>
+						<div className="flex gap-2">
+							<Button variant="outline" onClick={() => setIsImportOpen(true)}>
+								<RiFileUploadLine className="mr-2 h-4 w-4" />
+								Import CSV
+							</Button>
+							<Button
+								onClick={handleAddClick}
+								className="bg-green-600 hover:bg-green-700"
+							>
+								<RiAddLine className="mr-2 h-4 w-4" />
+								Create Tag
+							</Button>
+						</div>
 					</div>
 
 					{/* Search and Filters */}
@@ -592,6 +601,12 @@ export default function AdminTagsPage() {
 							</DialogFooter>
 						</DialogContent>
 					</Dialog>
+
+					<ImportTagsDialog
+						open={isImportOpen}
+						onOpenChange={setIsImportOpen}
+						onImported={() => refetchTags()}
+					/>
 
 					{/* Delete Tag Dialog */}
 					<Dialog

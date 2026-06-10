@@ -61,6 +61,7 @@ export interface LeadWithAgent {
 	stage: string;
 	leadType: "personal" | "company";
 	tags: string | null;
+	notes: string | null;
 	lastContact: Date | null;
 	nextContact: Date | null;
 	agentId: string | null;
@@ -243,6 +244,7 @@ export async function getAllLeadsAdmin(filter: AdminLeadsFilter = {}) {
 		});
 		return {
 			...parsed,
+			notes: parsed.notes ?? null,
 			projectName: r.projectName ?? null,
 			agentName: r.agentName ?? null,
 			agentEmail: r.agentEmail ?? null,
@@ -328,6 +330,7 @@ export async function getLeadByIdAdmin(leadId: string) {
 	return {
 		lead: {
 			...parsed,
+			notes: parsed.notes ?? null,
 			projectName: row.projectName ?? null,
 			agentName: row.agentName ?? null,
 			agentEmail: row.agentEmail ?? null,
@@ -633,7 +636,6 @@ export async function getLeadActivityAdmin(
 ): Promise<ActivityEntry[]> {
 	// ── 1. Fetch new activity log entries ────────────────────────────────────
 	let activityEntries: ActivityEntry[] = [];
-	let earliestActivityLogDate: Date | null = null;
 
 	try {
 		const rows = await db
@@ -666,19 +668,19 @@ export async function getLeadActivityAdmin(
 			createdAt: r.activity.createdAt,
 		}));
 
-		// Track the earliest log entry so we know which legacy notes to include
-		if (rows.length > 0) {
-			const dates = rows.map((r) => r.activity.createdAt.getTime());
-			earliestActivityLogDate = new Date(Math.min(...dates));
-		}
 	} catch {
 		// prospect_activity_log table not created yet — continue with legacy notes only
 	}
 
-	// ── 2. Fetch legacy notes from prospect_notes ─────────────────────────────
-	// Include ALL notes if there are no activity log entries yet, otherwise only
-	// include notes created before the activity log started (to avoid duplicates
-	// since addNoteToLeadAdmin now writes to BOTH tables).
+	// ── 2. Fetch notes from prospect_notes ────────────────────────────────────
+	// addNoteToLeadAdmin writes to both tables; skip prospect_notes rows that
+	// already appear as note_added in the activity log (same content).
+	const activityNoteContents = new Set(
+		activityEntries
+			.filter((e) => e.eventType === "note_added" && e.content)
+			.map((e) => e.content as string),
+	);
+
 	try {
 		const noteRows = await db
 			.select({
@@ -688,17 +690,12 @@ export async function getLeadActivityAdmin(
 			})
 			.from(prospectNotes)
 			.leftJoin(user, eq(prospectNotes.agentId, user.id))
-			.where(
-				earliestActivityLogDate
-					? and(
-							eq(prospectNotes.prospectId, leadId),
-							sql`${prospectNotes.createdAt} < ${earliestActivityLogDate.toISOString()}`,
-						)
-					: eq(prospectNotes.prospectId, leadId),
-			)
+			.where(eq(prospectNotes.prospectId, leadId))
 			.orderBy(desc(prospectNotes.createdAt));
 
-		const legacyNoteEntries: ActivityEntry[] = noteRows.map((r) => ({
+		const legacyNoteEntries: ActivityEntry[] = noteRows
+			.filter((r) => !activityNoteContents.has(r.note.content))
+			.map((r) => ({
 			id: `note-${r.note.id}`, // prefix to avoid UUID collision with activity_log ids
 			prospectId: r.note.prospectId,
 			eventType: "note_added" as const,
@@ -976,11 +973,64 @@ function parseTypeFromCsv(raw: string): ProspectType {
 }
 
 function parseLeadTypeFromCsv(raw: string): LeadType {
-	const s = raw.trim().toLowerCase();
+	const s = raw.trim().toLowerCase().replace(/[_-]+/g, " ");
 	if (!s) return "personal";
-	const parsed = leadTypeSchema.safeParse(s);
+	if (s.includes("company")) return "company";
+	if (s.includes("personal")) return "personal";
+	const parsed = leadTypeSchema.safeParse(s.replace(/\s+/g, ""));
 	if (parsed.success) return parsed.data;
+	const compact = leadTypeSchema.safeParse(s.replace(/\s+/g, "_"));
+	if (compact.success) return compact.data;
 	return "personal";
+}
+
+function parseCsvTagNames(raw: string): string[] {
+	if (!raw.trim()) return [];
+	return raw
+		.split(/[;,]/)
+		.map((s) => s.trim())
+		.filter(Boolean);
+}
+
+async function resolveTagIdsFromCsv(
+	raw: string,
+	actorId: string,
+): Promise<string[]> {
+	const names = parseCsvTagNames(raw);
+	if (names.length === 0) return [];
+
+	const tagIds: string[] = [];
+	for (const name of names) {
+		const [existing] = await db
+			.select({ id: crmTags.id })
+			.from(crmTags)
+			.where(sql`lower(trim(${crmTags.name})) = ${name.toLowerCase()}`)
+			.limit(1);
+
+		if (existing) {
+			tagIds.push(existing.id);
+			continue;
+		}
+
+		const [created] = await db
+			.insert(crmTags)
+			.values({ name, createdBy: actorId })
+			.returning({ id: crmTags.id });
+		if (created) tagIds.push(created.id);
+	}
+	return tagIds;
+}
+
+function formatZodImportErrors(
+	errors: { path: (string | number)[]; message: string }[],
+): string {
+	return errors
+		.map((e) => {
+			const path = e.path.length > 0 ? String(e.path[0]) : "field";
+			if (path === "email") return "Invalid email address";
+			return `${path}: ${e.message}`;
+		})
+		.join("; ");
 }
 
 export type LeadImportLineResult = {
@@ -1174,12 +1224,13 @@ export async function importLeadsBulkAdmin(
 		const nextContact = parseOptionalDate(nextContactRaw);
 
 		const notesVal = notesRaw.trim() ? notesRaw.trim() : null;
+		const tagNames = parseCsvTagNames(tags);
 
 		const existing = await findProspectByNormalizedPhone(phoneNorm);
 
 		const baseUpsert = {
 			name: name.trim(),
-			email: emailNorm === "" ? null : emailNorm,
+			...(emailNorm ? { email: emailNorm } : {}),
 			phone,
 			source: finalSource,
 			type: parsedType,
@@ -1188,7 +1239,7 @@ export async function importLeadsBulkAdmin(
 			status: parsedStatus,
 			stage: parsedStage,
 			leadType: parsedLeadType,
-			...(tags?.trim() ? { tags: tags.trim() } : {}),
+			...(tagNames.length > 0 ? { tags: tagNames.join(", ") } : {}),
 			...(notesVal ? { notes: notesVal } : {}),
 			...(lastContact ? { lastContact } : {}),
 			...(nextContact ? { nextContact } : {}),
@@ -1198,26 +1249,32 @@ export async function importLeadsBulkAdmin(
 		if (!validated.success) {
 			skippedInvalid++;
 			error++;
-			const msg = validated.error.errors.map((e) => e.message).join("; ");
 			lines.push({
 				lineNo: rowNum,
 				identifier: name.trim(),
 				object: "Lead",
 				kind: "error",
-				message: msg,
+				message: formatZodImportErrors(validated.error.errors),
 			});
 			continue;
 		}
 
+		const tagIds = tagNames.length > 0
+			? await resolveTagIdsFromCsv(tags, actorId)
+			: undefined;
+
 		try {
+			let leadId: string;
 			if (existing) {
 				await updateLeadAdmin(existing.id, {
 					...validated.data,
+					...(tagIds !== undefined ? { tagIds } : {}),
 					_actorId: actorId,
 				});
 				if (agentId !== null) {
 					await assignLeadAdmin(existing.id, agentId, actorId);
 				}
+				leadId = existing.id;
 				updated++;
 				lines.push({
 					lineNo: rowNum,
@@ -1236,11 +1293,13 @@ export async function importLeadsBulkAdmin(
 						message: `Email already used by “${dup.emailConflictName ?? "another lead"}”; creating/updating by phone only.`,
 					});
 				}
-				await createLeadAdmin({
+				const newLead = await createLeadAdmin({
 					...validated.data,
+					...(tagIds !== undefined ? { tagIds } : {}),
 					agentId: agentId ?? undefined,
 					_actorId: actorId,
 				});
+				leadId = newLead.id;
 				created++;
 				lines.push({
 					lineNo: rowNum,
@@ -1248,6 +1307,9 @@ export async function importLeadsBulkAdmin(
 					object: "Lead",
 					kind: "created",
 				});
+			}
+			if (notesVal) {
+				await addNoteToLeadAdmin(leadId, notesVal, actorId);
 			}
 		} catch (e) {
 			skippedInvalid++;
@@ -1367,6 +1429,7 @@ export async function importProspectsBulkForAgent(
 		const phoneNorm = phone.replace(/\s+/g, "");
 		const emailNorm = email.trim().toLowerCase();
 		const notesVal = notesRaw.trim() ? notesRaw.trim() : null;
+		const tagNames = parseCsvTagNames(tags);
 
 		const existing = await findProspectByNormalizedPhone(phoneNorm);
 
@@ -1393,7 +1456,7 @@ export async function importProspectsBulkForAgent(
 
 		const baseUpsert = {
 			name: name.trim(),
-			email: emailNorm === "" ? null : emailNorm,
+			...(emailNorm ? { email: emailNorm } : {}),
 			phone,
 			source: finalSource,
 			type: parsedType,
@@ -1402,7 +1465,7 @@ export async function importProspectsBulkForAgent(
 			status: parsedStatus,
 			stage: parsedStage,
 			leadType: forcedLeadType,
-			...(tags?.trim() ? { tags: tags.trim() } : {}),
+			...(tagNames.length > 0 ? { tags: tagNames.join(", ") } : {}),
 			...(notesVal ? { notes: notesVal } : {}),
 			...(lastContact ? { lastContact } : {}),
 			...(nextContact ? { nextContact } : {}),
@@ -1411,12 +1474,19 @@ export async function importProspectsBulkForAgent(
 		const validated = insertProspectSchema.safeParse(baseUpsert);
 		if (!validated.success) {
 			result.skippedInvalid++;
-			const msg = validated.error.errors.map((e) => e.message).join("; ");
-			result.errors.push({ rowIndex: rowNum, message: msg });
+			result.errors.push({
+				rowIndex: rowNum,
+				message: formatZodImportErrors(validated.error.errors),
+			});
 			continue;
 		}
 
+		const tagIds = tagNames.length > 0
+			? await resolveTagIdsFromCsv(tags, agentId)
+			: undefined;
+
 		try {
+			let leadId: string;
 			if (existing) {
 				if (mode === "personal_assigned") {
 					if (
@@ -1434,9 +1504,11 @@ export async function importProspectsBulkForAgent(
 					}
 					await updateLeadAdmin(existing.id, {
 						...validated.data,
+						...(tagIds !== undefined ? { tagIds } : {}),
 						_actorId: agentId,
 					});
 					await assignLeadAdmin(existing.id, agentId, agentId);
+					leadId = existing.id;
 					result.updated++;
 				} else {
 					if (existing.agentId !== null && existing.agentId !== undefined) {
@@ -1451,18 +1523,25 @@ export async function importProspectsBulkForAgent(
 					await updateLeadAdmin(existing.id, {
 						...validated.data,
 						leadType: "company",
+						...(tagIds !== undefined ? { tagIds } : {}),
 						_actorId: agentId,
 					});
+					leadId = existing.id;
 					result.updated++;
 				}
 			} else {
-				await createLeadAdmin({
+				const newLead = await createLeadAdmin({
 					...validated.data,
 					leadType: forcedLeadType,
+					...(tagIds !== undefined ? { tagIds } : {}),
 					agentId: assignAgentId ?? undefined,
 					_actorId: agentId,
 				});
+				leadId = newLead.id;
 				result.created++;
+			}
+			if (notesVal) {
+				await addNoteToLeadAdmin(leadId, notesVal, agentId);
 			}
 		} catch (e) {
 			result.skippedInvalid++;

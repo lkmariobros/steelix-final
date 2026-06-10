@@ -1,7 +1,0 @@
-Name,Phone,Email,Source,Notes,Tags,Assigned Agent
-Aiman Razak,+60123456789,aiman.razak@example.com,Facebook Ad,"Interested in Breeze Hill; prefers high floor","[ads lead] breeze hill;VIP",Agent One
-Siti Nurhaliza,+60111222333,,Google Ad,"No email provided; WhatsApp only","[ads lead] the shore",Agent Two
-Tan Wei Ming,+60199887766,tanwm@example.com,Landing Page,"Follow up next week","[ads lead] breeze hill",Agent One
-Nur Izzati,+60145556677,izzati@example.com,Referral,"Referred by Amir; budget RM700k","[referral] amir;[ads lead] the shore",Agent Two
-Duplicate Phone Update Test,+60123456789,aiman.new@example.com,Direct WhatsApp,"This row uses same phone as Aiman; should UPDATE not create","[ads lead] breeze hill;Updated",Agent One
-Bad Phone Example,0123456789,badphone@example.com,Facebook Ad,"This should fail validation (missing +60)","[ads lead] breeze hill",Agent One
