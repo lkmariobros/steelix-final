@@ -41,21 +41,23 @@ export const prospectStatusEnum = pgEnum("prospect_status", [
 	"pending",
 ]);
 
-// Pipeline stage enum (for Kanban board) - Updated to match client's CRM system
+// Pipeline stage enum (for Kanban board) — active + legacy values kept for DB compat
 export const pipelineStageEnum = pgEnum("pipeline_stage", [
 	"new_lead",
-	"contacted",
 	"follow_up_in_progress",
 	"no_pick_reply",
+	"can_recycle",
 	"follow_up_for_appointment",
 	"potential_lead",
-	"consider_seen",
 	"appointment_made",
-	"appointment_set",
+	"consider_seen",
 	"reject_project",
 	"booking_made",
-	"converted",
 	"spam_fake_lead",
+	// Legacy (migrated away in UI; rows should be updated via SQL patch)
+	"contacted",
+	"appointment_set",
+	"converted",
 ]);
 
 // Lead type enum (company vs personal)
@@ -178,21 +180,38 @@ export const propertyTypeSchema = z
 	.string()
 	.min(1, "Property name is required"); // Free text validation
 export const prospectStatusSchema = z.enum(["active", "inactive", "pending"]);
+/** Active pipeline stages only (client CRM spec). */
 export const pipelineStageSchema = z.enum([
 	"new_lead",
-	"contacted",
 	"follow_up_in_progress",
 	"no_pick_reply",
+	"can_recycle",
 	"follow_up_for_appointment",
 	"potential_lead",
-	"consider_seen",
 	"appointment_made",
-	"appointment_set",
+	"consider_seen",
 	"reject_project",
 	"booking_made",
-	"converted",
 	"spam_fake_lead",
 ]);
+
+/** Maps retired DB enum values to the nearest active stage. */
+export const LEGACY_PIPELINE_STAGE_MAP: Record<string, PipelineStage> = {
+	contacted: "follow_up_in_progress",
+	appointment_set: "follow_up_for_appointment",
+	converted: "booking_made",
+};
+
+export function normalisePipelineStage(
+	stage: string | null | undefined,
+): PipelineStage {
+	if (!stage) return "new_lead";
+	if (LEGACY_PIPELINE_STAGE_MAP[stage]) {
+		return LEGACY_PIPELINE_STAGE_MAP[stage];
+	}
+	const parsed = pipelineStageSchema.safeParse(stage);
+	return parsed.success ? parsed.data : "new_lead";
+}
 export const leadTypeSchema = z.enum(["personal", "company"]);
 
 export const insertProspectSchema = z.object({

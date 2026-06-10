@@ -196,7 +196,7 @@ export function LeadDetailSheet({
 	};
 
 	const handleConvertToTransaction = () => {
-		if (activeLead.stage !== "converted") return;
+		if (activeLead.stage !== "booking_made") return;
 		stashTransactionPrefillOnce({
 			clientData: {
 				name: activeLead.name,
@@ -363,7 +363,7 @@ export function LeadDetailSheet({
 										)}
 									</Button>
 								</div>
-								{activeLead.stage === "converted" ? (
+								{activeLead.stage === "booking_made" ? (
 									<Button
 										size="sm"
 										variant="secondary"

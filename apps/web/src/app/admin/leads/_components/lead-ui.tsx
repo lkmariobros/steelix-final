@@ -1,7 +1,12 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { ACTIVITY_CONFIG, stageMap, TASK_PRIORITY_CONFIG } from "./lead-constants";
+import {
+	ACTIVITY_CONFIG,
+	formatPipelineStageLabel,
+	stageMap,
+	TASK_PRIORITY_CONFIG,
+} from "./lead-constants";
 import type { ActivityEventType, TaskPriority } from "./lead-models";
 
 export function TaskPriorityBadge({ priority }: { priority: TaskPriority }) {
@@ -11,8 +16,8 @@ export function TaskPriorityBadge({ priority }: { priority: TaskPriority }) {
 
 export function StageBadge({ stage }: { stage: string }) {
 	const info = stageMap[stage] ?? {
-		label: stage,
-		color: "bg-gray-100 text-gray-700",
+		label: formatPipelineStageLabel(stage),
+		color: "bg-gray-100 text-gray-700 dark:bg-gray-900/20 dark:text-gray-400",
 	};
 	return (
 		<span

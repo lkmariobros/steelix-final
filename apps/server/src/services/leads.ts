@@ -16,6 +16,7 @@ import {
 	crmTags,
 	insertProspectSchema,
 	leadTypeSchema,
+	normalisePipelineStage,
 	pipelineStageSchema,
 	prospectNotes,
 	prospectTags,
@@ -239,7 +240,7 @@ export async function getAllLeadsAdmin(filter: AdminLeadsFilter = {}) {
 		const parsed = selectProspectSchema.parse({
 			...r.prospect,
 			type: normaliseType(r.prospect.type),
-			stage: r.prospect.stage ?? "new_lead",
+			stage: normalisePipelineStage(r.prospect.stage),
 			leadType: r.prospect.leadType ?? "personal",
 		});
 		return {
@@ -323,7 +324,7 @@ export async function getLeadByIdAdmin(leadId: string) {
 	const parsed = selectProspectSchema.parse({
 		...row.prospect,
 		type: normaliseType(row.prospect.type),
-		stage: row.prospect.stage ?? "new_lead",
+		stage: normalisePipelineStage(row.prospect.stage),
 		leadType: row.prospect.leadType ?? "personal",
 	});
 
@@ -936,21 +937,26 @@ function parseStageFromCsv(raw: string): PipelineStage {
 	const n = t.toLowerCase().replace(/[^a-z0-9]+/g, "");
 	const map: Record<string, PipelineStage> = {
 		newlead: "new_lead",
-		contacted: "contacted",
 		followupinprogress: "follow_up_in_progress",
 		nopickreply: "no_pick_reply",
+		nopickupnoreply: "no_pick_reply",
 		nopupreattempt: "no_pick_reply",
 		nopickupreattempt: "no_pick_reply",
+		nopicknoreply: "no_pick_reply",
+		canrecycle: "can_recycle",
+		recycle: "can_recycle",
 		followupforappt: "follow_up_for_appointment",
 		followupforappointment: "follow_up_for_appointment",
 		potentiallead: "potential_lead",
 		considerseen: "consider_seen",
 		appointmentmade: "appointment_made",
-		appointmentset: "appointment_set",
 		rejectproject: "reject_project",
 		bookingmade: "booking_made",
-		converted: "converted",
 		spamfakelead: "spam_fake_lead",
+		// Legacy CSV labels → active stage
+		contacted: "follow_up_in_progress",
+		appointmentset: "follow_up_for_appointment",
+		converted: "booking_made",
 	};
 	return map[n] ?? "new_lead";
 }

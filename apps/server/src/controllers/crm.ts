@@ -15,6 +15,7 @@ import {
 	insertProspectNoteSchema,
 	insertProspectSchema,
 	leadTypeSchema,
+	normalisePipelineStage,
 	pipelineStageSchema,
 	prospectNotes,
 	prospectTags,
@@ -367,7 +368,7 @@ export const crmRouter = router({
 						const prospect = {
 							...r.prospect,
 							type: prospectType as "tenant" | "buyer", // Migrate "owner" to "buyer"
-							stage: r.prospect.stage || "new_lead",
+							stage: normalisePipelineStage(r.prospect.stage),
 							leadType: r.prospect.leadType || "personal",
 							tags: r.prospect.tags || null, // Keep for backward compatibility
 						};
@@ -718,13 +719,13 @@ export const crmRouter = router({
 				effectiveUpdateData.nextContact !== undefined &&
 				effectiveUpdateData.stage === undefined
 			) {
-				effectiveUpdateData.stage = "appointment_set";
+				effectiveUpdateData.stage = "appointment_made";
 			} else if (
 				effectiveUpdateData.lastContact !== undefined &&
 				effectiveUpdateData.stage === undefined &&
 				existing.stage === "new_lead"
 			) {
-				effectiveUpdateData.stage = "contacted";
+				effectiveUpdateData.stage = "follow_up_in_progress";
 			}
 
 			const [updated] = await db
@@ -951,7 +952,9 @@ export const crmRouter = router({
 				.set({
 					lastContact: new Date(),
 					stage:
-						prospect.stage === "new_lead" ? "contacted" : prospect.stage,
+						prospect.stage === "new_lead"
+							? "follow_up_in_progress"
+							: prospect.stage,
 					updatedAt: new Date(),
 				})
 				.where(eq(prospects.id, prospectId));

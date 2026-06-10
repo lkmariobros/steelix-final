@@ -9,21 +9,12 @@ import {
 	RiEyeLine,
 	RiMessageLine,
 } from "@remixicon/react";
-// Pipeline stages type (shared) - Updated to match client's CRM system
-export type PipelineStage =
-	| "new_lead"
-	| "contacted"
-	| "follow_up_in_progress"
-	| "appointment_set"
-	| "no_pick_reply"
-	| "reject_project"
-	| "converted"
-	| "follow_up_for_appointment"
-	| "potential_lead"
-	| "consider_seen"
-	| "appointment_made"
-	| "booking_made"
-	| "spam_fake_lead";
+import {
+	PIPELINE_STAGES as SHARED_PIPELINE_STAGES,
+	type PipelineStageValue,
+} from "@/app/admin/leads/_components/lead-constants";
+
+export type PipelineStage = PipelineStageValue;
 
 interface Prospect {
 	id: string;
@@ -55,26 +46,15 @@ interface KanbanBoardProps {
 	onClaimLead?: (prospectId: string) => void;
 }
 
-// Pipeline stages configuration - Updated to match client's CRM system
 const PIPELINE_STAGES: Array<{
 	id: PipelineStage;
 	label: string;
 	color: string;
-}> = [
-	{ id: "new_lead", label: "New Lead", color: "bg-blue-100 dark:bg-blue-900/30" },
-	{ id: "contacted", label: "Contacted", color: "bg-purple-100 dark:bg-purple-900/30" },
-	{ id: "follow_up_in_progress", label: "Follow Up In Progress", color: "bg-yellow-100 dark:bg-yellow-900/30" },
-	{ id: "appointment_set", label: "Appointment Set", color: "bg-orange-100 dark:bg-orange-900/30" },
-	{ id: "no_pick_reply", label: "No Pick Up & Re-attempt", color: "bg-gray-100 dark:bg-gray-900/30" },
-	{ id: "reject_project", label: "Reject Project", color: "bg-red-100 dark:bg-red-900/30" },
-	{ id: "converted", label: "Converted", color: "bg-green-100 dark:bg-green-900/30" },
-	{ id: "follow_up_for_appointment", label: "Follow Up For Appointment", color: "bg-violet-100 dark:bg-violet-900/30" },
-	{ id: "potential_lead", label: "Potential Lead", color: "bg-cyan-100 dark:bg-cyan-900/30" },
-	{ id: "consider_seen", label: "Consider / Seen", color: "bg-indigo-100 dark:bg-indigo-900/30" },
-	{ id: "appointment_made", label: "Appointment Made", color: "bg-amber-100 dark:bg-amber-900/30" },
-	{ id: "booking_made", label: "Booking Made", color: "bg-emerald-100 dark:bg-emerald-900/30" },
-	{ id: "spam_fake_lead", label: "Spam / Fake Lead", color: "bg-neutral-100 dark:bg-neutral-900/30" },
-];
+}> = SHARED_PIPELINE_STAGES.map((s) => ({
+	id: s.value,
+	label: s.label,
+	color: `${s.color.split(" ").find((c) => c.startsWith("bg-")) ?? "bg-muted"} dark:bg-opacity-30`,
+}));
 
 export function KanbanBoard({
 	prospects,

@@ -13,18 +13,12 @@ import {
 	RiUserLine,
 } from "@remixicon/react";
 
-/** All DB pipeline_stage enum values — used for badges, Kanban lanes, filters. */
+/** Active pipeline stages — order matches client CRM spec. */
 export const PIPELINE_STAGES = [
 	{
 		value: "new_lead",
 		label: "New Lead",
 		color: "bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400",
-	},
-	{
-		value: "contacted",
-		label: "Contacted",
-		color:
-			"bg-purple-100 text-purple-800 dark:bg-purple-900/20 dark:text-purple-400",
 	},
 	{
 		value: "follow_up_in_progress",
@@ -33,27 +27,16 @@ export const PIPELINE_STAGES = [
 			"bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400",
 	},
 	{
-		value: "appointment_set",
-		label: "Appointment Set",
-		color:
-			"bg-orange-100 text-orange-800 dark:bg-orange-900/20 dark:text-orange-400",
-	},
-	{
 		value: "no_pick_reply",
-		label: "No Pick Up & Re-attempt",
+		label: "No Pick Up & No Reply",
 		color: "bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-400",
 	},
 	{
-		value: "reject_project",
-		label: "Reject Project",
-		color: "bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400",
+		value: "can_recycle",
+		label: "Can Recycle",
+		color:
+			"bg-slate-100 text-slate-800 dark:bg-slate-900/20 dark:text-slate-400",
 	},
-	{
-		value: "converted",
-		label: "Converted",
-		color: "bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400",
-	},
-	/* Additional / legacy lanes */
 	{
 		value: "follow_up_for_appointment",
 		label: "Follow Up For Appointment",
@@ -66,16 +49,21 @@ export const PIPELINE_STAGES = [
 		color: "bg-teal-100 text-teal-800 dark:bg-teal-900/20 dark:text-teal-400",
 	},
 	{
+		value: "appointment_made",
+		label: "Appointment Made",
+		color:
+			"bg-amber-100 text-amber-800 dark:bg-amber-900/20 dark:text-amber-400",
+	},
+	{
 		value: "consider_seen",
 		label: "Consider / Seen",
 		color:
 			"bg-indigo-100 text-indigo-800 dark:bg-indigo-900/20 dark:text-indigo-400",
 	},
 	{
-		value: "appointment_made",
-		label: "Appointment Made",
-		color:
-			"bg-amber-100 text-amber-800 dark:bg-amber-900/20 dark:text-amber-400",
+		value: "reject_project",
+		label: "Reject Project",
+		color: "bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400",
 	},
 	{
 		value: "booking_made",
@@ -92,6 +80,17 @@ export const PIPELINE_STAGES = [
 
 export type PipelineStageValue =
 	(typeof PIPELINE_STAGES)[number]["value"];
+
+/** Display label for any stage value (including legacy DB values). */
+export function formatPipelineStageLabel(stage: string): string {
+	const legacy: Record<string, string> = {
+		contacted: "Follow Up In Progress",
+		appointment_set: "Follow Up For Appointment",
+		converted: "Booking Made",
+	};
+	if (legacy[stage]) return legacy[stage];
+	return stageMap[stage]?.label ?? stage.replace(/_/g, " ");
+}
 
 export const stageMap: Record<
 	string,
@@ -205,13 +204,8 @@ export const ACTIVITY_CONFIG: Record<
 	},
 };
 
-// Icon map used in TodayTasksWidget
 export const TASK_TYPE_ICONS: Record<
-	| "call"
-	| "email"
-	| "follow_up"
-	| "meeting"
-	| "other",
+	"call" | "email" | "follow_up" | "meeting" | "other",
 	React.ReactNode
 > = {
 	call: <RiPhoneLine className="size-3.5" />,
@@ -220,4 +214,3 @@ export const TASK_TYPE_ICONS: Record<
 	meeting: <RiCalendar2Line className="size-3.5" />,
 	other: <RiFileList3Line className="size-3.5" />,
 };
-
