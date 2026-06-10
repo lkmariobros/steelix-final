@@ -1,4 +1,5 @@
 import { and, asc, count, desc, eq, ilike, isNull, or, sql } from "drizzle-orm";
+import { isAssignableLeadAgentRole } from "../utils/user-roles";
 import type { SQL } from "drizzle-orm";
 import {
 	type ActivityEntry,
@@ -350,9 +351,17 @@ export async function getLeadByIdAdmin(leadId: string) {
  */
 export async function updateLeadAdmin(
 	leadId: string,
-	data: Partial<InsertProspect> & { tagIds?: string[]; _actorId?: string },
+	data: Partial<InsertProspect> & {
+		tagIds?: string[];
+		_actorId?: string;
+		agentId?: string | null;
+	},
 ) {
 	const { tagIds, _actorId, ...updateFields } = data;
+
+	if (updateFields.agentId) {
+		await assertAssignableLeadAgent(updateFields.agentId);
+	}
 
 	// Fetch old record for diff-logging
 	const [before] = await db
@@ -424,6 +433,22 @@ export async function deleteLeadAdmin(leadId: string) {
 	return { success: true, id: deleted.id };
 }
 
+async function assertAssignableLeadAgent(agentId: string) {
+	const [agentRow] = await db
+		.select({ role: user.role, isActive: user.isActive })
+		.from(user)
+		.where(eq(user.id, agentId))
+		.limit(1);
+
+	if (!agentRow) throw new Error("Selected agent not found");
+	if (agentRow.isActive === false) {
+		throw new Error("Cannot assign to an inactive agent account");
+	}
+	if (!isAssignableLeadAgentRole(agentRow.role)) {
+		throw new Error("Leads can only be assigned to agent accounts");
+	}
+}
+
 /**
  * Assign / reassign a lead to an agent (or unassign by passing null).
  */
@@ -432,6 +457,8 @@ export async function assignLeadAdmin(
 	agentId: string | null,
 	actorId?: string,
 ) {
+	if (agentId) await assertAssignableLeadAgent(agentId);
+
 	// Fetch current agent for diff
 	const [before] = await db
 		.select({ agentId: prospects.agentId })
@@ -511,6 +538,10 @@ export async function createLeadAdmin(
 	},
 ) {
 	const { tagIds, _actorId, ...insertData } = data;
+
+	if (insertData.agentId) {
+		await assertAssignableLeadAgent(insertData.agentId);
+	}
 
 	const [created] = await db.insert(prospects).values(insertData).returning();
 
@@ -872,6 +903,12 @@ export async function getLeadsStatsAdmin(): Promise<LeadsStatsAdmin> {
 	};
 }
 
+/** Active agent-portal accounts eligible for lead assignment. */
+const assignableLeadAgentWhere = and(
+	or(eq(user.isActive, true), isNull(user.isActive)),
+	sql`lower(trim(coalesce(${user.role}, 'agent'))) = 'agent'`,
+);
+
 /**
  * Active sales agents available for lead assignment (not limited to leads already held).
  */
@@ -883,12 +920,7 @@ export async function getAgentsWithLeads() {
 			agentEmail: user.email,
 		})
 		.from(user)
-		.where(
-			and(
-				eq(user.isActive, true),
-				or(eq(user.role, "agent"), eq(user.role, "team_lead")),
-			),
-		)
+		.where(assignableLeadAgentWhere)
 		.orderBy(asc(user.name));
 
 	return rows;
@@ -1210,7 +1242,10 @@ export async function importLeadsBulkAdmin(
 				.select({ id: user.id })
 				.from(user)
 				.where(
-					sql`lower(${user.email}) = ${agentEmail.toLowerCase().trim()}`,
+					and(
+						sql`lower(${user.email}) = ${agentEmail.toLowerCase().trim()}`,
+						assignableLeadAgentWhere,
+					),
 				)
 				.limit(1);
 			agentId = uRow?.id ?? null;
@@ -1219,7 +1254,12 @@ export async function importLeadsBulkAdmin(
 			const [uRow] = await db
 				.select({ id: user.id })
 				.from(user)
-				.where(sql`lower(trim(${user.name})) = ${want}`)
+				.where(
+					and(
+						sql`lower(trim(${user.name})) = ${want}`,
+						assignableLeadAgentWhere,
+					),
+				)
 				.limit(1);
 			agentId = uRow?.id ?? null;
 		}

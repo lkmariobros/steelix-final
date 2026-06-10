@@ -1,3 +1,13 @@
+/** Normalise stored `user.role` for comparisons (defaults to agent). */
+export function normaliseUserRole(role: string | null | undefined): string {
+	return (role ?? "agent").trim().toLowerCase();
+}
+
+/** Whether a user account can receive lead assignments. */
+export function isAssignableLeadAgentRole(role: string | null | undefined): boolean {
+	return normaliseUserRole(role) === "agent";
+}
+
 /** Merge legacy `role` with `roles[]` for permission checks. */
 export function getEffectiveRoles(user: {
 	role?: string | null;

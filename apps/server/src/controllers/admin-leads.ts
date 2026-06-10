@@ -120,7 +120,7 @@ export const adminLeadsRouter = router({
 	}),
 
 	/**
-	 * Active agents / team leads available for assignment and filters.
+	 * Active agent-portal accounts available for assignment and filters.
 	 */
 	agentsWithLeads: adminProcedure.query(async () => {
 		return await getAgentsWithLeads();

@@ -1,7 +1,7 @@
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { trpc } from "@/utils/trpc";
 import { useTransactionModalActions } from "@/contexts/transaction-modal-context";
@@ -10,6 +10,7 @@ import {
 	type ActivityEventType,
 	type Lead,
 	getLeadDisplayTags,
+	withCurrentAssigneeOption,
 } from "./lead-models";
 import {
 	ACTIVITY_CONFIG,
@@ -121,6 +122,15 @@ export function LeadDetailSheet({
 		},
 		onError: (e) => toast.error(e.message),
 	});
+
+	const assignAgentOptions = useMemo(() => {
+		const current = detail?.lead ?? lead;
+		return withCurrentAssigneeOption(agents, {
+			agentId: current?.agentId ?? null,
+			agentName: current?.agentName ?? null,
+			agentEmail: current?.agentEmail ?? null,
+		});
+	}, [agents, lead, detail?.lead]);
 
 	if (!lead) return null;
 
@@ -337,7 +347,7 @@ export function LeadDetailSheet({
 									</SelectTrigger>
 									<SelectContent>
 										<SelectItem value="__unassigned__">— Unassigned —</SelectItem>
-										{agents.map((a) => (
+										{assignAgentOptions.map((a) => (
 											<SelectItem key={a.agentId} value={a.agentId}>
 												{a.agentName ?? a.agentEmail}
 											</SelectItem>

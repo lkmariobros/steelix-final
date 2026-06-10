@@ -24,6 +24,33 @@ export type Lead = {
 	updatedAt: Date | string;
 };
 
+export type AssignableAgentOption = {
+	agentId: string;
+	agentName: string | null;
+	agentEmail: string;
+};
+
+/** Include the lead's current assignee when they are not in the assignable agent list. */
+export function withCurrentAssigneeOption(
+	agents: AssignableAgentOption[],
+	current?: {
+		agentId: string | null;
+		agentName?: string | null;
+		agentEmail?: string | null;
+	},
+): AssignableAgentOption[] {
+	if (!current?.agentId) return agents;
+	if (agents.some((a) => a.agentId === current.agentId)) return agents;
+	return [
+		{
+			agentId: current.agentId,
+			agentName: current.agentName ?? null,
+			agentEmail: current.agentEmail ?? "",
+		},
+		...agents,
+	];
+}
+
 export function getLeadDisplayTags(
 	lead: Pick<Lead, "tagNames" | "tags">,
 ): string[] {
