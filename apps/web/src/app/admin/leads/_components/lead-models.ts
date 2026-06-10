@@ -38,7 +38,6 @@ export function getLeadDisplayTags(
 export type SortKey =
 	| "name"
 	| "stage"
-	| "status"
 	| "agentName"
 	| "createdAt"
 	| "updatedAt";

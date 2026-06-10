@@ -45,12 +45,10 @@ import { Textarea } from "@/components/ui/textarea";
 import {
 	RiHistoryLine,
 	RiLoader4Line,
-	RiMailLine,
-	RiPhoneLine,
 	RiStickyNoteLine,
 	RiUserLine,
 } from "@remixicon/react";
-import { StageBadge, StatusBadge, ActivityEventIcon } from "./lead-ui";
+import { StageBadge, ActivityEventIcon } from "./lead-ui";
 import { LeadTasksCard } from "./lead-tasks-card";
 
 export function LeadDetailSheet({
@@ -73,10 +71,7 @@ export function LeadDetailSheet({
 	const queryClient = useQueryClient();
 	const { openCreateModal } = useTransactionModalActions();
 
-	// Input state for the three action types
-	const [activeInput, setActiveInput] = useState<
-		"note" | "call" | "email" | null
-	>(null);
+	const [showNoteInput, setShowNoteInput] = useState(false);
 	const [inputContent, setInputContent] = useState("");
 	const [newStage, setNewStage] = useState<string>("");
 	const [assignAgentId, setAssignAgentId] = useState<string>("");
@@ -103,28 +98,7 @@ export function LeadDetailSheet({
 		onSuccess: () => {
 			toast.success("Note added");
 			setInputContent("");
-			setActiveInput(null);
-			invalidate();
-		},
-		onError: (e) => toast.error(e.message),
-	});
-
-	const logCallMutation = trpc.adminLeads.logCall.useMutation({
-		onSuccess: () => {
-			toast.success("Call logged");
-			setInputContent("");
-			setActiveInput(null);
-			invalidate();
-			onRefresh();
-		},
-		onError: (e) => toast.error(e.message),
-	});
-
-	const logEmailMutation = trpc.adminLeads.logEmail.useMutation({
-		onSuccess: () => {
-			toast.success("Email logged");
-			setInputContent("");
-			setActiveInput(null);
+			setShowNoteInput(false);
 			invalidate();
 		},
 		onError: (e) => toast.error(e.message),
@@ -181,18 +155,9 @@ export function LeadDetailSheet({
 		}
 	};
 
-	const handleSubmitAction = () => {
+	const handleSubmitNote = () => {
 		if (!inputContent.trim() || !lead) return;
-		if (activeInput === "note") {
-			addNoteMutation.mutate({ leadId: lead.id, content: inputContent.trim() });
-		} else if (activeInput === "call") {
-			logCallMutation.mutate({ leadId: lead.id, content: inputContent.trim() });
-		} else if (activeInput === "email") {
-			logEmailMutation.mutate({
-				leadId: lead.id,
-				content: inputContent.trim(),
-			});
-		}
+		addNoteMutation.mutate({ leadId: lead.id, content: inputContent.trim() });
 	};
 
 	const handleConvertToTransaction = () => {
@@ -217,22 +182,7 @@ export function LeadDetailSheet({
 		toast.success("Transaction form opened with lead details.");
 	};
 
-	const isSubmitting =
-		addNoteMutation.isPending ||
-		logCallMutation.isPending ||
-		logEmailMutation.isPending;
-
-	const actionLabels: Record<"note" | "call" | "email", string> = {
-		note: "Note",
-		call: "Call Summary",
-		email: "Email Summary",
-	};
-
-	const actionPlaceholders: Record<"note" | "call" | "email", string> = {
-		note: "Add a note about this lead…",
-		call: 'e.g. "Called John, interested in Unit 12A, will follow up Friday"',
-		email: 'e.g. "Sent brochure for Breeze Hill — awaiting reply"',
-	};
+	const isSubmitting = addNoteMutation.isPending;
 
 	return (
 		<Sheet open={open} onOpenChange={(v) => !v && onClose()}>
@@ -322,10 +272,7 @@ export function LeadDetailSheet({
 								<CardTitle className="text-sm">Pipeline Stage</CardTitle>
 							</CardHeader>
 							<CardContent className="space-y-3">
-								<div className="flex items-center gap-2">
-									<StageBadge stage={activeLead.stage} />
-									<StatusBadge status={activeLead.status} />
-								</div>
+								<StageBadge stage={activeLead.stage} />
 								<div className="flex gap-2">
 									<Select
 										value={newStage || activeLead.stage}
@@ -446,51 +393,21 @@ export function LeadDetailSheet({
 								</CardDescription>
 							</CardHeader>
 							<CardContent className="space-y-4">
-								{/* Quick-log action buttons */}
-								<div className="flex flex-wrap gap-2">
-									<Button
-										size="sm"
-										variant={activeInput === "note" ? "default" : "outline"}
-										className="h-8 gap-1.5 text-xs"
-										onClick={() =>
-											setActiveInput(activeInput === "note" ? null : "note")
-										}
-									>
-										<RiStickyNoteLine className="size-3.5" />
-										Add Note
-									</Button>
-									<Button
-										size="sm"
-										variant={activeInput === "call" ? "default" : "outline"}
-										className="h-8 gap-1.5 text-xs"
-										onClick={() =>
-											setActiveInput(activeInput === "call" ? null : "call")
-										}
-									>
-										<RiPhoneLine className="size-3.5" />
-										Log Call
-									</Button>
-									<Button
-										size="sm"
-										variant={activeInput === "email" ? "default" : "outline"}
-										className="h-8 gap-1.5 text-xs"
-										onClick={() =>
-											setActiveInput(activeInput === "email" ? null : "email")
-										}
-									>
-										<RiMailLine className="size-3.5" />
-										Log Email
-									</Button>
-								</div>
+								<Button
+									size="sm"
+									variant={showNoteInput ? "default" : "outline"}
+									className="h-8 gap-1.5 text-xs"
+									onClick={() => setShowNoteInput((v) => !v)}
+								>
+									<RiStickyNoteLine className="size-3.5" />
+									Add Note
+								</Button>
 
-								{/* Expandable text input */}
-								{activeInput && (
+								{showNoteInput && (
 									<div className="space-y-2 rounded-md border bg-muted/30 p-3">
-										<p className="font-medium text-xs">
-											{actionLabels[activeInput]}
-										</p>
+										<p className="font-medium text-xs">Note</p>
 										<Textarea
-											placeholder={actionPlaceholders[activeInput]}
+											placeholder="Add a note about this lead…"
 											value={inputContent}
 											onChange={(e) => setInputContent(e.target.value)}
 											rows={3}
@@ -501,18 +418,18 @@ export function LeadDetailSheet({
 											<Button
 												size="sm"
 												disabled={!inputContent.trim() || isSubmitting}
-												onClick={handleSubmitAction}
+												onClick={handleSubmitNote}
 											>
 												{isSubmitting ? (
 													<RiLoader4Line className="mr-1 size-4 animate-spin" />
 												) : null}
-												Save {actionLabels[activeInput]}
+												Save Note
 											</Button>
 											<Button
 												size="sm"
 												variant="ghost"
 												onClick={() => {
-													setActiveInput(null);
+													setShowNoteInput(false);
 													setInputContent("");
 												}}
 											>

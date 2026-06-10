@@ -873,17 +873,22 @@ export async function getLeadsStatsAdmin(): Promise<LeadsStatsAdmin> {
 }
 
 /**
- * Get list of agents who have at least one lead (for filter dropdown).
+ * Active sales agents available for lead assignment (not limited to leads already held).
  */
 export async function getAgentsWithLeads() {
 	const rows = await db
-		.selectDistinct({
+		.select({
 			agentId: user.id,
 			agentName: user.name,
 			agentEmail: user.email,
 		})
-		.from(prospects)
-		.innerJoin(user, eq(prospects.agentId, user.id))
+		.from(user)
+		.where(
+			and(
+				eq(user.isActive, true),
+				or(eq(user.role, "agent"), eq(user.role, "team_lead")),
+			),
+		)
 		.orderBy(asc(user.name));
 
 	return rows;

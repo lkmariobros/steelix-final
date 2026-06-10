@@ -72,7 +72,6 @@ import {
 	formatLeadTypeLabel,
 	PAGE_SIZE_OPTIONS,
 	PIPELINE_STAGES,
-	STATUS_OPTIONS,
 	TYPE_OPTIONS,
 	stageMap,
 } from "./_components/lead-constants";
@@ -82,7 +81,7 @@ import {
 	type SortKey,
 	getLeadDisplayTags,
 } from "./_components/lead-models";
-import { StageBadge, StatusBadge } from "./_components/lead-ui";
+import { StageBadge } from "./_components/lead-ui";
 import { LeadsCharts } from "./_components/leads-charts";
 import { SortHeader } from "./_components/sort-header";
 import { StatsCards } from "./_components/stats-cards";
@@ -96,7 +95,6 @@ export default function AdminLeadsPage() {
 	// ── Filters (all client-side, no backend re-fetch) ──────────────────────
 	const [search, setSearch] = useState("");
 	const [typeFilter, setTypeFilter] = useState("__all__");
-	const [statusFilter, setStatusFilter] = useState("__all__");
 	const [stageFilter, setStageFilter] = useState("__all__");
 	const [leadTypeFilter, setLeadTypeFilter] = useState("__all__");
 	const [agentFilter, setAgentFilter] = useState("__all__");
@@ -178,8 +176,6 @@ export default function AdminLeadsPage() {
 				return false;
 
 			if (typeFilter !== "__all__" && lead.type !== typeFilter) return false;
-			if (statusFilter !== "__all__" && lead.status !== statusFilter)
-				return false;
 			if (stageFilter !== "__all__" && lead.stage !== stageFilter) return false;
 			if (leadTypeFilter !== "__all__" && lead.leadType !== leadTypeFilter)
 				return false;
@@ -228,7 +224,6 @@ export default function AdminLeadsPage() {
 		allLeads,
 		search,
 		typeFilter,
-		statusFilter,
 		stageFilter,
 		leadTypeFilter,
 		agentFilter,
@@ -252,7 +247,6 @@ export default function AdminLeadsPage() {
 	const resetFilters = () => {
 		setSearch("");
 		setTypeFilter("__all__");
-		setStatusFilter("__all__");
 		setStageFilter("__all__");
 		setLeadTypeFilter("__all__");
 		setAgentFilter("__all__");
@@ -262,7 +256,6 @@ export default function AdminLeadsPage() {
 	const hasFilters =
 		search ||
 		typeFilter !== "__all__" ||
-		statusFilter !== "__all__" ||
 		stageFilter !== "__all__" ||
 		leadTypeFilter !== "__all__" ||
 		agentFilter !== "__all__";
@@ -293,7 +286,6 @@ export default function AdminLeadsPage() {
 			"Property": lead.property ?? "",
 			"Project": lead.projectName ?? "",
 			"Stage": stageMap[lead.stage]?.label ?? lead.stage ?? "",
-			"Status": capitalizeForExport(lead.status),
 			"Agent": lead.agentName ?? "Unassigned",
 			"Agent Email": lead.agentEmail ?? "",
 			"Type": capitalizeForExport(lead.type),
@@ -592,23 +584,6 @@ export default function AdminLeadsPage() {
 									</Select>
 
 									<Select
-										value={statusFilter}
-										onValueChange={setFilter(setStatusFilter)}
-									>
-										<SelectTrigger className="h-9 w-[120px] text-xs">
-											<SelectValue placeholder="Status" />
-										</SelectTrigger>
-										<SelectContent>
-											<SelectItem value="__all__">All Statuses</SelectItem>
-											{STATUS_OPTIONS.map((o) => (
-												<SelectItem key={o.value} value={o.value}>
-													{o.label}
-												</SelectItem>
-											))}
-										</SelectContent>
-									</Select>
-
-									<Select
 										value={typeFilter}
 										onValueChange={setFilter(setTypeFilter)}
 									>
@@ -690,24 +665,6 @@ export default function AdminLeadsPage() {
 												type="button"
 												onClick={() => {
 													setStageFilter("__all__");
-													setPage(1);
-												}}
-												className="ml-0.5 rounded-sm opacity-60 hover:opacity-100"
-											>
-												<RiCloseLine size={11} />
-											</button>
-										</span>
-									)}
-									{statusFilter !== "__all__" && (
-										<span className="inline-flex items-center gap-1 rounded-md border bg-muted/60 px-2 py-0.5 text-xs">
-											Status:{" "}
-											<span className="font-medium capitalize">
-												{statusFilter}
-											</span>
-											<button
-												type="button"
-												onClick={() => {
-													setStatusFilter("__all__");
 													setPage(1);
 												}}
 												className="ml-0.5 rounded-sm opacity-60 hover:opacity-100"
@@ -1102,13 +1059,6 @@ export default function AdminLeadsPage() {
 														onSort={handleSort}
 													/>
 													<SortHeader
-														label="Status"
-														sortKey="status"
-														current={sortKey}
-														order={sortOrder}
-														onSort={handleSort}
-													/>
-													<SortHeader
 														label="Agent"
 														sortKey="agentName"
 														current={sortKey}
@@ -1198,9 +1148,6 @@ export default function AdminLeadsPage() {
 														</TableCell>
 														<TableCell>
 															<StageBadge stage={lead.stage} />
-														</TableCell>
-														<TableCell>
-															<StatusBadge status={lead.status} />
 														</TableCell>
 														<TableCell>
 															{lead.agentName ? (

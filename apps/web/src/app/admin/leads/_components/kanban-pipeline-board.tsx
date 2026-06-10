@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import type React from "react";
 import type { Lead } from "./lead-models";
 import { PIPELINE_STAGES, type PipelineStageValue } from "./lead-constants";
-import { StageBadge, StatusBadge } from "./lead-ui";
+import { StageBadge } from "./lead-ui";
 import { Card } from "@/components/ui/card";
 import { trpc } from "@/utils/trpc";
 
@@ -250,20 +250,17 @@ export function KanbanPipelineBoard({
 											}}
 											title={`${lead.name}\n${lead.email}\n${lead.source}\n${lead.agentName ?? "Unassigned"}`}
 										>
-											<div className="flex items-start justify-between gap-2">
-												<div className="min-w-0 flex-1">
-													<div className="line-clamp-2 font-medium text-sm leading-tight">
-														{lead.name}
-													</div>
-													<p className="mt-0.5 truncate text-muted-foreground text-[11px]">
-														{lead.nextContact
-															? `Next ${formatDate(lead.nextContact)}`
-															: "No next contact"}
-														{" · "}
-														{lead.agentName ?? "Unassigned"}
-													</p>
+											<div className="min-w-0">
+												<div className="line-clamp-2 font-medium text-sm leading-tight">
+													{lead.name}
 												</div>
-												<StatusBadge status={lead.status} />
+												<p className="mt-0.5 truncate text-muted-foreground text-[11px]">
+													{lead.nextContact
+														? `Next ${formatDate(lead.nextContact)}`
+														: "No next contact"}
+													{" · "}
+													{lead.agentName ?? "Unassigned"}
+												</p>
 											</div>
 										</Card>
 									))
@@ -317,20 +314,17 @@ export function KanbanPipelineBoard({
 												}}
 												title={`${lead.name}\n${lead.email}\n${lead.source}\n${lead.agentName ?? "Unassigned"}`}
 									>
-										<div className="flex items-start justify-between gap-2">
-											<div className="min-w-0 flex-1">
-												<div className="line-clamp-2 font-medium text-sm leading-tight">
-													{lead.name}
-												</div>
-												<p className="mt-0.5 truncate text-muted-foreground text-[11px]">
-													{lead.nextContact
-														? `Next ${formatDate(lead.nextContact)}`
-														: "No next contact"}
-													{" · "}
-													{lead.agentName ?? "Unassigned"}
-												</p>
+										<div className="min-w-0">
+											<div className="line-clamp-2 font-medium text-sm leading-tight">
+												{lead.name}
 											</div>
-											<StatusBadge status={lead.status} />
+											<p className="mt-0.5 truncate text-muted-foreground text-[11px]">
+												{lead.nextContact
+													? `Next ${formatDate(lead.nextContact)}`
+													: "No next contact"}
+												{" · "}
+												{lead.agentName ?? "Unassigned"}
+											</p>
 										</div>
 									</Card>
 								))}

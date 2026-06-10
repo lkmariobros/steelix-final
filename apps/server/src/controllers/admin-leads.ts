@@ -120,7 +120,7 @@ export const adminLeadsRouter = router({
 	}),
 
 	/**
-	 * Get the list of agents that have at least one lead (for filter dropdown)
+	 * Active agents / team leads available for assignment and filters.
 	 */
 	agentsWithLeads: adminProcedure.query(async () => {
 		return await getAgentsWithLeads();
