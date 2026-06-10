@@ -33,36 +33,45 @@ export const initiationSchema = z
 		},
 	);
 
-// Step 2: Property Schema
+// Step 2: Property Schema (primary market — simplified)
 export const propertySchema = z.object({
 	listingId: z.string().uuid().optional(),
 	listingTitle: z.string().optional(),
-	/** Admin preset from listing; snapshot for commission step + audit */
+	schemeId: z.string().uuid().optional(),
+	salesPackage: z.string().optional(),
+	rebateAmount: z.number().nonnegative().optional(),
+	purchasingMethod: z.enum(["cash", "loan"]).optional(),
 	listingReferralShareType: z.enum(["percentage", "fixed"]).optional(),
 	listingReferralShareValue: z.number().nonnegative().optional(),
-	address: z.string().min(1, "Property address is required"),
-	propertyType: z.string().min(1, "Property type is required"),
+	address: z.string().optional(),
+	propertyType: z.string().optional(),
 	bedrooms: z.number().min(0).optional(),
 	bathrooms: z.number().min(0).optional(),
 	area: z.number().min(0).optional(),
 	price: z.number().min(1, "Property price must be greater than 0"),
+	spaPrice: z.number().positive().optional(),
+	nettPrice: z.number().positive().optional(),
 	description: z.string().optional(),
 });
 
-// Step 3: Client Schema
-// Note: isDualPartyDeal has been moved to unified representationType in Step 4
+// Step 3: Purchaser Schema
 export const clientSchema = z.object({
-	name: z.string().min(1, "Client name is required"),
+	name: z.string().min(1, "Purchaser name is required"),
+	icNo: z.string().min(1, "IC / Passport is required"),
 	email: z
 		.string()
 		.email("Please enter a valid email address")
 		.optional()
 		.or(z.literal("")),
 	phone: z.string().min(1, "Phone number is required"),
-	type: z.enum(["buyer", "seller", "tenant", "landlord"], {
-		required_error: "Please select client type",
-	}),
-	source: z.string().min(1, "Client source is required"),
+	address: z.string().min(1, "Correspondence address is required"),
+	race: z.string().optional(),
+	nationality: z.string().optional(),
+	gender: z.string().optional(),
+	emergencyName: z.string().optional(),
+	emergencyContact: z.string().optional(),
+	type: z.enum(["buyer", "seller", "tenant", "landlord"]).optional(),
+	source: z.string().optional(),
 	notes: z.string().optional(),
 });
 
@@ -75,7 +84,7 @@ const coBrokingBaseSchema = z.object({
 	isCoBroking: z.boolean().optional(),
 	coBrokingData: z
 		.object({
-			// All fields are optional at base level - validation is done via refine based on representationType
+			internalAgentId: z.string().optional(),
 			agentName: z.string().optional(),
 			agencyName: z.string().optional(),
 			commissionSplit: z
@@ -83,15 +92,13 @@ const coBrokingBaseSchema = z.object({
 				.min(0)
 				.max(100, "Commission split must be between 0-100%")
 				.optional(),
-			// Separate email and phone fields for clarity (Issue #11)
+			contactInfo: z.string().optional(),
 			agentEmail: z
 				.string()
 				.email("Please enter a valid email")
 				.optional()
 				.or(z.literal("")),
 			agentPhone: z.string().optional(),
-			// Legacy field for backward compatibility
-			contactInfo: z.string().optional(),
 		})
 		.optional(),
 });
@@ -101,20 +108,14 @@ export const createCoBrokingSchema = () => {
 	return coBrokingBaseSchema.superRefine((data, ctx) => {
 		// If co-broking is selected, validate required fields
 		if (data.representationType === "co_broking") {
-			const { agentName, agencyName, agentPhone } = data.coBrokingData || {};
+			const { internalAgentId, agentName, agentPhone } =
+				data.coBrokingData || {};
 
-			if (!agentName?.trim()) {
+			if (!internalAgentId?.trim() && !agentName?.trim()) {
 				ctx.addIssue({
 					code: z.ZodIssueCode.custom,
-					message: "Agent name is required for co-broking transactions",
+					message: "Select a co-broke agent or enter agent name",
 					path: ["coBrokingData", "agentName"],
-				});
-			}
-			if (!agencyName?.trim()) {
-				ctx.addIssue({
-					code: z.ZodIssueCode.custom,
-					message: "Agency name is required for co-broking transactions",
-					path: ["coBrokingData", "agencyName"],
 				});
 			}
 			if (!agentPhone?.trim()) {
@@ -179,47 +180,100 @@ export const documentsSchema = z.object({
 				url: z.string(),
 				uploadedAt: z.string(),
 				category: z
-					.enum(["contract", "identification", "financial", "miscellaneous"])
+					.enum([
+						"ic_passport",
+						"sales_form",
+						"bank_letter",
+						"payment_proof",
+						"other",
+						"contract",
+						"identification",
+						"financial",
+						"miscellaneous",
+					])
 					.optional(),
 			}),
 		)
 		.optional(),
 	notes: z.string().optional(),
-	transactionId: z.string().optional(), // For linking to transaction
+	transactionId: z.string().optional(),
 });
+
+/** Combined validation for wizard step 1 (Details). */
+export const detailsStepSchema = z
+	.object({
+		projectName: z.string().min(1, "Project is required"),
+		unitNo: z.string().min(1, "Unit number is required"),
+		blockListingId: z.string().uuid().optional(),
+		bookingDate: z.date({ required_error: "Booking date is required" }),
+		propertyData: propertySchema,
+		clientData: clientSchema,
+		representationType: representationTypeEnum,
+		isCoBroking: z.boolean().optional(),
+		coBrokingData: coBrokingBaseSchema.shape.coBrokingData,
+	})
+	.superRefine((data, ctx) => {
+		if (data.representationType === "co_broking") {
+			const { internalAgentId, agentName, agentPhone } =
+				data.coBrokingData || {};
+			if (!internalAgentId?.trim() && !agentName?.trim()) {
+				ctx.addIssue({
+					code: z.ZodIssueCode.custom,
+					message: "Select a co-broke agent",
+					path: ["coBrokingData", "agentName"],
+				});
+			}
+			if (!agentPhone?.trim()) {
+				ctx.addIssue({
+					code: z.ZodIssueCode.custom,
+					message: "Co-broke agent phone is required",
+					path: ["coBrokingData", "agentPhone"],
+				});
+			}
+		}
+	});
 
 // Complete Transaction Schema (all steps combined) with Primary Market → Sale validation
 export const completeTransactionSchema = z
 	.object({
-		// Step 1: Initiation
-		marketType: z.enum(["primary", "secondary"], {
-			required_error: "Please select a market type",
-		}),
-		transactionType: z.enum(["sale", "lease"], {
-			required_error: "Please select a transaction type",
-		}),
-		transactionDate: z.date({
-			required_error: "Please select a transaction date",
-		}),
-
-		// Step 2: Property
+		marketType: z.enum(["primary", "secondary"]).default("primary"),
+		transactionType: z.enum(["sale", "lease"]).default("sale"),
+		transactionDate: z.date().optional(),
+		projectName: z.string().optional(),
+		unitNo: z.string().optional(),
+		blockListingId: z.string().uuid().optional(),
+		bookingDate: z.date().optional(),
 		propertyData: propertySchema,
-
-		// Step 3: Client
 		clientData: clientSchema,
-
-		// Step 4: Co-Broking
 		...coBrokingBaseSchema.shape,
-
-		// Step 5: Commission
-		...commissionSchema.shape,
-
-		// Step 6: Documents
+		commissionType: z.enum(["percentage", "fixed"]).optional(),
+		commissionValue: z.number().min(0).optional(),
+		commissionAmount: z.number().min(0).optional(),
+		agentTier: z
+			.enum([
+				"advisor",
+				"sales_leader",
+				"team_leader",
+				"group_leader",
+				"supreme_leader",
+			])
+			.optional(),
+		companyCommissionSplit: z.number().min(0).max(100).optional(),
+		breakdown: z
+			.object({
+				totalCommission: z.number(),
+				agentCommissionShare: z.number(),
+				coBrokerShare: z.number().optional(),
+				companyShare: z.number(),
+				agentEarnings: z.number(),
+				yourShare: z.number(),
+				yourSharePercentage: z.number(),
+			})
+			.optional(),
 		...documentsSchema.shape,
 	})
 	.refine(
 		(data) => {
-			// Primary market transactions must be sales
 			if (data.marketType === "primary") {
 				return data.transactionType === "sale";
 			}
@@ -256,22 +310,22 @@ export type CommissionData = z.infer<typeof commissionSchema>;
 export type DocumentsData = z.infer<typeof documentsSchema>;
 export type CompleteTransactionData = z.infer<typeof completeTransactionSchema>;
 
-// Wizard UI step type (4 steps)
-export type FormStep = 1 | 2 | 3 | 4;
+// Wizard UI step type (3 steps)
+export type FormStep = 1 | 2 | 3;
 
-/** Data sections within the wizard (unchanged from the original 7-step flow). */
+/** Internal data sections (legacy mapping for updateStepData). */
 export type SectionStep = 1 | 2 | 3 | 4 | 5 | 6;
 
-export const FORM_STEP_COUNT = 4 as const;
+export const FORM_STEP_COUNT = 3 as const;
 
 // Transaction status types
 export type TransactionStatus =
 	| "draft"
-	| "submitted"
-	| "under_review"
-	| "approved"
-	| "rejected"
-	| "completed";
+	| "pending"
+	| "verified"
+	| "converted"
+	| "cancelled"
+	| "revoke";
 
 // Market and transaction type options
 export const marketTypeOptions = [
@@ -339,41 +393,45 @@ export const clientSourceOptions = [
 	{ value: "other", label: "Other" },
 ] as const;
 
-// Step configuration (4-step wizard)
+export const purchasingMethodOptions = [
+	{ value: "cash", label: "Cash" },
+	{ value: "loan", label: "Loan" },
+] as const;
+
+export const genderOptions = [
+	{ value: "male", label: "Male" },
+	{ value: "female", label: "Female" },
+	{ value: "other", label: "Other" },
+] as const;
+
+// Step configuration (3-step wizard)
 export const stepConfig = [
 	{
 		step: 1,
-		title: "Deal & Property",
-		description: "Transaction type, date, and property details",
+		title: "Details",
+		description: "Property, purchaser, and representation",
 	},
 	{
 		step: 2,
-		title: "Client & Representation",
-		description: "Client information and how you represent the deal",
+		title: "Upload",
+		description: "Supporting documents",
 	},
-	{
-		step: 3,
-		title: "Commission & Documents",
-		description: "Commission calculation and supporting documents",
-	},
-	{ step: 4, title: "Review", description: "Review and submit" },
+	{ step: 3, title: "Verify", description: "Review and submit" },
 ] as const;
 
-/** Map a legacy 7-step index (or saved draft step) to the 4-step wizard. */
+/** Map a legacy step index to the 3-step wizard. */
 export function normalizeFormStep(step: number): FormStep {
 	if (step >= 1 && step <= FORM_STEP_COUNT) return step as FormStep;
-	if (step <= 2) return 1;
-	if (step <= 4) return 2;
-	if (step <= 6) return 3;
-	return 4;
+	if (step <= 4) return 1;
+	if (step <= 6) return 2;
+	return 3;
 }
 
 /** Map a data section (1–6) to the wizard step used for edit navigation. */
 export function sectionToFormStep(section: number): FormStep {
-	if (section <= 2) return 1;
-	if (section <= 4) return 2;
-	if (section <= 6) return 3;
-	return 4;
+	if (section <= 4) return 1;
+	if (section <= 6) return 2;
+	return 3;
 }
 
 // Helper functions
@@ -390,39 +448,23 @@ export function isStepValid(
 	data: Partial<CompleteTransactionData>,
 ): boolean {
 	try {
-		if (step === 4) return true;
-
-		switch (step) {
-			case 1:
-				initiationSchema.parse({
-					marketType: data.marketType,
-					transactionType: data.transactionType,
-					transactionDate: data.transactionDate,
-				});
-				propertySchema.parse(data.propertyData);
-				return true;
-			case 2:
-				clientSchema.parse(data.clientData);
-				coBrokingSchema.parse({
-					representationType: data.representationType ?? "direct",
-					isCoBroking: data.isCoBroking,
-					coBrokingData: data.coBrokingData,
-				});
-				return true;
-			case 3:
-				commissionSchema.parse({
-					commissionType: data.commissionType,
-					commissionValue: data.commissionValue,
-					commissionAmount: data.commissionAmount,
-					representationType: data.representationType,
-					agentTier: data.agentTier,
-					companyCommissionSplit: data.companyCommissionSplit,
-					breakdown: data.breakdown,
-				});
-				return true;
-			default:
-				return false;
+		if (step === 3) return true;
+		if (step === 1) {
+			detailsStepSchema.parse({
+				projectName: data.projectName,
+				unitNo: data.unitNo,
+				blockListingId: data.blockListingId,
+				bookingDate: data.bookingDate ?? data.transactionDate,
+				propertyData: data.propertyData,
+				clientData: data.clientData,
+				representationType: data.representationType ?? "direct",
+				isCoBroking: data.isCoBroking,
+				coBrokingData: data.coBrokingData,
+			});
+			return true;
 		}
+		if (step === 2) return true;
+		return false;
 	} catch {
 		return false;
 	}

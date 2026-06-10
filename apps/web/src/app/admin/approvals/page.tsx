@@ -104,14 +104,11 @@ function formatRm(amount: string | number | null | undefined) {
 	}).format(num);
 }
 
-function queueStatusBadgeClass(status: string | null | undefined) {
-	const s = status ?? "";
-	if (s === "pending" || s === "submitted")
-		return "bg-amber-500/15 text-amber-700 dark:text-amber-400";
-	if (s === "verified" || s === "under_review")
-		return "bg-sky-500/15 text-sky-700 dark:text-sky-400";
-	return "bg-muted text-muted-foreground";
-}
+import {
+	CANONICAL_TRANSACTION_STATUSES,
+	formatStatusLabel,
+	getStatusBadgeClass,
+} from "@/features/transactions/transaction-detail-utils";
 
 // Dialog state type
 interface ApprovalDialogState {
@@ -150,11 +147,7 @@ export default function AdminApprovalsPage() {
 			status:
 				statusFilter === "all"
 					? undefined
-					: (statusFilter as
-							| "submitted"
-							| "under_review"
-							| "pending"
-							| "verified"),
+					: (statusFilter as (typeof CANONICAL_TRANSACTION_STATUSES)[number]),
 		},
 		{
 			enabled: !!session,
@@ -345,11 +338,12 @@ export default function AdminApprovalsPage() {
 									<SelectValue placeholder="Filter by status" />
 								</SelectTrigger>
 								<SelectContent>
-									<SelectItem value="all">All pending (queue)</SelectItem>
-									<SelectItem value="pending">Pending</SelectItem>
-									<SelectItem value="verified">Verified</SelectItem>
-									<SelectItem value="submitted">Submitted (legacy)</SelectItem>
-									<SelectItem value="under_review">Under review (legacy)</SelectItem>
+									<SelectItem value="all">Approval queue</SelectItem>
+									{CANONICAL_TRANSACTION_STATUSES.map((s) => (
+										<SelectItem key={s} value={s}>
+											{formatStatusLabel(s)}
+										</SelectItem>
+									))}
 								</SelectContent>
 							</Select>
 
@@ -429,7 +423,7 @@ export default function AdminApprovalsPage() {
 							<Card>
 								<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
 									<CardTitle className="font-medium text-sm">
-										Approved
+										Verified
 									</CardTitle>
 									<RiCheckboxCircleLine className="h-4 w-4 text-muted-foreground" />
 								</CardHeader>
@@ -438,7 +432,7 @@ export default function AdminApprovalsPage() {
 										{dashboardStats?.approvedTransactions || 0}
 									</div>
 									<p className="text-muted-foreground text-xs">
-										Transactions approved
+										Transactions verified
 									</p>
 								</CardContent>
 							</Card>
@@ -503,10 +497,9 @@ export default function AdminApprovalsPage() {
 															</span>
 														) : null}
 														<span
-															className={`rounded-full px-2 py-1 text-xs ${queueStatusBadgeClass(transaction.status)}`}
+															className={`rounded-full px-2 py-1 text-xs ${getStatusBadgeClass(transaction.status)}`}
 														>
-															{transaction.status?.replace(/_/g, " ") ||
-																"pending"}
+															{formatStatusLabel(transaction.status)}
 														</span>
 														<span className="rounded-full bg-violet-500/15 px-2 py-1 text-violet-800 text-xs dark:text-violet-300">
 															{transaction.transactionType} ·{" "}

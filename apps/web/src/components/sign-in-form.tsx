@@ -14,6 +14,44 @@ interface SignInFormProps {
 	onForgotPassword: () => void
 }
 
+function getSignInErrorMessage(error: unknown): string {
+	if (!error || typeof error !== "object") {
+		return "Sign in failed. Please check your email and password."
+	}
+
+	const record = error as Record<string, unknown>
+	const nested =
+		record.error && typeof record.error === "object"
+			? (record.error as Record<string, unknown>)
+			: null
+
+	if (typeof nested?.message === "string" && nested.message.trim()) {
+		return nested.message
+	}
+	if (typeof record.message === "string" && record.message.trim()) {
+		return record.message
+	}
+
+	const status =
+		typeof record.status === "number"
+			? record.status
+			: typeof record.statusCode === "number"
+				? record.statusCode
+				: undefined
+
+	if (status === 401 || status === 403) {
+		return "Invalid email or password."
+	}
+	if (status === 500) {
+		return "Authentication server error. Please try again or contact support."
+	}
+	if (status === 502) {
+		return "Could not reach the authentication server. Please try again later."
+	}
+
+	return "Sign in failed. Please try again."
+}
+
 export default function SignInForm({
 	onSwitchToSignUp,
 	onForgotPassword,
@@ -55,8 +93,8 @@ export default function SignInForm({
 							window.location.href = "/post-login"
 						},
 						onError: (error) => {
-							console.error('Sign in error:', error)
-							const errorMessage = error?.error?.message || 'Sign in failed. Please try again.'
+							console.error("Sign in error:", error)
+							const errorMessage = getSignInErrorMessage(error)
 							if (
 								errorMessage.toLowerCase().includes("431") ||
 								errorMessage.toLowerCase().includes("request header fields too large")

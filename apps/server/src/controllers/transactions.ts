@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import {
 	type NewTransaction,
@@ -16,11 +16,22 @@ import {
 	calculateSchemeCommission,
 	resolveSchemeForBlockAtDate,
 } from "../services/commission-schemes";
+import {
+	addTransactionMessage,
+	assertCanAccessTransactionMessages,
+	listTransactionMessages,
+} from "../services/transaction-messages";
 import { db } from "../utils/db";
+import {
+	agentCanEditTransaction,
+	dbStatusesForCanonicalFilter,
+	normalizeTransactionStatus,
+} from "../utils/transaction-status";
 import {
 	isTransactionsSchemaOutdatedError,
 	transactionsSchemaOutdatedMessage,
 } from "../utils/transactions-schema-hint";
+import { hasAdminAccess } from "../utils/user-roles";
 import { adminProcedure, protectedProcedure, router } from "../utils/trpc";
 
 // Base transaction input schema (without validation)
@@ -31,36 +42,48 @@ const baseTransactionInput = z.object({
 	transactionDate: z.coerce.date().optional(),
 	propertyData: z
 		.object({
-			address: z.string().min(1, "Address is required"),
-			propertyType: z.string().min(1, "Property type is required"),
+			address: z.string().optional(),
+			propertyType: z.string().optional(),
 			listingId: z.string().uuid().optional(),
 			listingTitle: z.string().optional(),
+			schemeId: z.string().uuid().optional(),
+			salesPackage: z.string().optional(),
+			rebateAmount: z.number().nonnegative().optional(),
+			purchasingMethod: z.enum(["cash", "loan"]).optional(),
 			listingReferralShareType: z.enum(["percentage", "fixed"]).optional(),
 			listingReferralShareValue: z.number().nonnegative().optional(),
-			bedrooms: z.number().optional(),
-			bathrooms: z.number().optional(),
-			area: z.number().optional(),
 			price: z.number().positive("Price must be positive"),
+			spaPrice: z.number().positive().optional(),
+			nettPrice: z.number().positive().optional(),
 			description: z.string().optional(),
 		})
 		.optional(),
+	projectName: z.string().optional(),
+	unitNo: z.string().optional(),
+	blockListingId: z.string().uuid().optional(),
+	bookingDate: z.coerce.date().optional(),
+	representationType: z.enum(["direct", "co_broking"]).optional(),
 	clientData: z
 		.object({
-			name: z.string().min(1, "Client name is required"),
-			email: z
-				.string()
-				.email("Valid email is required")
-				.optional()
-				.or(z.literal("")),
+			name: z.string().min(1, "Purchaser name is required"),
+			icNo: z.string().optional(),
+			email: z.string().email().optional().or(z.literal("")),
 			phone: z.string().min(1, "Phone number is required"),
-			type: z.enum(["buyer", "seller", "tenant", "landlord"]),
-			source: z.string().min(1, "Client source is required"),
+			address: z.string().optional(),
+			race: z.string().optional(),
+			nationality: z.string().optional(),
+			gender: z.string().optional(),
+			emergencyName: z.string().optional(),
+			emergencyContact: z.string().optional(),
+			type: z.enum(["buyer", "seller", "tenant", "landlord"]).optional(),
+			source: z.string().optional(),
 			notes: z.string().optional(),
 		})
 		.optional(),
 	isCoBroking: z.boolean().default(false),
 	coBrokingData: z
 		.object({
+			internalAgentId: z.string().optional(),
 			agentName: z.string().optional(),
 			agencyName: z.string().optional(),
 			commissionSplit: z
@@ -69,7 +92,6 @@ const baseTransactionInput = z.object({
 				.max(100, "Commission split must be between 0-100%")
 				.optional(),
 			contactInfo: z.string().optional(),
-			// New fields for enhanced co-broking
 			agentEmail: z.string().email().optional().or(z.literal("")),
 			agentPhone: z.string().optional(),
 		})
@@ -108,23 +130,17 @@ const createTransactionInput = baseTransactionInput
 	)
 	.refine(
 		(data) => {
-			// If co-broking is enabled, validate required fields
 			if ("isCoBroking" in data && data.isCoBroking && data.coBrokingData) {
-				const { agentName, agencyName, contactInfo } = data.coBrokingData;
-				return (
-					agentName &&
-					agentName.trim().length > 0 &&
-					agencyName &&
-					agencyName.trim().length > 0 &&
-					contactInfo &&
-					contactInfo.trim().length > 0
+				const { internalAgentId, agentName, agentPhone } = data.coBrokingData;
+				if (internalAgentId?.trim()) return true;
+				return Boolean(
+					agentName?.trim() && agentPhone?.trim(),
 				);
 			}
-			// If co-broking is disabled, it's valid
 			return true;
 		},
 		{
-			message: "Co-broking fields are required when co-broking is enabled",
+			message: "Co-broking agent is required when co-broking is enabled",
 			path: ["coBrokingData"],
 		},
 	);
@@ -149,23 +165,17 @@ const updateTransactionInput = baseTransactionInput
 	)
 	.refine(
 		(data) => {
-			// If co-broking is enabled, validate required fields
 			if ("isCoBroking" in data && data.isCoBroking && data.coBrokingData) {
-				const { agentName, agencyName, contactInfo } = data.coBrokingData;
-				return (
-					agentName &&
-					agentName.trim().length > 0 &&
-					agencyName &&
-					agencyName.trim().length > 0 &&
-					contactInfo &&
-					contactInfo.trim().length > 0
+				const { internalAgentId, agentName, agentPhone } = data.coBrokingData;
+				if (internalAgentId?.trim()) return true;
+				return Boolean(
+					agentName?.trim() && agentPhone?.trim(),
 				);
 			}
-			// If co-broking is disabled, it's valid
 			return true;
 		},
 		{
-			message: "Co-broking fields are required when co-broking is enabled",
+			message: "Co-broking agent is required when co-broking is enabled",
 			path: ["coBrokingData"],
 		},
 	);
@@ -174,40 +184,42 @@ const transactionIdInput = z.object({
 	id: z.string().uuid(),
 });
 
+const TRANSACTION_STATUS_VALUES = [
+	"draft",
+	"pending",
+	"verified",
+	"converted",
+	"cancelled",
+	"revoke",
+	// legacy (mapped on write)
+	"submitted",
+	"under_review",
+	"approved",
+	"commission_released",
+	"rejected",
+	"completed",
+] as const;
+
 const changeStatusInput = z.object({
 	id: z.string().uuid(),
-	status: z.enum([
-		"draft",
-		"submitted",
-		"under_review",
-		"pending",
-		"verified",
-		"approved",
-		"commission_released",
-		"rejected",
-		"completed",
-		"cancelled",
-	]),
+	status: z.enum(TRANSACTION_STATUS_VALUES),
 	reviewNotes: z.string().optional(),
+	/** When true with status=pending, agent may edit the case again. */
+	allowAgentEdit: z.boolean().optional(),
+});
+
+const addMessageInput = z.object({
+	transactionId: z.string().uuid(),
+	body: z.string().min(1).max(5000),
+	messageType: z
+		.enum(["remark", "edit_request", "status_note", "admin_reply"])
+		.default("remark"),
 });
 
 const listTransactionsInput = z.object({
 	limit: z.number().min(1).max(100).default(10),
 	offset: z.number().min(0).default(0),
-	status: z
-		.enum([
-			"draft",
-			"submitted",
-			"under_review",
-			"pending",
-			"verified",
-			"approved",
-			"commission_released",
-			"rejected",
-			"completed",
-			"cancelled",
-		])
-		.optional(),
+	status: z.enum(TRANSACTION_STATUS_VALUES).optional(),
 });
 
 const adminListTransactionsInput = z.object({
@@ -220,28 +232,18 @@ const adminListTransactionsInput = z.object({
 	projectName: z.string().optional(),
 	blockListingId: z.string().uuid().optional(),
 	agentId: z.string().optional(),
-	status: z
-		.enum([
-			"draft",
-			"submitted",
-			"under_review",
-			"pending",
-			"verified",
-			"approved",
-			"commission_released",
-			"rejected",
-			"completed",
-			"cancelled",
-		])
-		.optional(),
+	status: z.enum(TRANSACTION_STATUS_VALUES).optional(),
 	dateFrom: z.coerce.date().optional(),
 	dateTo: z.coerce.date().optional(),
 });
 
 function normalizeLegacyStatus(status: string | null | undefined) {
-	if (!status) return status;
-	if (status === "submitted" || status === "under_review") return "pending";
-	return status;
+	return normalizeTransactionStatus(status);
+}
+
+function mapIncomingStatus(status: string): string {
+	const n = normalizeTransactionStatus(status);
+	return typeof n === "string" ? n : status;
 }
 
 // Enhanced commission calculation input - simplified representation type
@@ -262,14 +264,15 @@ export const transactionsRouter = router({
 				...input,
 				agentId: ctx.session.user.id,
 				status: "draft" as const,
-				// Convert numbers to strings for decimal fields (handle optional values)
+				agentEditAllowed: true,
+				representationType: input.representationType ?? "direct",
+				isCoBroking: input.representationType === "co_broking",
+				marketType: input.marketType ?? "primary",
+				transactionType: input.transactionType ?? "sale",
+				transactionDate: input.transactionDate ?? input.bookingDate ?? new Date(),
+				commissionType: input.commissionType ?? "percentage",
 				commissionValue: input.commissionValue?.toString() ?? "0",
 				commissionAmount: input.commissionAmount?.toString() ?? "0",
-				// Ensure required fields have defaults for drafts
-				marketType: input.marketType ?? "secondary",
-				transactionType: input.transactionType ?? "sale",
-				transactionDate: input.transactionDate ?? new Date(),
-				commissionType: input.commissionType ?? "percentage",
 			};
 
 			const [transaction] = await db
@@ -302,11 +305,31 @@ export const transactionsRouter = router({
 				throw new Error("Transaction not found or access denied");
 			}
 
+			const existing = existingTransaction[0] as {
+				status: string | null;
+				agentEditAllowed?: boolean | null;
+			};
+
+			if (
+				!agentCanEditTransaction(existing.status, existing.agentEditAllowed)
+			) {
+				throw new TRPCError({
+					code: "FORBIDDEN",
+					message:
+						"This transaction is locked. Submit a request to admin for amendments.",
+				});
+			}
+
 			// Convert number fields to strings for decimal columns
 			const processedUpdateData: Record<string, unknown> = {
 				...updateData,
 				updatedAt: new Date(),
 			};
+
+			if (updateData.representationType !== undefined) {
+				processedUpdateData.isCoBroking =
+					updateData.representationType === "co_broking";
+			}
 
 			// Ensure commission fields are strings
 			if (updateData.commissionValue !== undefined) {
@@ -408,7 +431,11 @@ export const transactionsRouter = router({
 		.query(async ({ input }) => {
 			const conditions: any[] = [];
 
-			if (input.status) conditions.push(eq(transactions.status, input.status));
+			if (input.status) {
+				conditions.push(
+					inArray(transactions.status, dbStatusesForCanonicalFilter(input.status)),
+				);
+			}
 			if (input.projectName)
 				conditions.push(eq(transactions.projectName, input.projectName));
 			if (input.blockListingId)
@@ -500,7 +527,7 @@ export const transactionsRouter = router({
 	submit: protectedProcedure
 		.input(transactionIdInput)
 		.mutation(async ({ ctx, input }) => {
-			// Verify the transaction belongs to the current user and is in draft status
+			// Verify the transaction belongs to the current user and is submittable
 			const [existingTransaction] = await db
 				.select()
 				.from(transactions)
@@ -508,14 +535,26 @@ export const transactionsRouter = router({
 					and(
 						eq(transactions.id, input.id),
 						eq(transactions.agentId, ctx.session.user.id),
-						eq(transactions.status, "draft"),
 					),
 				)
 				.limit(1);
 
 			if (!existingTransaction) {
+				throw new Error("Transaction not found or access denied");
+			}
+
+			const txRow = existingTransaction as {
+				status: string | null;
+				agentEditAllowed?: boolean | null;
+			};
+			const normalizedStatus = normalizeTransactionStatus(txRow.status);
+			const canSubmit =
+				normalizedStatus === "draft" ||
+				(normalizedStatus === "pending" && txRow.agentEditAllowed === true);
+
+			if (!canSubmit) {
 				throw new Error(
-					"Transaction not found, access denied, or already submitted",
+					"Transaction already submitted or locked for editing",
 				);
 			}
 
@@ -528,9 +567,11 @@ export const transactionsRouter = router({
 					| { listingId?: string; price?: number }
 					| null
 					| undefined;
-				if (!hasSnapshot && property?.listingId && property.price) {
+				const blockId =
+					tx.blockListingId ?? property?.listingId ?? undefined;
+				if (!hasSnapshot && blockId && property?.price) {
 					const resolved = await resolveSchemeForBlockAtDate({
-						blockListingId: property.listingId,
+						blockListingId: blockId,
 						at: tx.transactionDate ?? new Date(),
 					});
 					if (resolved) {
@@ -586,6 +627,7 @@ export const transactionsRouter = router({
 				.set({
 					status: "pending",
 					submittedAt: new Date(),
+					agentEditAllowed: false,
 					...schemePatch,
 					updatedAt: new Date(),
 				})
@@ -595,21 +637,59 @@ export const transactionsRouter = router({
 			return updatedTransaction;
 		}),
 
-	// Change transaction status (admin function)
-	changeStatus: protectedProcedure
+	// Change transaction status (admin)
+	adminChangeStatus: adminProcedure
 		.input(changeStatusInput)
 		.mutation(async ({ ctx, input }) => {
-			// Note: In a real app, you'd check if the user has admin privileges
-			// For now, we'll allow any authenticated user to change status
+			const mappedStatus = mapIncomingStatus(input.status) as (typeof TRANSACTION_STATUS_VALUES)[number];
+			const patch: Record<string, unknown> = {
+				status: mappedStatus,
+				reviewedAt: new Date(),
+				reviewedBy: ctx.session.user.id,
+				reviewNotes: input.reviewNotes,
+				updatedAt: new Date(),
+			};
+
+			if (input.allowAgentEdit !== undefined) {
+				patch.agentEditAllowed = input.allowAgentEdit;
+			} else if (mappedStatus === "pending") {
+				patch.agentEditAllowed = false;
+			} else if (mappedStatus === "draft") {
+				patch.agentEditAllowed = true;
+			}
 
 			const [updatedTransaction] = await db
 				.update(transactions)
+				.set(patch)
+				.where(eq(transactions.id, input.id))
+				.returning();
+
+			if (!updatedTransaction) {
+				throw new TRPCError({
+					code: "NOT_FOUND",
+					message: "Transaction not found",
+				});
+			}
+
+			return updatedTransaction;
+		}),
+
+	// Legacy alias
+	changeStatus: adminProcedure
+		.input(changeStatusInput)
+		.mutation(async ({ ctx, input }) => {
+			const mappedStatus = mapIncomingStatus(input.status) as (typeof TRANSACTION_STATUS_VALUES)[number];
+			const [updatedTransaction] = await db
+				.update(transactions)
 				.set({
-					status: input.status,
+					status: mappedStatus,
 					reviewedAt: new Date(),
 					reviewedBy: ctx.session.user.id,
 					reviewNotes: input.reviewNotes,
 					updatedAt: new Date(),
+					...(input.allowAgentEdit !== undefined
+						? { agentEditAllowed: input.allowAgentEdit }
+						: {}),
 				})
 				.where(eq(transactions.id, input.id))
 				.returning();
@@ -619,6 +699,81 @@ export const transactionsRouter = router({
 			}
 
 			return updatedTransaction;
+		}),
+
+	adminUpdate: adminProcedure
+		.input(baseTransactionInput.partial().extend({ id: z.string().uuid() }))
+		.mutation(async ({ input }) => {
+			const { id, ...updateData } = input;
+			const processedUpdateData: Record<string, unknown> = {
+				...updateData,
+				updatedAt: new Date(),
+			};
+			if (updateData.commissionValue !== undefined) {
+				processedUpdateData.commissionValue =
+					updateData.commissionValue.toString();
+			}
+			if (updateData.commissionAmount !== undefined) {
+				processedUpdateData.commissionAmount =
+					updateData.commissionAmount.toString();
+			}
+			if (updateData.representationType !== undefined) {
+				processedUpdateData.isCoBroking =
+					updateData.representationType === "co_broking";
+			}
+			const [updated] = await db
+				.update(transactions)
+				.set(processedUpdateData)
+				.where(eq(transactions.id, id))
+				.returning();
+			if (!updated) throw new TRPCError({ code: "NOT_FOUND", message: "Not found" });
+			return updated;
+		}),
+
+	listMessages: protectedProcedure
+		.input(transactionIdInput)
+		.query(async ({ ctx, input }) => {
+			const sessionUser = ctx.session.user as typeof ctx.session.user & {
+				role?: string;
+				roles?: string[];
+			};
+			await assertCanAccessTransactionMessages(
+				input.id,
+				ctx.session.user.id,
+				sessionUser.role,
+				sessionUser.roles,
+			);
+			return await listTransactionMessages(input.id);
+		}),
+
+	addMessage: protectedProcedure
+		.input(addMessageInput)
+		.mutation(async ({ ctx, input }) => {
+			const sessionUser = ctx.session.user as typeof ctx.session.user & {
+				role?: string;
+				roles?: string[];
+			};
+			await assertCanAccessTransactionMessages(
+				input.transactionId,
+				ctx.session.user.id,
+				sessionUser.role,
+				sessionUser.roles,
+			);
+			const isAdmin = hasAdminAccess({
+				role: sessionUser.role,
+				roles: sessionUser.roles,
+			});
+			const authorRole = isAdmin ? "admin" : "agent";
+			if (!isAdmin && input.messageType === "admin_reply") {
+				throw new TRPCError({ code: "FORBIDDEN", message: "Not allowed" });
+			}
+			return await addTransactionMessage({
+				transactionId: input.transactionId,
+				authorId: ctx.session.user.id,
+				authorRole,
+				body: input.body,
+				messageType: input.messageType,
+			});
 		}),
 
 	// Delete a transaction (only if in draft status)

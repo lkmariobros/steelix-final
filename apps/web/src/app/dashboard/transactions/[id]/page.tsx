@@ -17,11 +17,14 @@ import {
 } from "@/components/ui/breadcrumb";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { LoadingScreen } from "@/components/ui/loading-spinner";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useTransactionModalActions } from "@/contexts/transaction-modal-context";
 import { TransactionDetailView } from "@/features/transactions/transaction-detail-view";
+import { agentCanEditTransaction } from "@/features/transactions/transaction-detail-utils";
+import { TransactionMessagesPanel } from "@/features/transactions/transaction-messages-panel";
 import { useRedirectUnauthenticated } from "@/hooks/use-redirect-unauthenticated";
 import { authClient } from "@/lib/auth-client";
 import { trpc } from "@/utils/trpc";
@@ -50,7 +53,13 @@ export default function AgentTransactionDetailPage() {
 	if (isPending) return <LoadingScreen text="Loading..." />;
 	if (!session) return <LoadingScreen text="Redirecting..." />;
 
-	const canEdit = tx?.status === "draft";
+	const canEdit =
+		tx != null &&
+		agentCanEditTransaction(
+			tx.status,
+			(tx as { agentEditAllowed?: boolean }).agentEditAllowed,
+		);
+	const isLocked = tx != null && !canEdit && tx.status !== "draft";
 
 	return (
 		<SidebarProvider>
@@ -108,14 +117,14 @@ export default function AgentTransactionDetailPage() {
 								onClick={() => openEditModal(tx.id)}
 							>
 								<RiEditLine className="mr-1 size-4" />
-								Edit draft
+								Edit {tx.status === "draft" ? "draft" : "case"}
 							</Button>
 						) : null}
 					</div>
 
 					<Card>
 						<CardHeader>
-							<CardTitle>Transaction details</CardTitle>
+							<CardTitle>{tx?.caseNo ?? "Transaction"}</CardTitle>
 						</CardHeader>
 						<CardContent>
 							{isLoading ? (
@@ -135,7 +144,23 @@ export default function AgentTransactionDetailPage() {
 									</Button>
 								</div>
 							) : tx ? (
-								<TransactionDetailView tx={tx} />
+								<Tabs defaultValue="details">
+									<TabsList>
+										<TabsTrigger value="details">Details</TabsTrigger>
+										<TabsTrigger value="messages">
+											Messages / Requests
+										</TabsTrigger>
+									</TabsList>
+									<TabsContent value="details" className="mt-4">
+										<TransactionDetailView tx={tx} />
+									</TabsContent>
+									<TabsContent value="messages" className="mt-4">
+										<TransactionMessagesPanel
+											transactionId={tx.id}
+											locked={isLocked}
+										/>
+									</TabsContent>
+								</Tabs>
 							) : null}
 						</CardContent>
 					</Card>

@@ -1,4 +1,4 @@
-import { and, avg, count, desc, eq, isNull, sql, sum } from "drizzle-orm";
+import { and, avg, count, desc, eq, inArray, isNull, sql, sum } from "drizzle-orm";
 import { z } from "zod";
 import {
 	AGENT_TIER_CONFIG,
@@ -15,6 +15,11 @@ import { transactions } from "../models/transactions";
 import { ensurePayoutsForApprovedTransaction } from "../services/commission-payouts";
 import { db } from "../utils/db";
 import { resolveUserRole } from "../utils/rbac";
+import {
+	ADMIN_QUEUE_DB_STATUSES,
+	CANONICAL_TRANSACTION_STATUSES,
+	dbStatusesForCanonicalFilter,
+} from "../utils/transaction-status";
 import { adminProcedure, protectedProcedure, router } from "../utils/trpc";
 import {
 	getEffectiveRoles,
@@ -75,9 +80,7 @@ export const adminRouter = router({
 			z.object({
 				limit: z.number().min(1).max(100).default(20),
 				offset: z.number().min(0).default(0),
-				status: z
-					.enum(["submitted", "under_review", "pending", "verified"])
-					.optional(),
+				status: z.enum(CANONICAL_TRANSACTION_STATUSES).optional(),
 			}),
 		)
 		.query(async ({ ctx, input }) => {
@@ -89,11 +92,12 @@ export const adminRouter = router({
 
 			// Filter by status if provided
 			if (input.status) {
-				whereConditions.push(eq(transactions.status, input.status));
-			} else {
-				// Default to pending approvals
 				whereConditions.push(
-					sql`${transactions.status} IN ('submitted', 'under_review', 'pending', 'verified')`,
+					inArray(transactions.status, dbStatusesForCanonicalFilter(input.status)),
+				);
+			} else {
+				whereConditions.push(
+					inArray(transactions.status, [...ADMIN_QUEUE_DB_STATUSES]),
 				);
 			}
 
@@ -170,7 +174,11 @@ export const adminRouter = router({
 		.input(commissionApprovalInput)
 		.mutation(async ({ ctx, input }) => {
 			const reviewerId = ctx.session.user.id;
-			const newStatus = input.action === "approve" ? "approved" : "rejected";
+			const newStatus = input.action === "approve" ? "verified" : "cancelled";
+			const reviewableStatuses = [
+				...dbStatusesForCanonicalFilter("pending"),
+				...dbStatusesForCanonicalFilter("verified"),
+			];
 
 			// Verify transaction exists and is in correct state
 			const [existingTransaction] = await db
@@ -179,7 +187,7 @@ export const adminRouter = router({
 				.where(
 					and(
 						eq(transactions.id, input.transactionId),
-						sql`${transactions.status} IN ('submitted', 'under_review', 'pending', 'verified')`,
+						inArray(transactions.status, reviewableStatuses),
 					),
 				)
 				.limit(1);
@@ -223,7 +231,7 @@ export const adminRouter = router({
 				.where(eq(transactions.id, input.transactionId))
 				.returning();
 
-			if (newStatus === "approved" && updatedTransaction) {
+			if (newStatus === "verified" && updatedTransaction) {
 				try {
 					await ensurePayoutsForApprovedTransaction(updatedTransaction);
 				} catch (e) {
@@ -276,10 +284,10 @@ export const adminRouter = router({
 						sql`CAST(${transactions.commissionAmount} AS DECIMAL)`,
 					),
 					approvedCount: count(
-						sql`CASE WHEN ${transactions.status} = 'approved' THEN 1 END`,
+						sql`CASE WHEN ${transactions.status} IN ('verified', 'approved', 'commission_released') THEN 1 END`,
 					),
 					pendingCount: count(
-						sql`CASE WHEN ${transactions.status} IN ('submitted', 'under_review') THEN 1 END`,
+						sql`CASE WHEN ${transactions.status} IN ('submitted', 'under_review', 'pending') THEN 1 END`,
 					),
 				})
 				.from(user)
@@ -396,10 +404,10 @@ export const adminRouter = router({
 				.select({
 					totalTransactions: count(transactions.id),
 					pendingApprovals: count(
-						sql`CASE WHEN ${transactions.status} IN ('submitted', 'under_review') THEN 1 END`,
+						sql`CASE WHEN ${transactions.status} IN ('submitted', 'under_review', 'pending') THEN 1 END`,
 					),
 					approvedTransactions: count(
-						sql`CASE WHEN ${transactions.status} = 'approved' THEN 1 END`,
+						sql`CASE WHEN ${transactions.status} IN ('verified', 'approved', 'commission_released') THEN 1 END`,
 					),
 					totalCommissionValue: sum(
 						sql`CAST(${transactions.commissionAmount} AS DECIMAL)`,

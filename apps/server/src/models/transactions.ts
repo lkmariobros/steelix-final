@@ -31,11 +31,9 @@ export const commissionTypeEnum = pgEnum("commission_type", [
 	"fixed",
 ]);
 export const transactionStatusEnum = pgEnum("transaction_status", [
-	// Legacy statuses (kept for backward compatibility)
 	"draft",
 	"submitted",
 	"under_review",
-	// Prompt 05 canonical statuses
 	"pending",
 	"verified",
 	"approved",
@@ -43,6 +41,8 @@ export const transactionStatusEnum = pgEnum("transaction_status", [
 	"completed",
 	"cancelled",
 	"rejected",
+	"converted",
+	"revoke",
 ]);
 
 // Document category enum for file uploads
@@ -51,6 +51,11 @@ export const documentCategoryEnum = pgEnum("document_category", [
 	"identification",
 	"financial",
 	"miscellaneous",
+	"ic_passport",
+	"sales_form",
+	"bank_letter",
+	"payment_proof",
+	"other",
 ]);
 
 // Main transactions table
@@ -76,40 +81,49 @@ export const transactions = pgTable("transactions", {
 
 	// Step 2: Property
 	propertyData: jsonb("property_data").$type<{
-		address: string;
-		propertyType: string;
+		address?: string;
+		propertyType?: string;
 		listingId?: string;
 		listingTitle?: string;
-		/** Snapshot of listing preset commission/referral rule at selection time */
+		schemeId?: string;
+		salesPackage?: string;
+		rebateAmount?: number;
+		purchasingMethod?: "cash" | "loan";
 		listingReferralShareType?: "percentage" | "fixed";
 		listingReferralShareValue?: number;
 		bedrooms?: number;
 		bathrooms?: number;
 		area?: number;
 		price: number;
-		/** Prompt 05: SPA + Nett pricing (RM) */
 		spaPrice?: number;
 		nettPrice?: number;
 		description?: string;
 	}>(),
 
-	// Step 3: Client
+	// Step 3: Client / purchaser
 	clientData: jsonb("client_data").$type<{
 		name: string;
 		icNo?: string;
 		email?: string;
 		phone: string;
 		address?: string;
+		race?: string;
+		nationality?: string;
+		gender?: string;
+		emergencyName?: string;
+		emergencyContact?: string;
 		coBuyerName?: string;
 		coBuyerIc?: string;
-		type: "buyer" | "seller" | "tenant" | "landlord";
-		source: string;
+		type?: "buyer" | "seller" | "tenant" | "landlord";
+		source?: string;
 		notes?: string;
 	}>(),
 
 	// Step 4: Co-Broking
+	representationType: text("representation_type").default("direct"),
 	isCoBroking: boolean("is_co_broking").default(false),
 	coBrokingData: jsonb("co_broking_data").$type<{
+		internalAgentId?: string;
 		agentName?: string;
 		agencyName?: string;
 		commissionSplit?: number;
@@ -180,6 +194,8 @@ export const transactions = pgTable("transactions", {
 
 	// Status and metadata
 	status: transactionStatusEnum("status").default("draft"),
+	/** When true, agent may edit while status is pending (admin reopened case). */
+	agentEditAllowed: boolean("agent_edit_allowed").default(false),
 	submittedAt: timestamp("submitted_at"),
 	reviewedAt: timestamp("reviewed_at"),
 	reviewedBy: text("reviewed_by"),

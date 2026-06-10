@@ -2,11 +2,13 @@
 
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { TransactionDocumentsPanel } from "./transaction-documents-panel";
 import {
 	formatRm,
 	formatStatusLabel,
 	formatTransactionDate,
 	formatTransactionDateTime,
+	getStatusBadgeClass,
 } from "./transaction-detail-utils";
 
 export type TransactionDetailRecord = {
@@ -127,7 +129,9 @@ export function TransactionDetailView({
 						{tx.caseNo}
 					</Badge>
 				) : null}
-				<Badge variant="secondary">{formatStatusLabel(tx.status)}</Badge>
+				<Badge className={getStatusBadgeClass(tx.status)}>
+					{formatStatusLabel(tx.status)}
+				</Badge>
 				{tx.marketType ? (
 					<Badge variant="outline" className="capitalize">
 						{tx.marketType} market
@@ -310,54 +314,27 @@ export function TransactionDetailView({
 				) : null}
 			</Section>
 
-			{(tx.notes?.trim() ||
-				(tx.documents && tx.documents.length > 0)) && (
-				<>
-					<Separator />
-					<Section title="Documents & notes">
-						<div className="space-y-4 rounded-lg border bg-muted/30 p-4">
-							{tx.documents && tx.documents.length > 0 ? (
-								<div className="space-y-2">
-									<p className="text-muted-foreground text-xs">Documents</p>
-									<ul className="space-y-2">
-										{tx.documents.map((doc, i) => (
-											<li
-												key={doc.id ?? `${doc.name ?? "doc"}-${i}`}
-												className="flex items-center justify-between gap-2 text-sm"
-											>
-												<span>
-													{doc.name ?? "File"}
-													{doc.type ? ` (${doc.type})` : ""}
-												</span>
-												{doc.url ? (
-													<a
-														href={doc.url}
-														target="_blank"
-														rel="noopener noreferrer"
-														className="text-primary text-xs hover:underline"
-													>
-														Open
-													</a>
-												) : null}
-											</li>
-										))}
-									</ul>
-								</div>
-							) : (
-								<DetailRow label="Documents" value="None uploaded" />
-							)}
-							{tx.notes?.trim() ? (
-								<div>
-									<p className="mb-1 text-muted-foreground text-xs">
-										Additional notes
-									</p>
-									<p className="whitespace-pre-wrap text-sm">{tx.notes}</p>
-								</div>
-							) : null}
+			<Separator />
+
+			<Section title="Documents & notes">
+				<div className="space-y-4 rounded-lg border bg-muted/30 p-4">
+					<div className="space-y-2">
+						<p className="text-muted-foreground text-xs">Documents</p>
+						<TransactionDocumentsPanel
+							transactionId={tx.id}
+							fallbackDocuments={tx.documents}
+						/>
+					</div>
+					{tx.notes?.trim() ? (
+						<div>
+							<p className="mb-1 text-muted-foreground text-xs">
+								Additional notes
+							</p>
+							<p className="whitespace-pre-wrap text-sm">{tx.notes}</p>
 						</div>
-					</Section>
-				</>
-			)}
+					) : null}
+				</div>
+			</Section>
 
 			<Separator />
 

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { getStatusBadgeClass } from "@/features/transactions/transaction-detail-utils";
 
 // Admin dashboard widget configuration
 export const adminWidgetConfigSchema = z.object({
@@ -178,9 +179,7 @@ export const defaultAdminWidgetConfig: AdminWidgetConfig[] = [
 
 // Helper functions
 export function getStatusColor(status: string): string {
-	return (
-		statusColors[status as keyof typeof statusColors] || statusColors.draft
-	);
+	return getStatusBadgeClass(status);
 }
 
 export function getPriorityColor(priority: string): string {

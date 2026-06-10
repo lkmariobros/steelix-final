@@ -10,21 +10,31 @@ export type TransactionRow = inferRouterOutputs<AppRouter>["transactions"]["getB
 export function mapTransactionRowToFormData(
 	row: TransactionRow,
 ): Partial<CompleteTransactionData> {
-	const isCo = row.isCoBroking ?? false;
+	const isCo =
+		row.representationType === "co_broking" || (row.isCoBroking ?? false);
 	const tt =
 		row.transactionType === "rental"
 			? ("lease" as const)
 			: (row.transactionType as "sale" | "lease");
 
-	const td = new Date(row.transactionDate as string | number | Date);
+	const td = row.transactionDate
+		? new Date(row.transactionDate as string | number | Date)
+		: undefined;
+	const bd = row.bookingDate
+		? new Date(row.bookingDate as string | number | Date)
+		: td;
 
 	const prop = row.propertyData;
 	const client = row.clientData;
 
 	return {
-		marketType: row.marketType,
+		marketType: row.marketType ?? "primary",
 		transactionType: tt,
 		transactionDate: td,
+		projectName: row.projectName ?? prop?.listingTitle ?? "",
+		unitNo: row.unitNo ?? "",
+		blockListingId: row.blockListingId ?? undefined,
+		bookingDate: bd,
 		propertyData: prop
 			? {
 					...prop,
@@ -35,7 +45,8 @@ export function mapTransactionRowToFormData(
 			? {
 					...client,
 					email: client.email ?? "",
-					source: client.source ?? "",
+					icNo: client.icNo ?? "",
+					address: client.address ?? "",
 				}
 			: undefined,
 		representationType: isCo ? "co_broking" : "direct",

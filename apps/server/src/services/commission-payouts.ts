@@ -51,7 +51,7 @@ function appendAudit(
  * Idempotent per transaction.
  */
 export async function ensurePayoutsForApprovedTransaction(tx: TxRow) {
-	if (tx.status !== "approved") return [];
+	if (tx.status !== "approved" && tx.status !== "verified") return [];
 
 	const existing = await db
 		.select({ id: commissionPayouts.id })

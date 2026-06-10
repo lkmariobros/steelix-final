@@ -153,7 +153,7 @@ export function AdminDashboardProvider({
 	});
 
 	const queueQuery = trpc.admin.getCommissionApprovalQueue.useQuery(
-		{ limit: 10, offset: 0, status: "submitted" },
+		{ limit: 10, offset: 0, status: "pending" },
 		{ staleTime: 30_000 },
 	);
 

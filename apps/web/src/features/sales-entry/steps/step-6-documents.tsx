@@ -42,6 +42,8 @@ interface StepDocumentsProps extends StepNavigationOptions {
 	onUpdate: (data: DocumentsData) => void;
 	onNext: () => void;
 	onPrevious: () => void;
+	/** Use client-spec document categories (IC, sales form, etc.) */
+	useClientCategories?: boolean;
 }
 
 export function StepDocuments({
@@ -54,9 +56,12 @@ export function StepDocuments({
 	nextLabel = "Continue to Review",
 	previousLabel = "Back to Commission",
 	beforeNext,
+	useClientCategories = false,
 }: StepDocumentsProps) {
 	const [selectedCategory, setSelectedCategory] =
-		useState<DocumentCategory>("contract");
+		useState<DocumentCategory>(
+			useClientCategories ? "ic_passport" : "contract",
+		);
 	const [showCategorySelector, setShowCategorySelector] = useState(false);
 	// Store as File[] instead of FileList to avoid the live object issue
 	const [pendingFiles, setPendingFiles] = useState<File[] | null>(null);
@@ -308,6 +313,9 @@ export function StepDocuments({
 								{showCategorySelector && (
 									<div className="space-y-4 rounded-lg border bg-background p-4">
 										<DocumentCategorySelector
+											variant={
+												useClientCategories ? "transaction" : "legacy"
+											}
 											onSelect={handleCategorySelect}
 											selectedCategory={selectedCategory}
 										/>

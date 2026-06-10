@@ -44,6 +44,10 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useTransactionModalActions } from "@/contexts/transaction-modal-context";
+import {
+	formatStatusLabel,
+	getStatusBadgeClass,
+} from "@/features/transactions/transaction-detail-utils";
 import { useRedirectUnauthenticated } from "@/hooks/use-redirect-unauthenticated";
 import { authClient } from "@/lib/auth-client";
 import { trpc } from "@/utils/trpc";
@@ -153,81 +157,11 @@ export default function TransactionsPage() {
 		refetchTransactions();
 	};
 
-	// Get status badge variant
-	const getStatusBadge = (status: string) => {
-		switch (status) {
-			case "completed":
-				return (
-					<Badge variant="default" className="bg-green-100 text-green-800">
-						<RiCheckLine className="mr-1 h-3 w-3" />
-						Completed
-					</Badge>
-				);
-			case "approved":
-				return (
-					<Badge variant="default" className="bg-blue-100 text-blue-800">
-						<RiCheckLine className="mr-1 h-3 w-3" />
-						Approved
-					</Badge>
-				);
-			case "under_review":
-				return (
-					<Badge variant="secondary">
-						<RiTimeLine className="mr-1 h-3 w-3" />
-						Under Review
-					</Badge>
-				);
-			case "submitted":
-				return (
-					<Badge variant="outline">
-						<RiTimeLine className="mr-1 h-3 w-3" />
-						Submitted
-					</Badge>
-				);
-			case "pending":
-				return (
-					<Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-900">
-						<RiTimeLine className="mr-1 h-3 w-3" />
-						Pending
-					</Badge>
-				);
-			case "verified":
-				return (
-					<Badge variant="secondary" className="bg-sky-100 text-sky-900">
-						<RiCheckLine className="mr-1 h-3 w-3" />
-						Verified
-					</Badge>
-				);
-			case "commission_released":
-				return (
-					<Badge variant="default" className="bg-emerald-100 text-emerald-900">
-						<RiCheckLine className="mr-1 h-3 w-3" />
-						Commission released
-					</Badge>
-				);
-			case "cancelled":
-				return (
-					<Badge variant="secondary" className="bg-muted text-muted-foreground">
-						<RiAlertLine className="mr-1 h-3 w-3" />
-						Cancelled
-					</Badge>
-				);
-			case "rejected":
-				return (
-					<Badge variant="destructive">
-						<RiAlertLine className="mr-1 h-3 w-3" />
-						Rejected
-					</Badge>
-				);
-			default:
-				return (
-					<Badge variant="secondary">
-						<RiEditLine className="mr-1 h-3 w-3" />
-						Draft
-					</Badge>
-				);
-		}
-	};
+	const getStatusBadge = (status: string) => (
+		<Badge className={getStatusBadgeClass(status)}>
+			{formatStatusLabel(status)}
+		</Badge>
+	);
 
 	// Format currency
 	const formatCurrency = (amount: string | number) => {

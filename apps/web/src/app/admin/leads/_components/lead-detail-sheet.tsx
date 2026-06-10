@@ -175,8 +175,10 @@ export function LeadDetailSheet({
 		stashTransactionPrefillOnce({
 			clientData: {
 				name: activeLead.name,
+				icNo: "",
 				email: activeLead.email ?? "",
 				phone: activeLead.phone,
+				address: activeLead.property || "",
 				type: activeLead.type === "tenant" ? "tenant" : "buyer",
 				source: activeLead.source,
 				notes: displayNotes ?? "",

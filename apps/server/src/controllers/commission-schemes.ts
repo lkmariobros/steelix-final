@@ -3,7 +3,7 @@ import {
 	insertCommissionSchemeSchema,
 	updateCommissionSchemeSchema,
 } from "../models/commission-schemes";
-import { adminProcedure, router } from "../utils/trpc";
+import { adminProcedure, protectedProcedure, router } from "../utils/trpc";
 import {
 	bulkUpdateCommissionSchemesAdmin,
 	createCommissionSchemeAdmin,
@@ -41,6 +41,22 @@ export const commissionSchemesRouter = router({
 	listProjects: adminProcedure.query(async () => {
 		return await listProjectNamesForSchemesAdmin();
 	}),
+
+	/** Agent-facing project list for transaction wizard */
+	listProjectsForAgent: protectedProcedure.query(async () => {
+		return await listProjectNamesForSchemesAdmin();
+	}),
+
+	listByProject: protectedProcedure
+		.input(z.object({ projectName: z.string().min(1) }))
+		.query(async ({ input }) => {
+			return await listCommissionSchemesAdmin({
+				projectName: input.projectName,
+				includeInactive: false,
+				limit: 50,
+				offset: 0,
+			});
+		}),
 
 	listBlocks: adminProcedure.query(async () => {
 		return await listBlockListingsForSchemesAdmin();

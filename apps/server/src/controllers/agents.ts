@@ -1,5 +1,5 @@
+import { hashPassword } from "better-auth/crypto";
 import { and, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
-import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { commissionApprovals } from "../models/approvals";
 import {
@@ -258,6 +258,41 @@ export const agentsRouter = router({
 		};
 	}),
 
+	/** Search active agents for co-broking (agent-facing). */
+	searchForCoBroking: protectedProcedure
+		.input(
+			z.object({
+				search: z.string().optional(),
+				limit: z.number().min(1).max(50).default(20),
+			}),
+		)
+		.query(async ({ ctx, input }) => {
+			const conditions = [
+				eq(user.role, "agent"),
+				eq(user.isActive, true),
+				sql`${user.id} != ${ctx.session.user.id}`,
+			];
+			if (input.search?.trim()) {
+				const q = `%${input.search.trim()}%`;
+				conditions.push(
+					sql`(${user.name} ILIKE ${q} OR ${user.email} ILIKE ${q})`,
+				);
+			}
+			const rows = await db
+				.select({
+					id: user.id,
+					name: user.name,
+					email: user.email,
+					phone: user.phone,
+					branch: user.branch,
+				})
+				.from(user)
+				.where(and(...conditions))
+				.orderBy(user.name)
+				.limit(input.limit);
+			return rows;
+		}),
+
 	// Get agent details (admin only)
 	getById: adminProcedure.input(agentIdInput).query(async ({ input }) => {
 		const [agentData] = await db
@@ -382,7 +417,7 @@ export const agentsRouter = router({
 	create: adminProcedure.input(createAgentInput).mutation(async ({ ctx, input }) => {
 		const now = new Date();
 		const userId = crypto.randomUUID();
-		const passwordHash = await bcrypt.hash(input.password, 12);
+		const passwordHash = await hashPassword(input.password);
 
 		const [createdUser] = await db
 			.insert(user)
@@ -453,7 +488,7 @@ export const agentsRouter = router({
 		.input(resetAgentPasswordInput)
 		.mutation(async ({ input }) => {
 			const now = new Date();
-			const passwordHash = await bcrypt.hash(input.newPassword, 12);
+			const passwordHash = await hashPassword(input.newPassword);
 
 			const [updated] = await db
 				.update(account)

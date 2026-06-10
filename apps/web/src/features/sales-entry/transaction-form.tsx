@@ -35,10 +35,9 @@ import {
 	useTransactionFormState,
 } from "./utils/form-state";
 
-import { StepDealAndProperty } from "./steps/step-1-deal-property";
-import { StepClientAndRepresentation } from "./steps/step-2-client-representation";
-import { StepCommissionAndDocuments } from "./steps/step-3-commission-documents";
-import { StepReview } from "./steps/step-7-review";
+import { StepDetails } from "./steps/step-1-details";
+import { StepUpload } from "./steps/step-2-upload";
+import { StepVerify } from "./steps/step-3-verify";
 
 interface TransactionFormProps {
 	transactionId?: string;
@@ -73,6 +72,7 @@ export function TransactionForm({
 		isHydratingTransaction,
 		serverTransactionStatus,
 		updateStepData,
+		updateFormData,
 		goToStep,
 		goToNextStep,
 		goToPreviousStep,
@@ -218,11 +218,14 @@ export function TransactionForm({
 			// If co-broking is disabled, remove coBrokingData entirely
 			cleanedData.coBrokingData = undefined;
 		} else if (cleanedData.coBrokingData) {
-			// If co-broking is enabled, validate required fields
-			const { agentName, agencyName, contactInfo } = cleanedData.coBrokingData;
-			if (!agentName?.trim() || !agencyName?.trim() || !contactInfo?.trim()) {
+			const { internalAgentId, agentName, agentPhone } =
+				cleanedData.coBrokingData;
+			if (
+				!internalAgentId?.trim() &&
+				(!agentName?.trim() || !agentPhone?.trim())
+			) {
 				throw new Error(
-					"Please complete all co-broking fields: Agent Name, Agency Name, and Contact Info are required.",
+					"Please select a co-broke agent or complete agent name and phone.",
 				);
 			}
 		}
@@ -237,27 +240,32 @@ export function TransactionForm({
 			let finalTransactionId = effectiveTxId;
 
 			// Validate form data before submission
-			if (
-				!formData.marketType ||
-				!formData.transactionType ||
-				!formData.transactionDate
-			) {
+			if (!formData.projectName || !formData.propertyData?.price) {
 				toast.error("Please complete all required fields");
 				return;
 			}
 
-			// Prepare clean form data
 			const cleanedFormData = prepareFormDataForSubmission(formData);
+
+			const payload = {
+				...cleanedFormData,
+				marketType: "primary" as const,
+				transactionType: "sale" as const,
+				transactionDate:
+					cleanedFormData.bookingDate ??
+					cleanedFormData.transactionDate ??
+					new Date(),
+			};
 
 			// Create or update the transaction first
 			if (effectiveTxId) {
 				await updateTransaction.mutateAsync({
 					id: effectiveTxId,
-					...cleanedFormData,
+					...payload,
 				});
 			} else {
 				const newTransaction =
-					await createTransaction.mutateAsync(cleanedFormData);
+					await createTransaction.mutateAsync(payload);
 				finalTransactionId = newTransaction.id;
 				setLocalTxId(newTransaction.id);
 			}
@@ -310,43 +318,30 @@ export function TransactionForm({
 		}
 	}, [hasUnsavedChanges, resetForm, onCancel]);
 
-	// Render step content (4-step wizard)
+	// Render step content (3-step wizard)
 	const renderStepContent = () => {
 		switch (currentStep) {
 			case 1:
 				return (
-					<StepDealAndProperty
+					<StepDetails
 						formData={formData}
-						onUpdateInitiation={(data) => handleStepUpdate(1, data)}
-						onUpdateProperty={(data) => handleStepUpdate(2, data)}
+						onUpdate={updateFormData}
 						onNext={goToNextStep}
-						onPrevious={goToPreviousStep}
 					/>
 				);
 			case 2:
 				return (
-					<StepClientAndRepresentation
+					<StepUpload
 						formData={formData}
-						onUpdateClient={(data) => handleStepUpdate(3, data)}
-						onUpdateCoBroking={(data) => handleStepUpdate(4, data)}
+						transactionId={effectiveTxId}
+						onUpdate={(data) => handleStepUpdate(6, data)}
 						onNext={goToNextStep}
 						onPrevious={goToPreviousStep}
 					/>
 				);
 			case 3:
 				return (
-					<StepCommissionAndDocuments
-						formData={formData}
-						transactionId={effectiveTxId}
-						onUpdateCommission={(data) => handleStepUpdate(5, data)}
-						onUpdateDocuments={(data) => handleStepUpdate(6, data)}
-						onNext={goToNextStep}
-						onPrevious={goToPreviousStep}
-					/>
-				);
-			case 4:
-				return (
-					<StepReview
+					<StepVerify
 						data={formData}
 						onSubmit={handleSubmit}
 						onPrevious={goToPreviousStep}

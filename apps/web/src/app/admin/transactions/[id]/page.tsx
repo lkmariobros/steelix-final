@@ -10,11 +10,19 @@ import {
 	BreadcrumbPage,
 	BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TransactionDetailView } from "@/features/transactions/transaction-detail-view";
+import { AdminTransactionStatusPanel } from "@/features/transactions/admin-transaction-status-panel";
+import { TransactionMessagesPanel } from "@/features/transactions/transaction-messages-panel";
+import {
+	formatStatusLabel,
+	getStatusBadgeClass,
+} from "@/features/transactions/transaction-detail-utils";
 import { trpc } from "@/utils/trpc";
 import {
 	RiArrowLeftLine,
@@ -86,11 +94,29 @@ export default function AdminTransactionDetailPage() {
 							Back to approvals
 						</Link>
 					</Button>
+					<Button variant="outline" size="sm" asChild>
+						<Link href="/admin/transactions">All transactions</Link>
+					</Button>
 				</div>
 
+				{tx && !isLoading && !error ? (
+					<AdminTransactionStatusPanel
+						transactionId={tx.id}
+						currentStatus={tx.status}
+						agentEditAllowed={
+							(tx as { agentEditAllowed?: boolean }).agentEditAllowed
+						}
+					/>
+				) : null}
+
 				<Card>
-					<CardHeader>
-						<CardTitle>Transaction details</CardTitle>
+					<CardHeader className="flex flex-row items-center justify-between gap-2">
+						<CardTitle>{tx?.caseNo ?? "Transaction"}</CardTitle>
+						{tx?.status ? (
+							<Badge className={getStatusBadgeClass(tx.status)}>
+								{formatStatusLabel(tx.status)}
+							</Badge>
+						) : null}
 					</CardHeader>
 					<CardContent>
 						{isLoading ? (
@@ -110,11 +136,27 @@ export default function AdminTransactionDetailPage() {
 								</Button>
 							</div>
 						) : tx ? (
-							<TransactionDetailView
-								tx={tx}
-								agentName={agentData?.agent?.name}
-								agentEmail={agentData?.agent?.email}
-							/>
+							<Tabs defaultValue="details">
+								<TabsList>
+									<TabsTrigger value="details">Details</TabsTrigger>
+									<TabsTrigger value="messages">
+										Messages / Requests
+									</TabsTrigger>
+								</TabsList>
+								<TabsContent value="details" className="mt-4">
+									<TransactionDetailView
+										tx={tx}
+										agentName={agentData?.agent?.name}
+										agentEmail={agentData?.agent?.email}
+									/>
+								</TabsContent>
+								<TabsContent value="messages" className="mt-4">
+									<TransactionMessagesPanel
+										transactionId={tx.id}
+										isAdmin
+									/>
+								</TabsContent>
+							</Tabs>
 						) : null}
 					</CardContent>
 				</Card>

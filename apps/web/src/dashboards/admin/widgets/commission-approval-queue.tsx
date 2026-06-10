@@ -43,8 +43,11 @@ import {
 	formatCurrency,
 	formatDateTime,
 	getRelativeTime,
-	getStatusColor,
 } from "../admin-schema";
+import {
+	formatStatusLabel,
+	getStatusBadgeClass,
+} from "@/features/transactions/transaction-detail-utils";
 
 interface CommissionApprovalQueueProps {
 	className?: string;
@@ -79,7 +82,7 @@ export function CommissionApprovalQueue({
 		useAdminDashboard();
 
 	const paginatedQuery = trpc.admin.getCommissionApprovalQueue.useQuery(
-		{ limit: PAGE_SIZE, offset: page * PAGE_SIZE, status: "submitted" },
+		{ limit: PAGE_SIZE, offset: page * PAGE_SIZE, status: "pending" },
 		{
 			enabled: page > 0, // only run when user navigates beyond page 0
 			staleTime: 30_000,
@@ -96,12 +99,12 @@ export function CommissionApprovalQueue({
 		trpc.admin.processCommissionApproval.useMutation({
 			onMutate: async (variables) => {
 				optimisticUpdateTransaction(queryClient, variables.transactionId, {
-					status: variables.action === "approve" ? "approved" : "rejected",
+					status: variables.action === "approve" ? "verified" : "cancelled",
 					reviewNotes: variables.reviewNotes,
 				});
 			},
 			onSuccess: (_, variables) => {
-				const label = variables.action === "approve" ? "approved" : "rejected";
+				const label = variables.action === "approve" ? "verified" : "cancelled";
 				toast.success(`Transaction ${label} successfully`);
 				invalidateAdminQueries(queryClient);
 				closeDialog();
@@ -291,8 +294,8 @@ export function CommissionApprovalQueue({
 													</div>
 												</TableCell>
 												<TableCell>
-													<Badge className={getStatusColor(transaction.status)}>
-														{transaction.status.replace("_", " ")}
+													<Badge className={getStatusBadgeClass(transaction.status)}>
+														{formatStatusLabel(transaction.status)}
 													</Badge>
 												</TableCell>
 												<TableCell className="text-right">

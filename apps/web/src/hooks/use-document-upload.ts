@@ -1,9 +1,14 @@
 import { trpc } from "@/utils/trpc";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import React, { useState, useCallback, useEffect } from "react";
 import { toast } from "sonner";
 
 export type DocumentCategory =
+	| "ic_passport"
+	| "sales_form"
+	| "bank_letter"
+	| "payment_proof"
+	| "other"
 	| "contract"
 	| "identification"
 	| "financial"
@@ -96,31 +101,28 @@ export function useDocumentUpload(transactionId?: string) {
 		}
 	}, [isTempMode]);
 
-	// ✅ CORRECT PATTERN: Use useQuery with tRPC proxy (same as dashboard components)
-	const listQuery = useQuery({
-		queryKey: ["documents.list", { transactionId: transactionId || "" }],
-		queryFn: async () => {
-			if (isTempMode) {
-				return [];
-			}
+	// Fetch documents via tRPC (signed URLs, admin + agent access)
+	const listQuery = trpc.documents.list.useQuery(
+		{ transactionId: transactionId ?? "" },
+		{ enabled: Boolean(transactionId) && !isTempMode },
+	);
 
-			const response = await fetch(
-				`/api/trpc/documents.list?input=${encodeURIComponent(JSON.stringify({ transactionId }))}`,
-				{
-					credentials: "include",
-				},
+	// Update documents when query data changes
+	useEffect(() => {
+		if (listQuery.data) {
+			setDocuments(
+				listQuery.data.map((d) => ({
+					id: d.id,
+					name: d.fileName,
+					type: d.fileType,
+					url: d.url,
+					uploadedAt: d.uploadedAt,
+					category: d.documentCategory as DocumentCategory,
+					fileSize: d.fileSize,
+				})),
 			);
-
-			if (!response.ok) {
-				throw new Error("Failed to fetch documents");
-			}
-
-			const result = await response.json();
-			return result.result?.data || [];
-		},
-		enabled: !isTempMode,
-		retry: false,
-	});
+		}
+	}, [listQuery.data]);
 
 	// ✅ CORRECT PATTERN: Use useMutation with manual fetch (same as commission-approval-queue)
 	const uploadMutation = useMutation({
@@ -167,12 +169,7 @@ export function useDocumentUpload(transactionId?: string) {
 		},
 	});
 
-	// Update documents when query data changes
-	useEffect(() => {
-		if (listQuery.data) {
-			setDocuments(listQuery.data);
-		}
-	}, [listQuery.data]);
+	// Update documents when query data changes — handled in listQuery effect above
 
 	// Issue #3 Fix: Upload file - handles both temp and real transaction modes
 	const uploadFile = async (
@@ -324,7 +321,7 @@ export function useDocumentUpload(transactionId?: string) {
 				type: result.fileType,
 				url: result.url,
 				uploadedAt: result.uploadedAt,
-				category: result.documentCategory,
+				category: result.documentCategory as DocumentCategory,
 			};
 		} catch (error) {
 			// Clean up progress and loading state on error

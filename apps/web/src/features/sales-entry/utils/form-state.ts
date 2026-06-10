@@ -47,31 +47,35 @@ function deserializeFormData(
 	};
 }
 
-// Initial form data with unified representation type (Issue #1 fix)
+// Initial form data — primary market 3-step wizard defaults
 export const initialFormData: Partial<CompleteTransactionData> = {
-	marketType: undefined,
-	transactionType: undefined,
+	marketType: "primary",
+	transactionType: "sale",
 	transactionDate: undefined,
+	projectName: "",
+	unitNo: "",
+	blockListingId: undefined,
+	bookingDate: undefined,
 	propertyData: {
-		address: "",
-		propertyType: "",
-		bedrooms: undefined,
-		bathrooms: undefined,
-		area: undefined,
 		price: 0,
-		description: "",
+		salesPackage: "",
+		rebateAmount: undefined,
+		purchasingMethod: undefined,
 	},
 	clientData: {
 		name: "",
+		icNo: "",
 		email: "",
 		phone: "",
-		type: "buyer" as "buyer" | "seller" | "tenant" | "landlord",
-		source: "",
-		notes: "",
+		address: "",
+		race: "",
+		nationality: "",
+		gender: "",
+		emergencyName: "",
+		emergencyContact: "",
 	},
-	// Simplified representation type - 2 options: direct or co_broking
 	representationType: "direct" as RepresentationType,
-	isCoBroking: false, // Derived from representationType for backward compatibility
+	isCoBroking: false,
 	coBrokingData: undefined,
 	commissionType: "percentage" as const,
 	commissionValue: 0,
@@ -250,6 +254,17 @@ export function useTransactionFormState(
 							| "lease"
 							| undefined,
 						transactionDate: data.transactionDate as Date | undefined,
+						projectName: data.projectName as string | undefined,
+						unitNo: data.unitNo as string | undefined,
+						blockListingId: data.blockListingId as string | undefined,
+						bookingDate: data.bookingDate as Date | undefined,
+						propertyData: data.propertyData as PropertyData | undefined,
+						clientData: data.clientData as ClientData | undefined,
+						representationType: data.representationType as
+							| RepresentationType
+							| undefined,
+						isCoBroking: data.isCoBroking as boolean | undefined,
+						coBrokingData: data.coBrokingData as CoBrokingData["coBrokingData"],
 					});
 					break;
 				case 2:
@@ -361,38 +376,27 @@ export function calculateProgress(currentStep: FormStep): number {
 	return (currentStep / FORM_STEP_COUNT) * 100;
 }
 
-// Step completion check
+// Step completion check (3-step wizard)
 export function getCompletedSteps(
 	formData: Partial<CompleteTransactionData>,
 ): FormStep[] {
 	const completed: FormStep[] = [];
 
-	// Step 1: Deal & Property
-	const dealComplete =
-		formData.marketType &&
-		formData.transactionType &&
-		formData.transactionDate &&
-		formData.propertyData?.address &&
-		formData.propertyData?.propertyType &&
-		formData.propertyData?.price;
-	if (dealComplete) completed.push(1);
+	const detailsComplete =
+		formData.projectName?.trim() &&
+		formData.unitNo?.trim() &&
+		formData.propertyData?.price &&
+		formData.clientData?.name?.trim() &&
+		formData.clientData?.icNo?.trim() &&
+		formData.clientData?.phone?.trim() &&
+		formData.clientData?.address?.trim() &&
+		(formData.bookingDate || formData.transactionDate);
+	if (detailsComplete) completed.push(1);
 
-	// Step 2: Client & Representation (co-broking fields validated on submit)
-	const clientComplete =
-		formData.clientData?.name &&
-		formData.clientData?.phone &&
-		formData.clientData?.type;
-	if (clientComplete) completed.push(2);
+	// Upload step is always navigable once details are done
+	if (detailsComplete) completed.push(2);
 
-	// Step 3: Commission & Documents (documents optional)
-	const commissionComplete =
-		formData.commissionType &&
-		formData.commissionValue !== undefined &&
-		formData.commissionAmount !== undefined;
-	if (commissionComplete) completed.push(3);
-
-	// Step 4: Review (complete when prior steps are done)
-	if (completed.length >= 3) completed.push(4);
+	if (completed.length >= 2) completed.push(3);
 
 	return completed;
 }
