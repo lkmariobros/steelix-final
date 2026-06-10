@@ -60,6 +60,7 @@ import {
 	RiRefreshLine,
 	RiTimeLine,
 } from "@remixicon/react";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 // View modes for the transactions page
@@ -76,8 +77,8 @@ const PIPELINE_STATUSES = [
 export default function TransactionsPage() {
 	const { data: session, isPending } = authClient.useSession();
 	useRedirectUnauthenticated(session, isPending);
-	const { openCreateModal, openEditModal, openViewModal } =
-		useTransactionModalActions();
+	const router = useRouter();
+	const { openCreateModal, openEditModal } = useTransactionModalActions();
 	const [viewMode, setViewMode] = useState<ViewMode>("all");
 	const [statusFilter, setStatusFilter] = useState<string>("all");
 	const [currentPage, setCurrentPage] = useState(0);
@@ -731,6 +732,11 @@ export default function TransactionsPage() {
 													<TableRow
 														key={transaction.id}
 														className="cursor-pointer hover:bg-muted/50"
+														onClick={() =>
+															router.push(
+																`/dashboard/transactions/${transaction.id}`,
+															)
+														}
 													>
 														<TableCell>
 															<div className="font-medium">
@@ -775,7 +781,12 @@ export default function TransactionsPage() {
 																<Button
 																	variant="ghost"
 																	size="sm"
-																	onClick={() => openViewModal(transaction.id)}
+																	onClick={(e) => {
+																		e.stopPropagation();
+																		router.push(
+																			`/dashboard/transactions/${transaction.id}`,
+																		);
+																	}}
 																	title="View details"
 																>
 																	<RiEyeLine className="h-4 w-4" />
@@ -783,7 +794,10 @@ export default function TransactionsPage() {
 																<Button
 																	variant="ghost"
 																	size="sm"
-																	onClick={() => openEditModal(transaction.id)}
+																	onClick={(e) => {
+																		e.stopPropagation();
+																		openEditModal(transaction.id);
+																	}}
 																	title="Edit transaction"
 																>
 																	<RiEditLine className="h-4 w-4" />

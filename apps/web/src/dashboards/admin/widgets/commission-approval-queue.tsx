@@ -30,7 +30,8 @@ import {
 	optimisticUpdateTransaction,
 } from "@/lib/query-invalidation";
 import { trpc } from "@/utils/trpc";
-import { RiCheckLine, RiCloseLine, RiTimeLine } from "@remixicon/react";
+import { RiCheckLine, RiCloseLine, RiEyeLine, RiTimeLine } from "@remixicon/react";
+import Link from "next/link";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -296,6 +297,14 @@ export function CommissionApprovalQueue({
 												</TableCell>
 												<TableCell className="text-right">
 													<div className="flex justify-end gap-2">
+														<Button size="sm" variant="secondary" asChild>
+															<Link
+																href={`/admin/transactions/${transaction.id}`}
+															>
+																<RiEyeLine size={14} className="mr-1" />
+																View
+															</Link>
+														</Button>
 														<Button
 															size="sm"
 															variant="outline"

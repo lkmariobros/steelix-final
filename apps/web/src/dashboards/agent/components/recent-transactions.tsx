@@ -5,6 +5,7 @@ import { Badge } from "@/components/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAgentDashboard } from "@/contexts/agent-dashboard-context";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 const formatCurrency = (amount: number): string =>
@@ -79,7 +80,10 @@ function TransactionItem({
 	);
 
 	return (
-		<div className="flex items-center gap-3">
+		<Link
+			href={`/dashboard/transactions/${transaction.id}`}
+			className="flex items-center gap-3 rounded-lg p-1 transition-colors hover:bg-muted/50"
+		>
 			<Avatar className="size-10">
 				<div className="flex size-full items-center justify-center bg-primary/10 font-medium text-primary text-sm">
 					{(transaction.agentName ?? "?").charAt(0).toUpperCase()}
@@ -112,7 +116,7 @@ function TransactionItem({
 				</div>
 				<div className="text-muted-foreground text-xs">{rel}</div>
 			</div>
-		</div>
+		</Link>
 	);
 }
 
@@ -186,12 +190,12 @@ export function RecentTransactions({ limit = 10 }: RecentTransactionsProps) {
 				</div>
 				{transactions.length >= limit && (
 					<div className="mt-4 border-t pt-4">
-						<button
-							type="button"
+						<Link
+							href="/dashboard/transactions"
 							className="text-primary text-sm hover:underline"
 						>
 							View all transactions →
-						</button>
+						</Link>
 					</div>
 				)}
 			</CardContent>

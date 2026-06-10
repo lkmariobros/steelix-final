@@ -2,6 +2,7 @@
 
 import { useTransactionModal } from "@/contexts/transaction-modal-context";
 import { TransactionFormModal } from "@/features/sales-entry/transaction-form-modal";
+import { usePathname, useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { useEffect } from "react";
 
@@ -14,11 +15,18 @@ import { useEffect } from "react";
  */
 export function GlobalTransactionModal() {
 	const { isOpen, mode, transactionId, closeModal } = useTransactionModal();
+	const router = useRouter();
+	const pathname = usePathname();
 
-	// Debug: Log when isOpen changes
+	// View mode opens the dedicated detail page instead of the edit wizard
 	useEffect(() => {
-		console.log("[GlobalTransactionModal] isOpen changed:", isOpen, "mode:", mode);
-	}, [isOpen, mode]);
+		if (!isOpen || mode !== "view" || !transactionId) return;
+		closeModal();
+		const base = pathname.startsWith("/admin")
+			? "/admin/transactions"
+			: "/dashboard/transactions";
+		router.push(`${base}/${transactionId}`);
+	}, [isOpen, mode, transactionId, closeModal, router, pathname]);
 
 	const handleSubmit = () => {
 		// Show success message based on mode
@@ -38,6 +46,10 @@ export function GlobalTransactionModal() {
 	};
 
 	// ✅ Removed client check to prevent hydration mismatch
+	if (mode === "view") {
+		return null;
+	}
+
 	return (
 		<TransactionFormModal
 			isOpen={isOpen}

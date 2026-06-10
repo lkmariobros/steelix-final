@@ -1,6 +1,7 @@
 "use client";
 
 import { Badge } from "@/components/badge";
+import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { trpc } from "@/utils/trpc";
@@ -163,8 +164,9 @@ export function SalesPipeline() {
 					) : (
 						<div className="space-y-3">
 							{activeTransactions.map((transaction) => (
-								<div
+								<Link
 									key={transaction.id}
+									href={`/dashboard/transactions/${transaction.id}`}
 									className="flex items-center justify-between rounded-lg border p-3 transition-colors hover:bg-muted/50"
 								>
 									<div className="space-y-1">
@@ -200,7 +202,7 @@ export function SalesPipeline() {
 											{formatCurrency(Number(transaction.commissionAmount))}
 										</div>
 									</div>
-								</div>
+								</Link>
 							))}
 						</div>
 					)}

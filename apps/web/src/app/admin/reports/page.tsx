@@ -43,6 +43,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { authClient } from "@/lib/auth-client";
 import { formatCurrency } from "@/lib/format-currency";
 import { trpc } from "@/utils/trpc";
+import Link from "next/link";
 import {
 	RiBarChartLine,
 	RiDashboardLine,
@@ -547,12 +548,18 @@ export default function AdminReportsPage() {
 																				className="border-b last:border-0"
 																			>
 																				<td className="px-3 py-2">
-																					<div className="font-medium">
-																						{txn.caseNo || txn.id.slice(0, 8)}
-																					</div>
-																					<div className="text-muted-foreground text-xs">
-																						{txn.agentName || "—"}
-																					</div>
+																					<Link
+																						href={`/admin/transactions/${txn.id}`}
+																						className="block hover:underline"
+																					>
+																						<div className="font-medium">
+																							{txn.caseNo ||
+																								txn.id.slice(0, 8)}
+																						</div>
+																						<div className="text-muted-foreground text-xs">
+																							{txn.agentName || "—"}
+																						</div>
+																					</Link>
 																				</td>
 																				<td className="px-3 py-2">
 																					<div>{txn.clientName || "—"}</div>
@@ -746,9 +753,14 @@ export default function AdminReportsPage() {
 												</TableHeader>
 												<TableBody>
 													{coBrokingData.transactions.map((t) => (
-														<TableRow key={t.id}>
+														<TableRow key={t.id} className="cursor-pointer hover:bg-muted/50">
 															<TableCell className="font-medium">
-																{t.agentName}
+																<Link
+																	href={`/admin/transactions/${t.id}`}
+																	className="hover:underline"
+																>
+																	{t.agentName}
+																</Link>
 															</TableCell>
 															<TableCell>
 																{t.coBrokingData?.agencyName || "-"}

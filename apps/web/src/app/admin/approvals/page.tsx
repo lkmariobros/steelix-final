@@ -36,7 +36,6 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { authClient } from "@/lib/auth-client";
@@ -50,6 +49,7 @@ import {
 	RiLoader4Line,
 	RiRefreshLine,
 } from "@remixicon/react";
+import Link from "next/link";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -113,177 +113,6 @@ function queueStatusBadgeClass(status: string | null | undefined) {
 	return "bg-muted text-muted-foreground";
 }
 
-function DetailRow({
-	label,
-	value,
-}: {
-	label: string;
-	value: string | number | null | undefined;
-}) {
-	const display =
-		value === null || value === undefined || value === "" ? "—" : String(value);
-	return (
-		<div className="min-w-0">
-			<div className="text-muted-foreground text-xs">{label}</div>
-			<div className="break-words text-sm">{display}</div>
-		</div>
-	);
-}
-
-function TransactionReadOnlyDetail({
-	tx,
-	formatDate,
-}: {
-	tx: {
-		id: string;
-		caseNo?: string | null;
-		bookingDate?: Date | string | null;
-		projectName?: string | null;
-		unitNo?: string | null;
-		blockListingId?: string | null;
-		transactionDate?: Date | string | null;
-		marketType?: string | null;
-		transactionType?: string | null;
-		status?: string | null;
-		commissionAmount?: string | null;
-		commissionValue?: string | null;
-		commissionType?: string | null;
-		notes?: string | null;
-		propertyData?: QueueTransaction["propertyData"] | null;
-		clientData?: QueueTransaction["clientData"] | null;
-		commissionBreakdown?: Record<string, unknown> | null;
-		isCoBroking?: boolean | null;
-		coBrokingData?: Record<string, unknown> | null;
-		documents?: { name?: string; type?: string }[] | null;
-	};
-	formatDate: (d: Date | string | null | undefined) => string;
-}) {
-	const prop = tx.propertyData;
-	const client = tx.clientData;
-	const bd = tx.commissionBreakdown;
-	const spa = prop?.spaPrice ?? prop?.price;
-	const nett = prop?.nettPrice ?? prop?.price;
-
-	return (
-		<div className="space-y-6 pr-3">
-			<section className="space-y-2">
-				<h4 className="font-semibold text-foreground text-sm">
-					Deal &amp; property
-				</h4>
-				<div className="grid gap-3 sm:grid-cols-2">
-					<DetailRow label="Case no." value={tx.caseNo ?? undefined} />
-					<DetailRow label="Status" value={tx.status ?? undefined} />
-					<DetailRow
-						label="Booking date"
-						value={formatDate(tx.bookingDate ?? tx.transactionDate)}
-					/>
-					<DetailRow label="Project" value={tx.projectName ?? undefined} />
-					<DetailRow label="Block / listing" value={prop?.listingTitle} />
-					<DetailRow label="Unit no." value={tx.unitNo ?? undefined} />
-					<DetailRow
-						label="SPA price (RM)"
-						value={spa !== undefined ? formatRm(spa) : undefined}
-					/>
-					<DetailRow
-						label="Nett price (RM)"
-						value={nett !== undefined ? formatRm(nett) : undefined}
-					/>
-					<DetailRow label="Property address" value={prop?.address} />
-					<DetailRow label="Property type" value={prop?.propertyType} />
-					<DetailRow label="Market" value={tx.marketType ?? undefined} />
-					<DetailRow label="Transaction type" value={tx.transactionType} />
-				</div>
-			</section>
-
-			<section className="space-y-2">
-				<h4 className="font-semibold text-foreground text-sm">Buyer / client</h4>
-				<div className="grid gap-3 sm:grid-cols-2">
-					<DetailRow label="Name" value={client?.name} />
-					<DetailRow label="IC No." value={client?.icNo} />
-					<DetailRow label="Phone" value={client?.phone} />
-					<DetailRow label="Email" value={client?.email} />
-					<DetailRow label="Type" value={client?.type} />
-					<DetailRow label="Address" value={client?.address} />
-				</div>
-			</section>
-
-			<section className="space-y-2">
-				<h4 className="font-semibold text-foreground text-sm">Commission</h4>
-				<div className="grid gap-3 sm:grid-cols-2">
-					<DetailRow label="Commission type" value={tx.commissionType} />
-					<DetailRow label="Rate / value" value={tx.commissionValue} />
-					<DetailRow label="Commission amount" value={tx.commissionAmount} />
-				</div>
-				{bd && Object.keys(bd).length > 0 ? (
-					<div className="mt-2 rounded-md border bg-muted/30 p-3 text-sm">
-						<div className="mb-1 font-medium text-xs">Breakdown snapshot</div>
-						<div className="grid gap-2 sm:grid-cols-2">
-							{typeof bd.spaPrice === "number" ? (
-								<DetailRow label="SPA" value={formatRm(bd.spaPrice)} />
-							) : null}
-							{typeof bd.nettPrice === "number" ? (
-								<DetailRow label="Nett" value={formatRm(bd.nettPrice)} />
-							) : null}
-							{typeof bd.commissionRatePercent === "number" ? (
-								<DetailRow
-									label="Rate %"
-									value={`${bd.commissionRatePercent}%`}
-								/>
-							) : null}
-							{typeof bd.grossCommission === "number" ? (
-								<DetailRow
-									label="Gross"
-									value={formatRm(bd.grossCommission)}
-								/>
-							) : null}
-							{typeof bd.sstAmount === "number" ? (
-								<DetailRow label="SST" value={formatRm(bd.sstAmount)} />
-							) : null}
-							{typeof bd.agentNetCommission === "number" ? (
-								<DetailRow
-									label="Net to agent"
-									value={formatRm(bd.agentNetCommission)}
-								/>
-							) : null}
-						</div>
-					</div>
-				) : null}
-			</section>
-
-			{tx.isCoBroking && tx.coBrokingData ? (
-				<section className="space-y-2">
-					<h4 className="font-semibold text-foreground text-sm">Co-broking</h4>
-					<pre className="max-h-40 overflow-auto rounded-md border bg-muted/30 p-3 text-xs">
-						{JSON.stringify(tx.coBrokingData, null, 2)}
-					</pre>
-				</section>
-			) : null}
-
-			{tx.notes?.trim() ? (
-				<section className="space-y-2">
-					<h4 className="font-semibold text-foreground text-sm">Notes</h4>
-					<p className="whitespace-pre-wrap text-muted-foreground text-sm">
-						{tx.notes}
-					</p>
-				</section>
-			) : null}
-
-			{tx.documents && tx.documents.length > 0 ? (
-				<section className="space-y-2">
-					<h4 className="font-semibold text-foreground text-sm">Documents</h4>
-					<ul className="list-inside list-disc text-sm">
-						{tx.documents.map((d, i) => (
-							<li key={`${d.name ?? "doc"}-${i}`}>
-								{d.name ?? "File"} {d.type ? `(${d.type})` : ""}
-							</li>
-						))}
-					</ul>
-				</section>
-			) : null}
-		</div>
-	);
-}
-
 // Dialog state type
 interface ApprovalDialogState {
 	isOpen: boolean;
@@ -308,15 +137,6 @@ export default function AdminApprovalsPage() {
 		reviewNotes: "",
 		isSubmitting: false,
 	});
-
-	const [detailTransactionId, setDetailTransactionId] = useState<string | null>(
-		null,
-	);
-
-	const detailQuery = trpc.transactions.adminGetById.useQuery(
-		{ id: detailTransactionId ?? "" },
-		{ enabled: Boolean(detailTransactionId) },
-	);
 
 	// Fetch approvals data from transactions table (like dashboard widget)
 	const {
@@ -756,12 +576,14 @@ export default function AdminApprovalsPage() {
 													<Button
 														size="sm"
 														variant="secondary"
-														onClick={() =>
-															setDetailTransactionId(transaction.id)
-														}
+														asChild
 													>
-														<RiFileList3Line className="mr-1 h-4 w-4" />
-														View details
+														<Link
+															href={`/admin/transactions/${transaction.id}`}
+														>
+															<RiFileList3Line className="mr-1 h-4 w-4" />
+															View details
+														</Link>
 													</Button>
 													<Button
 														size="sm"
@@ -960,36 +782,6 @@ export default function AdminApprovalsPage() {
 								)}
 							</Button>
 						</DialogFooter>
-					</DialogContent>
-				</Dialog>
-
-				{/* Full transaction read-only detail (admin) */}
-				<Dialog
-					open={detailTransactionId !== null}
-					onOpenChange={(open) => {
-						if (!open) setDetailTransactionId(null);
-					}}
-				>
-					<DialogContent className="max-h-[90vh] max-w-2xl gap-0 p-0">
-						<DialogHeader className="p-6 pb-2">
-							<DialogTitle>Transaction details</DialogTitle>
-							<DialogDescription>
-								Read-only view for review. Use Approve / Reject from the queue.
-							</DialogDescription>
-						</DialogHeader>
-						<ScrollArea className="max-h-[65vh] px-6 pb-6">
-							{detailQuery.isLoading ? (
-								<div className="flex justify-center py-12">
-									<RiLoader4Line className="h-8 w-8 animate-spin text-muted-foreground" />
-								</div>
-							) : detailQuery.error ? (
-								<p className="text-destructive text-sm">
-									{detailQuery.error.message}
-								</p>
-							) : detailQuery.data ? (
-								<TransactionReadOnlyDetail tx={detailQuery.data} formatDate={formatDate} />
-							) : null}
-						</ScrollArea>
 					</DialogContent>
 				</Dialog>
 		</>
