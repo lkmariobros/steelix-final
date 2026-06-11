@@ -89,6 +89,19 @@ export function CrmImportDialog({
 					: null,
 			].filter(Boolean);
 			toast.success(`Import finished: ${parts.join(" · ")}`);
+			if (result.warnings.length > 0) {
+				const preview = result.warnings
+					.slice(0, 4)
+					.map((w) => `Row ${w.rowIndex}: ${w.message}`)
+					.join("\n");
+				toast.message(
+					`${result.warnings.length} row(s) had category warnings`,
+					{
+						description:
+							preview + (result.warnings.length > 4 ? "\n…" : ""),
+					},
+				);
+			}
 			if (result.errors.length > 0) {
 				const preview = result.errors
 					.slice(0, 6)
@@ -246,8 +259,8 @@ export function CrmImportDialog({
 									notes="e.g. Website, Referral. If empty, “CSV import” is used."
 								/>
 								<FieldRow
-									header="Tags"
-									notes="Optional free text; use semicolons between multiple tags if you like (same style as export). Not linked to tag IDs."
+									header="Categories"
+									notes="Ignored on agent import. An admin assigns categories from Lead Categories after import."
 								/>
 								<FieldRow
 									header="Last Contact"

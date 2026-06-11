@@ -49,7 +49,7 @@ const FIELD_OPTIONS: Array<{ key: LeadFieldKey; label: string }> = [
 	{ key: "email", label: "Email" },
 	{ key: "source", label: "Source" },
 	{ key: "notes", label: "Notes" },
-	{ key: "tags", label: "Tags" },
+	{ key: "tags", label: "Categories" },
 	{ key: "leadType", label: "Lead Type" },
 	{ key: "agent", label: "Assigned Agent" },
 	{ key: "skip", label: "Skip column" },
@@ -421,9 +421,10 @@ export function ImportLeadsDialog({
 								</p>
 								<ul className="mt-2 list-disc space-y-1 pl-4 text-muted-foreground text-xs">
 									<li>
-										<strong>Tags:</strong> match Tag Management names (e.g.{" "}
+										<strong>Categories:</strong> must match names in Lead
+										Categories (e.g.{" "}
 										<code className="text-foreground">Breeze Hill Lead</code>
-										). Separate multiple tags with{" "}
+										). Unknown names are skipped. Separate multiple with{" "}
 										<code className="text-foreground">;</code> or{" "}
 										<code className="text-foreground">,</code>.
 									</li>
@@ -450,9 +451,9 @@ export function ImportLeadsDialog({
 												Step 2 — Column mapping
 											</p>
 											<p className="text-muted-foreground text-xs">
-												Map each CSV column to a lead field (or skip it). Tags and
-												Lead Type are optional — use “Skip empty” to leave existing
-												values unchanged on update.
+												Map each CSV column to a lead field (or skip it).
+												Categories and Lead Type are optional — use “Skip empty”
+												to leave existing values unchanged on update.
 											</p>
 										</div>
 										{mappingWarnings.length > 0 ? (

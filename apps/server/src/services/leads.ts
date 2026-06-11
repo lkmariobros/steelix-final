@@ -378,7 +378,7 @@ export async function updateLeadAdmin(
 
 	if (!updated) throw new Error("Lead not found");
 
-	// Update tags if provided
+	// Update lead categories if provided (junction table is the source of truth)
 	if (tagIds !== undefined) {
 		await db.delete(prospectTags).where(eq(prospectTags.prospectId, leadId));
 		if (tagIds.length > 0) {
@@ -386,6 +386,10 @@ export async function updateLeadAdmin(
 				.insert(prospectTags)
 				.values(tagIds.map((tagId) => ({ prospectId: leadId, tagId })));
 		}
+		await db
+			.update(prospects)
+			.set({ tags: null, updatedAt: new Date() })
+			.where(eq(prospects.id, leadId));
 	}
 
 	// Log stage change separately for clarity
@@ -1035,14 +1039,16 @@ function parseCsvTagNames(raw: string): string[] {
 		.filter(Boolean);
 }
 
-async function resolveTagIdsFromCsv(
-	raw: string,
-	actorId: string,
-): Promise<string[]> {
+/** Match CSV category names to admin-managed lead categories only (no auto-create). */
+async function resolveTagIdsFromCsv(raw: string): Promise<{
+	tagIds: string[];
+	unknownNames: string[];
+}> {
 	const names = parseCsvTagNames(raw);
-	if (names.length === 0) return [];
+	if (names.length === 0) return { tagIds: [], unknownNames: [] };
 
 	const tagIds: string[] = [];
+	const unknownNames: string[] = [];
 	for (const name of names) {
 		const [existing] = await db
 			.select({ id: crmTags.id })
@@ -1052,16 +1058,11 @@ async function resolveTagIdsFromCsv(
 
 		if (existing) {
 			tagIds.push(existing.id);
-			continue;
+		} else {
+			unknownNames.push(name);
 		}
-
-		const [created] = await db
-			.insert(crmTags)
-			.values({ name, createdBy: actorId })
-			.returning({ id: crmTags.id });
-		if (created) tagIds.push(created.id);
 	}
-	return tagIds;
+	return { tagIds, unknownNames };
 }
 
 function formatZodImportErrors(
@@ -1290,7 +1291,6 @@ export async function importLeadsBulkAdmin(
 			status: parsedStatus,
 			stage: parsedStage,
 			leadType: parsedLeadType,
-			...(tagNames.length > 0 ? { tags: tagNames.join(", ") } : {}),
 			...(notesVal ? { notes: notesVal } : {}),
 			...(lastContact ? { lastContact } : {}),
 			...(nextContact ? { nextContact } : {}),
@@ -1310,16 +1310,15 @@ export async function importLeadsBulkAdmin(
 			continue;
 		}
 
-		const tagIds = tagNames.length > 0
-			? await resolveTagIdsFromCsv(tags, actorId)
-			: undefined;
+		const resolvedTags =
+			tagNames.length > 0 ? await resolveTagIdsFromCsv(tags) : null;
 
 		try {
 			let leadId: string;
 			if (existing) {
 				await updateLeadAdmin(existing.id, {
 					...validated.data,
-					...(tagIds !== undefined ? { tagIds } : {}),
+					...(resolvedTags ? { tagIds: resolvedTags.tagIds } : {}),
 					_actorId: actorId,
 				});
 				if (agentId !== null) {
@@ -1346,7 +1345,7 @@ export async function importLeadsBulkAdmin(
 				}
 				const newLead = await createLeadAdmin({
 					...validated.data,
-					...(tagIds !== undefined ? { tagIds } : {}),
+					...(resolvedTags ? { tagIds: resolvedTags.tagIds } : {}),
 					agentId: agentId ?? undefined,
 					_actorId: actorId,
 				});
@@ -1357,6 +1356,16 @@ export async function importLeadsBulkAdmin(
 					identifier: name.trim(),
 					object: "Lead",
 					kind: "created",
+				});
+			}
+			if (resolvedTags && resolvedTags.unknownNames.length > 0) {
+				warning++;
+				lines.push({
+					lineNo: rowNum,
+					identifier: name.trim(),
+					object: "Lead",
+					kind: "warning",
+					message: `Unknown categories skipped (create them in Lead Categories first): ${resolvedTags.unknownNames.join(", ")}`,
 				});
 			}
 			if (notesVal) {
@@ -1412,6 +1421,7 @@ export async function importProspectsBulkForAgent(
 		skippedDuplicate: 0,
 		skippedInvalid: 0,
 		errors: [] as { rowIndex: number; message: string }[],
+		warnings: [] as { rowIndex: number; message: string }[],
 	};
 
 	const forcedLeadType: LeadType =
@@ -1453,7 +1463,6 @@ export async function importProspectsBulkForAgent(
 		const statusRaw = pickCsvField(row, "status", "Status");
 		const typeRaw = pickCsvField(row, "type", "Type");
 		const source = pickCsvField(row, "source", "Source");
-		const tags = pickCsvField(row, "tags", "Tags");
 		const lastContactRaw = pickCsvField(
 			row,
 			"lastcontact",
@@ -1480,7 +1489,6 @@ export async function importProspectsBulkForAgent(
 		const phoneNorm = phone.replace(/\s+/g, "");
 		const emailNorm = email.trim().toLowerCase();
 		const notesVal = notesRaw.trim() ? notesRaw.trim() : null;
-		const tagNames = parseCsvTagNames(tags);
 
 		const existing = await findProspectByNormalizedPhone(phoneNorm);
 
@@ -1516,7 +1524,6 @@ export async function importProspectsBulkForAgent(
 			status: parsedStatus,
 			stage: parsedStage,
 			leadType: forcedLeadType,
-			...(tagNames.length > 0 ? { tags: tagNames.join(", ") } : {}),
 			...(notesVal ? { notes: notesVal } : {}),
 			...(lastContact ? { lastContact } : {}),
 			...(nextContact ? { nextContact } : {}),
@@ -1531,10 +1538,6 @@ export async function importProspectsBulkForAgent(
 			});
 			continue;
 		}
-
-		const tagIds = tagNames.length > 0
-			? await resolveTagIdsFromCsv(tags, agentId)
-			: undefined;
 
 		try {
 			let leadId: string;
@@ -1555,7 +1558,6 @@ export async function importProspectsBulkForAgent(
 					}
 					await updateLeadAdmin(existing.id, {
 						...validated.data,
-						...(tagIds !== undefined ? { tagIds } : {}),
 						_actorId: agentId,
 					});
 					await assignLeadAdmin(existing.id, agentId, agentId);
@@ -1574,7 +1576,6 @@ export async function importProspectsBulkForAgent(
 					await updateLeadAdmin(existing.id, {
 						...validated.data,
 						leadType: "company",
-						...(tagIds !== undefined ? { tagIds } : {}),
 						_actorId: agentId,
 					});
 					leadId = existing.id;
@@ -1584,7 +1585,6 @@ export async function importProspectsBulkForAgent(
 				const newLead = await createLeadAdmin({
 					...validated.data,
 					leadType: forcedLeadType,
-					...(tagIds !== undefined ? { tagIds } : {}),
 					agentId: assignAgentId ?? undefined,
 					_actorId: agentId,
 				});

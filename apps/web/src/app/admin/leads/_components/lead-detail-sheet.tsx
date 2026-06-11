@@ -244,7 +244,7 @@ export function LeadDetailSheet({
 									</p>
 								</div>
 								<div className="col-span-2">
-									<span className="text-muted-foreground">Tags</span>
+									<span className="text-muted-foreground">Categories</span>
 									{displayTags.length > 0 ? (
 										<div className="mt-1 flex flex-wrap gap-1.5">
 											{displayTags.map((tag) => (

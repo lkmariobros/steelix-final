@@ -314,7 +314,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 							icon: RiTeamLine,
 						},
 						{
-							title: "Tags",
+							title: "Lead Categories",
 							url: "/admin/tags",
 							icon: RiPriceTagLine,
 						},

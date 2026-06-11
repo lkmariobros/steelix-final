@@ -31,6 +31,7 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
+import { TagSelector } from "@/components/tag-selector";
 import { RiAddLine, RiErrorWarningLine, RiLoader4Line } from "@remixicon/react";
 
 export function CreateLeadDialog({
@@ -62,6 +63,7 @@ export function CreateLeadDialog({
 	};
 
 	const [form, setForm] = useState(emptyForm);
+	const [tagIds, setTagIds] = useState<string[]>([]);
 	// Debounced values used for the duplicate query (500 ms delay)
 	const [debouncedEmail, setDebouncedEmail] = useState("");
 	const [debouncedPhone, setDebouncedPhone] = useState("");
@@ -111,6 +113,7 @@ export function CreateLeadDialog({
 	const handleClose = () => {
 		onClose();
 		setForm(emptyForm);
+		setTagIds([]);
 		setDebouncedEmail("");
 		setDebouncedPhone("");
 	};
@@ -287,6 +290,13 @@ export function CreateLeadDialog({
 							</SelectContent>
 						</Select>
 					</div>
+					<div className="col-span-2 space-y-1.5">
+						<Label>Categories</Label>
+						<p className="text-muted-foreground text-xs">
+							Admin only — group this lead with others under the same category.
+						</p>
+						<TagSelector value={tagIds} onChange={setTagIds} />
+					</div>
 					<div className="space-y-1.5">
 						<Label>Assign to Agent</Label>
 						<Select
@@ -348,6 +358,7 @@ export function CreateLeadDialog({
 										? undefined
 										: form.agentId || undefined,
 								stage: form.stage as PipelineStageValue,
+								tagIds: tagIds.length > 0 ? tagIds : undefined,
 							})
 						}
 					>

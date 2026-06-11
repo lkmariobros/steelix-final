@@ -292,7 +292,8 @@ export default function AdminLeadsPage() {
 			"Type": capitalizeForExport(lead.type),
 			"Lead Type": formatLeadTypeLabel(lead.leadType),
 			"Source": lead.source ?? "",
-			"Tags": (lead.tagNames?.length ? lead.tagNames.join("; ") : lead.tags) ?? "",
+			Categories:
+				(lead.tagNames?.length ? lead.tagNames.join("; ") : lead.tags) ?? "",
 			"Last Contact": formatDateForExport(lead.lastContact),
 			"Next Contact": formatDateForExport(lead.nextContact),
 			"Created At": formatDateForExport(lead.createdAt),
@@ -1052,7 +1053,7 @@ export default function AdminLeadsPage() {
 														Contact
 													</TableHead>
 													<TableHead className="hidden lg:table-cell">
-														Tags
+														Categories
 													</TableHead>
 													<SortHeader
 														label="Stage"

@@ -36,7 +36,7 @@ interface TagSelectorProps {
 export function TagSelector({
 	value,
 	onChange,
-	placeholder = "Select tags...",
+	placeholder = "Select categories...",
 	disabled = false,
 	className,
 }: TagSelectorProps) {
@@ -108,10 +108,10 @@ export function TagSelector({
 			</PopoverTrigger>
 			<PopoverContent className="w-[400px] p-0" align="start">
 				<Command shouldFilter={true}>
-					<CommandInput placeholder="Search tags..." />
+					<CommandInput placeholder="Search categories..." />
 					<CommandList>
 						<CommandEmpty>
-							{isLoading ? "Loading tags..." : "No tags found."}
+							{isLoading ? "Loading categories..." : "No categories found."}
 						</CommandEmpty>
 						<CommandGroup>
 							{tags.map((tag) => {

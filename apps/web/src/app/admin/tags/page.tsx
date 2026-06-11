@@ -104,7 +104,7 @@ export default function AdminTagsPage() {
 	// Create tag mutation
 	const createTagMutation = trpc.tags.create.useMutation({
 		onSuccess: () => {
-			toast.success("Tag created successfully!");
+			toast.success("Category created successfully!");
 			setIsAddDialogOpen(false);
 			setTagName("");
 			queryClient.invalidateQueries({ queryKey: [["tags", "list"]] });
@@ -112,14 +112,14 @@ export default function AdminTagsPage() {
 		},
 		onError: (error) => {
 			console.error("Error creating tag:", error);
-			toast.error(error.message || "Failed to create tag. Please try again.");
+			toast.error(error.message || "Failed to create category. Please try again.");
 		},
 	});
 
 	// Update tag mutation
 	const updateTagMutation = trpc.tags.update.useMutation({
 		onSuccess: () => {
-			toast.success("Tag updated successfully!");
+			toast.success("Category updated successfully!");
 			setIsEditDialogOpen(false);
 			setSelectedTag(null);
 			setTagName("");
@@ -128,14 +128,14 @@ export default function AdminTagsPage() {
 		},
 		onError: (error) => {
 			console.error("Error updating tag:", error);
-			toast.error(error.message || "Failed to update tag. Please try again.");
+			toast.error(error.message || "Failed to update category. Please try again.");
 		},
 	});
 
 	// Delete tag mutation
 	const deleteTagMutation = trpc.tags.delete.useMutation({
 		onSuccess: () => {
-			toast.success("Tag deleted successfully!");
+			toast.success("Category deleted successfully!");
 			setIsDeleteDialogOpen(false);
 			setSelectedTag(null);
 			queryClient.invalidateQueries({ queryKey: [["tags", "list"]] });
@@ -143,7 +143,7 @@ export default function AdminTagsPage() {
 		},
 		onError: (error) => {
 			console.error("Error deleting tag:", error);
-			toast.error(error.message || "Failed to delete tag. Please try again.");
+			toast.error(error.message || "Failed to delete category. Please try again.");
 		},
 	});
 
@@ -166,7 +166,7 @@ export default function AdminTagsPage() {
 
 	const handleAddSubmit = () => {
 		if (!tagName.trim()) {
-			toast.error("Tag name is required");
+			toast.error("Category name is required");
 			return;
 		}
 		createTagMutation.mutate({ name: tagName.trim() });
@@ -222,7 +222,7 @@ export default function AdminTagsPage() {
 								<BreadcrumbItem>
 									<BreadcrumbPage className="flex items-center gap-2">
 										<RiPriceTagLine size={18} />
-										Tags
+										Lead Categories
 									</BreadcrumbPage>
 								</BreadcrumbItem>
 							</BreadcrumbList>
@@ -236,10 +236,11 @@ export default function AdminTagsPage() {
 					{/* Page Header */}
 					<div className="flex items-center justify-between">
 						<div>
-							<h1 className="font-semibold text-2xl">Tag Management</h1>
+							<h1 className="font-semibold text-2xl">Lead Categories</h1>
 							<p className="mt-1 text-muted-foreground text-sm">
-								Create and manage labels for contacts that help you organize
-								data and run automations
+								Define categories used to group leads under the same campaign,
+								project, or source — for example &quot;Breeze Hill Lead&quot; or
+								&quot;Weekend Inquiry&quot;.
 							</p>
 						</div>
 						<div className="flex gap-2">
@@ -252,7 +253,7 @@ export default function AdminTagsPage() {
 								className="bg-green-600 hover:bg-green-700"
 							>
 								<RiAddLine className="mr-2 h-4 w-4" />
-								Create Tag
+								Create Category
 							</Button>
 						</div>
 					</div>
@@ -260,9 +261,10 @@ export default function AdminTagsPage() {
 					{/* Search and Filters */}
 					<Card>
 						<CardHeader>
-							<CardTitle>Tags</CardTitle>
+							<CardTitle>Categories</CardTitle>
 							<CardDescription>
-								Manage the master list of tags that can be assigned to prospects
+								Master list of lead categories. Assign these when creating or
+								editing leads to group them together.
 							</CardDescription>
 						</CardHeader>
 						<CardContent>
@@ -270,7 +272,7 @@ export default function AdminTagsPage() {
 								<div className="relative flex-1">
 									<RiSearchLine className="-translate-y-1/2 absolute top-1/2 left-3 size-4 text-muted-foreground" />
 									<Input
-										placeholder="Search tags..."
+										placeholder="Search categories..."
 										value={searchQuery}
 										onChange={(e) => {
 											setSearchQuery(e.target.value);
@@ -368,8 +370,8 @@ export default function AdminTagsPage() {
 							) : tags.length === 0 ? (
 								<div className="py-12 text-center text-muted-foreground">
 									{searchQuery
-										? "No tags found matching your search."
-										: "No tags yet. Click 'Create Tag' to get started."}
+										? "No categories found matching your search."
+										: "No categories yet. Click \"Create Category\" to get started."}
 								</div>
 							) : (
 								<div className="rounded-md border">
@@ -382,7 +384,7 @@ export default function AdminTagsPage() {
 														className="rounded border-gray-300"
 													/>
 												</TableHead>
-												<TableHead>Tag Name</TableHead>
+												<TableHead>Category Name</TableHead>
 												<TableHead>Created On</TableHead>
 												<TableHead>Created By</TableHead>
 												<TableHead className="text-right">Actions</TableHead>
@@ -474,21 +476,21 @@ export default function AdminTagsPage() {
 							<DialogHeader>
 								<DialogTitle className="flex items-center gap-2">
 									<RiPriceTagLine className="size-5" />
-									Create New Tag
+									Create New Category
 								</DialogTitle>
 								<DialogDescription>
-									Add a new tag to the master list. This tag will be available
-									for all agents to use.
+									Add a category to the master list. Agents can assign it to
+									leads to group them under the same campaign or project.
 								</DialogDescription>
 							</DialogHeader>
 							<div className="space-y-4 py-4">
 								<div className="space-y-2">
 									<label htmlFor="add-tag-name" className="font-medium text-sm">
-										Tag Name <span className="text-destructive">*</span>
+										Category Name <span className="text-destructive">*</span>
 									</label>
 									<Input
 										id="add-tag-name"
-										placeholder="e.g., [ads lead] breeze hill"
+										placeholder="e.g., Breeze Hill Lead"
 										value={tagName}
 										onChange={(e) => setTagName(e.target.value)}
 										onKeyDown={(e) => {
@@ -498,8 +500,7 @@ export default function AdminTagsPage() {
 										}}
 									/>
 									<p className="text-muted-foreground text-xs">
-										Enter a descriptive tag name that helps categorize prospects
-										by project or source.
+										Use a clear name so agents can group related leads together.
 									</p>
 								</div>
 							</div>
@@ -527,7 +528,7 @@ export default function AdminTagsPage() {
 									) : (
 										<>
 											<RiAddLine className="mr-2 h-4 w-4" />
-											Create Tag
+											Create Category
 										</>
 									)}
 								</Button>
@@ -541,11 +542,11 @@ export default function AdminTagsPage() {
 							<DialogHeader>
 								<DialogTitle className="flex items-center gap-2">
 									<RiEditLine className="size-5" />
-									Edit Tag
+									Edit Category
 								</DialogTitle>
 								<DialogDescription>
-									Update the tag name. This will update the tag for all
-									prospects using it.
+									Rename this category. All leads using it will show the new
+									name.
 								</DialogDescription>
 							</DialogHeader>
 							<div className="space-y-4 py-4">
@@ -558,7 +559,7 @@ export default function AdminTagsPage() {
 									</label>
 									<Input
 										id="edit-tag-name"
-										placeholder="e.g., [ads lead] breeze hill"
+										placeholder="e.g., Breeze Hill Lead"
 										value={tagName}
 										onChange={(e) => setTagName(e.target.value)}
 										onKeyDown={(e) => {
@@ -594,7 +595,7 @@ export default function AdminTagsPage() {
 									) : (
 										<>
 											<RiEditLine className="mr-2 h-4 w-4" />
-											Update Tag
+											Update Category
 										</>
 									)}
 								</Button>
@@ -617,11 +618,11 @@ export default function AdminTagsPage() {
 							<DialogHeader>
 								<DialogTitle className="flex items-center gap-2 text-red-600 dark:text-red-400">
 									<RiDeleteBinLine className="size-5" />
-									Delete Tag
+									Delete Category
 								</DialogTitle>
 								<DialogDescription>
-									Are you sure you want to delete this tag? This will remove the
-									tag from all prospects that use it. This action cannot be
+									Are you sure you want to delete this category? It will be
+									removed from all leads that use it. This action cannot be
 									undone.
 								</DialogDescription>
 							</DialogHeader>
@@ -630,7 +631,7 @@ export default function AdminTagsPage() {
 									<div className="rounded-lg border bg-muted/30 p-4">
 										<div className="space-y-2">
 											<div className="font-medium text-muted-foreground text-sm">
-												Tag Name
+												Category Name
 											</div>
 											<div className="font-semibold text-base">
 												{selectedTag.name}
@@ -667,7 +668,7 @@ export default function AdminTagsPage() {
 									) : (
 										<>
 											<RiDeleteBinLine className="mr-2 h-4 w-4" />
-											Delete Tag
+											Delete Category
 										</>
 									)}
 								</Button>

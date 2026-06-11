@@ -31,6 +31,7 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
+import { TagSelector } from "@/components/tag-selector";
 import { RiErrorWarningLine, RiLoader4Line } from "@remixicon/react";
 
 export function EditLeadDialog({
@@ -62,6 +63,7 @@ export function EditLeadDialog({
 		leadType: "personal" as "personal" | "company",
 		agentId: "",
 	});
+	const [tagIds, setTagIds] = useState<string[]>([]);
 
 	// Debounced values for duplicate check
 	const [debouncedEmail, setDebouncedEmail] = useState("");
@@ -122,6 +124,7 @@ export function EditLeadDialog({
 				leadType: lead.leadType,
 				agentId: lead.agentId ?? "__unassigned__",
 			});
+			setTagIds(lead.tagIds ?? []);
 			// Seed debounced values immediately so the check runs on open
 			setDebouncedEmail((lead.email ?? "").trim());
 			setDebouncedPhone(lead.phone.trim());
@@ -295,6 +298,14 @@ export function EditLeadDialog({
 							</SelectContent>
 						</Select>
 					</div>
+					<div className="col-span-2 space-y-1.5">
+						<Label>Categories</Label>
+						<p className="text-muted-foreground text-xs">
+							Admin only — assign or change categories for this lead, including
+							after import.
+						</p>
+						<TagSelector value={tagIds} onChange={setTagIds} />
+					</div>
 					<div className="space-y-1.5">
 						<Label>Assigned Agent</Label>
 						<Select
@@ -347,6 +358,7 @@ export function EditLeadDialog({
 										? undefined
 										: form.agentId || undefined,
 								stage: form.stage as PipelineStageValue,
+								tagIds,
 							})
 						}
 					>

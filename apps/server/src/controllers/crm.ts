@@ -60,20 +60,9 @@ const getProspectInput = z.object({
 	id: z.string().uuid(),
 });
 
-// Create prospect input schema (extend to include tagIds)
-const createProspectInput = insertProspectSchema.extend({
-	tagIds: z.array(z.string().uuid()).optional(), // Array of tag IDs to associate
-});
-
-// Update prospect input schema (extend to include tagIds)
-const updateProspectInput = updateProspectSchema.extend({
-	tagIds: z.array(z.string().uuid()).optional(), // Array of tag IDs to associate
-});
-
-// Delete prospect input schema
-const deleteProspectInput = z.object({
-	id: z.string().uuid(),
-});
+// Agents cannot set lead categories — admin only (admin-leads router).
+const createProspectInput = insertProspectSchema;
+const updateProspectInput = updateProspectSchema;
 
 export const crmRouter = router({
 	// Projects
@@ -541,13 +530,12 @@ export const crmRouter = router({
 		.mutation(async ({ input, ctx }) => {
 			try {
 				const agentId = ctx.session.user.id;
-				const { tagIds, ...prospectData } = input;
 
 				// If it's a company lead, agentId can be null (unclaimed)
 				// Otherwise, set agentId for personal leads
 				const newProspect: InsertProspect & { agentId?: string | null } = {
-					...prospectData,
-					agentId: prospectData.leadType === "company" ? null : agentId,
+					...input,
+					agentId: input.leadType === "company" ? null : agentId,
 				};
 
 				const [created] = await db
@@ -555,33 +543,7 @@ export const crmRouter = router({
 					.values(newProspect)
 					.returning();
 
-				// Associate tags if provided
-				if (tagIds && tagIds.length > 0) {
-					try {
-						// Verify all tag IDs exist
-						const existingTags = await db
-							.select()
-							.from(crmTags)
-							.where(inArray(crmTags.id, tagIds));
-
-						if (existingTags.length !== tagIds.length) {
-							throw new Error("One or more tag IDs are invalid");
-						}
-
-						// Insert tag relationships
-						await db.insert(prospectTags).values(
-							tagIds.map((tagId) => ({
-								prospectId: created.id,
-								tagId,
-							})),
-						);
-					} catch (error) {
-						console.warn("⚠️ Could not associate tags with prospect:", error);
-						// Continue without tags if association fails
-					}
-				}
-
-				// Fetch tags for response
+				// Fetch categories for response (read-only for agents)
 				let prospectTagsData: Array<{
 					tag: {
 						id: string;
@@ -686,7 +648,7 @@ export const crmRouter = router({
 	update: protectedProcedure
 		.input(updateProspectInput)
 		.mutation(async ({ input, ctx }) => {
-			const { id, tagIds, leadType: _leadType, ...updateData } = input;
+			const { id, leadType: _leadType, ...updateData } = input;
 			const agentId = ctx.session.user.id;
 
 			// Verify prospect belongs to the agent OR is an unclaimed company lead
@@ -734,34 +696,7 @@ export const crmRouter = router({
 				.where(eq(prospects.id, id))
 				.returning();
 
-			// Update tags if provided
-			if (tagIds !== undefined) {
-				// Delete existing tag relationships
-				await db.delete(prospectTags).where(eq(prospectTags.prospectId, id));
-
-				// Add new tag relationships if any
-				if (tagIds.length > 0) {
-					// Verify all tag IDs exist
-					const existingTags = await db
-						.select()
-						.from(crmTags)
-						.where(inArray(crmTags.id, tagIds));
-
-					if (existingTags.length !== tagIds.length) {
-						throw new Error("One or more tag IDs are invalid");
-					}
-
-					// Insert new tag relationships
-					await db.insert(prospectTags).values(
-						tagIds.map((tagId) => ({
-							prospectId: id,
-							tagId,
-						})),
-					);
-				}
-			}
-
-			// Fetch tags for response
+			// Fetch categories for response (agents cannot change them)
 			let prospectTagsData: Array<{
 				tag: {
 					id: string;
@@ -882,29 +817,6 @@ export const crmRouter = router({
 				type: claimedType as "tenant" | "buyer",
 			};
 			return selectProspectSchema.parse(claimedForParse);
-		}),
-
-	// Delete a prospect
-	delete: protectedProcedure
-		.input(deleteProspectInput)
-		.mutation(async ({ input, ctx }) => {
-			const { id } = input;
-			const agentId = ctx.session.user.id;
-
-			// Verify prospect belongs to the agent
-			const [existing] = await db
-				.select()
-				.from(prospects)
-				.where(and(eq(prospects.id, id), eq(prospects.agentId, agentId)))
-				.limit(1);
-
-			if (!existing) {
-				throw new Error("Prospect not found");
-			}
-
-			await db.delete(prospects).where(eq(prospects.id, id));
-
-			return { success: true, id };
 		}),
 
 	// Notes CRUD

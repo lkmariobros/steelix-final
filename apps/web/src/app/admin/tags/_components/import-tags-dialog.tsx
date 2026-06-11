@@ -132,11 +132,11 @@ export function ImportTagsDialog({
 				<DialogHeader>
 					<DialogTitle className="flex items-center gap-2">
 						<RiFileUploadLine className="size-5" />
-						Import tags from CSV
+						Import categories from CSV
 					</DialogTitle>
 					<DialogDescription>
-						One tag per row. Use a column named <strong>Tags</strong> or{" "}
-						<strong>Tag Name</strong>. Existing tags are skipped (not overwritten).
+						One category per row. Use a column named <strong>Tags</strong> or{" "}
+						<strong>Category Name</strong>. Existing names are skipped.
 					</DialogDescription>
 				</DialogHeader>
 

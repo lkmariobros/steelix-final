@@ -8,7 +8,6 @@ import {
 	SidebarProvider,
 	SidebarTrigger,
 } from "@/components/sidebar";
-import { TagSelector } from "@/components/tag-selector";
 import { Badge } from "@/components/ui/badge";
 import {
 	Breadcrumb,
@@ -65,7 +64,6 @@ import {
 	RiFileUploadLine,
 	RiCalendarLine,
 	RiDashboardLine,
-	RiDeleteBinLine,
 	RiEyeLine,
 	RiHomeLine,
 	RiLinksLine,
@@ -170,7 +168,6 @@ const prospectFormSchema = z.object({
 		.default("new_lead")
 		.optional(),
 	leadType: z.enum(["personal", "company"]).default("personal").optional(),
-	tagIds: z.array(z.string().uuid()).optional(),
 });
 
 type ProspectFormValues = z.infer<typeof prospectFormSchema>;
@@ -225,7 +222,6 @@ export default function CRMPage() {
 	const [currentPage, setCurrentPage] = useState(1);
 	const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
 	const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
-	const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 	const [isStagePromptOpen, setIsStagePromptOpen] = useState(false);
 	const [stagePromptProspect, setStagePromptProspect] =
 		useState<Prospect | null>(null);
@@ -233,9 +229,6 @@ export default function CRMPage() {
 	const [stagePromptTargetStage, setStagePromptTargetStage] =
 		useState<PipelineStage | null>(null);
 	const [selectedProspect, setSelectedProspect] = useState<Prospect | null>(
-		null,
-	);
-	const [prospectToDelete, setProspectToDelete] = useState<Prospect | null>(
 		null,
 	);
 	const [isImportOpen, setIsImportOpen] = useState(false);
@@ -375,22 +368,6 @@ export default function CRMPage() {
 		},
 	});
 
-	// Delete prospect mutation
-	const deleteProspectMutation = trpc.crm.delete.useMutation({
-		onSuccess: () => {
-			toast.success("Prospect deleted successfully!");
-			setIsDeleteDialogOpen(false);
-			setProspectToDelete(null);
-			// Invalidate and refetch prospects list
-			queryClient.invalidateQueries({ queryKey: [["crm", "list"]] });
-			refetchProspects();
-		},
-		onError: (error) => {
-			console.error("Error deleting prospect:", error);
-			toast.error("Failed to delete prospect. Please try again.");
-		},
-	});
-
 	const handleAddProspect = () => {
 		form.reset({
 			name: "",
@@ -477,16 +454,6 @@ export default function CRMPage() {
 	const handleLink = (prospect: Prospect) => {
 		// TODO: Link to transaction
 		console.log("Link prospect:", prospect);
-	};
-
-	const handleDeleteClick = (prospect: Prospect) => {
-		setProspectToDelete(prospect);
-		setIsDeleteDialogOpen(true);
-	};
-
-	const handleDeleteConfirm = async () => {
-		if (!prospectToDelete) return;
-		deleteProspectMutation.mutate({ id: prospectToDelete.id });
 	};
 
 	// Stage change handler (for Kanban drag-and-drop) with optimistic updates
@@ -930,8 +897,8 @@ export default function CRMPage() {
 														/>
 													</FormControl>
 													<FormDescription>
-														Enter the property name. Tags can be used to
-														categorize properties in the database.
+														Enter the property or project name the lead is
+														interested in.
 													</FormDescription>
 													<FormMessage />
 												</FormItem>
@@ -972,8 +939,6 @@ export default function CRMPage() {
 												</Select>
 												<FormDescription>
 													Optional: choose a developer project defined by admin.
-													For agent-defined project names, use the Property
-													field or tags.
 												</FormDescription>
 												<FormMessage />
 											</FormItem>
@@ -1005,29 +970,6 @@ export default function CRMPage() {
 													</SelectContent>
 												</Select>
 												<FormMessage />
-											</FormItem>
-										)}
-									/>
-
-									{/* Tags */}
-									<FormField
-										control={form.control}
-										name="tagIds"
-										render={({ field }) => (
-											<FormItem>
-												<FormLabel>Tags</FormLabel>
-												<FormControl>
-													<TagSelector
-														value={field.value || []}
-														onChange={field.onChange}
-														placeholder="Select tags..."
-													/>
-												</FormControl>
-												<FormMessage />
-												<p className="text-muted-foreground text-xs">
-													Select tags from the master list to categorize this
-													prospect by project.
-												</p>
 											</FormItem>
 										)}
 									/>
@@ -1149,42 +1091,49 @@ export default function CRMPage() {
 													</Badge>
 												</div>
 											) : null}
-											{(selectedProspect.tagNames &&
-												selectedProspect.tagNames.length > 0) ||
-											selectedProspect.tags?.trim() ? (
-												<div className="flex items-center justify-between">
-													<div className="flex items-center gap-2 text-muted-foreground text-sm">
-														<RiPriceTagLine className="size-4" />
-														Tags
-													</div>
-													<div className="flex flex-wrap gap-2">
-														{selectedProspect.tagNames &&
-														selectedProspect.tagNames.length > 0
-															? selectedProspect.tagNames.map((tag) => (
+											<div className="flex items-start justify-between gap-2">
+												<div className="flex items-center gap-2 text-muted-foreground text-sm">
+													<RiPriceTagLine className="size-4 shrink-0" />
+													Categories
+												</div>
+												<div className="text-right">
+													{selectedProspect.tagNames &&
+													selectedProspect.tagNames.length > 0 ? (
+														<div className="flex flex-wrap justify-end gap-1">
+															{selectedProspect.tagNames.map((tag) => (
+																<Badge
+																	key={tag}
+																	variant="secondary"
+																	className="text-xs"
+																>
+																	{tag}
+																</Badge>
+															))}
+														</div>
+													) : selectedProspect.tags?.trim() ? (
+														<div className="flex flex-wrap justify-end gap-1">
+															{selectedProspect.tags
+																.split(",")
+																.map((tag) => (
 																	<Badge
-																		key={tag}
+																		key={tag.trim()}
 																		variant="secondary"
 																		className="text-xs"
 																	>
-																		{tag}
+																		{tag.trim()}
 																	</Badge>
-																))
-															: selectedProspect.tags
-																? selectedProspect.tags
-																		.split(",")
-																		.map((tag) => (
-																			<Badge
-																				key={tag.trim()}
-																				variant="secondary"
-																				className="text-xs"
-																			>
-																				{tag.trim()}
-																			</Badge>
-																		))
-																: null}
-													</div>
+																))}
+														</div>
+													) : (
+														<span className="text-muted-foreground text-sm">
+															—
+														</span>
+													)}
+													<p className="mt-1 text-muted-foreground text-xs">
+														Assigned by admin only
+													</p>
 												</div>
-											) : null}
+											</div>
 											{selectedProspect.agentName && (
 												<div className="flex items-center justify-between">
 													<div className="flex items-center gap-2 text-muted-foreground text-sm">
@@ -1441,79 +1390,6 @@ export default function CRMPage() {
 										</>
 									) : (
 										"Yes, Move"
-									)}
-								</Button>
-							</DialogFooter>
-						</DialogContent>
-					</Dialog>
-
-					{/* Delete Confirmation Dialog */}
-					<Dialog
-						open={isDeleteDialogOpen}
-						onOpenChange={setIsDeleteDialogOpen}
-					>
-						<DialogContent className="sm:max-w-[500px]">
-							<DialogHeader>
-								<DialogTitle className="flex items-center gap-2 text-red-600 dark:text-red-400">
-									<RiAlertLine className="size-5" />
-									Delete Prospect
-								</DialogTitle>
-								<DialogDescription>
-									Are you sure you want to delete this prospect? This action
-									cannot be undone.
-								</DialogDescription>
-							</DialogHeader>
-
-							{prospectToDelete && (
-								<div className="py-4">
-									<div className="rounded-lg border bg-muted/30 p-4">
-										<div className="space-y-2">
-											<div className="flex items-center gap-2">
-												<RiUserLine className="size-4 text-muted-foreground" />
-												<span className="font-medium">
-													{prospectToDelete.name}
-												</span>
-											</div>
-											<div className="flex items-center gap-2 text-muted-foreground text-sm">
-												<RiMailLine className="size-4" />
-												<span>{prospectToDelete.email}</span>
-											</div>
-											<div className="flex items-center gap-2 text-muted-foreground text-sm">
-												<RiPhoneLine className="size-4" />
-												<span>{prospectToDelete.phone}</span>
-											</div>
-										</div>
-									</div>
-								</div>
-							)}
-
-							<DialogFooter>
-								<Button
-									variant="outline"
-									onClick={() => {
-										setIsDeleteDialogOpen(false);
-										setProspectToDelete(null);
-									}}
-									disabled={deleteProspectMutation.isPending}
-								>
-									Cancel
-								</Button>
-								<Button
-									variant="destructive"
-									onClick={handleDeleteConfirm}
-									disabled={deleteProspectMutation.isPending}
-									className="bg-red-600 hover:bg-red-700"
-								>
-									{deleteProspectMutation.isPending ? (
-										<>
-											<RiLoader4Line className="mr-2 h-4 w-4 animate-spin" />
-											Deleting...
-										</>
-									) : (
-										<>
-											<RiDeleteBinLine className="mr-2 h-4 w-4" />
-											Delete Prospect
-										</>
 									)}
 								</Button>
 							</DialogFooter>
@@ -1832,15 +1708,6 @@ export default function CRMPage() {
 													>
 														<RiEyeLine className="mr-2 h-4 w-4" />
 														View
-													</Button>
-													<Button
-														variant="outline"
-														size="sm"
-														onClick={() => handleDeleteClick(prospect)}
-														className="cursor-pointer border-red-500/50 text-red-600 hover:bg-red-500/10 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-500/20 dark:hover:text-red-300"
-													>
-														<RiDeleteBinLine className="mr-2 h-4 w-4" />
-														Delete
 													</Button>
 												</div>
 											</div>

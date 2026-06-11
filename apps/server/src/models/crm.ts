@@ -85,8 +85,8 @@ export const prospects = pgTable(
 		leadType: leadTypeEnum("lead_type").default("personal").notNull(),
 		// Free-form notes (interest, buyer type, remarks)
 		notes: text("notes"),
-		// Tags for categorization (stored as comma-separated string for simplicity)
-		tags: text("tags"), // e.g., "VIP,Investor,Buyer"
+		// Legacy free-text categories — prefer prospect_tags + crm_tags junction
+		tags: text("tags"),
 		lastContact: timestamp("last_contact"),
 		nextContact: timestamp("next_contact"),
 		// Track which agent created/manages this prospect
@@ -131,12 +131,12 @@ export const prospectNotes = pgTable(
 	}),
 );
 
-// Master tags table (admin-managed)
+// Master lead categories (admin-managed; assigned to leads via prospect_tags)
 export const crmTags = pgTable(
 	"crm_tags",
 	{
 		id: uuid("id").primaryKey().defaultRandom(),
-		name: text("name").notNull().unique(), // Tag name, e.g., "[ads lead] breeze hill"
+		name: text("name").notNull().unique(), // e.g. "Breeze Hill Lead", "Weekend Inquiry"
 		// Admin who created the tag
 		createdBy: text("created_by")
 			.notNull()
