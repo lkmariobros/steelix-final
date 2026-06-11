@@ -27,6 +27,7 @@ import {
 	PopoverTrigger,
 } from "@/components/ui/popover";
 import { authClient } from "@/lib/auth-client";
+import type { AuthSessionData } from "@/lib/auth-client";
 import { useUserRole } from "@/hooks/use-user-role";
 import { PORTAL_PATHS } from "@/lib/user-role";
 import { trpc } from "@/utils/trpc";
@@ -60,14 +61,15 @@ const data = {
 // Component for notification bell with announcements popover
 function AnnouncementNotification({ 
 	open, 
-	onOpenChange 
+	onOpenChange,
+	session,
 }: { 
 	open?: boolean; 
 	onOpenChange?: (open: boolean) => void;
+	session: AuthSessionData | null;
 }) {
 	const pathname = usePathname();
 	const router = useRouter();
-	const { data: session } = authClient.useSession();
 	const isCurrentlyInAdminPortal = pathname.startsWith("/admin");
 	
 	// Only show for agent portal, not admin portal
@@ -225,7 +227,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 	const pathname = usePathname();
 	const router = useRouter();
 	const [isAnnouncementPopoverOpen, setIsAnnouncementPopoverOpen] = useState(false);
-	const { data: session } = authClient.useSession();
+	const { session, hasAdminAccess } = useUserRole();
+	const isCurrentlyInAdminPortal = pathname.startsWith("/admin");
 
 	const handleSignOut = useCallback(async () => {
 		await authClient.signOut({
@@ -236,9 +239,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 			},
 		});
 	}, []);
-
-	const { hasAdminAccess } = useUserRole();
-	const isCurrentlyInAdminPortal = pathname.startsWith("/admin");
 
 	const portalSwitch =
 		hasAdminAccess ? (
@@ -461,6 +461,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 								<AnnouncementNotification
 									open={isAnnouncementPopoverOpen}
 									onOpenChange={setIsAnnouncementPopoverOpen}
+									session={session}
 								/>
 								<span>Announcement</span>
 							</div>

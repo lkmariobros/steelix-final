@@ -48,7 +48,7 @@ import { toast } from "sonner";
 
 export default function ListingsPage() {
 	const { data: session, isPending } = authClient.useSession();
-	useRedirectUnauthenticated(session, isPending);
+	useRedirectUnauthenticated(session?.user?.id, isPending);
 
 	const [search, setSearch] = useState("");
 	const [status, setStatus] = useState<"active" | "all" | "draft" | "under_offer" | "closed" | "archived">("active");

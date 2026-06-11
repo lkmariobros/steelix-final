@@ -211,7 +211,7 @@ export default function CRMPage() {
 	const queryClient = useQueryClient();
 	const trpcUtils = trpc.useUtils();
 	const { data: session, isPending } = authClient.useSession();
-	useRedirectUnauthenticated(session, isPending);
+	useRedirectUnauthenticated(session?.user?.id, isPending);
 	const [activeTab, setActiveTab] = useState<LeadsTab>("my"); // My Leads | Company Leads
 	const [viewMode, setViewMode] = useState<ViewMode>("list"); // New: View mode toggle
 	const [searchQuery, setSearchQuery] = useState("");

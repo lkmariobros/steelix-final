@@ -73,7 +73,7 @@ interface AutoReplyRule {
 export default function AutoReplyPage() {
 	const queryClient = useQueryClient();
 	const { data: session, isPending } = authClient.useSession();
-	useRedirectUnauthenticated(session, isPending);
+	useRedirectUnauthenticated(session?.user?.id, isPending);
 	const [searchQuery, setSearchQuery] = useState("");
 	const [statusFilter, setStatusFilter] = useState<"all" | "tenant" | "owner">(
 		"all",

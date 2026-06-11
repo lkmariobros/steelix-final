@@ -3,37 +3,33 @@
 import { queryClient, trpc } from "@/utils/trpc";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
+import { UserRoleProvider } from "@/contexts/user-role-context";
 import { TransactionModalProvider } from "@/contexts/transaction-modal-context";
 import { GlobalTransactionModal } from "./global-transaction-modal";
 import { ThemeProvider } from "./theme-provider";
 import { Toaster } from "./ui/sonner";
 import { httpBatchLink } from "@trpc/client";
 import { useState } from "react";
-import { useInactivityLogout } from "@/hooks/use-inactivity-logout";
 
 export default function Providers({
 	children,
 }: {
 	children: React.ReactNode;
 }) {
-	useInactivityLogout();
-
 	const [trpcClient] = useState(() =>
 		trpc.createClient({
 			links: [
 				httpBatchLink({
-					// Use local proxy to avoid cross-origin cookie issues on mobile
-					// The proxy forwards requests to the backend server
 					url: "/api/trpc",
 					fetch(url, options) {
 						return fetch(url, {
 							...options,
-							credentials: "include", // Include cookies (now same-origin)
+							credentials: "include",
 						});
 					},
 				}),
 			],
-		})
+		}),
 	);
 
 	return (
@@ -47,7 +43,7 @@ export default function Providers({
 			<trpc.Provider client={trpcClient} queryClient={queryClient}>
 				<QueryClientProvider client={queryClient}>
 					<TransactionModalProvider>
-						{children}
+						<UserRoleProvider>{children}</UserRoleProvider>
 						<GlobalTransactionModal />
 						<ReactQueryDevtools />
 					</TransactionModalProvider>

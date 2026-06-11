@@ -1,8 +1,8 @@
 "use client";
 
 import { LoadingScreen } from "@/components/ui/loading-spinner";
-import { redirectAfterAuth } from "@/lib/redirect-after-auth";
 import { authClient } from "@/lib/auth-client";
+import { redirectAfterAuth } from "@/lib/redirect-after-auth";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef } from "react";
 
@@ -10,17 +10,9 @@ const REDIRECT_TIMEOUT_MS = 10_000;
 
 export default function PostLoginPage() {
 	const router = useRouter();
-	const { data: session, isPending: isSessionPending } = authClient.useSession();
 	const redirected = useRef(false);
 
 	useEffect(() => {
-		if (isSessionPending) return;
-
-		if (!session?.user) {
-			router.replace("/login");
-			return;
-		}
-
 		if (redirected.current) return;
 		redirected.current = true;
 
@@ -34,9 +26,18 @@ export default function PostLoginPage() {
 
 		void (async () => {
 			try {
-				await redirectAfterAuth(
+				const { data } = await authClient.getSession();
+				if (cancelled) return;
+
+				if (!data?.user) {
+					window.clearTimeout(timeout);
+					router.replace("/login");
+					return;
+				}
+
+				redirectAfterAuth(
 					router.replace,
-					session.user as { role?: string | null },
+					data.user as { role?: string | null },
 				);
 				if (!cancelled) {
 					window.clearTimeout(timeout);
@@ -53,7 +54,7 @@ export default function PostLoginPage() {
 			cancelled = true;
 			window.clearTimeout(timeout);
 		};
-	}, [isSessionPending, session, router]);
+	}, [router]);
 
 	return <LoadingScreen text="Signing you in..." />;
 }

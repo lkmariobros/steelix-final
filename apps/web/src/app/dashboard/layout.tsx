@@ -14,7 +14,7 @@ export default function DashboardLayout({
 	children: React.ReactNode;
 }) {
 	const { session, isSessionPending, isChecking } = useUserRole();
-	useRedirectUnauthenticated(session, isSessionPending);
+	useRedirectUnauthenticated(session?.user.id, isSessionPending);
 
 	if (isSessionPending || isChecking) {
 		return <LoadingScreen text="Loading..." />;

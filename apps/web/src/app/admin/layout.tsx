@@ -12,13 +12,11 @@ import { useRequireAdmin } from "@/hooks/use-require-admin";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
 	const admin = useRequireAdmin();
-	useRedirectUnauthenticated(admin.session, admin.isSessionPending);
-	useAdminPrefetch(!!admin.session && admin.isAdmin);
+	useRedirectUnauthenticated(admin.session?.user.id, admin.isSessionPending);
+	useAdminPrefetch(!!admin.session && !admin.isSessionPending);
 
 	if (admin.isSessionPending) return <LoadingScreen text="Loading..." />;
 	if (!admin.session) return <LoadingScreen text="Redirecting..." />;
-	if (admin.isChecking) return <LoadingScreen text="Checking access..." />;
-	if (!admin.isAdmin) return <LoadingScreen text="Redirecting..." />;
 
 	return (
 		<SidebarProvider>

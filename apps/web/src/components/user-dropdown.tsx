@@ -9,18 +9,26 @@ import {
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useAuthSession } from "@/hooks/use-user-role";
 import { authClient } from "@/lib/auth-client";
 import { trpc } from "@/utils/trpc";
 import { RiLogoutBoxLine } from "@remixicon/react";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 
 export default function UserDropdown() {
-	const { data: session, isPending } = authClient.useSession();
+	const { data: session, isPending } = useAuthSession();
+	const [loadProfile, setLoadProfile] = useState(false);
 
-	// Fresh name/image from DB (session cookie cache can lag after profile save)
+	useEffect(() => {
+		const id = window.setTimeout(() => setLoadProfile(true), 2_000);
+		return () => window.clearTimeout(id);
+	}, []);
+
+	// Fresh name/image from DB — deferred so login is not blocked by profile fetch
 	const { data: profile } = trpc.agents.getMyProfile.useQuery(undefined, {
-		enabled: !!session,
+		enabled: !!session && loadProfile,
 		staleTime: 3 * 60 * 1000,
 		gcTime: 15 * 60 * 1000,
 	});
@@ -63,17 +71,16 @@ export default function UserDropdown() {
 		});
 	};
 
+	const sessionImage =
+		typeof session.user.image === "string" ? session.user.image : undefined;
+
 	return (
 		<DropdownMenu>
 			<DropdownMenuTrigger asChild>
 				<Button variant="ghost" className="h-auto p-0 hover:bg-transparent">
 					<Avatar className="size-8">
 						<AvatarImage
-							src={
-								profile?.agent?.image ||
-								session.user.image ||
-								undefined
-							}
+							src={profile?.agent?.image || sessionImage || undefined}
 							alt="Profile image"
 						/>
 						<AvatarFallback>{userInitials}</AvatarFallback>

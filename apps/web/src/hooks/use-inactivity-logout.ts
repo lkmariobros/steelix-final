@@ -1,29 +1,29 @@
 "use client";
 
-import { authClient } from "@/lib/auth-client";
-import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useRef } from "react";
 import { toast } from "sonner";
 
 const DEFAULT_IDLE_MINUTES = 60;
-const AUTH_PATHS = new Set(["/login", "/post-login", "/reset-password"]);
 
-export function useInactivityLogout() {
-	const pathname = usePathname();
-	const skip = AUTH_PATHS.has(pathname);
-	const { data: session } = authClient.useSession();
-
+/** Pass stable user id string — not session object references. */
+export function useInactivityLogout(userId: string | null) {
 	const idleMs = useMemo(() => {
-		const env = typeof window !== "undefined" ? process.env.NEXT_PUBLIC_IDLE_LOGOUT_MINUTES : undefined;
+		const env =
+			typeof window !== "undefined"
+				? process.env.NEXT_PUBLIC_IDLE_LOGOUT_MINUTES
+				: undefined;
 		const minutes = env ? Number(env) : DEFAULT_IDLE_MINUTES;
-		return (Number.isFinite(minutes) && minutes > 0 ? minutes : DEFAULT_IDLE_MINUTES) * 60_000;
+		return (
+			(Number.isFinite(minutes) && minutes > 0 ? minutes : DEFAULT_IDLE_MINUTES) *
+			60_000
+		);
 	}, []);
 
 	const timeoutIdRef = useRef<number | null>(null);
 	const lastActivityRef = useRef<number>(Date.now());
 
 	useEffect(() => {
-		if (skip || !session) return;
+		if (!userId) return;
 
 		const clear = () => {
 			if (timeoutIdRef.current) window.clearTimeout(timeoutIdRef.current);
@@ -38,10 +38,11 @@ export function useInactivityLogout() {
 					arm();
 					return;
 				}
+				const { authClient } = await import("@/lib/auth-client");
 				await authClient.signOut({
 					fetchOptions: {
 						onSuccess: () => {
-							toast.info("You’ve been signed out due to inactivity.");
+							toast.info("You've been signed out due to inactivity.");
 							window.location.href = "/login";
 						},
 					},
@@ -61,7 +62,8 @@ export function useInactivityLogout() {
 			"touchstart",
 			"scroll",
 		];
-		for (const e of events) window.addEventListener(e, onActivity, { passive: true });
+		for (const e of events)
+			window.addEventListener(e, onActivity, { passive: true });
 
 		arm();
 
@@ -69,6 +71,5 @@ export function useInactivityLogout() {
 			for (const e of events) window.removeEventListener(e, onActivity);
 			clear();
 		};
-	}, [idleMs, session, skip]);
+	}, [idleMs, userId]);
 }
-

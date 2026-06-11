@@ -47,7 +47,7 @@ import { toast } from "sonner";
 export default function AgentSettingsPage() {
 	const { data: session, isPending, refetch: refetchSession } =
 		authClient.useSession();
-	useRedirectUnauthenticated(session, isPending);
+	useRedirectUnauthenticated(session?.user?.id, isPending);
 	const fileInputRef = useRef<HTMLInputElement>(null);
 
 	// Fetch profile data from backend

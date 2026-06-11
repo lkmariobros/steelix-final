@@ -3,9 +3,11 @@
 import { trpc } from "@/utils/trpc";
 import { useEffect, useRef } from "react";
 
+const PREFETCH_DELAY_MS = 4_000;
+
 /**
- * Prefetch common admin portal data once after auth is confirmed.
- * Tab clicks then read from React Query cache instead of cold-fetching.
+ * Lazy prefetch after login settles — never blocks the critical sign-in path.
+ * Only warms dashboard widgets, not leads or other heavy tabs.
  */
 export function useAdminPrefetch(enabled: boolean) {
 	const utils = trpc.useUtils();
@@ -13,24 +15,22 @@ export function useAdminPrefetch(enabled: boolean) {
 
 	useEffect(() => {
 		if (!enabled || prefetched.current) return;
-		prefetched.current = true;
 
-		const dateRange = {};
+		const id = window.setTimeout(() => {
+			if (prefetched.current) return;
+			prefetched.current = true;
 
-		void utils.admin.getDashboardSummary.prefetch(dateRange);
-		void utils.admin.getCommissionApprovalQueue.prefetch({
-			limit: 10,
-			offset: 0,
-			status: "pending",
-		});
-		void utils.admin.getUrgentTasks.prefetch();
-		void utils.admin.getAgentPerformance.prefetch({ dateRange });
-		void utils.adminLeads.list.prefetch({ limit: 5000, page: 1 });
-		void utils.adminLeads.agentsWithLeads.prefetch();
-		void utils.admin.getCommissionApprovalQueue.prefetch({
-			limit: 20,
-			offset: 0,
-		});
-		void utils.leadTasks.listToday.prefetch();
+			const dateRange = {};
+			void utils.admin.getDashboardSummary.prefetch(dateRange);
+			void utils.admin.getCommissionApprovalQueue.prefetch({
+				limit: 10,
+				offset: 0,
+				status: "pending",
+			});
+			void utils.admin.getUrgentTasks.prefetch();
+			void utils.admin.getAgentPerformance.prefetch({ dateRange });
+		}, PREFETCH_DELAY_MS);
+
+		return () => window.clearTimeout(id);
 	}, [enabled, utils]);
 }

@@ -2,8 +2,7 @@
 
 import { useUserRole } from "@/hooks/use-user-role";
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
-
+import { useEffect, useRef } from "react";
 /**
  * Guard for Admin-only pages.
  * - Redirects non-admin authenticated users to /dashboard
@@ -11,20 +10,22 @@ import { useEffect } from "react";
  */
 export function useRequireAdmin() {
 	const router = useRouter();
-	const { session, hasAdminAccess, isChecking, isSessionPending } = useUserRole();
+	const redirected = useRef(false);
+	const { session, hasAdminAccess, isSessionPending, isRoleLoading } = useUserRole();
 
+	// Redirect non-admins once after role resolves
 	useEffect(() => {
-		if (isSessionPending) return;
-		if (!session) return;
-		if (isChecking) return;
+		const id = session?.user.id;
+		if (isSessionPending || !id || isRoleLoading || redirected.current) return;
 		if (!hasAdminAccess) {
+			redirected.current = true;
 			router.replace("/dashboard");
 		}
-	}, [isSessionPending, session, isChecking, hasAdminAccess, router]);
+	}, [isSessionPending, session?.user.id, isRoleLoading, hasAdminAccess, router]);
 
 	return {
 		session,
-		isChecking: isSessionPending || isChecking,
+		isChecking: isSessionPending,
 		isSessionPending,
 		isAdmin: !!session && hasAdminAccess,
 	};

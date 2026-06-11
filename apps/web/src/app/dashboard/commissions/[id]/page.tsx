@@ -34,7 +34,7 @@ function formatRm(n: number | string) {
 export default function AgentCommissionDetailPage() {
 	const { id } = useParams<{ id: string }>();
 	const { data: session, isPending } = authClient.useSession();
-	useRedirectUnauthenticated(session, isPending);
+	useRedirectUnauthenticated(session?.user?.id, isPending);
 
 	const q = trpc.commissionPayouts.agentGet.useQuery(
 		{ id },

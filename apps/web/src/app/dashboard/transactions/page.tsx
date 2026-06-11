@@ -80,7 +80,7 @@ const PIPELINE_STATUSES = [
 
 export default function TransactionsPage() {
 	const { data: session, isPending } = authClient.useSession();
-	useRedirectUnauthenticated(session, isPending);
+	useRedirectUnauthenticated(session?.user?.id, isPending);
 	const router = useRouter();
 	const { openCreateModal, openEditModal } = useTransactionModalActions();
 	const [viewMode, setViewMode] = useState<ViewMode>("all");

@@ -163,7 +163,7 @@ type AnnouncementFormValues = z.infer<typeof announcementFormSchema>;
 export default function CalendarPage() {
 	const queryClient = useQueryClient();
 	const { data: session, isPending } = authClient.useSession();
-	useRedirectUnauthenticated(session, isPending);
+	useRedirectUnauthenticated(session?.user?.id, isPending);
 	const [viewMode, setViewMode] = useState<"calendar" | "announcements">(
 		"calendar",
 	);

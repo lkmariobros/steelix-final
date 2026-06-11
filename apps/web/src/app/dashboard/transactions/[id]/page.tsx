@@ -42,7 +42,7 @@ export default function AgentTransactionDetailPage() {
 	const router = useRouter();
 	const transactionId = params.id;
 	const { data: session, isPending } = authClient.useSession();
-	useRedirectUnauthenticated(session, isPending);
+	useRedirectUnauthenticated(session?.user?.id, isPending);
 	const { openEditModal } = useTransactionModalActions();
 
 	const { data: tx, isLoading, error } = trpc.transactions.getById.useQuery(

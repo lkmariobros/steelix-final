@@ -1,12 +1,9 @@
 import { authClient } from "@/lib/auth-client"
-import {
-	redirectAfterAuth,
-	redirectAfterFreshAuth,
-} from "@/lib/redirect-after-auth"
+import { redirectAfterFreshAuth } from "@/lib/redirect-after-auth"
 import { useForm } from "@tanstack/react-form"
 import { Eye, EyeOff, Loader2, Mail } from "lucide-react"
 import { useRouter } from "next/navigation"
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import z from "zod/v4"
 import { Button } from "./ui/button"
@@ -64,22 +61,14 @@ export default function SignInForm({
 	const router = useRouter()
 	const [isClient, setIsClient] = useState(false)
 	const [showPassword, setShowPassword] = useState(false)
-	const { data: session, isPending } = authClient.useSession()
+	const [isRedirecting, setIsRedirecting] = useState(false)
+	const redirectStarted = useRef(false)
 
 	useEffect(() => {
 		setIsClient(true)
 	}, [])
 
-	// Already signed in — client redirect reuses the session atom (no extra get-session)
-	useEffect(() => {
-		if (!isClient || isPending) return
-		if (session?.user) {
-			void redirectAfterAuth(
-				router.replace,
-				session.user as { role?: string | null },
-			)
-		}
-	}, [isClient, isPending, session, router])
+	// No auto-redirect on login mount — prevents /admin ↔ /login ping-pong loops
 
 	const form = useForm({
 		defaultValues: {
@@ -97,8 +86,11 @@ export default function SignInForm({
 					},
 					{
 						onSuccess: (ctx) => {
+							if (redirectStarted.current) return
+							redirectStarted.current = true
+							setIsRedirecting(true)
 							toast.success("Sign in successful! Redirecting...")
-							void redirectAfterFreshAuth(router.replace, ctx.data)
+							redirectAfterFreshAuth(router.replace, ctx.data)
 						},
 						onError: (error) => {
 							console.error("Sign in error:", error)
@@ -133,7 +125,7 @@ export default function SignInForm({
 		return null
 	}
 
-	if (session?.user) {
+	if (isRedirecting) {
 		return (
 			<div className="flex items-center justify-center py-8">
 				<Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />

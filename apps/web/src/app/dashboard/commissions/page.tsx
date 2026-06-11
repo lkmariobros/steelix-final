@@ -69,7 +69,7 @@ function statusBadge(status: string) {
 
 export default function AgentCommissionsPage() {
 	const { data: session, isPending } = authClient.useSession();
-	useRedirectUnauthenticated(session, isPending);
+	useRedirectUnauthenticated(session?.user?.id, isPending);
 
 	const [search, setSearch] = useState("");
 	const [status, setStatus] = useState<string>("__all__");

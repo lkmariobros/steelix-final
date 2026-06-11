@@ -110,7 +110,7 @@ export default function WhatsAppPage() {
 	const queryClient = useQueryClient();
 	const { data: session, isPending: isSessionPending } =
 		authClient.useSession();
-	useRedirectUnauthenticated(session, isSessionPending);
+	useRedirectUnauthenticated(session?.user?.id, isSessionPending);
 	const [searchQuery, setSearchQuery] = useState("");
 	const [filter, setFilter] = useState<"all" | "unread">("all");
 	const [selectedConversationId, setSelectedConversationId] = useState<
