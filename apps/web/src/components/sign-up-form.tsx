@@ -1,6 +1,11 @@
 import { authClient } from "@/lib/auth-client"
+import {
+	redirectAfterAuth,
+	redirectAfterFreshAuth,
+} from "@/lib/redirect-after-auth"
 import { useForm } from "@tanstack/react-form"
 import { Eye, EyeOff, Loader2, Mail } from "lucide-react"
+import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import z from "zod/v4"
@@ -13,6 +18,7 @@ interface SignUpFormProps {
 }
 
 export default function SignUpForm({ onSwitchToSignIn }: SignUpFormProps) {
+	const router = useRouter()
 	const [isClient, setIsClient] = useState(false)
 	const [showPassword, setShowPassword] = useState(false)
 	const { data: session, isPending } = authClient.useSession()
@@ -24,9 +30,12 @@ export default function SignUpForm({ onSwitchToSignIn }: SignUpFormProps) {
 	useEffect(() => {
 		if (!isClient || isPending) return
 		if (session?.user) {
-			window.location.href = "/post-login"
+			void redirectAfterAuth(
+				router.replace,
+				session.user as { role?: string | null },
+			)
 		}
-	}, [isClient, isPending, session])
+	}, [isClient, isPending, session, router])
 
 	const form = useForm({
 		defaultValues: {
@@ -44,9 +53,9 @@ export default function SignUpForm({ onSwitchToSignIn }: SignUpFormProps) {
 					name: displayName,
 				},
 				{
-					onSuccess: () => {
-						window.location.href = "/post-login"
+					onSuccess: (ctx) => {
 						toast.success("Account created successfully!")
+						void redirectAfterFreshAuth(router.replace, ctx.data)
 					},
 					onError: (error) => {
 						toast.error(error.error.message)

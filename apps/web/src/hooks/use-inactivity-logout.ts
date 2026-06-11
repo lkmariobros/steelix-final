@@ -1,12 +1,16 @@
 "use client";
 
 import { authClient } from "@/lib/auth-client";
+import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useRef } from "react";
 import { toast } from "sonner";
 
 const DEFAULT_IDLE_MINUTES = 60;
+const AUTH_PATHS = new Set(["/login", "/post-login", "/reset-password"]);
 
 export function useInactivityLogout() {
+	const pathname = usePathname();
+	const skip = AUTH_PATHS.has(pathname);
 	const { data: session } = authClient.useSession();
 
 	const idleMs = useMemo(() => {
@@ -19,7 +23,7 @@ export function useInactivityLogout() {
 	const lastActivityRef = useRef<number>(Date.now());
 
 	useEffect(() => {
-		if (!session) return;
+		if (skip || !session) return;
 
 		const clear = () => {
 			if (timeoutIdRef.current) window.clearTimeout(timeoutIdRef.current);
@@ -65,6 +69,6 @@ export function useInactivityLogout() {
 			for (const e of events) window.removeEventListener(e, onActivity);
 			clear();
 		};
-	}, [idleMs, session]);
+	}, [idleMs, session, skip]);
 }
 

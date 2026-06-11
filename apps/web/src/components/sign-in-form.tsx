@@ -1,6 +1,11 @@
 import { authClient } from "@/lib/auth-client"
+import {
+	redirectAfterAuth,
+	redirectAfterFreshAuth,
+} from "@/lib/redirect-after-auth"
 import { useForm } from "@tanstack/react-form"
 import { Eye, EyeOff, Loader2, Mail } from "lucide-react"
+import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import z from "zod/v4"
@@ -56,6 +61,7 @@ export default function SignInForm({
 	onSwitchToSignUp,
 	onForgotPassword,
 }: SignInFormProps) {
+	const router = useRouter()
 	const [isClient, setIsClient] = useState(false)
 	const [showPassword, setShowPassword] = useState(false)
 	const { data: session, isPending } = authClient.useSession()
@@ -64,13 +70,16 @@ export default function SignInForm({
 		setIsClient(true)
 	}, [])
 
-	// Already signed in — don't leave the login page stuck on a session spinner
+	// Already signed in — client redirect reuses the session atom (no extra get-session)
 	useEffect(() => {
 		if (!isClient || isPending) return
 		if (session?.user) {
-			window.location.href = "/post-login"
+			void redirectAfterAuth(
+				router.replace,
+				session.user as { role?: string | null },
+			)
 		}
-	}, [isClient, isPending, session])
+	}, [isClient, isPending, session, router])
 
 	const form = useForm({
 		defaultValues: {
@@ -87,10 +96,9 @@ export default function SignInForm({
 						rememberMe: value.rememberMe,
 					},
 					{
-						onSuccess: () => {
+						onSuccess: (ctx) => {
 							toast.success("Sign in successful! Redirecting...")
-							// Use window.location.href for hard refresh to ensure cookies are properly read
-							window.location.href = "/post-login"
+							void redirectAfterFreshAuth(router.replace, ctx.data)
 						},
 						onError: (error) => {
 							console.error("Sign in error:", error)

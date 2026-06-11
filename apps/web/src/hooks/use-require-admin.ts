@@ -25,6 +25,7 @@ export function useRequireAdmin() {
 	return {
 		session,
 		isChecking: isSessionPending || isChecking,
+		isSessionPending,
 		isAdmin: !!session && hasAdminAccess,
 	};
 }
