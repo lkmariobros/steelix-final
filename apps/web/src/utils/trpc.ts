@@ -9,13 +9,10 @@ import type { AppRouter } from "../../../server/src/routers";
 export const queryClient = new QueryClient({
 	defaultOptions: {
 		queries: {
-			// Data considered fresh for 30 seconds - no refetch during this time
-			staleTime: 30 * 1000,
-			// Keep unused data in cache for 5 minutes before garbage collection
-			gcTime: 5 * 60 * 1000,
-			// Don't refetch when window regains focus (reduces unnecessary calls)
+			// Keep tab data warm — avoid refetch on every sidebar click
+			staleTime: 3 * 60 * 1000,
+			gcTime: 10 * 60 * 1000,
 			refetchOnWindowFocus: false,
-			// Don't refetch when reconnecting (let user trigger manually if needed)
 			refetchOnReconnect: false,
 			// Retry failed requests once with exponential backoff
 			retry: 1,

@@ -20,7 +20,7 @@ interface DashboardSummaryProps {
 }
 
 export function DashboardSummary({ className }: DashboardSummaryProps) {
-	const { dashboardSummary: raw, isLoading, hasError } = useAdminDashboard();
+	const { dashboardSummary: raw, summaryLoading, hasError } = useAdminDashboard();
 
 	// Normalise commission values (Drizzle sum/avg return string | null)
 	const data = React.useMemo(() => {
@@ -38,7 +38,7 @@ export function DashboardSummary({ className }: DashboardSummaryProps) {
 
 	// ── Loading ───────────────────────────────────────────────────────────────
 
-	if (isLoading) {
+	if (summaryLoading) {
 		return (
 			<Card className={className}>
 				<CardHeader>

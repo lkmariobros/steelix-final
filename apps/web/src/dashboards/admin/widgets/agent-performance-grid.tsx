@@ -44,7 +44,7 @@ type SortDirection = "asc" | "desc";
 export function AgentPerformanceGrid({ className }: AgentPerformanceGridProps) {
 	const {
 		agentPerformance: rawPerformanceData,
-		isLoading,
+		performanceLoading,
 		hasError,
 	} = useAdminDashboard();
 	const [sortField, setSortField] = useState<SortField>("transactions");
@@ -152,7 +152,7 @@ export function AgentPerformanceGrid({ className }: AgentPerformanceGridProps) {
 		);
 	};
 
-	if (isLoading) {
+	if (performanceLoading) {
 		return (
 			<Card className={className}>
 				<CardHeader>

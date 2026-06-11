@@ -124,7 +124,11 @@ interface AdminDashboardContextValue {
 	urgentTasks: UrgentTaskItem[] | undefined;
 	agentPerformance: AgentPerformanceItem[] | undefined;
 
-	// State
+	// State — per-widget so one slow query does not block the whole dashboard
+	summaryLoading: boolean;
+	queueLoading: boolean;
+	urgentLoading: boolean;
+	performanceLoading: boolean;
 	isLoading: boolean;
 	isRefetching: boolean;
 	hasError: boolean;
@@ -149,30 +153,35 @@ export function AdminDashboardProvider({
 	// ── All queries in ONE component → tRPC batches them into ONE HTTP request ──
 
 	const summaryQuery = trpc.admin.getDashboardSummary.useQuery(dateRange, {
-		staleTime: 60_000,
+		staleTime: 3 * 60_000,
 	});
 
 	const queueQuery = trpc.admin.getCommissionApprovalQueue.useQuery(
 		{ limit: 10, offset: 0, status: "pending" },
-		{ staleTime: 30_000 },
+		{ staleTime: 3 * 60_000 },
 	);
 
 	const urgentQuery = trpc.admin.getUrgentTasks.useQuery(undefined, {
-		staleTime: 60_000,
+		staleTime: 3 * 60_000,
 	});
 
 	const performanceQuery = trpc.admin.getAgentPerformance.useQuery(
 		{ dateRange },
-		{ staleTime: 60_000 },
+		{ staleTime: 3 * 60_000 },
 	);
 
 	// ── Derived state ──────────────────────────────────────────────────────────
 
+	const summaryLoading = summaryQuery.isPending;
+	const queueLoading = queueQuery.isPending;
+	const urgentLoading = urgentQuery.isPending;
+	const performanceLoading = performanceQuery.isPending;
+
 	const isLoading =
-		summaryQuery.isLoading ||
-		queueQuery.isLoading ||
-		urgentQuery.isLoading ||
-		performanceQuery.isLoading;
+		summaryLoading ||
+		queueLoading ||
+		urgentLoading ||
+		performanceLoading;
 
 	const isRefetching =
 		summaryQuery.isFetching ||
@@ -208,6 +217,10 @@ export function AdminDashboardProvider({
 				agentPerformance: performanceQuery.data as
 					| AgentPerformanceItem[]
 					| undefined,
+				summaryLoading,
+				queueLoading,
+				urgentLoading,
+				performanceLoading,
 				isLoading,
 				isRefetching,
 				hasError,

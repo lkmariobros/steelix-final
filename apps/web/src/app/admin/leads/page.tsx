@@ -37,7 +37,6 @@ import {
 } from "@/components/ui/select";
 import { LoadingScreen } from "@/components/ui/loading-spinner";
 import { Skeleton } from "@/components/ui/skeleton";
-import { authClient } from "@/lib/auth-client";
 import { trpc } from "@/utils/trpc";
 import {
 	RiCheckboxMultipleLine,
@@ -56,7 +55,7 @@ import {
 } from "@remixicon/react";
 import { FileSpreadsheet, FileText } from "lucide-react";
 import type React from "react";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/tooltip";
 
@@ -91,7 +90,12 @@ import { KanbanPipelineBoard } from "./_components/kanban-pipeline-board";
 import { ImportLeadsDialog } from "./_components/import-leads-dialog";
 
 export default function AdminLeadsPage() {
-	const { data: session } = authClient.useSession();
+	// Defer non-critical widgets so the table can render first
+	const [loadSecondary, setLoadSecondary] = useState(false);
+	useEffect(() => {
+		const id = window.setTimeout(() => setLoadSecondary(true), 0);
+		return () => window.clearTimeout(id);
+	}, []);
 
 	// ── Filters (all client-side, no backend re-fetch) ──────────────────────
 	const [search, setSearch] = useState("");
@@ -122,17 +126,17 @@ export default function AdminLeadsPage() {
 	// happens here on the client via useMemo (zero extra network requests).
 	const {
 		data: rawData,
-		isLoading,
+		isPending: leadsPending,
 		isFetching,
 		refetch,
 	} = trpc.adminLeads.list.useQuery(
-		{ limit: 5000, page: 1 }, // fetch entire dataset in one shot
-		{ enabled: !!session, staleTime: 60 * 1000 },
+		{ limit: 5000, page: 1 },
+		{ staleTime: 3 * 60 * 1000 },
 	);
 
 	const { data: agentsData } = trpc.adminLeads.agentsWithLeads.useQuery(
 		undefined,
-		{ enabled: !!session, staleTime: 60 * 1000 },
+		{ staleTime: 3 * 60 * 1000 },
 	);
 
 	const allLeads = (rawData?.leads ?? []) as Lead[];
@@ -407,7 +411,7 @@ export default function AdminLeadsPage() {
 			format: "csv" | "excel",
 			scope: "filtered" | "selected",
 		) => {
-			if (isExporting || isLoading) return;
+			if (isExporting || leadsPending) return;
 			setIsExporting(true);
 			try {
 				const leads =
@@ -430,7 +434,7 @@ export default function AdminLeadsPage() {
 			exportToCSV,
 			exportToExcelHtml,
 			isExporting,
-			isLoading,
+			leadsPending,
 			kanbanLeads,
 			leadsToExportRows,
 			selectedIds,
@@ -495,9 +499,9 @@ export default function AdminLeadsPage() {
 
 			<div className="flex flex-1 flex-col gap-6 py-6">
 					<AdminLeadsPageHeader
-						isLoading={isLoading}
+						isLoading={leadsPending}
 						leadCount={allLeads.length}
-						isRefreshing={isLoading || isFetching}
+						isRefreshing={leadsPending || isFetching}
 						viewMode={viewMode}
 						onRefresh={handleRefresh}
 						onViewMode={(mode) => {
@@ -508,20 +512,21 @@ export default function AdminLeadsPage() {
 					/>
 
 					{/* Stats */}
-					<StatsCards leads={allLeads} isLoading={isLoading} />
+					<StatsCards leads={allLeads} isLoading={leadsPending} />
 
 					{/* Charts */}
-					<LeadsCharts leads={allLeads} isLoading={isLoading} />
+					<LeadsCharts leads={allLeads} isLoading={leadsPending} />
 
 					{/* Today's Tasks */}
 					<TodayTasksWidget
+						enabled={loadSecondary}
 						onViewLead={(leadId) => {
 							const lead = allLeads.find((l) => l.id === leadId);
 							if (lead) setViewLead(lead);
 						}}
 					/>
 
-					<LeadTasksReport />
+					<LeadTasksReport enabled={loadSecondary} />
 
 					{/* Table */}
 					<Card className="overflow-hidden">
@@ -784,7 +789,7 @@ export default function AdminLeadsPage() {
 										</>
 									)}
 									<span className="text-muted-foreground text-xs">
-										{isLoading ? (
+										{leadsPending ? (
 											"Loading…"
 										) : totalFiltered === allLeads.length ? (
 											<>
@@ -811,7 +816,7 @@ export default function AdminLeadsPage() {
 													size="icon"
 													variant="ghost"
 													className="h-8 w-8 rounded-none p-0 text-muted-foreground hover:text-foreground"
-													disabled={isLoading}
+													disabled={leadsPending}
 													aria-label="Import leads from CSV"
 													onClick={() => setIsImportOpen(true)}
 												>
@@ -826,7 +831,7 @@ export default function AdminLeadsPage() {
 												<span
 													className={[
 														"inline-flex",
-														isLoading || isExporting
+														leadsPending || isExporting
 															? "pointer-events-none opacity-50"
 															: "",
 													].join(" ")}
@@ -837,7 +842,7 @@ export default function AdminLeadsPage() {
 																size="icon"
 																variant="ghost"
 																className="h-8 w-8 rounded-none p-0 text-muted-foreground hover:text-foreground"
-																disabled={isLoading || isExporting}
+																disabled={leadsPending || isExporting}
 																aria-label="Export leads"
 															>
 																<RiFileDownloadLine
@@ -861,7 +866,7 @@ export default function AdminLeadsPage() {
 														<TooltipTrigger asChild>
 															<DropdownMenuItem
 																disabled={
-																	isLoading ||
+																	leadsPending ||
 																	isExporting ||
 																	(selectedIds.size === 0 &&
 																		kanbanLeads.length === 0)
@@ -888,7 +893,7 @@ export default function AdminLeadsPage() {
 														<TooltipTrigger asChild>
 															<DropdownMenuItem
 																disabled={
-																	isLoading ||
+																	leadsPending ||
 																	isExporting ||
 																	(selectedIds.size === 0 &&
 																		kanbanLeads.length === 0)
@@ -920,7 +925,7 @@ export default function AdminLeadsPage() {
 						</div>
 						<CardContent className="p-0">
 							<div className={viewMode === "table" ? "" : "hidden"}>
-								{isLoading ? (
+								{leadsPending ? (
 									<div className="overflow-x-auto">
 										<Table>
 											<TableHeader>
@@ -1384,7 +1389,7 @@ export default function AdminLeadsPage() {
 								)}
 							</div>
 							<div className={viewMode === "kanban" ? "p-4" : "hidden"}>
-								{isLoading ? (
+								{leadsPending ? (
 									<div className="flex items-center justify-center py-12">
 										<RiLoader4Line className="size-8 animate-spin text-primary" />
 									</div>

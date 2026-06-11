@@ -15,16 +15,19 @@ import { RiAlarmWarningLine, RiCheckboxCircleLine, RiTodoLine } from "@remixicon
 import { TASK_TYPE_LABELS } from "./lead-constants";
 import type { TaskType } from "./lead-models";
 
-export function LeadTasksReport() {
+export function LeadTasksReport({ enabled = true }: { enabled?: boolean }) {
 	const [status, setStatus] = useState<"__all__" | "open" | "overdue" | "completed">(
 		"__all__",
 	);
 
-	const { data, isLoading } = trpc.leadTasks.listReport.useQuery({
-		status: status === "__all__" ? undefined : status,
-		limit: 50,
-		offset: 0,
-	});
+	const { data, isLoading } = trpc.leadTasks.listReport.useQuery(
+		{
+			status: status === "__all__" ? undefined : status,
+			limit: 50,
+			offset: 0,
+		},
+		{ enabled, staleTime: 3 * 60 * 1000 },
+	);
 
 	const summary = data?.summary;
 

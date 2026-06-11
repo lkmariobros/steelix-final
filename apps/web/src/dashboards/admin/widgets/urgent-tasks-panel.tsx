@@ -26,7 +26,7 @@ interface UrgentTasksPanelProps {
 }
 
 export function UrgentTasksPanel({ className }: UrgentTasksPanelProps) {
-	const { urgentTasks: rawTasks, isLoading, hasError } = useAdminDashboard();
+	const { urgentTasks: rawTasks, urgentLoading, hasError } = useAdminDashboard();
 
 	const getPriorityIcon = (priority: string) => {
 		switch (priority) {
@@ -50,7 +50,7 @@ export function UrgentTasksPanel({ className }: UrgentTasksPanelProps) {
 		console.log("Navigate to task:", task);
 	};
 
-	if (isLoading) {
+	if (urgentLoading) {
 		return (
 			<Card className={className}>
 				<CardHeader>

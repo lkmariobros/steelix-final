@@ -78,7 +78,7 @@ export function CommissionApprovalQueue({
 
 	// Page 0 comes from the shared context (already batched on mount).
 	// Subsequent pages use their own query (user interaction).
-	const { commissionQueue: contextQueueData, isLoading: contextLoading } =
+	const { commissionQueue: contextQueueData, queueLoading: contextLoading } =
 		useAdminDashboard();
 
 	const paginatedQuery = trpc.admin.getCommissionApprovalQueue.useQuery(

@@ -6,12 +6,14 @@ import {
 	SidebarProvider,
 } from "@/components/sidebar";
 import { LoadingScreen } from "@/components/ui/loading-spinner";
+import { useAdminPrefetch } from "@/hooks/use-admin-prefetch";
 import { useRedirectUnauthenticated } from "@/hooks/use-redirect-unauthenticated";
 import { useRequireAdmin } from "@/hooks/use-require-admin";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
 	const admin = useRequireAdmin();
 	useRedirectUnauthenticated(admin.session, admin.isSessionPending);
+	useAdminPrefetch(!!admin.session && admin.isAdmin);
 
 	if (admin.isSessionPending) return <LoadingScreen text="Loading..." />;
 	if (!admin.session) return <LoadingScreen text="Redirecting..." />;

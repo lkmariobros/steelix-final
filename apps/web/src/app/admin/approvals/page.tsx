@@ -38,7 +38,6 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
-import { authClient } from "@/lib/auth-client";
 import { trpc } from "@/utils/trpc";
 import {
 	RiCheckLine,
@@ -121,7 +120,6 @@ interface ApprovalDialogState {
 
 export default function AdminApprovalsPage() {
 	const queryClient = useQueryClient();
-	const { data: session } = authClient.useSession();
 	const [statusFilter, setStatusFilter] = useState<string>("all");
 	const [page, setPage] = useState(0);
 	const pageSize = 20;
@@ -150,19 +148,16 @@ export default function AdminApprovalsPage() {
 					: (statusFilter as (typeof CANONICAL_TRANSACTION_STATUSES)[number]),
 		},
 		{
-			enabled: !!session,
 			refetchOnWindowFocus: false,
-			staleTime: 30000,
+			staleTime: 3 * 60 * 1000,
 		},
 	);
 
 	// Get dashboard stats for the summary cards
-	const { data: dashboardStats, isLoading: isLoadingStats } =
+	const { data: dashboardStats, isPending: statsPending } =
 		trpc.admin.getDashboardSummary.useQuery(
 			{},
-			{
-				enabled: !!session,
-			},
+			{ staleTime: 3 * 60 * 1000 },
 		);
 
 	// Mutation for approving/rejecting commissions
@@ -355,7 +350,7 @@ export default function AdminApprovalsPage() {
 					</div>
 
 					{/* Approval Summary Cards */}
-					{isLoadingStats ? (
+					{statsPending ? (
 						<div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
 							{["sk-a1", "sk-a2", "sk-a3", "sk-a4"].map((id) => (
 								<Card key={id} className="overflow-hidden">

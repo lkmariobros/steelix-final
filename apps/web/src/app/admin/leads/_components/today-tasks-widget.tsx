@@ -23,17 +23,19 @@ import {
 export function TodayTasksWidget({
 	onViewLead,
 	scope = "admin",
+	enabled = true,
 }: {
 	onViewLead: (leadId: string) => void;
 	scope?: "admin" | "agent";
+	enabled?: boolean;
 }) {
 	const adminQuery = trpc.leadTasks.listToday.useQuery(undefined, {
-		staleTime: 30 * 1000,
-		enabled: scope === "admin",
+		staleTime: 3 * 60 * 1000,
+		enabled: enabled && scope === "admin",
 	});
 	const agentQuery = trpc.leadTasks.listMyToday.useQuery(undefined, {
-		staleTime: 30 * 1000,
-		enabled: scope === "agent",
+		staleTime: 3 * 60 * 1000,
+		enabled: enabled && scope === "agent",
 	});
 
 	const { data: tasks, isLoading } =
