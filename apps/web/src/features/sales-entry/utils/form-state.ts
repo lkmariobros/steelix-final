@@ -383,14 +383,17 @@ export function getCompletedSteps(
 	const completed: FormStep[] = [];
 
 	const detailsComplete =
-		formData.projectName?.trim() &&
-		formData.unitNo?.trim() &&
 		formData.propertyData?.price &&
 		formData.clientData?.name?.trim() &&
 		formData.clientData?.icNo?.trim() &&
 		formData.clientData?.phone?.trim() &&
 		formData.clientData?.address?.trim() &&
-		(formData.bookingDate || formData.transactionDate);
+		(formData.bookingDate || formData.transactionDate) &&
+		(formData.marketType === "secondary"
+			? Boolean(formData.propertyData?.address?.trim()) &&
+				(formData.commissionValue ?? 0) > 0
+			: Boolean(formData.projectName?.trim()) &&
+				Boolean(formData.unitNo?.trim()));
 	if (detailsComplete) completed.push(1);
 
 	// Upload step is always navigable once details are done

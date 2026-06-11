@@ -5,10 +5,10 @@ import {
 	agentTierHistory,
 	commissionAuditLog,
 	leadershipBonusPayments,
-	tierCommissionConfig,
 	user,
 } from "../models/auth";
 import { db } from "../utils/db";
+import { resolveTierConfig, type ResolvedTierConfig } from "./tier-config";
 
 /**
  * Agent tier management utilities for commission calculations
@@ -91,7 +91,8 @@ export async function getAgentTierInfo(agentId: string) {
 		throw new Error(`Agent not found: ${agentId}`);
 	}
 
-	const tierConfig = AGENT_TIER_CONFIG[agent.agentTier as AgentTier];
+	const tier = agent.agentTier as AgentTier;
+	const tierConfig = await resolveTierConfig(tier);
 
 	return {
 		...agent,
@@ -141,13 +142,13 @@ export async function getUplineInfo(agentId: string): Promise<{
 	}
 
 	const uplineTier = upline.agentTier as AgentTier;
-	const leadershipBonusRate = AGENT_TIER_CONFIG[uplineTier].leadershipBonusRate;
+	const uplineConfig = await resolveTierConfig(uplineTier);
 
 	return {
 		uplineId: upline.id,
 		uplineName: upline.name,
 		uplineTier,
-		leadershipBonusRate,
+		leadershipBonusRate: uplineConfig.leadershipBonusRate,
 	};
 }
 
@@ -273,7 +274,8 @@ export async function promoteAgentTier(
 		}
 
 		const effectiveDate = new Date();
-		const newCommissionSplit = AGENT_TIER_CONFIG[newTier].commissionSplit;
+		const newTierConfig = await resolveTierConfig(newTier);
+		const newCommissionSplit = newTierConfig.commissionSplit;
 
 		// Update user tier and commission split
 		await db
@@ -372,20 +374,26 @@ export function validateTierRequirements(
 		monthlySales: number;
 		teamMembers: number;
 	},
+	config?: ResolvedTierConfig,
 ): { eligible: boolean; missingRequirements: string[] } {
-	const requirements = AGENT_TIER_CONFIG[targetTier].requirements;
+	const requirements =
+		config?.requirements ?? AGENT_TIER_CONFIG[targetTier].requirements;
 	const missingRequirements: string[] = [];
 
-	if (performanceMetrics.monthlySales < requirements.monthlySales) {
-		missingRequirements.push(
-			`Need ${requirements.monthlySales} monthly sales (current: ${performanceMetrics.monthlySales})`,
-		);
+	if (requirements.teamMembers > 0) {
+		if (performanceMetrics.teamMembers < requirements.teamMembers) {
+			missingRequirements.push(
+				`Need ${requirements.teamMembers} direct recruits (current: ${performanceMetrics.teamMembers})`,
+			);
+		}
 	}
 
-	if (performanceMetrics.teamMembers < requirements.teamMembers) {
-		missingRequirements.push(
-			`Need ${requirements.teamMembers} team members (current: ${performanceMetrics.teamMembers})`,
-		);
+	if (requirements.monthlySales > 0) {
+		if (performanceMetrics.monthlySales < requirements.monthlySales) {
+			missingRequirements.push(
+				`Need ${requirements.monthlySales} monthly sales (current: ${performanceMetrics.monthlySales})`,
+			);
+		}
 	}
 
 	return {

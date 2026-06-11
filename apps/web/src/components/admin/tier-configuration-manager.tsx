@@ -104,8 +104,9 @@ export function TierConfigurationManager() {
     <div className="space-y-6">
       <Alert>
         <AlertDescription>
-          Changes to tier configurations will affect all future commission calculations. 
-          Existing transactions will not be affected.
+          Secondary market settings: tier commission splits, leadership bonuses, and
+          recruitment requirements for promotion. Primary market rates are managed under
+          Commission Schemes.
         </AlertDescription>
       </Alert>
 
@@ -145,15 +146,15 @@ export function TierConfigurationManager() {
                     </p>
                   </div>
                   <div className="rounded-lg border p-3">
-                    <p className="text-sm text-muted-foreground">Monthly Sales Req.</p>
+                    <p className="text-sm text-muted-foreground">Direct Recruits Req.</p>
                     <p className="text-xl font-semibold">
-                      {(config.requirements as { monthlySales: number })?.monthlySales || 0}
+                      {(config.requirements as { teamMembers: number })?.teamMembers || 0}
                     </p>
                   </div>
                   <div className="rounded-lg border p-3">
-                    <p className="text-sm text-muted-foreground">Team Members Req.</p>
+                    <p className="text-sm text-muted-foreground">Monthly Sales Req.</p>
                     <p className="text-xl font-semibold">
-                      {(config.requirements as { teamMembers: number })?.teamMembers || 0}
+                      {(config.requirements as { monthlySales: number })?.monthlySales || 0}
                     </p>
                   </div>
                 </div>

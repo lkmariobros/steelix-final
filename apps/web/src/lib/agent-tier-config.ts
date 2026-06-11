@@ -22,13 +22,7 @@ export interface TierConfig {
 	description: string;
 }
 
-// Full tier configuration matching backend - New Leadership Plan
-// Commission structure:
-// - Advisor: 70% commission, no leadership bonus
-// - Sales Leader: 80% commission + 7% leadership bonus from downline
-// - Team Leader: 83% commission + 5% leadership bonus from downline
-// - Group Leader: 85% commission + 8% leadership bonus from downline
-// - Supreme Leader: 85% commission + 6% leadership bonus from downline
+// Secondary market tier splits (70/80/85/90). Primary market uses Commission Schemes.
 export const AGENT_TIER_CONFIG: Record<AgentTier, TierConfig> = {
 	advisor: {
 		commissionSplit: 70,
@@ -40,30 +34,30 @@ export const AGENT_TIER_CONFIG: Record<AgentTier, TierConfig> = {
 	sales_leader: {
 		commissionSplit: 80,
 		leadershipBonusRate: 7,
-		requirements: { monthlySales: 2, teamMembers: 0 },
+		requirements: { monthlySales: 0, teamMembers: 2 },
 		displayName: "Sales Leader",
-		description: "Proven sales performer",
+		description: "2+ direct recruits",
 	},
 	team_leader: {
-		commissionSplit: 83,
+		commissionSplit: 85,
 		leadershipBonusRate: 5,
-		requirements: { monthlySales: 3, teamMembers: 3 },
+		requirements: { monthlySales: 0, teamMembers: 5 },
 		displayName: "Team Leader",
-		description: "Leading a small team",
+		description: "5+ direct recruits",
 	},
 	group_leader: {
-		commissionSplit: 85,
+		commissionSplit: 90,
 		leadershipBonusRate: 8,
-		requirements: { monthlySales: 5, teamMembers: 5 },
+		requirements: { monthlySales: 0, teamMembers: 10 },
 		displayName: "Group Leader",
-		description: "Managing multiple teams",
+		description: "10+ direct recruits",
 	},
 	supreme_leader: {
-		commissionSplit: 85,
+		commissionSplit: 90,
 		leadershipBonusRate: 6,
-		requirements: { monthlySales: 8, teamMembers: 10 },
+		requirements: { monthlySales: 0, teamMembers: 20 },
 		displayName: "Supreme Leader",
-		description: "Top tier leadership",
+		description: "20+ direct recruits",
 	},
 };
 

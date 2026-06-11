@@ -240,7 +240,24 @@ export function TransactionForm({
 			let finalTransactionId = effectiveTxId;
 
 			// Validate form data before submission
-			if (!formData.projectName || !formData.propertyData?.price) {
+			if (!formData.propertyData?.price) {
+				toast.error("Please complete all required fields");
+				return;
+			}
+			if (
+				formData.marketType === "secondary" &&
+				(!formData.propertyData?.address?.trim() ||
+					(formData.commissionValue ?? 0) <= 0)
+			) {
+				toast.error(
+					"Secondary market requires property address and commission rate",
+				);
+				return;
+			}
+			if (
+				formData.marketType !== "secondary" &&
+				(!formData.projectName || !formData.unitNo)
+			) {
 				toast.error("Please complete all required fields");
 				return;
 			}
@@ -249,8 +266,11 @@ export function TransactionForm({
 
 			const payload = {
 				...cleanedFormData,
-				marketType: "primary" as const,
-				transactionType: "sale" as const,
+				marketType: cleanedFormData.marketType ?? "primary",
+				transactionType:
+					cleanedFormData.marketType === "secondary"
+						? (cleanedFormData.transactionType ?? "sale")
+						: ("sale" as const),
 				transactionDate:
 					cleanedFormData.bookingDate ??
 					cleanedFormData.transactionDate ??

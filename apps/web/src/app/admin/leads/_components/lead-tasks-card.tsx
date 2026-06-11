@@ -85,6 +85,8 @@ export function LeadTasksCard({ leadId }: { leadId: string }) {
 	const invalidate = () => {
 		queryClient.invalidateQueries({ queryKey: [["leadTasks", "list"]] });
 		queryClient.invalidateQueries({ queryKey: [["leadTasks", "listToday"]] });
+		queryClient.invalidateQueries({ queryKey: [["leadTasks", "listMyToday"]] });
+		queryClient.invalidateQueries({ queryKey: [["leadTasks", "listReport"]] });
 	};
 
 	const createMutation = trpc.leadTasks.create.useMutation({

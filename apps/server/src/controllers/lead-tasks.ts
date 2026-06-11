@@ -1,3 +1,4 @@
+import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import {
 	completeLeadTaskSchema,
@@ -8,32 +9,109 @@ import {
 	completeLeadTask,
 	createLeadTask,
 	deleteLeadTask,
+	getLeadTasksReport,
+	getProspectAgentId,
+	getTaskProspectAgentId,
+	getTasksForAgentToday,
 	getTasksForLead,
 	getTodaysTasks,
 	getUpcomingTasks,
 	updateLeadTask,
 } from "../services/lead-tasks";
-import { adminProcedure, router } from "../utils/trpc";
+import { hasAdminAccess } from "../utils/user-roles";
+import { adminProcedure, protectedProcedure, router } from "../utils/trpc";
+
+async function assertAgentOwnsProspect(agentId: string, prospectId: string) {
+	const ownerId = await getProspectAgentId(prospectId);
+	if (ownerId === null) {
+		throw new TRPCError({ code: "NOT_FOUND", message: "Lead not found" });
+	}
+	if (ownerId !== agentId) {
+		throw new TRPCError({
+			code: "FORBIDDEN",
+			message: "You can only manage tasks on your assigned leads",
+		});
+	}
+}
+
+async function assertAgentOwnsTask(agentId: string, taskId: string) {
+	const meta = await getTaskProspectAgentId(taskId);
+	if (!meta) {
+		throw new TRPCError({ code: "NOT_FOUND", message: "Task not found" });
+	}
+	if (meta.agentId !== agentId) {
+		throw new TRPCError({
+			code: "FORBIDDEN",
+			message: "You can only manage tasks on your assigned leads",
+		});
+	}
+}
+
+function sessionUser(ctx: {
+	session: { user: { id: string; role?: string | null; roles?: string[] | null } };
+}) {
+	return ctx.session.user;
+}
+
+function assertAdminOrAgentProspect(
+	ctx: { session: { user: { id: string; role?: string | null; roles?: string[] | null } } },
+	prospectId: string,
+) {
+	if (hasAdminAccess(sessionUser(ctx))) return Promise.resolve();
+	return assertAgentOwnsProspect(ctx.session.user.id, prospectId);
+}
+
+function assertAdminOrAgentTask(
+	ctx: { session: { user: { id: string; role?: string | null; roles?: string[] | null } } },
+	taskId: string,
+) {
+	if (hasAdminAccess(sessionUser(ctx))) return Promise.resolve();
+	return assertAgentOwnsTask(ctx.session.user.id, taskId);
+}
 
 export const leadTasksRouter = router({
 	/**
-	 * Get all tasks for a specific lead (ordered: pending first, then completed)
+	 * Get all tasks for a specific lead (agent: own leads only; admin: any)
 	 */
-	list: adminProcedure
+	list: protectedProcedure
 		.input(z.object({ prospectId: z.string().uuid() }))
-		.query(async ({ input }) => {
+		.query(async ({ input, ctx }) => {
+			await assertAdminOrAgentProspect(ctx, input.prospectId);
 			return await getTasksForLead(input.prospectId);
 		}),
 
 	/**
-	 * Get overdue + today's tasks across all leads (dashboard widget)
+	 * Agent: overdue + today's tasks on assigned leads
+	 */
+	listMyToday: protectedProcedure.query(async ({ ctx }) => {
+		return await getTasksForAgentToday(ctx.session.user.id);
+	}),
+
+	/**
+	 * Admin: overdue + today's tasks across all leads
 	 */
 	listToday: adminProcedure.query(async () => {
 		return await getTodaysTasks();
 	}),
 
 	/**
-	 * Get upcoming tasks for the next N days (default: 7)
+	 * Admin: task report with filters
+	 */
+	listReport: adminProcedure
+		.input(
+			z.object({
+				agentId: z.string().optional(),
+				status: z.enum(["open", "completed", "overdue"]).optional(),
+				limit: z.number().min(1).max(200).default(50),
+				offset: z.number().min(0).default(0),
+			}),
+		)
+		.query(async ({ input }) => {
+			return await getLeadTasksReport(input);
+		}),
+
+	/**
+	 * Get upcoming tasks for the next N days (admin)
 	 */
 	listUpcoming: adminProcedure
 		.input(z.object({ days: z.number().min(1).max(30).default(7) }))
@@ -44,36 +122,46 @@ export const leadTasksRouter = router({
 	/**
 	 * Create a new task linked to a lead
 	 */
-	create: adminProcedure
+	create: protectedProcedure
 		.input(insertLeadTaskSchema)
 		.mutation(async ({ input, ctx }) => {
-			return await createLeadTask(input, ctx.session.user.id);
+			await assertAdminOrAgentProspect(ctx, input.prospectId);
+			const assignedTo =
+				input.assignedTo ??
+				(hasAdminAccess(sessionUser(ctx)) ? null : ctx.session.user.id);
+			return await createLeadTask(
+				{ ...input, assignedTo },
+				ctx.session.user.id,
+			);
 		}),
 
 	/**
-	 * Update task fields (title, type, priority, due date, notes, assignee)
+	 * Update task fields
 	 */
-	update: adminProcedure
+	update: protectedProcedure
 		.input(updateLeadTaskSchema)
-		.mutation(async ({ input }) => {
+		.mutation(async ({ input, ctx }) => {
+			await assertAdminOrAgentTask(ctx, input.id);
 			return await updateLeadTask(input);
 		}),
 
 	/**
 	 * Mark a task as complete or reopen it
 	 */
-	complete: adminProcedure
+	complete: protectedProcedure
 		.input(completeLeadTaskSchema)
-		.mutation(async ({ input }) => {
+		.mutation(async ({ input, ctx }) => {
+			await assertAdminOrAgentTask(ctx, input.id);
 			return await completeLeadTask(input.id, input.completed);
 		}),
 
 	/**
 	 * Delete a task permanently
 	 */
-	delete: adminProcedure
+	delete: protectedProcedure
 		.input(z.object({ id: z.string().uuid() }))
-		.mutation(async ({ input }) => {
+		.mutation(async ({ input, ctx }) => {
+			await assertAdminOrAgentTask(ctx, input.id);
 			return await deleteLeadTask(input.id);
 		}),
 });

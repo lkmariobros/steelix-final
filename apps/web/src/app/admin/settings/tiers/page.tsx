@@ -65,8 +65,8 @@ export default function TierConfigurationPage() {
 							<div>
 								<h1 className="font-bold text-3xl">Tier Configuration</h1>
 								<p className="text-muted-foreground">
-									Manage commission splits and leadership bonus rates for agent
-									tiers
+									Secondary market tier splits (70/80/85/90), leadership bonus rates, and
+									recruitment-based promotion rules
 								</p>
 							</div>
 						</div>

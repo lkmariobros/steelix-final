@@ -42,7 +42,7 @@ const listProspectsInput = z.object({
 	overdueOnly: z.boolean().optional(),
 	stage: pipelineStageSchema.optional(), // Filter by pipeline stage
 	leadType: leadTypeSchema.optional(), // Filter by lead type
-	includeCompanyLeads: z.boolean().default(false), // Include unclaimed company leads
+	includeCompanyLeads: z.boolean().default(false), // Company tab: unclaimed company pool only
 	page: z.number().min(1).default(1),
 	/** Max 5000 when forExport; otherwise capped to 1000 in the handler. */
 	limit: z.number().min(1).max(5000).default(10),
@@ -145,13 +145,10 @@ export const crmRouter = router({
 				// Build where conditions
 				const conditions: SQL[] = [];
 
-				// Show agent's personal leads OR unclaimed company leads (if includeCompanyLeads is true)
+				// Tab scope: "my" = assigned leads only; "company" = unclaimed company pool only
 				if (includeCompanyLeads) {
-					const leadCondition = or(
-						eq(prospects.agentId, agentId),
-						and(eq(prospects.leadType, "company"), isNull(prospects.agentId)),
-					);
-					conditions.push(leadCondition ?? sql`false`);
+					conditions.push(eq(prospects.leadType, "company"));
+					conditions.push(isNull(prospects.agentId));
 				} else {
 					conditions.push(eq(prospects.agentId, agentId));
 				}

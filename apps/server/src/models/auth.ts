@@ -469,17 +469,12 @@ export const agentGoals = pgTable(
 	}),
 );
 
-// Agent tier configuration with commission splits, leadership bonus, and requirements
-// New Leadership Plan commission structure:
-// - Advisor: 70% commission, no leadership bonus (entry level)
-// - Sales Leader: 80% commission + 7% leadership bonus from downline
-// - Team Leader: 83% commission + 5% leadership bonus from downline
-// - Group Leader: 85% commission + 8% leadership bonus from downline
-// - Supreme Leader: 85% commission + 6% leadership bonus from downline
+// Agent tier configuration — secondary market tier splits (70/80/85/90)
+// Primary market uses Commission Schemes (100% to agent); tiers apply leadership bonus only.
 export const AGENT_TIER_CONFIG = {
 	advisor: {
 		commissionSplit: 70,
-		leadershipBonusRate: 0, // No leadership bonus for entry level
+		leadershipBonusRate: 0,
 		requirements: {
 			monthlySales: 0,
 			teamMembers: 0,
@@ -489,42 +484,42 @@ export const AGENT_TIER_CONFIG = {
 	},
 	sales_leader: {
 		commissionSplit: 80,
-		leadershipBonusRate: 7, // 7% leadership bonus from company's share
+		leadershipBonusRate: 7,
 		requirements: {
-			monthlySales: 2,
-			teamMembers: 0,
+			monthlySales: 0,
+			teamMembers: 2,
 		},
 		displayName: "Sales Leader",
-		description: "2+ monthly sales",
+		description: "2+ direct recruits",
 	},
 	team_leader: {
-		commissionSplit: 83,
-		leadershipBonusRate: 5, // 5% leadership bonus from company's share
-		requirements: {
-			monthlySales: 3,
-			teamMembers: 3,
-		},
-		displayName: "Team Leader",
-		description: "3+ sales, 3+ team members",
-	},
-	group_leader: {
 		commissionSplit: 85,
-		leadershipBonusRate: 8, // 8% leadership bonus from company's share
+		leadershipBonusRate: 5,
 		requirements: {
-			monthlySales: 5,
+			monthlySales: 0,
 			teamMembers: 5,
 		},
-		displayName: "Group Leader",
-		description: "5+ sales, 5+ team members",
+		displayName: "Team Leader",
+		description: "5+ direct recruits",
 	},
-	supreme_leader: {
-		commissionSplit: 85,
-		leadershipBonusRate: 6, // 6% leadership bonus from company's share
+	group_leader: {
+		commissionSplit: 90,
+		leadershipBonusRate: 8,
 		requirements: {
-			monthlySales: 8,
+			monthlySales: 0,
 			teamMembers: 10,
 		},
+		displayName: "Group Leader",
+		description: "10+ direct recruits",
+	},
+	supreme_leader: {
+		commissionSplit: 90,
+		leadershipBonusRate: 6,
+		requirements: {
+			monthlySales: 0,
+			teamMembers: 20,
+		},
 		displayName: "Supreme Leader",
-		description: "8+ sales, 10+ team members",
+		description: "20+ direct recruits",
 	},
 } as const;

@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import {
 	RiPhoneLine,
 	RiEyeLine,
-	RiMessageLine,
 } from "@remixicon/react";
 import {
 	PIPELINE_STAGES as SHARED_PIPELINE_STAGES,
@@ -41,9 +40,10 @@ interface Prospect {
 interface KanbanBoardProps {
 	prospects: Prospect[];
 	onView: (prospect: Prospect) => void;
-	onMessage: (prospect: Prospect) => void;
 	onStageChange: (prospectId: string, newStage: PipelineStage) => void;
 	onClaimLead?: (prospectId: string) => void;
+	/** Which leads tab is active — controls claim button and type badges */
+	leadsTab?: "my" | "company";
 }
 
 const PIPELINE_STAGES: Array<{
@@ -59,9 +59,9 @@ const PIPELINE_STAGES: Array<{
 export function KanbanBoard({
 	prospects,
 	onView,
-	onMessage,
 	onStageChange,
 	onClaimLead,
+	leadsTab = "my",
 }: KanbanBoardProps) {
 	const [draggedProspect, setDraggedProspect] = useState<Prospect | null>(null);
 	const [optimisticUpdates, setOptimisticUpdates] = useState<Map<string, PipelineStage>>(new Map());
@@ -198,15 +198,16 @@ export function KanbanBoard({
 											<h4 className="line-clamp-2 font-medium text-sm leading-snug">
 												{prospect.name}
 											</h4>
-											{prospect.leadType === "company" && !prospect.agentId ? (
-												<Badge variant="outline" className="h-5 shrink-0 border-purple-500/50 px-1 text-[10px] text-purple-700 dark:text-purple-300">
+											{leadsTab === "company" &&
+											prospect.leadType === "company" &&
+											!prospect.agentId ? (
+												<Badge
+													variant="outline"
+													className="h-5 shrink-0 border-purple-500/50 px-1 text-[10px] text-purple-700 dark:text-purple-300"
+												>
 													Co.
 												</Badge>
-											) : (
-												<Badge variant="outline" className="h-5 shrink-0 border-blue-500/50 px-1 text-[10px] text-blue-700 dark:text-blue-300">
-													Ind.
-												</Badge>
-											)}
+											) : null}
 										</div>
 
 										<p className="mt-1 truncate text-muted-foreground text-[11px]">
@@ -231,17 +232,21 @@ export function KanbanBoard({
 										)}
 
 										<div className="mt-2 flex items-center gap-1 border-border border-t pt-1.5">
-											{prospect.leadType === "company" && !prospect.agentId && onClaimLead && (
+											{leadsTab === "company" &&
+											prospect.leadType === "company" &&
+											!prospect.agentId &&
+											onClaimLead && (
 												<Button
 													size="sm"
 													variant="secondary"
 													className="h-7 flex-1 px-2 text-xs"
+													title="Assign this company lead to yourself"
 													onClick={(e) => {
 														e.stopPropagation();
 														onClaimLead(prospect.id);
 													}}
 												>
-													Claim
+													Claim Lead
 												</Button>
 											)}
 											<Button
@@ -252,15 +257,6 @@ export function KanbanBoard({
 											>
 												<RiEyeLine className="size-3.5" />
 												<span className="sr-only">View</span>
-											</Button>
-											<Button
-												size="sm"
-												variant="ghost"
-												className="h-7 flex-1 px-2 text-xs"
-												onClick={() => onMessage(prospect)}
-											>
-												<RiMessageLine className="size-3.5" />
-												<span className="sr-only">Message</span>
 											</Button>
 										</div>
 									</CardContent>

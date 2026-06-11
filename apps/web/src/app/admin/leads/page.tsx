@@ -86,6 +86,7 @@ import { LeadsCharts } from "./_components/leads-charts";
 import { SortHeader } from "./_components/sort-header";
 import { StatsCards } from "./_components/stats-cards";
 import { TodayTasksWidget } from "./_components/today-tasks-widget";
+import { LeadTasksReport } from "./_components/lead-tasks-report";
 import { KanbanPipelineBoard } from "./_components/kanban-pipeline-board";
 import { ImportLeadsDialog } from "./_components/import-leads-dialog";
 
@@ -518,6 +519,8 @@ export default function AdminLeadsPage() {
 							if (lead) setViewLead(lead);
 						}}
 					/>
+
+					<LeadTasksReport />
 
 					{/* Table */}
 					<Card className="overflow-hidden">

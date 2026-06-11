@@ -145,6 +145,9 @@ export default function CommissionSchemesAdminPage() {
 						<div>
 							<h1 className="font-bold text-2xl tracking-tight">Commission Schemes</h1>
 							<p className="text-muted-foreground text-sm">
+								Primary market — developer/project commission rates (agents receive 100% of scheme)
+							</p>
+							<p className="text-muted-foreground text-sm">
 								Manage commission rates, SST rules, and effective tiers per project/block.
 							</p>
 						</div>

@@ -202,8 +202,10 @@ export const documentsSchema = z.object({
 /** Combined validation for wizard step 1 (Details). */
 export const detailsStepSchema = z
 	.object({
-		projectName: z.string().min(1, "Project is required"),
-		unitNo: z.string().min(1, "Unit number is required"),
+		marketType: z.enum(["primary", "secondary"]),
+		transactionType: z.enum(["sale", "lease"]),
+		projectName: z.string().optional(),
+		unitNo: z.string().optional(),
 		blockListingId: z.string().uuid().optional(),
 		bookingDate: z.date({ required_error: "Booking date is required" }),
 		propertyData: propertySchema,
@@ -211,8 +213,43 @@ export const detailsStepSchema = z
 		representationType: representationTypeEnum,
 		isCoBroking: z.boolean().optional(),
 		coBrokingData: coBrokingBaseSchema.shape.coBrokingData,
+		commissionType: z.enum(["percentage", "fixed"]).optional(),
+		commissionValue: z.number().optional(),
 	})
 	.superRefine((data, ctx) => {
+		if (data.marketType === "primary") {
+			if (!data.projectName?.trim()) {
+				ctx.addIssue({
+					code: z.ZodIssueCode.custom,
+					message: "Project is required",
+					path: ["projectName"],
+				});
+			}
+			if (!data.unitNo?.trim()) {
+				ctx.addIssue({
+					code: z.ZodIssueCode.custom,
+					message: "Unit number is required",
+					path: ["unitNo"],
+				});
+			}
+		} else {
+			if (!data.propertyData?.address?.trim()) {
+				ctx.addIssue({
+					code: z.ZodIssueCode.custom,
+					message: "Property address is required",
+					path: ["propertyData", "address"],
+				});
+			}
+			const cv = data.commissionValue ?? 0;
+			if (cv <= 0) {
+				ctx.addIssue({
+					code: z.ZodIssueCode.custom,
+					message: "Commission rate is required for secondary market",
+					path: ["commissionValue"],
+				});
+			}
+		}
+
 		if (data.representationType === "co_broking") {
 			const { internalAgentId, agentName, agentPhone } =
 				data.coBrokingData || {};
@@ -223,7 +260,11 @@ export const detailsStepSchema = z
 					path: ["coBrokingData", "agentName"],
 				});
 			}
-			if (!agentPhone?.trim()) {
+			// Phone only required for manual entry; internal agents may omit phone in profile
+			if (
+				!internalAgentId?.trim() &&
+				!agentPhone?.trim()
+			) {
 				ctx.addIssue({
 					code: z.ZodIssueCode.custom,
 					message: "Co-broke agent phone is required",
@@ -451,6 +492,8 @@ export function isStepValid(
 		if (step === 3) return true;
 		if (step === 1) {
 			detailsStepSchema.parse({
+				marketType: data.marketType ?? "primary",
+				transactionType: data.transactionType ?? "sale",
 				projectName: data.projectName,
 				unitNo: data.unitNo,
 				blockListingId: data.blockListingId,
@@ -460,6 +503,8 @@ export function isStepValid(
 				representationType: data.representationType ?? "direct",
 				isCoBroking: data.isCoBroking,
 				coBrokingData: data.coBrokingData,
+				commissionType: data.commissionType,
+				commissionValue: data.commissionValue,
 			});
 			return true;
 		}

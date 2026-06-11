@@ -18,8 +18,13 @@ import {
 	projectClaimSchedules,
 } from "../models/commission-payouts";
 import { user } from "../models/auth";
+import type { AgentTier } from "../models/auth";
 import { transactions } from "../models/transactions";
 import { calculateSchemeCommission } from "./commission-schemes";
+import {
+	recordPrimaryLeadershipBonus,
+	recordSecondaryLeadershipBonus,
+} from "./commission-calculation";
 import { db } from "../utils/db";
 
 type TxRow = typeof transactions.$inferSelect;
@@ -61,12 +66,22 @@ export async function ensurePayoutsForApprovedTransaction(tx: TxRow) {
 	if (existing.length > 0) return [];
 
 	const breakdown = tx.commissionBreakdown as {
+		marketType?: "primary" | "secondary";
 		spaPrice?: number;
 		nettPrice?: number;
 		commissionRatePercent?: number;
 		grossCommission?: number;
 		sstAmount?: number;
 		agentNetCommission?: number;
+		agentSharePercent?: number;
+		companyShare?: number;
+		leadershipBonus?: {
+			uplineId?: string | null;
+			uplineTier?: string | null;
+			bonusRate?: number;
+			bonusAmount?: number;
+			fromCompanyShare?: number;
+		};
 	} | null;
 	const snapshot = tx.commissionSchemeSnapshot as {
 		projectName?: string;
@@ -97,6 +112,8 @@ export async function ensurePayoutsForApprovedTransaction(tx: TxRow) {
 		tx.projectName ?? schemeSnap?.projectName ?? null,
 	);
 
+	const isSecondary = tx.marketType === "secondary";
+
 	const incSst = schemeSnap?.incSst ?? false;
 	const sstPct = schemeSnap?.sstPercent ?? 0;
 	const sstBorne = schemeSnap?.sstBorneBy ?? "agent";
@@ -110,7 +127,12 @@ export async function ensurePayoutsForApprovedTransaction(tx: TxRow) {
 	let pctN =
 		breakdown?.commissionRatePercent ?? Number(tx.commissionValue) ?? 0;
 
-	if (schemeSnap && breakdown == null) {
+	if (isSecondary && breakdown?.agentNetCommission != null) {
+		grossN = breakdown.grossCommission ?? grossN;
+		netN = breakdown.agentNetCommission;
+		pctN = breakdown.commissionRatePercent ?? pctN;
+		sstN = breakdown.sstAmount ?? 0;
+	} else if (schemeSnap && breakdown == null) {
 		const tierPct = schemeSnap.commissionPercent ?? pctN;
 		const calc = calculateSchemeCommission({
 			nettPrice: nett,
@@ -165,6 +187,7 @@ export async function ensurePayoutsForApprovedTransaction(tx: TxRow) {
 
 	const overridePct = schemeSnap?.overridePercent ?? 0;
 	if (
+		!isSecondary &&
 		overridePct > 0 &&
 		tx.teamLeaderAgentId &&
 		tx.teamLeaderAgentId !== tx.agentId
@@ -201,6 +224,16 @@ export async function ensurePayoutsForApprovedTransaction(tx: TxRow) {
 			})
 			.returning();
 		created.push(overrideRow);
+	}
+
+	try {
+		if (isSecondary && breakdown) {
+			await recordSecondaryLeadershipBonus(tx, breakdown);
+		} else if (!isSecondary) {
+			await recordPrimaryLeadershipBonus(tx, grossN);
+		}
+	} catch {
+		// Leadership bonus tables may not be migrated yet
 	}
 
 	return created;

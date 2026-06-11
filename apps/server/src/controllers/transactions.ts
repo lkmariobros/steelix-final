@@ -12,10 +12,7 @@ import {
 	calculateEnhancedCommission,
 	logCommissionAudit,
 } from "../services/agent-tier";
-import {
-	calculateSchemeCommission,
-	resolveSchemeForBlockAtDate,
-} from "../services/commission-schemes";
+import { lockCommissionOnSubmit } from "../services/commission-calculation";
 import {
 	addTransactionMessage,
 	assertCanAccessTransactionMessages,
@@ -558,68 +555,15 @@ export const transactionsRouter = router({
 				);
 			}
 
-			// Lock commission scheme snapshot at submission time (if available)
+			// Lock commission at submission (primary = scheme 100%, secondary = tier split)
 			let schemePatch: Record<string, unknown> = {};
 			try {
-				const tx = existingTransaction as any;
-				const hasSnapshot = Boolean(tx.commissionSchemeSnapshot);
-				const property = tx.propertyData as
-					| { listingId?: string; price?: number }
-					| null
-					| undefined;
-				const blockId =
-					tx.blockListingId ?? property?.listingId ?? undefined;
-				if (!hasSnapshot && blockId && property?.price) {
-					const resolved = await resolveSchemeForBlockAtDate({
-						blockListingId: blockId,
-						at: tx.transactionDate ?? new Date(),
-					});
-					if (resolved) {
-						const { scheme, tier } = resolved;
-						const nettPrice = Number(property.price);
-						const breakdown = calculateSchemeCommission({
-							nettPrice,
-							commissionPercent: tier.commissionPercent,
-							incSst: scheme.incSst,
-							sstPercent: scheme.sstPercent,
-							sstBorneBy: scheme.sstBorneBy,
-						});
-
-						schemePatch = {
-							commissionType: "percentage",
-							commissionValue: tier.commissionPercent.toFixed(2),
-							commissionAmount: breakdown.grossCommission.toFixed(2),
-							commissionSchemeSnapshot: {
-								schemeId: scheme.id,
-								schemeName: scheme.schemeName,
-								shortform: scheme.shortform,
-								projectName: scheme.projectName,
-								blockListingId: scheme.blockListingId,
-								blockListingTitle: scheme.blockListingTitle,
-								tierId: tier.id,
-								tierName: tier.tierName,
-								commissionPercent: tier.commissionPercent,
-								overridePercent: tier.overridePercent,
-								incSst: scheme.incSst,
-								sstPercent: scheme.sstPercent,
-								sstBorneBy: scheme.sstBorneBy,
-								lockedAt: new Date().toISOString(),
-							},
-							commissionBreakdown: {
-								spaPrice: nettPrice,
-								nettPrice,
-								commissionRatePercent: tier.commissionPercent,
-								baseCommission: breakdown.baseCommission,
-								grossCommission: breakdown.grossCommission,
-								sstPercent: scheme.sstPercent,
-								sstAmount: breakdown.sstAmount,
-								agentNetCommission: breakdown.agentNetCommission,
-							},
-						};
-					}
-				}
+				schemePatch = await lockCommissionOnSubmit(
+					existingTransaction as typeof transactions.$inferSelect,
+					ctx.session.user.id,
+				);
 			} catch {
-				// If commission scheme tables aren't migrated yet, submission should still work.
+				// If commission tables aren't migrated yet, submission should still work.
 			}
 
 			const [updatedTransaction] = await db
@@ -816,7 +760,7 @@ export const transactionsRouter = router({
 			type AgentTier = import("../models/auth").AgentTier;
 			const agentTier: AgentTier =
 				(userSession.agentTier as AgentTier) || "advisor";
-			const companyCommissionSplit = userSession.companyCommissionSplit ?? 60;
+			const companyCommissionSplit = userSession.companyCommissionSplit ?? 70;
 
 			// Calculate commission rate
 			let commissionRate: number;
@@ -885,7 +829,7 @@ export const transactionsRouter = router({
 			type AgentTier = import("../models/auth").AgentTier;
 			const agentTier: AgentTier =
 				(userSession.agentTier as AgentTier) || "advisor";
-			const companyCommissionSplit = userSession.companyCommissionSplit ?? 60;
+			const companyCommissionSplit = userSession.companyCommissionSplit ?? 70;
 
 			// Calculate enhanced commission
 			let commissionRate: number;

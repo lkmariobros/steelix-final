@@ -72,7 +72,6 @@ import {
 	RiLoader4Line,
 	RiMailLine,
 	RiMapPinLine,
-	RiMessageLine,
 	RiPhoneLine,
 	RiPriceTagLine,
 	RiSearchLine,
@@ -94,6 +93,8 @@ import {
 	prospectsToExportRows,
 	type CrmExportProspect,
 } from "./_utils/crm-export";
+import { LeadTasksCard } from "@/app/admin/leads/_components/lead-tasks-card";
+import { TodayTasksWidget } from "@/app/admin/leads/_components/today-tasks-widget";
 
 // Pipeline stages for Kanban board
 type LeadType = "personal" | "company";
@@ -264,7 +265,7 @@ export default function CRMPage() {
 					? (statusFilter as "active" | "inactive" | "pending")
 					: undefined,
 			overdueOnly: overdueOnly || undefined,
-			leadType: activeTab === "company" ? "company" : undefined,
+			leadType: activeTab === "company" ? ("company" as const) : undefined,
 			includeCompanyLeads: activeTab === "company",
 			page: currentPage,
 			limit: viewMode === "kanban" ? 1000 : itemsPerPage,
@@ -408,19 +409,6 @@ export default function CRMPage() {
 		createProspectMutation.mutate(data);
 	};
 
-	const handleMessage = (prospect: Prospect) => {
-		// TODO: Open WhatsApp message
-		console.log("Message prospect:", prospect);
-
-		// Show micro-prompt to move to Follow Up In Progress stage
-		if (prospect.stage === "new_lead") {
-			setStagePromptProspect(prospect);
-			setStagePromptMessage("Move lead to Follow Up In Progress?");
-			setStagePromptTargetStage("follow_up_in_progress");
-			setIsStagePromptOpen(true);
-		}
-	};
-
 	const handleCall = (prospect: Prospect) => {
 		// TODO: Initiate call
 		console.log("Call prospect:", prospect);
@@ -453,6 +441,15 @@ export default function CRMPage() {
 		setSelectedProspect(prospect);
 		setIsViewDialogOpen(true);
 	};
+
+	const handleViewLeadById = (leadId: string) => {
+		const lead = prospects.find((p) => p.id === leadId);
+		if (lead) handleView(lead);
+	};
+
+	const canManageTasksForSelected =
+		Boolean(selectedProspect?.agentId) &&
+		selectedProspect?.agentId === session?.user?.id;
 
 	const [newNoteContent, setNewNoteContent] = useState("");
 
@@ -620,42 +617,43 @@ export default function CRMPage() {
 				</header>
 				<div className="flex flex-1 flex-col gap-4 py-4 lg:gap-6 lg:py-6">
 					{/* Page Header with My Leads / Company Leads tabs */}
-					<div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-						<div className="flex items-center gap-4">
-							<h1 className="font-semibold text-2xl">
-								CRM - Prospect Management
-							</h1>
-							{/* My Leads | Company Leads tabs */}
-							<div
-								className="flex items-center gap-1 rounded-md border bg-muted/50 p-1"
-								role="tablist"
-								aria-label="Lead type"
-							>
-								<Button
-									type="button"
-									role="tab"
-									aria-selected={activeTab === "my"}
-									variant={activeTab === "my" ? "default" : "ghost"}
-									size="sm"
-									onClick={() => setActiveTab("my")}
-									className="h-8"
+					<div className="flex flex-col gap-2">
+						<div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+							<div className="flex items-center gap-4">
+								<h1 className="font-semibold text-2xl">
+									CRM - Prospect Management
+								</h1>
+								{/* My Leads | Company Leads tabs */}
+								<div
+									className="flex items-center gap-1 rounded-md border bg-muted/50 p-1"
+									role="tablist"
+									aria-label="Lead type"
 								>
-									My Leads
-								</Button>
-								<Button
-									type="button"
-									role="tab"
-									aria-selected={activeTab === "company"}
-									variant={activeTab === "company" ? "default" : "ghost"}
-									size="sm"
-									onClick={() => setActiveTab("company")}
-									className="h-8"
-								>
-									Company Leads
-								</Button>
+									<Button
+										type="button"
+										role="tab"
+										aria-selected={activeTab === "my"}
+										variant={activeTab === "my" ? "default" : "ghost"}
+										size="sm"
+										onClick={() => setActiveTab("my")}
+										className="h-8"
+									>
+										My Leads
+									</Button>
+									<Button
+										type="button"
+										role="tab"
+										aria-selected={activeTab === "company"}
+										variant={activeTab === "company" ? "default" : "ghost"}
+										size="sm"
+										onClick={() => setActiveTab("company")}
+										className="h-8"
+									>
+										Company Leads
+									</Button>
+								</div>
 							</div>
-						</div>
-						<div className="flex flex-wrap items-center gap-2 sm:gap-3">
+							<div className="flex flex-wrap items-center gap-2 sm:gap-3">
 							<div className="inline-flex items-center overflow-hidden rounded-md border border-border/80 bg-muted/30">
 								<Tooltip>
 									<TooltipTrigger asChild>
@@ -768,7 +766,17 @@ export default function CRMPage() {
 								Add
 							</Button>
 						</div>
+						</div>
+						{activeTab === "company" ? (
+							<p className="text-muted-foreground text-sm">
+								Unclaimed company leads shared with all agents. Tap{" "}
+								<span className="font-medium text-foreground">Claim Lead</span>{" "}
+								to assign one to yourself.
+							</p>
+						) : null}
 					</div>
+
+					<TodayTasksWidget scope="agent" onViewLead={handleViewLeadById} />
 
 					{/* Add Prospect Dialog */}
 					<Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
@@ -1058,7 +1066,7 @@ export default function CRMPage() {
 
 					{/* View Prospect Dialog */}
 					<Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
-						<DialogContent className="sm:max-w-[600px]">
+						<DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[700px]">
 							<DialogHeader>
 								<DialogTitle className="flex items-center gap-2">
 									<RiUserLine className="size-5" />
@@ -1128,17 +1136,19 @@ export default function CRMPage() {
 													{selectedProspect.source}
 												</div>
 											</div>
-											<div className="flex items-center justify-between">
-												<div className="flex items-center gap-2 text-muted-foreground text-sm">
-													<RiPriceTagLine className="size-4" />
-													Type
+											{activeTab === "company" ? (
+												<div className="flex items-center justify-between">
+													<div className="flex items-center gap-2 text-muted-foreground text-sm">
+														<RiPriceTagLine className="size-4" />
+														Type
+													</div>
+													<Badge variant="outline" className="capitalize">
+														{selectedProspect.type === "tenant"
+															? "Tenant"
+															: "Owner"}
+													</Badge>
 												</div>
-												<Badge variant="outline" className="capitalize">
-													{selectedProspect.type === "tenant"
-														? "Tenant"
-														: "Owner"}
-												</Badge>
-											</div>
+											) : null}
 											{(selectedProspect.tagNames &&
 												selectedProspect.tagNames.length > 0) ||
 											selectedProspect.tags?.trim() ? (
@@ -1269,6 +1279,15 @@ export default function CRMPage() {
 										</div>
 									)}
 
+									{canManageTasksForSelected && selectedProspect ? (
+										<LeadTasksCard leadId={selectedProspect.id} />
+									) : selectedProspect?.leadType === "company" &&
+									  !selectedProspect.agentId ? (
+										<p className="rounded-lg border border-dashed p-4 text-center text-muted-foreground text-sm">
+											Claim this company lead to add tasks and follow-ups.
+										</p>
+									) : null}
+
 									{/* Notes Timeline */}
 									<div className="space-y-3">
 										<div className="font-medium text-muted-foreground text-sm">
@@ -1363,18 +1382,6 @@ export default function CRMPage() {
 									onClick={() => setIsViewDialogOpen(false)}
 								>
 									Close
-								</Button>
-								<Button
-									onClick={() => {
-										if (selectedProspect) {
-											handleMessage(selectedProspect);
-											setIsViewDialogOpen(false);
-										}
-									}}
-									className="bg-green-600 hover:bg-green-700"
-								>
-									<RiMessageLine className="mr-2 h-4 w-4" />
-									Send Message
 								</Button>
 							</DialogFooter>
 						</DialogContent>
@@ -1618,9 +1625,11 @@ export default function CRMPage() {
 								<KanbanBoard
 									prospects={prospects}
 									onView={handleView}
-									onMessage={handleMessage}
 									onStageChange={handleStageChange}
-									onClaimLead={handleClaimLead}
+									leadsTab={activeTab}
+									onClaimLead={
+										activeTab === "company" ? handleClaimLead : undefined
+									}
 								/>
 							)}
 						</div>
@@ -1751,10 +1760,9 @@ export default function CRMPage() {
 														<div className="flex items-center gap-2">
 															<RiPriceTagLine className="size-4 text-muted-foreground" />
 															<Badge variant="outline" className="capitalize">
-																{prospect.type === "tenant"
-																	? "Tenant"
-																	: "Owner"}{" "}
-																| {prospect.status}
+																{activeTab === "company"
+																	? `${prospect.type === "tenant" ? "Tenant" : "Owner"} | ${prospect.status}`
+																	: prospect.status}
 															</Badge>
 														</div>
 														<div className="flex items-center gap-2">
@@ -1802,15 +1810,19 @@ export default function CRMPage() {
 
 												{/* Action Buttons */}
 												<div className="flex items-center gap-2">
-													<Button
-														variant="outline"
-														size="sm"
-														onClick={() => handleMessage(prospect)}
-														className="cursor-pointer"
-													>
-														<RiMessageLine className="mr-2 h-4 w-4" />
-														Message
-													</Button>
+													{activeTab === "company" &&
+														prospect.leadType === "company" &&
+														!prospect.agentId && (
+															<Button
+																variant="secondary"
+																size="sm"
+																title="Assign this company lead to yourself"
+																onClick={() => handleClaimLead(prospect.id)}
+																className="cursor-pointer"
+															>
+																Claim Lead
+															</Button>
+														)}
 													<Button
 														variant="outline"
 														size="sm"

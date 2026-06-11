@@ -41,6 +41,7 @@ import {
 	type CompleteTransactionData,
 	detailsStepSchema,
 	genderOptions,
+	marketTypeOptions,
 	purchasingMethodOptions,
 	representationTypeOptions,
 } from "../transaction-schema";
@@ -64,6 +65,10 @@ export function StepDetails({
 	nextLabel = "Continue to Upload",
 }: StepDetailsProps) {
 	const [agentSearch, setAgentSearch] = useState("");
+	const [coBrokePickerOpen, setCoBrokePickerOpen] = useState(false);
+	const [selectedCoBrokeLabel, setSelectedCoBrokeLabel] = useState<
+		string | null
+	>(formData.coBrokingData?.agentName ?? null);
 
 	const { data: projects = [] } =
 		trpc.commissionSchemes.listProjectsForAgent.useQuery();
@@ -71,12 +76,17 @@ export function StepDetails({
 	const form = useForm<DetailsFormValues>({
 		resolver: zodResolver(detailsStepSchema),
 		defaultValues: {
+			marketType: formData.marketType ?? "primary",
+			transactionType: formData.transactionType ?? "sale",
 			projectName: formData.projectName ?? "",
 			unitNo: formData.unitNo ?? "",
 			blockListingId: formData.blockListingId,
 			bookingDate: formData.bookingDate ?? formData.transactionDate ?? new Date(),
+			commissionType: formData.commissionType ?? "percentage",
+			commissionValue: formData.commissionValue ?? 0,
 			propertyData: {
 				price: formData.propertyData?.price ?? 0,
+				address: formData.propertyData?.address ?? "",
 				salesPackage: formData.propertyData?.salesPackage ?? "",
 				rebateAmount: formData.propertyData?.rebateAmount,
 				purchasingMethod: formData.propertyData?.purchasingMethod,
@@ -102,11 +112,31 @@ export function StepDetails({
 	});
 
 	const projectName = form.watch("projectName");
+	const marketType = form.watch("marketType");
 	const representationType = form.watch("representationType");
+	const propertyPrice = form.watch("propertyData.price");
+	const commissionValue = form.watch("commissionValue");
 
 	const { data: schemesForProject } = trpc.commissionSchemes.listByProject.useQuery(
 		{ projectName: projectName ?? "" },
-		{ enabled: Boolean(projectName?.trim()) },
+		{ enabled: marketType === "primary" && Boolean(projectName?.trim()) },
+	);
+
+	const { data: secondaryPreview } = trpc.agentTiers.getCommissionPreview.useQuery(
+		{
+			propertyPrice: propertyPrice || 1,
+			commissionType: "percentage",
+			commissionValue: commissionValue || 1,
+			representationType:
+				representationType === "co_broking" ? "co_broking" : "direct",
+			coBrokerSplitPercentage: form.getValues("coBrokingData.commissionSplit") ?? 50,
+		},
+		{
+			enabled:
+				marketType === "secondary" &&
+				propertyPrice > 0 &&
+				(commissionValue ?? 0) > 0,
+		},
 	);
 
 	const selectedScheme = useMemo(() => {
@@ -122,17 +152,26 @@ export function StepDetails({
 		form.setValue("propertyData.schemeId", selectedScheme.id);
 	}, [selectedScheme, form]);
 
-	const { data: coBrokingAgents = [] } = trpc.agents.searchForCoBroking.useQuery(
-		{ search: agentSearch, limit: 20 },
-		{ enabled: representationType === "co_broking" },
-	);
+	const { data: coBrokingAgents = [], isLoading: coBrokingAgentsLoading } =
+		trpc.agents.searchForCoBroking.useQuery(
+			{ search: agentSearch.trim() || undefined, limit: 50 },
+			{
+				enabled:
+					representationType === "co_broking" &&
+					coBrokePickerOpen &&
+					!selectedCoBrokeLabel,
+			},
+		);
+
+	const showAgentPicker = coBrokePickerOpen && !selectedCoBrokeLabel;
 
 	const syncToParent = () => {
 		const values = form.getValues();
 		const isCoBroking = values.representationType === "co_broking";
 		onUpdate({
-			marketType: "primary",
-			transactionType: "sale",
+			marketType: values.marketType,
+			transactionType:
+				values.marketType === "primary" ? "sale" : values.transactionType,
 			projectName: values.projectName,
 			unitNo: values.unitNo,
 			blockListingId: values.blockListingId,
@@ -143,14 +182,17 @@ export function StepDetails({
 			representationType: values.representationType,
 			isCoBroking,
 			coBrokingData: isCoBroking ? values.coBrokingData : undefined,
+			commissionType: values.commissionType,
+			commissionValue: values.commissionValue,
 		});
 	};
 
 	const handleSubmit = (values: DetailsFormValues) => {
 		const isCoBroking = values.representationType === "co_broking";
 		onUpdate({
-			marketType: "primary",
-			transactionType: "sale",
+			marketType: values.marketType,
+			transactionType:
+				values.marketType === "primary" ? "sale" : values.transactionType,
 			projectName: values.projectName,
 			unitNo: values.unitNo,
 			blockListingId: values.blockListingId,
@@ -161,6 +203,8 @@ export function StepDetails({
 			representationType: values.representationType,
 			isCoBroking,
 			coBrokingData: isCoBroking ? values.coBrokingData : undefined,
+			commissionType: values.commissionType,
+			commissionValue: values.commissionValue,
 		});
 		onNext();
 	};
@@ -172,39 +216,108 @@ export function StepDetails({
 		phone: string | null;
 		branch: string | null;
 	}) => {
-		form.setValue("coBrokingData.internalAgentId", agent.id);
-		form.setValue("coBrokingData.agentName", agent.name ?? "");
-		form.setValue("coBrokingData.agentEmail", agent.email ?? "");
-		form.setValue("coBrokingData.agentPhone", agent.phone ?? "");
-		form.setValue("coBrokingData.agencyName", agent.branch ?? "Steelix");
-		form.setValue(
-			"coBrokingData.contactInfo",
-			[agent.email, agent.phone].filter(Boolean).join(" · "),
-		);
+		const coBrokingData = {
+			...(form.getValues("coBrokingData") ?? {}),
+			internalAgentId: agent.id,
+			agentName: agent.name ?? "",
+			agentEmail: agent.email ?? "",
+			agentPhone: agent.phone ?? "",
+			agencyName: agent.branch ?? "Steelix",
+			contactInfo: [agent.email, agent.phone].filter(Boolean).join(" · "),
+			commissionSplit: form.getValues("coBrokingData.commissionSplit") ?? 50,
+		};
+		form.setValue("coBrokingData", coBrokingData, {
+			shouldDirty: true,
+			shouldValidate: true,
+		});
+		form.clearErrors("coBrokingData");
+		setAgentSearch("");
+		setCoBrokePickerOpen(false);
+		setSelectedCoBrokeLabel(agent.name ?? agent.email ?? "Selected agent");
 		syncToParent();
-		toast.success(`Co-broke agent: ${agent.name}`);
+		toast.success(`Co-broke agent: ${agent.name ?? "Selected"}`);
+	};
+
+	const handleInvalidSubmit = () => {
+		const errors = form.formState.errors;
+		const firstMessage =
+			errors.projectName?.message ??
+			errors.propertyData?.address?.message ??
+			errors.commissionValue?.message ??
+			errors.unitNo?.message ??
+			errors.bookingDate?.message ??
+			errors.propertyData?.price?.message ??
+			errors.clientData?.name?.message ??
+			errors.clientData?.icNo?.message ??
+			errors.clientData?.phone?.message ??
+			errors.clientData?.address?.message ??
+			errors.coBrokingData?.agentName?.message ??
+			errors.coBrokingData?.agentPhone?.message ??
+			"Please complete all required fields";
+		toast.error(String(firstMessage));
 	};
 
 	return (
 		<div className="space-y-6">
 			<Card>
 				<CardHeader>
-					<CardTitle>Property Details</CardTitle>
+					<CardTitle>Deal Details</CardTitle>
 					<CardDescription>
-						Select the project and enter unit, price, and booking information.
+						{marketType === "primary"
+							? "Primary market: project commission scheme applies (agent receives 100% of scheme)."
+							: "Secondary market: your tier split applies (70% / 80% / 85% / 90%)."}
 					</CardDescription>
 				</CardHeader>
 				<CardContent>
 					<Form {...form}>
 						<form
-							onSubmit={form.handleSubmit(handleSubmit, () => {
-								toast.error("Please complete all required fields");
-							})}
+							onSubmit={form.handleSubmit(handleSubmit, handleInvalidSubmit)}
 							className="space-y-6"
 						>
 							<RequiredFieldsNote />
 
+							<FormField
+								control={form.control}
+								name="marketType"
+								render={({ field }) => (
+									<FormItem>
+										<RequiredLabel>Market Type</RequiredLabel>
+										<FormControl>
+											<div className="grid gap-3 md:grid-cols-2">
+												{marketTypeOptions.map((opt) => (
+													<button
+														key={opt.value}
+														type="button"
+														className={`rounded-lg border p-4 text-left transition-colors ${
+															field.value === opt.value
+																? "border-primary bg-primary/5"
+																: "hover:bg-muted/50"
+														}`}
+														onClick={() => {
+															field.onChange(opt.value);
+															if (opt.value === "primary") {
+																form.setValue("transactionType", "sale");
+															}
+															syncToParent();
+														}}
+													>
+														<p className="font-medium">{opt.label}</p>
+														<p className="mt-1 text-muted-foreground text-sm">
+															{opt.value === "primary"
+																? "New development / project sales"
+																: "Resale, subsale, or rental"}
+														</p>
+													</button>
+												))}
+											</div>
+										</FormControl>
+										<FormMessage />
+									</FormItem>
+								)}
+							/>
+
 							<div className="grid gap-4 md:grid-cols-2">
+								{marketType === "primary" ? (
 								<FormField
 									control={form.control}
 									name="projectName"
@@ -241,7 +354,28 @@ export function StepDetails({
 										</FormItem>
 									)}
 								/>
+								) : (
+								<FormField
+									control={form.control}
+									name="propertyData.address"
+									render={({ field }) => (
+										<FormItem className="md:col-span-2">
+											<RequiredLabel>Property Address</RequiredLabel>
+											<FormControl>
+												<Textarea
+													{...field}
+													value={field.value ?? ""}
+													rows={2}
+													onBlur={() => syncToParent()}
+												/>
+											</FormControl>
+											<FormMessage />
+										</FormItem>
+									)}
+								/>
+								)}
 
+								{marketType === "primary" ? (
 								<FormField
 									control={form.control}
 									name="unitNo"
@@ -259,6 +393,35 @@ export function StepDetails({
 										</FormItem>
 									)}
 								/>
+								) : (
+								<FormField
+									control={form.control}
+									name="transactionType"
+									render={({ field }) => (
+										<FormItem>
+											<RequiredLabel>Transaction Type</RequiredLabel>
+											<Select
+												value={field.value}
+												onValueChange={(v) => {
+													field.onChange(v as "sale" | "lease");
+													syncToParent();
+												}}
+											>
+												<FormControl>
+													<SelectTrigger>
+														<SelectValue />
+													</SelectTrigger>
+												</FormControl>
+												<SelectContent>
+													<SelectItem value="sale">Sale</SelectItem>
+													<SelectItem value="lease">Lease</SelectItem>
+												</SelectContent>
+											</Select>
+											<FormMessage />
+										</FormItem>
+									)}
+								/>
+								)}
 
 								<FormField
 									control={form.control}
@@ -280,6 +443,33 @@ export function StepDetails({
 									)}
 								/>
 
+								{marketType === "secondary" ? (
+									<FormField
+										control={form.control}
+										name="commissionValue"
+										render={({ field }) => (
+											<FormItem>
+												<RequiredLabel>Commission Rate (%)</RequiredLabel>
+												<FormControl>
+													<Input
+														type="number"
+														min={0}
+														max={100}
+														step={0.01}
+														value={field.value ?? ""}
+														onChange={(e) => {
+															field.onChange(Number(e.target.value));
+															syncToParent();
+														}}
+													/>
+												</FormControl>
+												<FormMessage />
+											</FormItem>
+										)}
+									/>
+								) : null}
+
+								{marketType === "primary" ? (
 								<FormField
 									control={form.control}
 									name="propertyData.salesPackage"
@@ -293,7 +483,9 @@ export function StepDetails({
 										</FormItem>
 									)}
 								/>
+								) : null}
 
+								{marketType === "primary" ? (
 								<FormField
 									control={form.control}
 									name="propertyData.rebateAmount"
@@ -313,6 +505,20 @@ export function StepDetails({
 										</FormItem>
 									)}
 								/>
+								) : null}
+
+								{marketType === "secondary" && secondaryPreview ? (
+									<div className="md:col-span-2 rounded-lg border bg-muted/30 p-3 text-sm">
+										<p className="font-medium">Your estimated share (tier split)</p>
+										<p className="mt-1 text-muted-foreground">
+											{secondaryPreview.companyCommissionSplit}% of total commission
+											→ RM{" "}
+											{secondaryPreview.agentEarnings.toLocaleString(undefined, {
+												minimumFractionDigits: 2,
+											})}
+										</p>
+									</div>
+								) : null}
 
 								<FormField
 									control={form.control}
@@ -546,6 +752,19 @@ export function StepDetails({
 															}`}
 															onClick={() => {
 																field.onChange(opt.value);
+																if (opt.value === "co_broking") {
+																	form.setValue(
+																		"coBrokingData",
+																		form.getValues("coBrokingData") ?? {
+																			commissionSplit: 50,
+																		},
+																	);
+																} else {
+																	form.setValue("coBrokingData", undefined);
+																	setSelectedCoBrokeLabel(null);
+																	setAgentSearch("");
+																	setCoBrokePickerOpen(false);
+																}
 																syncToParent();
 															}}
 														>
@@ -568,28 +787,80 @@ export function StepDetails({
 											<UserPlus className="h-4 w-4" />
 											<p className="font-medium text-sm">Co-broke Agent</p>
 										</div>
-										<div className="relative">
-											<Search className="absolute top-2.5 left-2.5 h-4 w-4 text-muted-foreground" />
-											<Input
-												className="pl-8"
-												placeholder="Search internal agents…"
-												value={agentSearch}
-												onChange={(e) => setAgentSearch(e.target.value)}
-											/>
-										</div>
-										{coBrokingAgents.length > 0 && (
+
+										{selectedCoBrokeLabel ? (
+											<div className="flex items-center justify-between gap-2 rounded-md border bg-muted/40 px-3 py-2 text-sm">
+												<span>
+													<span className="text-muted-foreground">
+														Selected:{" "}
+													</span>
+													{selectedCoBrokeLabel}
+												</span>
+												<Button
+													type="button"
+													variant="ghost"
+													size="sm"
+													onClick={() => {
+														form.setValue("coBrokingData", {
+															commissionSplit: 50,
+														});
+														setSelectedCoBrokeLabel(null);
+														setAgentSearch("");
+														setCoBrokePickerOpen(true);
+														syncToParent();
+													}}
+												>
+													Change
+												</Button>
+											</div>
+										) : (
+											<div className="relative">
+												<Search className="absolute top-2.5 left-2.5 h-4 w-4 text-muted-foreground" />
+												<Input
+													className="pl-8"
+													placeholder="Search internal agents…"
+													value={agentSearch}
+													onChange={(e) => {
+														setAgentSearch(e.target.value);
+														setCoBrokePickerOpen(true);
+													}}
+													onFocus={() => setCoBrokePickerOpen(true)}
+													onKeyDown={(e) => {
+														if (e.key === "Enter") {
+															e.preventDefault();
+														}
+													}}
+												/>
+											</div>
+										)}
+										{showAgentPicker && (
 											<ul className="max-h-40 space-y-1 overflow-y-auto rounded border p-2">
-												{coBrokingAgents.map((a) => (
-													<li key={a.id}>
-														<button
-															type="button"
-															className="w-full rounded px-2 py-1.5 text-left text-sm hover:bg-muted"
-															onClick={() => selectCoBrokingAgent(a)}
-														>
-															{a.name} · {a.email}
-														</button>
+												{coBrokingAgentsLoading ? (
+													<li className="px-2 py-1.5 text-muted-foreground text-sm">
+														Loading agents…
 													</li>
-												))}
+												) : coBrokingAgents.length === 0 ? (
+													<li className="px-2 py-1.5 text-muted-foreground text-sm">
+														No agents found
+													</li>
+												) : (
+													coBrokingAgents.map((a) => (
+														<li key={a.id}>
+															<button
+																type="button"
+																className="w-full rounded px-2 py-1.5 text-left text-sm hover:bg-muted"
+																onMouseDown={(e) => e.preventDefault()}
+																onClick={(e) => {
+																	e.preventDefault();
+																	e.stopPropagation();
+																	selectCoBrokingAgent(a);
+																}}
+															>
+																{a.name} · {a.email}
+															</button>
+														</li>
+													))
+												)}
 											</ul>
 										)}
 										<FormField

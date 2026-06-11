@@ -69,6 +69,8 @@ export function StepVerify({
 	const validate = (): ValidationError[] => {
 		const errors: ValidationError[] = [];
 		const result = detailsStepSchema.safeParse({
+			marketType: data.marketType ?? "primary",
+			transactionType: data.transactionType ?? "sale",
 			projectName: data.projectName,
 			unitNo: data.unitNo,
 			blockListingId: data.blockListingId,
@@ -77,6 +79,8 @@ export function StepVerify({
 			clientData: data.clientData,
 			representationType: data.representationType ?? "direct",
 			coBrokingData: data.coBrokingData,
+			commissionType: data.commissionType,
+			commissionValue: data.commissionValue,
 		});
 		if (!result.success) {
 			for (const issue of result.error.issues) {
@@ -139,13 +143,32 @@ export function StepVerify({
 						</div>
 						<dl className="grid gap-2 text-sm md:grid-cols-2">
 							<div>
-								<dt className="text-muted-foreground">Project</dt>
-								<dd>{data.projectName || "—"}</dd>
+								<dt className="text-muted-foreground">Market</dt>
+								<dd className="capitalize">{data.marketType ?? "primary"}</dd>
 							</div>
-							<div>
-								<dt className="text-muted-foreground">Unit</dt>
-								<dd>{data.unitNo || "—"}</dd>
-							</div>
+							{data.marketType === "secondary" ? (
+								<>
+									<div className="md:col-span-2">
+										<dt className="text-muted-foreground">Address</dt>
+										<dd>{data.propertyData?.address || "—"}</dd>
+									</div>
+									<div>
+										<dt className="text-muted-foreground">Commission Rate</dt>
+										<dd>{data.commissionValue ?? "—"}%</dd>
+									</div>
+								</>
+							) : (
+								<>
+									<div>
+										<dt className="text-muted-foreground">Project</dt>
+										<dd>{data.projectName || "—"}</dd>
+									</div>
+									<div>
+										<dt className="text-muted-foreground">Unit</dt>
+										<dd>{data.unitNo || "—"}</dd>
+									</div>
+								</>
+							)}
 							<div>
 								<dt className="text-muted-foreground">Price</dt>
 								<dd>

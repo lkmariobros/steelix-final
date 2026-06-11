@@ -4,6 +4,7 @@ import {
 	type AgentTier,
 	agentTierSchema,
 } from "../models/auth";
+import { resolveTierConfig } from "../services/tier-config";
 import {
 	calculateEnhancedCommission,
 	getAgentTierHistory,
@@ -213,9 +214,9 @@ export const agentTiersRouter = router({
 			};
 			const agentTier: AgentTier =
 				(userSession.agentTier as AgentTier) || "advisor";
+			const tierConfig = await resolveTierConfig(agentTier);
 			const companyCommissionSplit =
-				userSession.companyCommissionSplit ??
-				AGENT_TIER_CONFIG[agentTier].commissionSplit;
+				userSession.companyCommissionSplit ?? tierConfig.commissionSplit;
 
 			// Calculate commission rate
 			let commissionRate: number;

@@ -22,13 +22,22 @@ import {
 
 export function TodayTasksWidget({
 	onViewLead,
+	scope = "admin",
 }: {
 	onViewLead: (leadId: string) => void;
+	scope?: "admin" | "agent";
 }) {
-	const { data: tasks, isLoading } = trpc.leadTasks.listToday.useQuery(
-		undefined,
-		{ staleTime: 30 * 1000 },
-	);
+	const adminQuery = trpc.leadTasks.listToday.useQuery(undefined, {
+		staleTime: 30 * 1000,
+		enabled: scope === "admin",
+	});
+	const agentQuery = trpc.leadTasks.listMyToday.useQuery(undefined, {
+		staleTime: 30 * 1000,
+		enabled: scope === "agent",
+	});
+
+	const { data: tasks, isLoading } =
+		scope === "agent" ? agentQuery : adminQuery;
 
 	const queryClient = useQueryClient();
 
