@@ -1,6 +1,7 @@
 "use client";
 
-import { usePathname } from "next/navigation";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useState } from "react";
 import type * as React from "react";
 
@@ -30,7 +31,6 @@ import { useUserRole } from "@/hooks/use-user-role";
 import { PORTAL_PATHS } from "@/lib/user-role";
 import { trpc } from "@/utils/trpc";
 import { TeamSwitcher } from "@/components/team-switcher";
-import { useRouter } from "next/navigation";
 import { formatDistanceToNow } from "date-fns";
 import {
 	RiBarChartLine,
@@ -248,7 +248,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 					size="sm"
 					className="w-full justify-between"
 					onClick={() =>
-						window.location.assign(
+						router.replace(
 							isCurrentlyInAdminPortal
 								? PORTAL_PATHS.agent
 								: PORTAL_PATHS.admin,
@@ -426,7 +426,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 											className="group/menu-button h-9 gap-3 rounded-md bg-gradient-to-r font-medium hover:bg-transparent hover:from-sidebar-accent hover:to-sidebar-accent/40 data-[active=true]:from-primary/20 data-[active=true]:to-primary/5 [&>svg]:size-auto"
 											isActive={isNavItemActive(pathname, menuItem.url)}
 										>
-											<a href={menuItem.url} className="relative flex items-center justify-between w-full">
+											<Link
+												href={menuItem.url}
+												className="relative flex w-full items-center justify-between"
+											>
 												<div className="flex items-center gap-3">
 													{menuItem.icon && (
 														<menuItem.icon
@@ -437,7 +440,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 													)}
 													<span>{menuItem.title}</span>
 												</div>
-											</a>
+											</Link>
 										</SidebarMenuButton>
 									</SidebarMenuItem>
 								))}

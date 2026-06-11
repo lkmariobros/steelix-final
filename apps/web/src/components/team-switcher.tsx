@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 
 import {
 	SidebarMenu,
@@ -39,6 +39,7 @@ interface TeamSwitcherProps {
 
 export function TeamSwitcher({ teams = [] }: TeamSwitcherProps) {
 	const pathname = usePathname();
+	const router = useRouter();
 	const [isOpen, setIsOpen] = React.useState(false);
 	const { session, hasAdminAccess, isChecking } = useUserRole();
 
@@ -51,15 +52,15 @@ export function TeamSwitcher({ teams = [] }: TeamSwitcherProps) {
 		logo: "https://raw.githubusercontent.com/origin-space/origin-images/refs/heads/main/exp1/logo-01_kp2j8x.png",
 	};
 
-	/** Full page navigation — admin/agent layouts differ; client push alone can fail to remount. */
+	/** Client navigation between admin/agent layouts — no full page reload. */
 	const switchPortal = React.useCallback(
 		(target: (typeof PORTAL_PATHS)[keyof typeof PORTAL_PATHS]) => {
 			setIsOpen(false);
 			if (target === PORTAL_PATHS.admin && isInAdminPortal) return;
 			if (target === PORTAL_PATHS.agent && isInAgentPortal) return;
-			window.location.assign(target);
+			router.replace(target);
 		},
-		[isInAdminPortal, isInAgentPortal],
+		[isInAdminPortal, isInAgentPortal, router],
 	);
 
 	const { handleKeyDown: handleTriggerKeyDown } = useKeyboardNavigation({
