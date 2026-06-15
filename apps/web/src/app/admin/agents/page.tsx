@@ -39,7 +39,8 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { authClient } from "@/lib/auth-client";
+import { useUserRole } from "@/hooks/use-user-role";
+import { accountRoleBadgeClass, formatAccountRole } from "@/lib/user-role";
 import { trpc } from "@/utils/trpc";
 import {
 	RiAddLine,
@@ -55,6 +56,7 @@ import { toast } from "sonner";
 // Agent Tier Management Components
 import {
 	AgentManagementDialog,
+	AgentRoleDialog,
 	AgentViewModal,
 	TierBadge,
 	TierDashboardWidget,
@@ -76,12 +78,13 @@ interface AgentData {
 }
 
 export default function AdminAgentsPage() {
-	const { data: session } = authClient.useSession();
+	const { session, isSuperAdmin } = useUserRole();
 	const [statusFilter, setStatusFilter] = useState<string>("active");
 
 	// State for dialogs
 	const [selectedAgent, setSelectedAgent] = useState<AgentData | null>(null);
 	const [isManageDialogOpen, setIsManageDialogOpen] = useState(false);
+	const [isRoleDialogOpen, setIsRoleDialogOpen] = useState(false);
 	const [isViewModalOpen, setIsViewModalOpen] = useState(false);
 	const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
 	const [isResetPasswordOpen, setIsResetPasswordOpen] = useState(false);
@@ -92,6 +95,7 @@ export default function AdminAgentsPage() {
 	const [newAgentPhone, setNewAgentPhone] = useState("");
 	const [newAgentBranch, setNewAgentBranch] = useState("");
 	const [newAgentPassword, setNewAgentPassword] = useState("");
+	const [newAgentRole, setNewAgentRole] = useState<"agent" | "team_lead" | "admin">("agent");
 	const [resetPassword, setResetPassword] = useState("");
 
 	// For invalidation after mutations
@@ -101,6 +105,11 @@ export default function AdminAgentsPage() {
 	const handleManageAgent = (agent: AgentData) => {
 		setSelectedAgent(agent);
 		setIsManageDialogOpen(true);
+	};
+
+	const handleChangeRole = (agent: AgentData) => {
+		setSelectedAgent(agent);
+		setIsRoleDialogOpen(true);
 	};
 
 	const handleViewAgent = (agent: AgentData) => {
@@ -391,15 +400,9 @@ export default function AdminAgentsPage() {
 																{agentItem.agent.name}
 															</span>
 															<span
-																className={`rounded-full px-2 py-1 text-xs ${
-																	agentItem.agent.role === "admin"
-																		? "bg-red-100 text-red-800"
-																		: agentItem.agent.role === "team_lead"
-																			? "bg-blue-100 text-blue-800"
-																			: "bg-green-100 text-green-800"
-																}`}
+																className={`rounded-full px-2 py-1 text-xs ${accountRoleBadgeClass(agentItem.agent.role)}`}
 															>
-																{agentItem.agent.role}
+																{formatAccountRole(agentItem.agent.role)}
 															</span>
 															{agentItem.agent.agentTier && (
 																<TierBadge
@@ -417,6 +420,17 @@ export default function AdminAgentsPage() {
 													</div>
 												</div>
 												<div className="flex gap-2">
+													{isSuperAdmin && agentItem.agent.role !== "super_admin" && (
+														<Button
+															size="sm"
+															variant="secondary"
+															onClick={() =>
+																handleChangeRole(agentItem.agent as AgentData)
+															}
+														>
+															Role
+														</Button>
+													)}
 													<Button
 														size="sm"
 														variant="outline"
@@ -529,6 +543,23 @@ export default function AdminAgentsPage() {
 				/>
 			)}
 
+			{selectedAgent && (
+				<AgentRoleDialog
+					open={isRoleDialogOpen}
+					onOpenChange={setIsRoleDialogOpen}
+					agent={{
+						id: selectedAgent.id,
+						name: selectedAgent.name || "Unknown",
+						email: selectedAgent.email,
+						role: selectedAgent.role,
+					}}
+					onSuccess={() => {
+						refetchAgents();
+						utils.agents.getStats.invalidate();
+					}}
+				/>
+			)}
+
 			{/* Agent View Modal */}
 			{selectedAgent && (
 				<AgentViewModal
@@ -577,6 +608,26 @@ export default function AdminAgentsPage() {
 								onChange={(e) => setNewAgentPassword(e.target.value)}
 							/>
 						</div>
+						{isSuperAdmin && (
+							<div className="col-span-2 space-y-2">
+								<Label>Account role</Label>
+								<Select
+									value={newAgentRole}
+									onValueChange={(value) =>
+										setNewAgentRole(value as "agent" | "team_lead" | "admin")
+									}
+								>
+									<SelectTrigger>
+										<SelectValue />
+									</SelectTrigger>
+									<SelectContent>
+										<SelectItem value="agent">Agent</SelectItem>
+										<SelectItem value="team_lead">Team Lead</SelectItem>
+										<SelectItem value="admin">Admin</SelectItem>
+									</SelectContent>
+								</Select>
+							</div>
+						)}
 					</div>
 					<DialogFooter>
 						<Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
@@ -596,7 +647,7 @@ export default function AdminAgentsPage() {
 									phone: newAgentPhone.trim() || undefined,
 									branch: newAgentBranch.trim() || undefined,
 									password: newAgentPassword,
-									role: "agent",
+									role: isSuperAdmin ? newAgentRole : "agent",
 								});
 							}}
 						>

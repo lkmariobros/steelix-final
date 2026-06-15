@@ -117,7 +117,7 @@ try {
 							const isFirstUser = existingUsersCount.count === 0;
 
 							// Assign role based on whether this is the first user
-							const role = isFirstUser ? "admin" : "agent";
+							const role = isFirstUser ? "super_admin" : "agent";
 
 							console.log(
 								`🔐 User creation: ${userData.email} - Role: ${role} (First user: ${isFirstUser})`,
@@ -152,9 +152,9 @@ try {
 								.where(eq(schema.user.id, user.id))
 								.limit(1);
 
-							if (createdUser[0]?.role === "admin") {
+							if (createdUser[0]?.role === "super_admin") {
 								console.log(
-									"🎉 BOOTSTRAP COMPLETE: First admin user created! Admin dashboard access enabled.",
+									"🎉 BOOTSTRAP COMPLETE: First super admin created! Admin dashboard access enabled.",
 								);
 							}
 						} catch (error) {

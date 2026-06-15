@@ -19,11 +19,19 @@ export function getEffectiveRoles(user: {
 	return [...merged];
 }
 
+export function hasSuperAdminAccess(user: {
+	role?: string | null;
+	roles?: string[] | null;
+}): boolean {
+	return getEffectiveRoles(user).includes("super_admin");
+}
+
 export function hasAdminAccess(user: {
 	role?: string | null;
 	roles?: string[] | null;
 }): boolean {
-	return getEffectiveRoles(user).includes("admin");
+	const roles = getEffectiveRoles(user);
+	return roles.includes("admin") || roles.includes("super_admin");
 }
 
 export function hasAgentAccess(user: {
@@ -31,7 +39,7 @@ export function hasAgentAccess(user: {
 	roles?: string[] | null;
 }): boolean {
 	const roles = getEffectiveRoles(user);
-	return roles.includes("agent") || roles.includes("admin");
+	return roles.includes("agent") || roles.includes("admin") || roles.includes("super_admin");
 }
 
 export function getPrimaryRole(user: {
@@ -39,6 +47,7 @@ export function getPrimaryRole(user: {
 	roles?: string[] | null;
 }): string {
 	const roles = getEffectiveRoles(user);
+	if (roles.includes("super_admin")) return "super_admin";
 	if (roles.includes("admin")) return "admin";
 	if (roles.includes("team_lead")) return "team_lead";
 	return "agent";

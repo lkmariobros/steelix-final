@@ -26,6 +26,7 @@ import {
 	getPrimaryRole,
 	hasAdminAccess,
 	hasAgentAccess,
+	hasSuperAdminAccess,
 } from "../utils/user-roles";
 
 // Input schemas for admin operations
@@ -69,6 +70,7 @@ export const adminRouter = router({
 
 		return {
 			hasAdminAccess: hasAdminAccess(userRecord ?? {}),
+			hasSuperAdminAccess: hasSuperAdminAccess(userRecord ?? {}),
 			hasAgentAccess: hasAgentAccess(userRecord ?? {}),
 			role: userRole,
 		};

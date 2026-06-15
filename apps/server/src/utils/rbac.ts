@@ -3,10 +3,16 @@ import { eq } from "drizzle-orm";
 import { user } from "../models/auth";
 import type { Context } from "./context";
 import { db } from "./db";
+import { hasAdminAccess, hasSuperAdminAccess } from "./user-roles";
 
-export type AppRole = "admin" | "agent" | "team_lead";
+export type AppRole = "super_admin" | "admin" | "agent" | "team_lead";
 
-const APP_ROLES: readonly AppRole[] = ["admin", "agent", "team_lead"];
+const APP_ROLES: readonly AppRole[] = [
+	"super_admin",
+	"admin",
+	"agent",
+	"team_lead",
+];
 
 export function isAppRole(value: string | null | undefined): value is AppRole {
 	return !!value && APP_ROLES.includes(value as AppRole);
@@ -40,7 +46,7 @@ export async function resolveUserRole(ctx: Context): Promise<AppRole> {
 }
 
 export function assertAdminRole(role: AppRole): void {
-	if (role !== "admin") {
+	if (!hasAdminAccess({ role })) {
 		throw new TRPCError({
 			code: "FORBIDDEN",
 			message: "Admin access required",
@@ -48,8 +54,23 @@ export function assertAdminRole(role: AppRole): void {
 	}
 }
 
+export function assertSuperAdminRole(role: AppRole): void {
+	if (!hasSuperAdminAccess({ role })) {
+		throw new TRPCError({
+			code: "FORBIDDEN",
+			message: "Super admin access required",
+		});
+	}
+}
+
 export async function requireAdminRole(ctx: Context): Promise<AppRole> {
 	const role = await resolveUserRole(ctx);
 	assertAdminRole(role);
+	return role;
+}
+
+export async function requireSuperAdminRole(ctx: Context): Promise<AppRole> {
+	const role = await resolveUserRole(ctx);
+	assertSuperAdminRole(role);
 	return role;
 }

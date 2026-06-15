@@ -63,7 +63,7 @@ export const user = pgTable(
 		// Hierarchy relationships
 		agencyId: uuid("agency_id").references(() => agencies.id),
 		teamId: uuid("team_id").references(() => teams.id),
-		role: text("role").default("agent"), // 'agent', 'team_lead', 'admin'
+		role: text("role").default("agent"), // 'agent', 'team_lead', 'admin', 'super_admin'
 		permissions: text("permissions"), // JSON string for role permissions
 		// Agent tier system for commission calculations
 		agentTier: agentTierEnum("agent_tier").default("advisor"),

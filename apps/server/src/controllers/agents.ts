@@ -1,3 +1,4 @@
+import { TRPCError } from "@trpc/server";
 import { hashPassword } from "better-auth/crypto";
 import { and, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -16,13 +17,14 @@ import {
 import { performanceMetrics } from "../models/reports";
 import { transactions } from "../models/transactions";
 import { db } from "../utils/db";
-import { adminProcedure, protectedProcedure, router } from "../utils/trpc";
+import { hasSuperAdminAccess } from "../utils/user-roles";
+import { adminProcedure, protectedProcedure, router, superAdminProcedure } from "../utils/trpc";
 
 // Input schemas
 const listAgentsInput = z.object({
 	limit: z.number().min(1).max(100).default(20),
 	offset: z.number().min(0).default(0),
-	role: z.enum(["agent", "team_lead", "admin"]).optional(),
+	role: z.enum(["agent", "team_lead", "admin", "super_admin"]).optional(),
 	agentTier: z
 		.enum([
 			"advisor",
@@ -52,7 +54,6 @@ const updateAgentInput = z.object({
 		.regex(/^\+60\d{8,11}$/, "Phone must be in Malaysian format (+60...)")
 		.optional(),
 	branch: z.string().min(1).max(120).optional(),
-	role: z.enum(["agent", "team_lead", "admin"]).optional(),
 	agentTier: z
 		.enum([
 			"advisor",
@@ -79,7 +80,12 @@ const createAgentInput = z.object({
 	branch: z.string().min(1).max(120).optional(),
 	teamId: z.string().uuid().optional(),
 	agencyId: z.string().uuid().optional(),
-	role: z.enum(["agent", "admin"]).default("agent"),
+	role: z.enum(["agent", "team_lead", "admin"]).default("agent"),
+});
+
+const updateUserRoleInput = z.object({
+	userId: z.string(),
+	role: z.enum(["agent", "team_lead", "admin"]),
 });
 
 const resetAgentPasswordInput = z.object({
@@ -413,8 +419,58 @@ export const agentsRouter = router({
 			return updatedAgent;
 		}),
 
-	// Create new agent/admin account (admin only)
+	// Change account role (super admin only — not tier/commission)
+	updateRole: superAdminProcedure
+		.input(updateUserRoleInput)
+		.mutation(async ({ ctx, input }) => {
+			if (input.userId === ctx.session.user.id) {
+				throw new TRPCError({
+					code: "FORBIDDEN",
+					message: "You cannot change your own role",
+				});
+			}
+
+			const [target] = await db
+				.select({ id: user.id, role: user.role })
+				.from(user)
+				.where(eq(user.id, input.userId))
+				.limit(1);
+
+			if (!target) {
+				throw new TRPCError({ code: "NOT_FOUND", message: "User not found" });
+			}
+
+			if (target.role === "super_admin") {
+				throw new TRPCError({
+					code: "FORBIDDEN",
+					message:
+						"Super admin accounts can only be changed directly in the database",
+				});
+			}
+
+			const [updated] = await db
+				.update(user)
+				.set({ role: input.role, updatedAt: new Date() })
+				.where(eq(user.id, input.userId))
+				.returning();
+
+			return updated;
+		}),
+
+	// Create new agent/admin account (admin only; role elevation requires super admin)
 	create: adminProcedure.input(createAgentInput).mutation(async ({ ctx, input }) => {
+		const requestedRole = input.role ?? "agent";
+		const actorIsSuperAdmin = hasSuperAdminAccess(
+			ctx.session.user as { role?: string | null },
+		);
+
+		if (requestedRole !== "agent" && !actorIsSuperAdmin) {
+			throw new TRPCError({
+				code: "FORBIDDEN",
+				message: "Only super admins can create admin or team lead accounts",
+			});
+		}
+
 		const now = new Date();
 		const userId = crypto.randomUUID();
 		const passwordHash = await hashPassword(input.password);
@@ -433,7 +489,7 @@ export const agentsRouter = router({
 				deactivatedAt: null,
 				agencyId: input.agencyId,
 				teamId: input.teamId,
-				role: input.role,
+				role: requestedRole,
 				permissions: null,
 				agentTier: "advisor",
 				companyCommissionSplit: 70,
@@ -659,6 +715,7 @@ export const agentsRouter = router({
 				activeAgents: sql<number>`count(*) filter (where role = 'agent')`,
 				teamLeads: sql<number>`count(*) filter (where role = 'team_lead')`,
 				admins: sql<number>`count(*) filter (where role = 'admin')`,
+				superAdmins: sql<number>`count(*) filter (where role = 'super_admin')`,
 			})
 			.from(user);
 

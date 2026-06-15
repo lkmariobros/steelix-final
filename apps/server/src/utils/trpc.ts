@@ -5,6 +5,7 @@ import {
 	getPrimaryRole,
 	hasAdminAccess,
 	hasAgentAccess,
+	hasSuperAdminAccess,
 } from "./user-roles";
 
 export const t = initTRPC.context<Context>().create();
@@ -46,6 +47,22 @@ export const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
 			message: "Admin access required",
 		});
 	}
+	return next({ ctx: { ...ctx, session: ctx.session, userRole, userRoles: roles } });
+});
+
+export const superAdminProcedure = protectedProcedure.use(({ ctx, next }) => {
+	const user = ctx.session.user as {
+		roles?: string[] | null;
+		role?: string | null;
+	};
+	const roles = getEffectiveRoles(user);
+	if (!hasSuperAdminAccess(user)) {
+		throw new TRPCError({
+			code: "FORBIDDEN",
+			message: "Super admin access required",
+		});
+	}
+	const userRole = getPrimaryRole(user);
 	return next({ ctx: { ...ctx, session: ctx.session, userRole, userRoles: roles } });
 });
 

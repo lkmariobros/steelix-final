@@ -4,6 +4,7 @@ import { authClient, type AuthSessionData } from "@/lib/auth-client";
 import {
 	isAdministrator,
 	isAppRole,
+	isSuperAdmin,
 	roleFromSessionUser,
 	type AppRole,
 } from "@/lib/user-role";
@@ -26,6 +27,7 @@ export type UserRoleContextValue = {
 	isSessionPending: boolean;
 	role: AppRole | undefined;
 	hasAdminAccess: boolean;
+	isSuperAdmin: boolean;
 	isAdmin: boolean;
 	isAgentPortalUser: boolean;
 	isChecking: boolean;
@@ -37,6 +39,7 @@ const GUEST_VALUE: UserRoleContextValue = {
 	isSessionPending: false,
 	role: undefined,
 	hasAdminAccess: false,
+	isSuperAdmin: false,
 	isAdmin: false,
 	isAgentPortalUser: true,
 	isChecking: false,
@@ -134,7 +137,10 @@ function ActiveUserRoleProvider({ children }: { children: ReactNode }) {
 
 	const sessionRole = roleFromSessionUser(session?.user);
 	const sessionHasAdminRole =
-		(sessionUser?.roles?.some((r) => r === "admin") ?? false) ||
+		(sessionUser?.roles?.some(
+			(r) => r === "admin" || r === "super_admin",
+		) ??
+			false) ||
 		isAdministrator(sessionRole);
 
 	const { data: roleCheck, isLoading: isRoleQueryLoading } =
@@ -151,6 +157,8 @@ function ActiveUserRoleProvider({ children }: { children: ReactNode }) {
 		roleCheck?.hasAdminAccess === true ||
 		isAdministrator(role) ||
 		sessionHasAdminRole;
+	const isSuperAdminUser =
+		roleCheck?.hasSuperAdminAccess === true || isSuperAdmin(role);
 
 	useInactivityLogout(userId ?? null);
 
@@ -160,6 +168,7 @@ function ActiveUserRoleProvider({ children }: { children: ReactNode }) {
 			isSessionPending,
 			role,
 			hasAdminAccess,
+			isSuperAdmin: isSuperAdminUser,
 			isAdmin: hasAdminAccess,
 			isAgentPortalUser: !hasAdminAccess,
 			isChecking: isSessionPending,
@@ -170,6 +179,7 @@ function ActiveUserRoleProvider({ children }: { children: ReactNode }) {
 			isSessionPending,
 			role,
 			hasAdminAccess,
+			isSuperAdminUser,
 			userId,
 			isRoleQueryLoading,
 		],

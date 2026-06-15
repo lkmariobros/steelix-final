@@ -38,8 +38,9 @@ async function resolveAdminAccess(
 	const sessionData = (await sessionRes.json()) as SessionPayload | null;
 	const sessionRole =
 		sessionData?.user?.role ?? sessionData?.session?.user?.role;
-	if (sessionRole === "admin") return true;
-	if (sessionRole && sessionRole !== "admin") return false;
+	if (sessionRole === "admin" || sessionRole === "super_admin") return true;
+	if (sessionRole && sessionRole !== "admin" && sessionRole !== "super_admin")
+		return false;
 
 	const roleRes = await fetch(`${base}/api/auth/me-role`, {
 		headers: { cookie },
@@ -49,7 +50,11 @@ async function resolveAdminAccess(
 	if (!roleRes.ok) return false;
 
 	const roleData = (await roleRes.json()) as MeRolePayload;
-	return roleData.hasAdminAccess === true || roleData.role === "admin";
+	return (
+		roleData.hasAdminAccess === true ||
+		roleData.role === "admin" ||
+		roleData.role === "super_admin"
+	);
 }
 
 /**

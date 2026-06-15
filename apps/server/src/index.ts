@@ -12,6 +12,7 @@ import { auth } from "./utils/auth";
 import { createContext } from "./utils/context";
 import { db } from "./utils/db";
 import { isAppRole } from "./utils/rbac";
+import { hasAdminAccess, hasSuperAdminAccess } from "./utils/user-roles";
 import { startServer } from "./utils/server";
 
 const app = new Hono();
@@ -75,7 +76,8 @@ app.get("/api/auth/me-role", async (c) => {
 		if (isAppRole(fromSession)) {
 			return c.json({
 				role: fromSession,
-				hasAdminAccess: fromSession === "admin",
+				hasAdminAccess: hasAdminAccess({ role: fromSession }),
+				hasSuperAdminAccess: hasSuperAdminAccess({ role: fromSession }),
 			});
 		}
 
@@ -88,7 +90,8 @@ app.get("/api/auth/me-role", async (c) => {
 		const role = isAppRole(record?.role) ? record.role : "agent";
 		return c.json({
 			role,
-			hasAdminAccess: role === "admin",
+			hasAdminAccess: hasAdminAccess({ role }),
+			hasSuperAdminAccess: hasSuperAdminAccess({ role }),
 		});
 	} catch (error) {
 		console.error("❌ me-role error:", error);

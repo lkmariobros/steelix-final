@@ -10,6 +10,7 @@ export { TierHistoryTimeline } from './tier-history-timeline'
 
 // Management dialogs
 export { AgentManagementDialog } from './agent-management-dialog'
+export { AgentRoleDialog } from './agent-role-dialog'
 export { AgentViewModal } from './agent-view-modal'
 
 // Gamification components
