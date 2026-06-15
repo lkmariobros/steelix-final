@@ -77,9 +77,19 @@ interface AgentData {
 	isActive?: boolean | null;
 }
 
+type AccountRoleFilter =
+	| "all"
+	| "agent"
+	| "team_lead"
+	| "admin"
+	| "super_admin";
+
 export default function AdminAgentsPage() {
 	const { session, isSuperAdmin } = useUserRole();
-	const [statusFilter, setStatusFilter] = useState<string>("active");
+	const [roleFilter, setRoleFilter] = useState<AccountRoleFilter>("all");
+	const [activeFilter, setActiveFilter] = useState<"all" | "active" | "inactive">(
+		"all",
+	);
 
 	// State for dialogs
 	const [selectedAgent, setSelectedAgent] = useState<AgentData | null>(null);
@@ -162,14 +172,13 @@ export default function AdminAgentsPage() {
 		refetch: refetchAgents,
 	} = trpc.agents.list.useQuery(
 		{
-			limit: 20,
+			limit: 50,
 			offset: 0,
-			role:
-				statusFilter === "all"
+			role: roleFilter === "all" ? undefined : roleFilter,
+			isActive:
+				activeFilter === "all"
 					? undefined
-					: statusFilter === "active"
-						? "agent"
-						: undefined,
+					: activeFilter === "active",
 			sortBy: "name",
 			sortOrder: "asc",
 		},
@@ -226,26 +235,50 @@ export default function AdminAgentsPage() {
 						<div className="space-y-1">
 							<h1 className="flex items-center gap-2 font-semibold text-2xl">
 								<RiTeamLine className="size-6" />
-								Agent Management
+								{isSuperAdmin ? "Account Management" : "Agent Management"}
 							</h1>
 							<p className="text-muted-foreground text-sm">
-								Manage agent accounts, permissions, performance, and team
-								assignments.
+								{isSuperAdmin
+									? "Manage all accounts — agents, team leads, and admins."
+									: "Manage agent accounts, permissions, performance, and team assignments."}
 							</p>
 						</div>
 
 						{/* Agent Controls */}
 						<div className="flex items-center gap-2">
-							{/* Status Filter */}
-							<Select value={statusFilter} onValueChange={setStatusFilter}>
-								<SelectTrigger className="w-40">
-									<SelectValue placeholder="Filter by status" />
+							<Select
+								value={roleFilter}
+								onValueChange={(value) =>
+									setRoleFilter(value as AccountRoleFilter)
+								}
+							>
+								<SelectTrigger className="w-44">
+									<SelectValue placeholder="Account role" />
 								</SelectTrigger>
 								<SelectContent>
-									<SelectItem value="active">Active Agents</SelectItem>
+									<SelectItem value="all">All accounts</SelectItem>
+									<SelectItem value="agent">Agents</SelectItem>
+									<SelectItem value="team_lead">Team leads</SelectItem>
+									<SelectItem value="admin">Admins</SelectItem>
+									{isSuperAdmin && (
+										<SelectItem value="super_admin">Super admins</SelectItem>
+									)}
+								</SelectContent>
+							</Select>
+
+							<Select
+								value={activeFilter}
+								onValueChange={(value) =>
+									setActiveFilter(value as "all" | "active" | "inactive")
+								}
+							>
+								<SelectTrigger className="w-36">
+									<SelectValue placeholder="Status" />
+								</SelectTrigger>
+								<SelectContent>
+									<SelectItem value="all">All status</SelectItem>
+									<SelectItem value="active">Active</SelectItem>
 									<SelectItem value="inactive">Inactive</SelectItem>
-									<SelectItem value="pending">Pending Approval</SelectItem>
-									<SelectItem value="all">All Agents</SelectItem>
 								</SelectContent>
 							</Select>
 
@@ -340,9 +373,14 @@ export default function AdminAgentsPage() {
 								</CardHeader>
 								<CardContent>
 									<div className="font-bold text-2xl">
-										{agentStats?.admins || 0}
+										{(agentStats?.admins || 0) +
+											(agentStats?.superAdmins || 0)}
 									</div>
-									<p className="text-muted-foreground text-xs">Admin users</p>
+									<p className="text-muted-foreground text-xs">
+										{agentStats?.superAdmins
+											? `${agentStats.admins} admin · ${agentStats.superAdmins} super`
+											: "Admin users"}
+									</p>
 								</CardContent>
 							</Card>
 						</div>
@@ -355,10 +393,13 @@ export default function AdminAgentsPage() {
 						{/* Agent Management Interface */}
 						<Card className="lg:col-span-2">
 							<CardHeader>
-								<CardTitle>Agent Directory</CardTitle>
+								<CardTitle>
+									{isSuperAdmin ? "Account Directory" : "Agent Directory"}
+								</CardTitle>
 								<CardDescription>
-									Manage agent accounts, roles, permissions, and performance
-									tracking
+									{isSuperAdmin
+										? "View and manage agents, team leads, and admins. Use Role to change account access."
+										: "Manage agent accounts, tiers, and performance tracking"}
 								</CardDescription>
 							</CardHeader>
 							<CardContent>
@@ -419,8 +460,9 @@ export default function AdminAgentsPage() {
 														</p>
 													</div>
 												</div>
-												<div className="flex gap-2">
-													{isSuperAdmin && agentItem.agent.role !== "super_admin" && (
+												<div className="flex flex-wrap justify-end gap-2">
+													{isSuperAdmin &&
+														agentItem.agent.role !== "super_admin" && (
 														<Button
 															size="sm"
 															variant="secondary"
@@ -431,16 +473,20 @@ export default function AdminAgentsPage() {
 															Role
 														</Button>
 													)}
-													<Button
-														size="sm"
-														variant="outline"
-														onClick={() =>
-															handleManageAgent(agentItem.agent as AgentData)
-														}
-													>
-														<RiSettings3Line className="mr-1 h-4 w-4" />
-														Manage
-													</Button>
+													{(agentItem.agent.role === "agent" ||
+														agentItem.agent.role === "team_lead" ||
+														!agentItem.agent.role) && (
+														<Button
+															size="sm"
+															variant="outline"
+															onClick={() =>
+																handleManageAgent(agentItem.agent as AgentData)
+															}
+														>
+															<RiSettings3Line className="mr-1 h-4 w-4" />
+															Manage
+														</Button>
+													)}
 													<Button
 														size="sm"
 														variant="outline"

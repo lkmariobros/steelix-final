@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { trpc } from "@/utils/trpc";
 import {
@@ -43,9 +43,16 @@ export function AgentRoleDialog({
 	agent,
 	onSuccess,
 }: AgentRoleDialogProps) {
-	const [role, setRole] = useState<AssignableRole>(
-		(agent.role as AssignableRole) || "agent",
-	);
+	const initialRole: AssignableRole =
+		agent.role === "admin" || agent.role === "team_lead" || agent.role === "agent"
+			? agent.role
+			: "agent";
+	const [role, setRole] = useState<AssignableRole>(initialRole);
+
+	useEffect(() => {
+		if (!open) return;
+		setRole(initialRole);
+	}, [open, agent.id, agent.role, initialRole]);
 
 	const updateRoleMutation = trpc.agents.updateRole.useMutation({
 		onSuccess: () => {
@@ -74,8 +81,8 @@ export function AgentRoleDialog({
 						Change account role
 					</DialogTitle>
 					<DialogDescription>
-						Update portal access for {agent.name}. Super admin accounts cannot
-						be changed here.
+						Update portal access for {agent.name}. Admins can be demoted to
+						agent or team lead. Super admin accounts cannot be changed here.
 					</DialogDescription>
 				</DialogHeader>
 

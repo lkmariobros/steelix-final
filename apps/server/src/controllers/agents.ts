@@ -37,6 +37,7 @@ const listAgentsInput = z.object({
 	teamId: z.string().uuid().optional(),
 	agencyId: z.string().uuid().optional(),
 	searchQuery: z.string().optional(),
+	isActive: z.boolean().optional(),
 	sortBy: z.enum(["name", "email", "createdAt", "agentTier"]).default("name"),
 	sortOrder: z.enum(["asc", "desc"]).default("asc"),
 });
@@ -176,6 +177,9 @@ export const agentsRouter = router({
 			conditions.push(
 				sql`(${user.name} ILIKE ${`%${input.searchQuery}%`} OR ${user.email} ILIKE ${`%${input.searchQuery}%`})`,
 			);
+		}
+		if (input.isActive !== undefined) {
+			conditions.push(eq(user.isActive, input.isActive));
 		}
 
 		// Build order by clause
