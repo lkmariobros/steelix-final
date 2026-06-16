@@ -83,8 +83,10 @@ import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 
-import { CrmImportDialog } from "./_components/crm-import-dialog";
-import type { CrmImportMode } from "./_components/crm-import-dialog";
+import { ImportLeadsDialog } from "./_components/import-leads-dialog";
+import type { AgentCrmImportMode } from "./_components/import-leads-dialog";
+import { PIPELINE_STAGES } from "@/app/admin/leads/_components/lead-constants";
+import { LeadTasksReport } from "@/app/admin/leads/_components/lead-tasks-report";
 import {
 	exportProspectsToCsv,
 	exportProspectsToExcelHtml,
@@ -215,10 +217,11 @@ export default function CRMPage() {
 	const [activeTab, setActiveTab] = useState<LeadsTab>("my"); // My Leads | Company Leads
 	const [viewMode, setViewMode] = useState<ViewMode>("list"); // New: View mode toggle
 	const [searchQuery, setSearchQuery] = useState("");
-	const [typeFilter, setTypeFilter] = useState("all");
-	const [statusFilter, setStatusFilter] = useState("all");
-	const [propertyFilter, setPropertyFilter] = useState("all");
-	const [overdueOnly, setOverdueOnly] = useState(false);
+	const [stageFilter, setStageFilter] = useState<PipelineStage | "all">("all");
+	const [categoryFilter, setCategoryFilter] = useState<string>("all"); // tagId
+	const [taskStatusFilter, setTaskStatusFilter] = useState<
+		"__all__" | "open" | "overdue" | "completed"
+	>("__all__");
 	const [currentPage, setCurrentPage] = useState(1);
 	const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
 	const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
@@ -240,6 +243,10 @@ export default function CRMPage() {
 		enabled: !!session,
 		staleTime: 60_000,
 	});
+	const { data: tagsData } = trpc.tags.list.useQuery(
+		{ page: 1, limit: 100 },
+		{ enabled: !!session, staleTime: 30_000 },
+	);
 
 	// Fetch prospects with tRPC - only when session is available
 	const {
@@ -250,14 +257,8 @@ export default function CRMPage() {
 	} = trpc.crm.list.useQuery(
 		{
 			search: searchQuery || undefined,
-			type:
-				typeFilter !== "all" ? (typeFilter as "tenant" | "buyer") : undefined,
-			property: propertyFilter !== "all" ? propertyFilter : undefined,
-			status:
-				statusFilter !== "all"
-					? (statusFilter as "active" | "inactive" | "pending")
-					: undefined,
-			overdueOnly: overdueOnly || undefined,
+			stage: stageFilter === "all" ? undefined : stageFilter,
+			tagId: categoryFilter === "all" ? undefined : categoryFilter,
 			leadType:
 				activeTab === "company" ? ("company" as const) : ("personal" as const),
 			page: currentPage,
@@ -273,20 +274,14 @@ export default function CRMPage() {
 	const prospects = prospectsData?.prospects || [];
 	const totalPages = prospectsData?.pagination.totalPages || 0;
 
-	const importMode: CrmImportMode =
+	const importMode: AgentCrmImportMode =
 		activeTab === "company" ? "company_unclaimed" : "personal_assigned";
 
 	const exportListParams = useMemo(
 		() => ({
 			search: searchQuery || undefined,
-			type:
-				typeFilter !== "all" ? (typeFilter as "tenant" | "buyer") : undefined,
-			property: propertyFilter !== "all" ? propertyFilter : undefined,
-			status:
-				statusFilter !== "all"
-					? (statusFilter as "active" | "inactive" | "pending")
-					: undefined,
-			overdueOnly: overdueOnly || undefined,
+			stage: stageFilter === "all" ? undefined : stageFilter,
+			tagId: categoryFilter === "all" ? undefined : categoryFilter,
 			leadType:
 				activeTab === "company" ? ("company" as const) : ("personal" as const),
 			page: 1,
@@ -295,10 +290,8 @@ export default function CRMPage() {
 		}),
 		[
 			searchQuery,
-			typeFilter,
-			propertyFilter,
-			statusFilter,
-			overdueOnly,
+			stageFilter,
+			categoryFilter,
 			activeTab,
 		],
 	);
@@ -725,6 +718,11 @@ export default function CRMPage() {
 					</div>
 
 					<TodayTasksWidget scope="agent" onViewLead={handleViewLeadById} />
+					<LeadTasksReport
+						enabled={true}
+						status={taskStatusFilter}
+						onStatusChange={setTaskStatusFilter}
+					/>
 
 					{/* Add Prospect Dialog */}
 					<Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
@@ -1365,46 +1363,60 @@ export default function CRMPage() {
 								className="pl-9"
 							/>
 						</div>
-						<Select value={typeFilter} onValueChange={setTypeFilter}>
-							<SelectTrigger className="w-32">
-								<SelectValue placeholder="Type" />
-							</SelectTrigger>
-							<SelectContent>
-								<SelectItem value="all">All</SelectItem>
-								<SelectItem value="tenant">Tenant</SelectItem>
-								<SelectItem value="buyer">Buyer</SelectItem>
-							</SelectContent>
-						</Select>
-						<Input
-							type="text"
-							placeholder="Search by property..."
-							value={propertyFilter === "all" ? "" : propertyFilter}
-							onChange={(e) => {
-								const value = e.target.value.trim();
-								setPropertyFilter(value || "all");
+						<Select
+							value={categoryFilter}
+							onValueChange={(v) => {
+								setCategoryFilter(v);
+								setCurrentPage(1);
 							}}
-							className="w-48"
-						/>
-						<Select value={statusFilter} onValueChange={setStatusFilter}>
-							<SelectTrigger className="w-36">
-								<SelectValue placeholder="Status" />
+						>
+							<SelectTrigger className="w-44">
+								<SelectValue placeholder="Category" />
 							</SelectTrigger>
 							<SelectContent>
-								<SelectItem value="all">Status: All</SelectItem>
-								<SelectItem value="active">Status: Active</SelectItem>
-								<SelectItem value="inactive">Status: Inactive</SelectItem>
-								<SelectItem value="pending">Status: Pending</SelectItem>
+								<SelectItem value="all">All Categories</SelectItem>
+								{(tagsData?.tags ?? []).map((t) => (
+									<SelectItem key={t.id} value={t.id}>
+										{t.name}
+									</SelectItem>
+								))}
 							</SelectContent>
 						</Select>
-						<Button
-							type="button"
-							variant={overdueOnly ? "default" : "outline"}
-							size="sm"
-							onClick={() => setOverdueOnly((prev) => !prev)}
-							className="h-9"
+
+						<Select
+							value={stageFilter}
+							onValueChange={(v) => {
+								setStageFilter(v as PipelineStage | "all");
+								setCurrentPage(1);
+							}}
 						>
-							Overdue Follow-up
-						</Button>
+							<SelectTrigger className="w-44">
+								<SelectValue placeholder="Lead Stage" />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectItem value="all">All Stages</SelectItem>
+								{PIPELINE_STAGES.map((s) => (
+									<SelectItem key={s.value} value={s.value}>
+										{s.label}
+									</SelectItem>
+								))}
+							</SelectContent>
+						</Select>
+
+						<Select
+							value={taskStatusFilter}
+							onValueChange={(v) => setTaskStatusFilter(v as typeof taskStatusFilter)}
+						>
+							<SelectTrigger className="w-40">
+								<SelectValue placeholder="Task Status" />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectItem value="__all__">All tasks</SelectItem>
+								<SelectItem value="open">Open</SelectItem>
+								<SelectItem value="overdue">Overdue</SelectItem>
+								<SelectItem value="completed">Completed</SelectItem>
+							</SelectContent>
+						</Select>
 					</div>
 
 					{/* Prospects View - Kanban or List */}
@@ -1703,7 +1715,7 @@ export default function CRMPage() {
 						</div>
 					)}
 				</div>
-				<CrmImportDialog
+				<ImportLeadsDialog
 					open={isImportOpen}
 					onOpenChange={setIsImportOpen}
 					importMode={importMode}

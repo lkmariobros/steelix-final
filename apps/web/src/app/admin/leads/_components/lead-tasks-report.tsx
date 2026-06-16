@@ -15,14 +15,27 @@ import { RiAlarmWarningLine, RiCheckboxCircleLine, RiTodoLine } from "@remixicon
 import { TASK_TYPE_LABELS } from "./lead-constants";
 import type { TaskType } from "./lead-models";
 
-export function LeadTasksReport({ enabled = true }: { enabled?: boolean }) {
-	const [status, setStatus] = useState<"__all__" | "open" | "overdue" | "completed">(
-		"__all__",
-	);
+type TaskStatusFilter = "__all__" | "open" | "overdue" | "completed";
+
+export function LeadTasksReport({
+	enabled = true,
+	status,
+	onStatusChange,
+}: {
+	enabled?: boolean;
+	status?: TaskStatusFilter;
+	onStatusChange?: (status: TaskStatusFilter) => void;
+}) {
+	const [internalStatus, setInternalStatus] = useState<TaskStatusFilter>("__all__");
+	const effectiveStatus = status ?? internalStatus;
+	const setStatus = (next: TaskStatusFilter) => {
+		onStatusChange?.(next);
+		if (status === undefined) setInternalStatus(next);
+	};
 
 	const { data, isLoading } = trpc.leadTasks.listReport.useQuery(
 		{
-			status: status === "__all__" ? undefined : status,
+			status: effectiveStatus === "__all__" ? undefined : effectiveStatus,
 			limit: 50,
 			offset: 0,
 		},
@@ -39,9 +52,9 @@ export function LeadTasksReport({ enabled = true }: { enabled?: boolean }) {
 					Agent Task Report
 				</CardTitle>
 				<Select
-					value={status}
+					value={effectiveStatus}
 					onValueChange={(v) =>
-						setStatus(v as "open" | "overdue" | "completed" | "__all__")
+						setStatus(v as TaskStatusFilter)
 					}
 				>
 					<SelectTrigger className="h-8 w-[140px] text-xs">

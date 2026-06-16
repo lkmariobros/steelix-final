@@ -15,6 +15,7 @@ import {
 	DialogTitle,
 } from "@/components/ui/dialog";
 import { RiFileUploadLine, RiLoader4Line } from "@remixicon/react";
+import { Progress } from "@/components/ui/progress";
 import { parseCsvToRecords } from "@/app/admin/leads/_utils/parse-csv";
 import { PIPELINE_STAGES } from "@/app/admin/leads/_components/lead-constants";
 
@@ -71,6 +72,14 @@ export function CrmImportDialog({
 	const [rows, setRows] = useState<Record<string, string>[]>([]);
 	const [fileName, setFileName] = useState<string | null>(null);
 	const [parseError, setParseError] = useState<string | null>(null);
+	const [step, setStep] = useState<1 | 2 | 3>(1); // 1 Upload, 2 Review, 3 Results
+	const [lastResult, setLastResult] = useState<null | {
+		created: number;
+		skippedDuplicate: number;
+		skippedInvalid: number;
+		warnings: number;
+		errors: number;
+	}>(null);
 
 	const modeLabel =
 		importMode === "personal_assigned"
@@ -79,6 +88,14 @@ export function CrmImportDialog({
 
 	const importMutation = trpc.crm.importCsv.useMutation({
 		onSuccess: (result) => {
+			setLastResult({
+				created: result.created,
+				skippedDuplicate: result.skippedDuplicate ?? 0,
+				skippedInvalid: result.skippedInvalid ?? 0,
+				warnings: result.warnings.length,
+				errors: result.errors.length,
+			});
+			setStep(3);
 			const parts = [
 				`${result.created} created`,
 				result.skippedDuplicate
@@ -117,7 +134,6 @@ export function CrmImportDialog({
 			}
 			void queryClient.invalidateQueries({ queryKey: [["crm"]] });
 			onImported();
-			handleClose();
 		},
 		onError: (e) => toast.error(e.message),
 	});
@@ -127,6 +143,8 @@ export function CrmImportDialog({
 		setRows([]);
 		setFileName(null);
 		setParseError(null);
+		setStep(1);
+		setLastResult(null);
 		if (fileRef.current) fileRef.current.value = "";
 	};
 
@@ -135,6 +153,8 @@ export function CrmImportDialog({
 		setParseError(null);
 		setRows([]);
 		setFileName(null);
+		setLastResult(null);
+		setStep(1);
 		if (!file) return;
 		if (!/\.csv$/i.test(file.name)) {
 			setParseError("Please choose a .csv file.");
@@ -149,6 +169,7 @@ export function CrmImportDialog({
 			}
 			setRows(parsed);
 			setFileName(file.name);
+			setStep(2);
 		} catch {
 			setParseError("Could not read that file.");
 		}
@@ -181,6 +202,24 @@ export function CrmImportDialog({
 					</DialogDescription>
 				</DialogHeader>
 
+				<div className="shrink-0 border-b bg-muted/10 px-6 py-3">
+					<div className="flex items-center justify-between text-xs text-muted-foreground">
+						<span className={step === 1 ? "font-medium text-foreground" : ""}>
+							1) Upload
+						</span>
+						<span className={step === 2 ? "font-medium text-foreground" : ""}>
+							2) Review
+						</span>
+						<span className={step === 3 ? "font-medium text-foreground" : ""}>
+							3) Results
+						</span>
+					</div>
+					<Progress
+						value={step === 1 ? 25 : step === 2 ? 65 : 100}
+						className="mt-2 h-2"
+					/>
+				</div>
+
 				<div
 					className={[
 						"min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-6 py-4",
@@ -196,6 +235,42 @@ export function CrmImportDialog({
 					].join(" ")}
 				>
 					<div className="space-y-4">
+						{step === 3 && lastResult ? (
+							<div className="rounded-lg border border-border/80 bg-muted/25 px-4 py-3 text-sm">
+								<p className="font-medium text-foreground">Import results</p>
+								<ul className="mt-2 grid gap-1 text-muted-foreground">
+									<li>
+										<strong className="text-foreground">{lastResult.created}</strong>{" "}
+										created
+									</li>
+									<li>
+										<strong className="text-foreground">
+											{lastResult.skippedDuplicate}
+										</strong>{" "}
+										skipped (duplicate)
+									</li>
+									<li>
+										<strong className="text-foreground">
+											{lastResult.skippedInvalid}
+										</strong>{" "}
+										skipped (invalid)
+									</li>
+									<li>
+										<strong className="text-foreground">{lastResult.warnings}</strong>{" "}
+										warnings
+									</li>
+									<li>
+										<strong className="text-foreground">{lastResult.errors}</strong>{" "}
+										errors
+									</li>
+								</ul>
+								<p className="mt-2 text-muted-foreground text-xs">
+									Close this dialog and refresh the list if you don’t see new rows
+									immediately.
+								</p>
+							</div>
+						) : null}
+
 						<div className="rounded-lg border border-border/80 bg-muted/25 px-3 py-2.5">
 							<p className="mb-2 font-medium text-foreground text-sm">
 								CSV columns (exactly what the importer reads)
@@ -341,26 +416,31 @@ export function CrmImportDialog({
 						onClick={handleClose}
 						disabled={importMutation.isPending}
 					>
-						Cancel
+						{step === 3 ? "Close" : "Cancel"}
 					</Button>
-					<Button
-						type="button"
-						size="sm"
-						onClick={handleImport}
-						disabled={
-							rows.length === 0 || !!parseError || importMutation.isPending
-						}
-						className="min-w-[120px] bg-green-600 hover:bg-green-700"
-					>
-						{importMutation.isPending ? (
-							<>
-								<RiLoader4Line className="mr-1.5 size-4 animate-spin" />
-								Importing…
-							</>
-						) : (
-							"Import"
-						)}
-					</Button>
+					{step !== 3 && (
+						<Button
+							type="button"
+							size="sm"
+							onClick={handleImport}
+							disabled={
+								rows.length === 0 ||
+								!!parseError ||
+								importMutation.isPending ||
+								step !== 2
+							}
+							className="min-w-[120px] bg-green-600 hover:bg-green-700"
+						>
+							{importMutation.isPending ? (
+								<>
+									<RiLoader4Line className="mr-1.5 size-4 animate-spin" />
+									Importing…
+								</>
+							) : (
+								"Import"
+							)}
+						</Button>
+					)}
 				</DialogFooter>
 			</DialogContent>
 		</Dialog>
