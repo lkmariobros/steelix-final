@@ -166,11 +166,17 @@ export function KanbanBoard({
 						onDrop={(e) => handleDrop(e, stage.id)}
 					>
 						{/* Column Header */}
-						<div
-							className={`${stage.color} mb-2 rounded-md border border-border px-2 py-2`}
-						>
+						<div className="mb-2 rounded-md border border-border bg-muted/20 px-2 py-2">
 							<div className="flex items-center justify-between gap-2">
-								<h3 className="font-medium text-xs leading-tight">{stage.label}</h3>
+								<div className="flex min-w-0 items-center gap-2">
+									<span
+										aria-hidden="true"
+										className={`${stage.color} size-2.5 shrink-0 rounded-sm`}
+									/>
+									<h3 className="min-w-0 truncate font-semibold text-foreground text-xs leading-tight">
+										{stage.label}
+									</h3>
+								</div>
 								<Badge variant="secondary" className="h-5 min-w-5 px-1.5 text-[10px] tabular-nums">
 									{stageProspects.length}
 								</Badge>

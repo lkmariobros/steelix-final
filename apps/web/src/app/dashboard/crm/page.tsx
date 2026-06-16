@@ -258,8 +258,8 @@ export default function CRMPage() {
 					? (statusFilter as "active" | "inactive" | "pending")
 					: undefined,
 			overdueOnly: overdueOnly || undefined,
-			leadType: activeTab === "company" ? ("company" as const) : undefined,
-			includeCompanyLeads: activeTab === "company",
+			leadType:
+				activeTab === "company" ? ("company" as const) : ("personal" as const),
 			page: currentPage,
 			limit: viewMode === "kanban" ? 1000 : itemsPerPage,
 		},
@@ -287,8 +287,8 @@ export default function CRMPage() {
 					? (statusFilter as "active" | "inactive" | "pending")
 					: undefined,
 			overdueOnly: overdueOnly || undefined,
-			leadType: activeTab === "company" ? ("company" as const) : undefined,
-			includeCompanyLeads: activeTab === "company",
+			leadType:
+				activeTab === "company" ? ("company" as const) : ("personal" as const),
 			page: 1,
 			limit: 5000,
 			forExport: true as const,
@@ -523,23 +523,6 @@ export default function CRMPage() {
 		setStagePromptTargetStage(null);
 	};
 
-	// Claim lead handler
-	const claimLeadMutation = trpc.crm.claimLead.useMutation({
-		onSuccess: () => {
-			toast.success("Lead claimed successfully!");
-			queryClient.invalidateQueries({ queryKey: [["crm", "list"]] });
-			refetchProspects();
-		},
-		onError: (error) => {
-			console.error("Error claiming lead:", error);
-			toast.error("Failed to claim lead. Please try again.");
-		},
-	});
-
-	const handleClaimLead = (prospectId: string) => {
-		claimLeadMutation.mutate({ id: prospectId });
-	};
-
 	// Authentication check
 	if (isPending) {
 		return <LoadingScreen text="Loading..." />;
@@ -736,9 +719,7 @@ export default function CRMPage() {
 						</div>
 						{activeTab === "company" ? (
 							<p className="text-muted-foreground text-sm">
-								Unclaimed company leads shared with all agents. Tap{" "}
-								<span className="font-medium text-foreground">Claim Lead</span>{" "}
-								to assign one to yourself.
+								Company leads (lead type = Company Lead).
 							</p>
 						) : null}
 					</div>
@@ -1012,10 +993,10 @@ export default function CRMPage() {
 							<DialogHeader>
 								<DialogTitle className="flex items-center gap-2">
 									<RiUserLine className="size-5" />
-									Prospect Details
+									Lead Detail
 								</DialogTitle>
 								<DialogDescription>
-									View complete information about this prospect.
+									View complete information about this lead.
 								</DialogDescription>
 							</DialogHeader>
 
@@ -1063,10 +1044,10 @@ export default function CRMPage() {
 										</div>
 									</div>
 
-									{/* Prospect Details */}
+									{/* Lead Detail */}
 									<div className="space-y-3" style={{ marginBottom: "15px" }}>
 										<div className="font-medium text-muted-foreground text-sm">
-											Prospect Details
+											Lead Detail
 										</div>
 										<div className="space-y-3 rounded-lg border bg-muted/30 p-4">
 											<div className="flex items-center justify-between">
@@ -1078,19 +1059,26 @@ export default function CRMPage() {
 													{selectedProspect.source}
 												</div>
 											</div>
-											{activeTab === "company" ? (
-												<div className="flex items-center justify-between">
-													<div className="flex items-center gap-2 text-muted-foreground text-sm">
-														<RiPriceTagLine className="size-4" />
-														Type
-													</div>
-													<Badge variant="outline" className="capitalize">
-														{selectedProspect.type === "tenant"
-															? "Tenant"
-															: "Owner"}
-													</Badge>
+											<div className="flex items-center justify-between">
+												<div className="flex items-center gap-2 text-muted-foreground text-sm">
+													<RiPriceTagLine className="size-4" />
+													Lead Type
 												</div>
-											) : null}
+												<Badge variant="outline" className="capitalize">
+													{selectedProspect.leadType === "company"
+														? "Company Lead"
+														: "Personal Lead"}
+												</Badge>
+											</div>
+											<div className="flex items-center justify-between">
+												<div className="flex items-center gap-2 text-muted-foreground text-sm">
+													<RiLinksLine className="size-4" />
+													Lead Stage
+												</div>
+												<Badge variant="secondary" className="capitalize">
+													{String(selectedProspect.stage).replaceAll("_", " ")}
+												</Badge>
+											</div>
 											<div className="flex items-start justify-between gap-2">
 												<div className="flex items-center gap-2 text-muted-foreground text-sm">
 													<RiPriceTagLine className="size-4 shrink-0" />
@@ -1129,9 +1117,6 @@ export default function CRMPage() {
 															—
 														</span>
 													)}
-													<p className="mt-1 text-muted-foreground text-xs">
-														Assigned by admin only
-													</p>
 												</div>
 											</div>
 											{selectedProspect.agentName && (
@@ -1145,33 +1130,6 @@ export default function CRMPage() {
 													</div>
 												</div>
 											)}
-											<div className="flex items-center justify-between">
-												<div className="flex items-center gap-2 text-muted-foreground text-sm">
-													<RiPriceTagLine className="size-4" />
-													Status
-												</div>
-												<Badge
-													variant="outline"
-													className={`capitalize ${
-														selectedProspect.status === "active"
-															? "border-green-500 text-green-700 dark:text-green-400"
-															: selectedProspect.status === "pending"
-																? "border-yellow-500 text-yellow-700 dark:text-yellow-400"
-																: "border-gray-500 text-gray-700 dark:text-gray-400"
-													}`}
-												>
-													{selectedProspect.status}
-												</Badge>
-											</div>
-											<div className="flex items-center justify-between">
-												<div className="flex items-center gap-2 text-muted-foreground text-sm">
-													<RiHomeLine className="size-4" />
-													Property
-												</div>
-												<div className="font-medium text-sm">
-													{selectedProspect.property || "Not specified"}
-												</div>
-											</div>
 											{selectedProspect.projectName && (
 												<div className="flex items-center justify-between">
 													<div className="flex items-center gap-2 text-muted-foreground text-sm">
@@ -1503,9 +1461,6 @@ export default function CRMPage() {
 									onView={handleView}
 									onStageChange={handleStageChange}
 									leadsTab={activeTab}
-									onClaimLead={
-										activeTab === "company" ? handleClaimLead : undefined
-									}
 								/>
 							)}
 						</div>
@@ -1635,10 +1590,17 @@ export default function CRMPage() {
 														</div>
 														<div className="flex items-center gap-2">
 															<RiPriceTagLine className="size-4 text-muted-foreground" />
-															<Badge variant="outline" className="capitalize">
-																{activeTab === "company"
-																	? `${prospect.type === "tenant" ? "Tenant" : "Owner"} | ${prospect.status}`
-																	: prospect.status}
+															<Badge
+																variant="outline"
+																className={`capitalize ${
+																	prospect.status === "active"
+																		? "border-green-500/60 text-green-600 dark:text-green-400"
+																		: prospect.status === "pending"
+																			? "border-amber-500/60 text-amber-600 dark:text-amber-400"
+																			: "border-slate-500/60 text-slate-600 dark:text-slate-300"
+																}`}
+															>
+																{prospect.status}
 															</Badge>
 														</div>
 														<div className="flex items-center gap-2">
@@ -1686,19 +1648,6 @@ export default function CRMPage() {
 
 												{/* Action Buttons */}
 												<div className="flex items-center gap-2">
-													{activeTab === "company" &&
-														prospect.leadType === "company" &&
-														!prospect.agentId && (
-															<Button
-																variant="secondary"
-																size="sm"
-																title="Assign this company lead to yourself"
-																onClick={() => handleClaimLead(prospect.id)}
-																className="cursor-pointer"
-															>
-																Claim Lead
-															</Button>
-														)}
 													<Button
 														variant="outline"
 														size="sm"
