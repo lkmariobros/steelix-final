@@ -8,7 +8,6 @@ import type { Lead } from "./lead-models";
 import {
 	LEAD_TYPE_OPTIONS,
 	PIPELINE_STAGES,
-	STATUS_OPTIONS,
 	TYPE_OPTIONS,
 	type PipelineStageValue,
 } from "./lead-constants";
@@ -57,8 +56,6 @@ export function EditLeadDialog({
 		phone: "",
 		source: "",
 		type: "buyer" as "tenant" | "buyer",
-		property: "",
-		status: "active" as "active" | "inactive" | "pending",
 		stage: "new_lead",
 		leadType: "personal" as "personal" | "company",
 		agentId: "",
@@ -118,8 +115,6 @@ export function EditLeadDialog({
 				phone: lead.phone,
 				source: lead.source,
 				type: lead.type,
-				property: lead.property,
-				status: lead.status,
 				stage: lead.stage,
 				leadType: lead.leadType,
 				agentId: lead.agentId ?? "__unassigned__",
@@ -204,14 +199,6 @@ export function EditLeadDialog({
 						/>
 					</div>
 					<div className="space-y-1.5">
-						<Label htmlFor="edit-property">Property</Label>
-						<Input
-							id="edit-property"
-							value={form.property}
-							onChange={f("property")}
-						/>
-					</div>
-					<div className="space-y-1.5">
 						<Label>Type</Label>
 						<Select
 							value={form.type}
@@ -224,29 +211,6 @@ export function EditLeadDialog({
 							</SelectTrigger>
 							<SelectContent>
 								{TYPE_OPTIONS.map((o) => (
-									<SelectItem key={o.value} value={o.value}>
-										{o.label}
-									</SelectItem>
-								))}
-							</SelectContent>
-						</Select>
-					</div>
-					<div className="space-y-1.5">
-						<Label>Status</Label>
-						<Select
-							value={form.status}
-							onValueChange={(v) =>
-								setForm((p) => ({
-									...p,
-									status: v as "active" | "inactive" | "pending",
-								}))
-							}
-						>
-							<SelectTrigger>
-								<SelectValue />
-							</SelectTrigger>
-							<SelectContent>
-								{STATUS_OPTIONS.map((o) => (
 									<SelectItem key={o.value} value={o.value}>
 										{o.label}
 									</SelectItem>
@@ -352,12 +316,17 @@ export function EditLeadDialog({
 						onClick={() =>
 							updateMutation.mutate({
 								id: lead.id,
-								...form,
+								name: form.name,
+								email: form.email,
+								phone: form.phone,
+								source: form.source,
+								type: form.type,
 								agentId:
 									form.agentId === "__unassigned__"
 										? undefined
 										: form.agentId || undefined,
 								stage: form.stage as PipelineStageValue,
+								leadType: form.leadType,
 								tagIds,
 							})
 						}

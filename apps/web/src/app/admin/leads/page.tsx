@@ -49,6 +49,7 @@ import {
 	RiFileUploadLine,
 	RiFileList3Line,
 	RiLoader4Line,
+	RiPriceTagLine,
 	RiSearchLine,
 	RiShieldUserLine,
 	RiUserLine,
@@ -103,6 +104,7 @@ export default function AdminLeadsPage() {
 	const [stageFilter, setStageFilter] = useState("__all__");
 	const [leadTypeFilter, setLeadTypeFilter] = useState("__all__");
 	const [agentFilter, setAgentFilter] = useState("__all__");
+	const [categoryFilter, setCategoryFilter] = useState("__all__");
 	const [sortKey, setSortKey] = useState<SortKey>("createdAt");
 	const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
 	const [page, setPage] = useState(1);
@@ -138,9 +140,14 @@ export default function AdminLeadsPage() {
 		undefined,
 		{ staleTime: 3 * 60 * 1000 },
 	);
+	const { data: tagsData } = trpc.tags.list.useQuery(
+		{ page: 1, limit: 100 },
+		{ staleTime: 30_000 },
+	);
 
 	const allLeads = (rawData?.leads ?? []) as Lead[];
 	const agents = agentsData ?? [];
+	const tags = tagsData?.tags ?? [];
 
 	// ── Sort handler (just updates state, no API call) ──────────────────────
 	// Read sortKey directly from closure — avoids unreliable nested state setters
@@ -161,7 +168,7 @@ export default function AdminLeadsPage() {
 
 	// ── All filtering + sorting + pagination via useMemo ────────────────────
 	// Runs entirely in memory — instant, no network round-trips
-	const { visibleLeads, totalFiltered, kanbanLeads } = useMemo(() => {
+	const { visibleLeads, totalFiltered, kanbanLeads, filteredLeads } = useMemo(() => {
 		const q = search.toLowerCase().trim();
 
 		// 1. Filter
@@ -193,6 +200,15 @@ export default function AdminLeadsPage() {
 				}
 			}
 
+			if (categoryFilter !== "__all__") {
+				const tagIds = lead.tagIds ?? [];
+				if (categoryFilter === "__none__") {
+					if (tagIds.length > 0) return false;
+				} else {
+					if (!tagIds.includes(categoryFilter)) return false;
+				}
+			}
+
 			return true;
 		});
 
@@ -219,12 +235,13 @@ export default function AdminLeadsPage() {
 
 		const totalFiltered = filtered.length;
 		const kanbanLeads = filtered;
+		const filteredLeads = filtered;
 
 		// 3. Paginate
 		const start = (page - 1) * pageSize;
 		const visibleLeads = filtered.slice(start, start + pageSize);
 
-		return { visibleLeads, totalFiltered, kanbanLeads };
+		return { visibleLeads, totalFiltered, kanbanLeads, filteredLeads };
 	}, [
 		allLeads,
 		search,
@@ -232,6 +249,7 @@ export default function AdminLeadsPage() {
 		stageFilter,
 		leadTypeFilter,
 		agentFilter,
+		categoryFilter,
 		sortKey,
 		sortOrder,
 		page,
@@ -255,6 +273,7 @@ export default function AdminLeadsPage() {
 		setStageFilter("__all__");
 		setLeadTypeFilter("__all__");
 		setAgentFilter("__all__");
+		setCategoryFilter("__all__");
 		setPage(1);
 	};
 
@@ -263,7 +282,8 @@ export default function AdminLeadsPage() {
 		typeFilter !== "__all__" ||
 		stageFilter !== "__all__" ||
 		leadTypeFilter !== "__all__" ||
-		agentFilter !== "__all__";
+		agentFilter !== "__all__" ||
+		categoryFilter !== "__all__";
 
 	const handleRefresh = () => {
 		setSelectedIds(new Set());
@@ -512,10 +532,10 @@ export default function AdminLeadsPage() {
 					/>
 
 					{/* Stats */}
-					<StatsCards leads={allLeads} isLoading={leadsPending} />
+					<StatsCards leads={filteredLeads} isLoading={leadsPending} />
 
 					{/* Charts */}
-					<LeadsCharts leads={allLeads} isLoading={leadsPending} />
+					<LeadsCharts leads={filteredLeads} isLoading={leadsPending} />
 
 					{/* Today's Tasks */}
 					<TodayTasksWidget
@@ -626,6 +646,28 @@ export default function AdminLeadsPage() {
 										</SelectContent>
 									</Select>
 
+									<Select
+										value={categoryFilter}
+										onValueChange={setFilter(setCategoryFilter)}
+									>
+										<SelectTrigger className="h-9 w-[150px] text-xs">
+											<RiPriceTagLine
+												size={13}
+												className="mr-1.5 shrink-0 text-muted-foreground"
+											/>
+											<SelectValue placeholder="Category" />
+										</SelectTrigger>
+										<SelectContent>
+											<SelectItem value="__all__">All Categories</SelectItem>
+											<SelectItem value="__none__">Uncategorized</SelectItem>
+											{tags.map((t) => (
+												<SelectItem key={t.id} value={t.id}>
+													{t.name}
+												</SelectItem>
+											))}
+										</SelectContent>
+									</Select>
+
 									{hasFilters && (
 										<Button
 											variant="ghost"
@@ -692,6 +734,27 @@ export default function AdminLeadsPage() {
 												type="button"
 												onClick={() => {
 													setTypeFilter("__all__");
+													setPage(1);
+												}}
+												className="ml-0.5 rounded-sm opacity-60 hover:opacity-100"
+											>
+												<RiCloseLine size={11} />
+											</button>
+										</span>
+									)}
+									{categoryFilter !== "__all__" && (
+										<span className="inline-flex items-center gap-1 rounded-md border bg-muted/60 px-2 py-0.5 text-xs">
+											Category:{" "}
+											<span className="font-medium">
+												{categoryFilter === "__none__"
+													? "Uncategorized"
+													: (tags.find((t) => t.id === categoryFilter)?.name ??
+														categoryFilter)}
+											</span>
+											<button
+												type="button"
+												onClick={() => {
+													setCategoryFilter("__all__");
 													setPage(1);
 												}}
 												className="ml-0.5 rounded-sm opacity-60 hover:opacity-100"

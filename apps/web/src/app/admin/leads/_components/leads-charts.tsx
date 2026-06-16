@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Skeleton } from "@/components/ui/skeleton";
 import type { Lead } from "./lead-models";
 import { PIPELINE_STAGES } from "./lead-constants";
+import { getLeadDisplayTags } from "./lead-models";
 import {
 	Area,
 	AreaChart,
@@ -84,7 +85,7 @@ export function LeadsCharts({
 	leads: Lead[];
 	isLoading: boolean;
 }) {
-	const { stageData, monthlyData } = useMemo(() => {
+	const { stageData, monthlyData, categoryData, totalLeads } = useMemo(() => {
 		// Stage distribution — attach color to each datum for the custom tooltip
 		const stageCounts: Record<string, number> = {};
 		for (const lead of leads) {
@@ -120,14 +121,36 @@ export function LeadsCharts({
 			leads: monthlyCounts[m.key] ?? 0,
 		}));
 
-		return { stageData, monthlyData };
-	}, [leads]);
+		const totalLeads = leads.length;
 
-	const totalLeads = stageData.reduce((s, d) => s + d.value, 0);
+		// Category distribution (tags)
+		const categoryCounts: Record<string, number> = {};
+		for (const lead of leads) {
+			const tags = getLeadDisplayTags(lead);
+			if (tags.length === 0) {
+				categoryCounts["Uncategorized"] = (categoryCounts["Uncategorized"] ?? 0) + 1;
+				continue;
+			}
+			for (const t of tags) {
+				categoryCounts[t] = (categoryCounts[t] ?? 0) + 1;
+			}
+		}
+
+		const categoryData = Object.entries(categoryCounts)
+			.map(([name, value], i) => ({
+				name,
+				value,
+				color: CHART_COLORS[i % CHART_COLORS.length],
+			}))
+			.sort((a, b) => b.value - a.value)
+			.slice(0, 10); // keep legend readable
+
+		return { stageData, monthlyData, categoryData, totalLeads };
+	}, [leads]);
 
 	if (isLoading) {
 		return (
-			<div className="grid gap-4 lg:grid-cols-3">
+			<div className="grid gap-4 lg:grid-cols-4">
 				<Card className="lg:col-span-2">
 					<CardHeader className="pb-3">
 						<Skeleton className="h-4 w-40" />
@@ -146,6 +169,15 @@ export function LeadsCharts({
 						<Skeleton className="h-[180px] w-[180px] rounded-full" />
 					</CardContent>
 				</Card>
+				<Card>
+					<CardHeader className="pb-3">
+						<Skeleton className="h-4 w-40" />
+						<Skeleton className="h-3 w-52" />
+					</CardHeader>
+					<CardContent className="flex items-center justify-center">
+						<Skeleton className="h-[180px] w-[180px] rounded-full" />
+					</CardContent>
+				</Card>
 			</div>
 		);
 	}
@@ -153,7 +185,7 @@ export function LeadsCharts({
 	if (leads.length === 0) return null;
 
 	return (
-		<div className="grid gap-4 lg:grid-cols-3">
+		<div className="grid gap-4 lg:grid-cols-4">
 			{/* ── Monthly trend — area chart ── */}
 			<Card className="lg:col-span-2">
 				<CardHeader className="pb-2">
@@ -298,6 +330,74 @@ export function LeadsCharts({
 									</span>
 									<span className="w-5 shrink-0 text-right font-semibold text-foreground text-xs">
 										{s.value}
+									</span>
+								</div>
+							);
+						})}
+					</div>
+				</CardContent>
+			</Card>
+
+			{/* ── Category distribution — donut chart ── */}
+			<Card>
+				<CardHeader className="pb-2">
+					<CardTitle className="font-semibold text-sm">
+						Category Distribution
+					</CardTitle>
+					<CardDescription className="text-xs">
+						Leads by category (top 10)
+					</CardDescription>
+				</CardHeader>
+				<CardContent className="pb-3">
+					<div className="relative">
+						<ResponsiveContainer width="100%" height={180}>
+							<PieChart>
+								<Pie
+									data={categoryData}
+									cx="50%"
+									cy="50%"
+									innerRadius={54}
+									outerRadius={80}
+									paddingAngle={3}
+									dataKey="value"
+									strokeWidth={0}
+								>
+									{categoryData.map((entry, idx) => (
+										<Cell key={`cat-cell-${idx}`} fill={entry.color} />
+									))}
+								</Pie>
+								{/* @ts-ignore */}
+								<Tooltip content={<PieTooltip />} />
+							</PieChart>
+						</ResponsiveContainer>
+						<div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+							<span className="font-bold text-2xl text-foreground leading-none">
+								{totalLeads}
+							</span>
+							<span className="mt-0.5 text-muted-foreground text-xs">total</span>
+						</div>
+					</div>
+
+					<div className="mt-2 space-y-1.5">
+						{categoryData.map((c) => {
+							const pct = totalLeads ? Math.round((c.value / totalLeads) * 100) : 0;
+							return (
+								<div key={c.name} className="flex items-center gap-2">
+									<span
+										className="size-2.5 shrink-0 rounded-sm"
+										style={{ backgroundColor: c.color }}
+									/>
+									<span
+										className="min-w-0 flex-1 truncate font-medium text-foreground/90 text-xs"
+										title={c.name}
+									>
+										{c.name}
+									</span>
+									<span className="shrink-0 text-muted-foreground text-xs">
+										{pct}%
+									</span>
+									<span className="w-5 shrink-0 text-right font-semibold text-foreground text-xs">
+										{c.value}
 									</span>
 								</div>
 							);
