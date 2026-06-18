@@ -120,16 +120,16 @@ export default function CommissionSchemesAdminPage() {
 								</BreadcrumbItem>
 								<BreadcrumbSeparator className="hidden md:block" />
 								<BreadcrumbItem className="hidden md:block">
-									<BreadcrumbLink href="/admin/settings" className="flex items-center gap-1">
+									<BreadcrumbLink href="/admin/commission-settings" className="flex items-center gap-1">
 										<RiSettings3Line size={16} />
-										Settings
+										Commission Settings
 									</BreadcrumbLink>
 								</BreadcrumbItem>
 								<BreadcrumbSeparator className="hidden md:block" />
 								<BreadcrumbItem>
 									<BreadcrumbPage className="flex items-center gap-2">
 										<RiFileList3Line size={20} aria-hidden="true" />
-										Commission Schemes
+										Primary Market Schemes
 									</BreadcrumbPage>
 								</BreadcrumbItem>
 							</BreadcrumbList>
@@ -143,12 +143,9 @@ export default function CommissionSchemesAdminPage() {
 				<div className="flex flex-1 flex-col gap-6 py-6">
 					<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 						<div>
-							<h1 className="font-bold text-2xl tracking-tight">Commission Schemes</h1>
+							<h1 className="font-bold text-2xl tracking-tight">Primary Market Schemes</h1>
 							<p className="text-muted-foreground text-sm">
-								Primary market — developer/project commission rates (agents receive 100% of scheme)
-							</p>
-							<p className="text-muted-foreground text-sm">
-								Manage commission rates, SST rules, and effective tiers per project/block.
+								Agent receives 100% of announced commission; uplines receive override % from scheme tiers.
 							</p>
 						</div>
 						<Button className="h-9" onClick={() => setIsCreateOpen(true)}>

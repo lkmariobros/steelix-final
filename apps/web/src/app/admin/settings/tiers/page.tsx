@@ -38,15 +38,15 @@ export default function TierConfigurationPage() {
 								</BreadcrumbItem>
 								<BreadcrumbSeparator className="hidden md:block" />
 								<BreadcrumbItem className="hidden md:block">
-									<BreadcrumbLink href="/admin/settings">
-										Settings
+									<BreadcrumbLink href="/admin/commission-settings">
+										Commission Settings
 									</BreadcrumbLink>
 								</BreadcrumbItem>
 								<BreadcrumbSeparator className="hidden md:block" />
 								<BreadcrumbItem>
 									<BreadcrumbPage className="flex items-center gap-2">
 										<RiSettings3Line size={20} aria-hidden="true" />
-										Tier Configuration
+										Secondary Market Tiers
 									</BreadcrumbPage>
 								</BreadcrumbItem>
 							</BreadcrumbList>
@@ -63,10 +63,10 @@ export default function TierConfigurationPage() {
 								<RiSettings3Line className="h-6 w-6 text-primary" />
 							</div>
 							<div>
-								<h1 className="font-bold text-3xl">Tier Configuration</h1>
+								<h1 className="font-bold text-3xl">Secondary Market Tiers</h1>
 								<p className="text-muted-foreground">
-									Secondary market tier splits (70/80/85/90), leadership bonus rates, and
-									recruitment-based promotion rules
+									Agent tier commission splits (70/80/85/90), leadership bonus from
+									company share, and promotion rules — separate from primary schemes
 								</p>
 							</div>
 						</div>

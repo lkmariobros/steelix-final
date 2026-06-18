@@ -520,6 +520,24 @@ export function StepDetails({
 									</div>
 								) : null}
 
+								{marketType === "primary" && selectedScheme?.tiers?.[0] ? (
+									<div className="md:col-span-2 rounded-lg border bg-muted/30 p-3 text-sm">
+										<p className="font-medium">Primary scheme preview</p>
+										<p className="mt-1 text-muted-foreground">
+											Announced commission:{" "}
+											{selectedScheme.tiers[0].commissionPercent.toFixed(2)}% — you
+											receive 100% of scheme net
+										</p>
+										{selectedScheme.tiers[0].overridePercent > 0 ? (
+											<p className="mt-1 text-muted-foreground">
+												Upline override:{" "}
+												{selectedScheme.tiers[0].overridePercent.toFixed(2)}% (paid
+												separately, not deducted from your share)
+											</p>
+										) : null}
+									</div>
+								) : null}
+
 								<FormField
 									control={form.control}
 									name="bookingDate"

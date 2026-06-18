@@ -32,6 +32,7 @@ function getCoBrokerSplit(tx: TxRow): number {
 export async function buildPrimaryCommissionPatch(
 	tx: TxRow,
 ): Promise<Record<string, unknown>> {
+	if (tx.marketType !== "primary") return {};
 	if (tx.commissionSchemeSnapshot) return {};
 
 	const property = tx.propertyData as
@@ -56,6 +57,18 @@ export async function buildPrimaryCommissionPatch(
 		sstPercent: scheme.sstPercent,
 		sstBorneBy: scheme.sstBorneBy,
 	});
+
+	const overridePercent = tier.overridePercent ?? 0;
+	const overrideBreakdown =
+		overridePercent > 0
+			? calculateSchemeCommission({
+					nettPrice,
+					commissionPercent: overridePercent,
+					incSst: scheme.incSst,
+					sstPercent: scheme.sstPercent,
+					sstBorneBy: scheme.sstBorneBy,
+				})
+			: null;
 
 	return {
 		commissionType: "percentage" as const,
@@ -88,6 +101,9 @@ export async function buildPrimaryCommissionPatch(
 			sstAmount: breakdown.sstAmount,
 			agentNetCommission: breakdown.agentNetCommission,
 			agentSharePercent: 100,
+			overridePercent,
+			overrideGrossCommission: overrideBreakdown?.grossCommission ?? 0,
+			overrideNetCommission: overrideBreakdown?.agentNetCommission ?? 0,
 		},
 	};
 }
@@ -99,6 +115,7 @@ export async function buildSecondaryCommissionPatch(
 	tx: TxRow,
 	agentId: string,
 ): Promise<Record<string, unknown>> {
+	if (tx.marketType !== "secondary") return {};
 	const existing = tx.commissionBreakdown as { marketType?: string } | null;
 	if (existing?.marketType === "secondary") return {};
 
@@ -178,41 +195,24 @@ export async function lockCommissionOnSubmit(
 	if (tx.marketType === "secondary") {
 		return buildSecondaryCommissionPatch(tx, agentId);
 	}
-	return buildPrimaryCommissionPatch(tx);
+	if (tx.marketType === "primary") {
+		return buildPrimaryCommissionPatch(tx);
+	}
+	return {};
 }
 
 /**
- * Primary leadership bonus: paid from gross commission pool (not deducted from agent 100%).
+ * Primary market upline override payee: direct recruiter first, then team leader on the deal.
+ * Override amount comes from commission scheme tiers — not secondary tier config.
  */
-export async function recordPrimaryLeadershipBonus(
-	tx: TxRow,
-	grossCommission: number,
-): Promise<void> {
-	const [existing] = await db
-		.select({ id: leadershipBonusPayments.id })
-		.from(leadershipBonusPayments)
-		.where(eq(leadershipBonusPayments.transactionId, tx.id))
-		.limit(1);
-	if (existing) return;
-
-	const upline = await getUplineInfo(tx.agentId);
-	if (!upline?.uplineId || upline.leadershipBonusRate <= 0) return;
-
-	const bonusAmount =
-		Math.round(grossCommission * (upline.leadershipBonusRate / 100) * 100) /
-		100;
-	if (bonusAmount <= 0) return;
-
-	await createLeadershipBonusPayment(
-		tx.id,
-		tx.agentId,
-		upline.uplineId,
-		upline.uplineTier ?? "advisor",
-		grossCommission,
-		grossCommission,
-		upline.leadershipBonusRate,
-		bonusAmount,
-	);
+export async function resolvePrimaryOverridePayeeAgentId(
+	agentId: string,
+	teamLeaderAgentId: string | null | undefined,
+): Promise<string | null> {
+	const upline = await getUplineInfo(agentId);
+	const payee = upline?.uplineId ?? teamLeaderAgentId ?? null;
+	if (!payee || payee === agentId) return null;
+	return payee;
 }
 
 /**

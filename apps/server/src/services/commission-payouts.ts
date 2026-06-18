@@ -22,8 +22,8 @@ import type { AgentTier } from "../models/auth";
 import { transactions } from "../models/transactions";
 import { calculateSchemeCommission } from "./commission-schemes";
 import {
-	recordPrimaryLeadershipBonus,
 	recordSecondaryLeadershipBonus,
+	resolvePrimaryOverridePayeeAgentId,
 } from "./commission-calculation";
 import { db } from "../utils/db";
 
@@ -186,12 +186,13 @@ export async function ensurePayoutsForApprovedTransaction(tx: TxRow) {
 	const created = [negotiator];
 
 	const overridePct = schemeSnap?.overridePercent ?? 0;
-	if (
-		!isSecondary &&
-		overridePct > 0 &&
-		tx.teamLeaderAgentId &&
-		tx.teamLeaderAgentId !== tx.agentId
-	) {
+	const overridePayeeId = !isSecondary
+		? await resolvePrimaryOverridePayeeAgentId(
+				tx.agentId,
+				tx.teamLeaderAgentId,
+			)
+		: null;
+	if (!isSecondary && overridePct > 0 && overridePayeeId) {
 		const oCalc = calculateSchemeCommission({
 			nettPrice: nett,
 			commissionPercent: overridePct,
@@ -203,7 +204,7 @@ export async function ensurePayoutsForApprovedTransaction(tx: TxRow) {
 			.insert(commissionPayouts)
 			.values({
 				transactionId: tx.id,
-				payeeAgentId: tx.teamLeaderAgentId,
+				payeeAgentId: overridePayeeId,
 				payoutType: "override",
 				status: "pending_approval",
 				caseNo: tx.caseNo ?? null,
@@ -229,8 +230,6 @@ export async function ensurePayoutsForApprovedTransaction(tx: TxRow) {
 	try {
 		if (isSecondary && breakdown) {
 			await recordSecondaryLeadershipBonus(tx, breakdown);
-		} else if (!isSecondary) {
-			await recordPrimaryLeadershipBonus(tx, grossN);
 		}
 	} catch {
 		// Leadership bonus tables may not be migrated yet

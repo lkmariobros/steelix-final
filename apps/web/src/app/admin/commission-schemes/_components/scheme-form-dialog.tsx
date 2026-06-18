@@ -338,7 +338,10 @@ export function SchemeFormDialog({
 										/>
 									</div>
 									<div className="space-y-1.5">
-										<Label>Override %</Label>
+										<Label>Upline override %</Label>
+										<p className="text-muted-foreground text-xs">
+											Paid separately to recruiter upline (primary market only)
+										</p>
 										<Input
 											value={t.overridePercent}
 											onChange={(e) =>

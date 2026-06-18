@@ -335,8 +335,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 							icon: RiSettings3Line,
 						},
 						{
-							title: "Commission schemes",
-							url: "/admin/commission-schemes",
+							title: "Commission settings",
+							url: "/admin/commission-settings",
 							icon: RiMoneyDollarCircleLine,
 						},
 						{

@@ -19,9 +19,18 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { authClient } from "@/lib/auth-client";
-import { RiDashboardLine, RiSettings3Line } from "@remixicon/react";
+import {
+	RiArrowRightLine,
+	RiBuilding2Line,
+	RiDashboardLine,
+	RiMoneyDollarCircleLine,
+	RiSettings3Line,
+	RiTeamLine,
+} from "@remixicon/react";
+import Link from "next/link";
 export default function AdminSettingsPage() {
 	const { data: session } = authClient.useSession();
 
@@ -65,7 +74,7 @@ export default function AdminSettingsPage() {
 						<div>
 							<h1 className="font-bold text-3xl">Admin Settings</h1>
 							<p className="text-muted-foreground">
-								View your admin account information and system status
+								Account information and commission configuration
 							</p>
 						</div>
 					</div>
@@ -108,6 +117,56 @@ export default function AdminSettingsPage() {
 									policies, etc.), please contact your system administrator or
 									modify environment variables directly.
 								</p>
+							</CardContent>
+						</Card>
+
+						<Card className="mt-6">
+							<CardHeader>
+								<CardTitle>Commission configuration</CardTitle>
+								<CardDescription>
+									Primary and secondary markets use separate rules — adjust
+									schemes and tier splits without mixing markets
+								</CardDescription>
+							</CardHeader>
+							<CardContent className="grid gap-4 sm:grid-cols-2">
+								<div className="rounded-lg border p-4">
+									<div className="mb-2 flex items-center gap-2">
+										<RiBuilding2Line className="size-5 text-primary" />
+										<p className="font-medium">Primary market schemes</p>
+									</div>
+									<p className="mb-3 text-muted-foreground text-sm">
+										Project commission %, SST rules, and upline override %
+									</p>
+									<Button asChild size="sm" variant="outline">
+										<Link href="/admin/commission-schemes">
+											Open schemes
+											<RiArrowRightLine className="ml-1 size-4" />
+										</Link>
+									</Button>
+								</div>
+								<div className="rounded-lg border p-4">
+									<div className="mb-2 flex items-center gap-2">
+										<RiTeamLine className="size-5 text-primary" />
+										<p className="font-medium">Secondary market tiers</p>
+									</div>
+									<p className="mb-3 text-muted-foreground text-sm">
+										Agent tier splits (70/80/85/90) and leadership bonus rates
+									</p>
+									<Button asChild size="sm" variant="outline">
+										<Link href="/admin/settings/tiers">
+											Open tier config
+											<RiArrowRightLine className="ml-1 size-4" />
+										</Link>
+									</Button>
+								</div>
+								<div className="sm:col-span-2">
+									<Button asChild variant="secondary">
+										<Link href="/admin/commission-settings">
+											<RiMoneyDollarCircleLine className="mr-1.5 size-4" />
+											Commission settings overview
+										</Link>
+									</Button>
+								</div>
 							</CardContent>
 						</Card>
 				</div>

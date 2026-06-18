@@ -24,7 +24,7 @@ export function SchemeTiersRow({
 					<tr>
 						<th className="px-3 py-2 text-left">Tier</th>
 						<th className="px-3 py-2 text-left">Commission %</th>
-						<th className="px-3 py-2 text-left">Override %</th>
+						<th className="px-3 py-2 text-left">Upline override %</th>
 						<th className="px-3 py-2 text-left">Effective From</th>
 						<th className="px-3 py-2 text-left">Effective To</th>
 						<th className="px-3 py-2 text-left">Active</th>
