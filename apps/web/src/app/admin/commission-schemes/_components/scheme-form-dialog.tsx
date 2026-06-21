@@ -222,7 +222,7 @@ export function SchemeFormDialog({
 							/>
 						</div>
 						<div className="col-span-2 space-y-1.5">
-							<Label>Block (listing)</Label>
+							<Label>Block</Label>
 							<Select
 								value={form.blockType}
 								onValueChange={(v) => setForm((p) => ({ ...p, blockType: v }))}

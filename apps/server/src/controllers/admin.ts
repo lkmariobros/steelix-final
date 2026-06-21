@@ -232,7 +232,6 @@ export const adminRouter = router({
 			const newStatus = input.action === "approve" ? "verified" : "cancelled";
 			const reviewableStatuses = [
 				...dbStatusesForCanonicalFilter("pending"),
-				...dbStatusesForCanonicalFilter("verified"),
 			];
 
 			// Verify transaction exists and is in correct state

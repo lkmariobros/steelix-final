@@ -127,6 +127,13 @@ export function resolveSegmentConfig(
 	);
 }
 
+export function getSegmentPageUrl(config: AdminTransactionSegmentConfig): string {
+	if (config.view === "requests") {
+		return `/admin/approvals/requests?segment=${config.segment}`;
+	}
+	return `/admin/transactions/${config.segment}/${config.pageKey}`;
+}
+
 export const TRANSACTIONS_SIDEBAR_SECTIONS = [
 	{
 		label: "New Project",

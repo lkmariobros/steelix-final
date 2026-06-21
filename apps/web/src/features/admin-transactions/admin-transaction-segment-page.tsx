@@ -26,6 +26,7 @@ import {
 } from "@/components/table";
 import { useTransactionModalActions } from "@/contexts/transaction-modal-context";
 import type { AdminTransactionSegmentConfig } from "@/features/admin-transactions/segment-config";
+import { getSegmentPageUrl } from "@/features/admin-transactions/segment-config";
 import { stashTransactionPrefillOnce } from "@/features/sales-entry/prefill-stash";
 import {
 	formatRm,
@@ -173,7 +174,7 @@ export function AdminTransactionSegmentPage({
 												{crumb}
 											</BreadcrumbPage>
 										) : (
-											<BreadcrumbLink href="/admin/transactions/new-project/sold-units">
+											<BreadcrumbLink href={getSegmentPageUrl(config)}>
 												{crumb}
 											</BreadcrumbLink>
 										)}

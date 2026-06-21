@@ -23,9 +23,9 @@ export function GlobalTransactionModal() {
 		if (!isOpen || mode !== "view" || !transactionId) return;
 		closeModal();
 		const base = pathname.startsWith("/admin")
-			? "/admin/transactions"
-			: "/dashboard/transactions";
-		router.push(`${base}/${transactionId}`);
+			? `/admin/transactions/case/${transactionId}`
+			: `/dashboard/transactions/${transactionId}`;
+		router.push(base);
 	}, [isOpen, mode, transactionId, closeModal, router, pathname]);
 
 	const handleSubmit = () => {

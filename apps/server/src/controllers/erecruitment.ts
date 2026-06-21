@@ -15,7 +15,6 @@ import {
 	getRecruitmentApplication,
 } from "../services/erecruitment";
 import { db } from "../utils/db";
-import { hasAdminAccess } from "../utils/user-roles";
 import {
 	adminProcedure,
 	protectedProcedure,
@@ -65,7 +64,7 @@ export const erecruitmentRouter = router({
 			return submitRecruitmentApplication(input);
 		}),
 
-	createLink: protectedProcedure
+	createLink: adminProcedure
 		.input(
 			z.object({
 				inviteeName: z.string().optional(),
@@ -75,14 +74,11 @@ export const erecruitmentRouter = router({
 		)
 		.mutation(async ({ ctx, input }) => {
 			const sessionUser = ctx.session.user;
-			const isAdmin = hasAdminAccess({
-				role: (sessionUser as { role?: string }).role,
-			});
 
 			let recruiterId = sessionUser.id;
 			let recruiterName = sessionUser.name ?? "Recruiter";
 
-			if (input.recruiterId && isAdmin) {
+			if (input.recruiterId) {
 				const [recruiter] = await db
 					.select({ id: user.id, name: user.name })
 					.from(user)

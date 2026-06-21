@@ -579,11 +579,34 @@ export const agentsRouter = router({
 	approve: adminProcedure
 		.input(approveAgentInput)
 		.mutation(async ({ input }) => {
+			const [existing] = await db
+				.select({
+					id: user.id,
+					agentStatus: user.agentStatus,
+					agentCode: user.agentCode,
+				})
+				.from(user)
+				.where(eq(user.id, input.agentId))
+				.limit(1);
+
+			if (!existing) throw new Error("Agent not found");
+
+			const status = existing.agentStatus ?? "pending_approval";
+			if (status !== "pending_approval") {
+				throw new TRPCError({
+					code: "BAD_REQUEST",
+					message: "Only pending agents can be approved",
+				});
+			}
+
+			const agentCode =
+				existing.agentCode?.trim() || (await getNextAgentCode());
 			const now = new Date();
 			const [updated] = await db
 				.update(user)
 				.set({
 					agentStatus: "active",
+					agentCode,
 					isActive: true,
 					deactivatedAt: null,
 					updatedAt: now,
