@@ -51,6 +51,7 @@ import {
 	RiMoneyDollarCircleLine,
 	RiPushpinLine,
 	RiArrowRightLine,
+	RiUserAddLine,
 } from "@remixicon/react";
 
 // Clean data structure - no mock teams
@@ -312,6 +313,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 							title: "Agent management",
 							url: "/admin/agents",
 							icon: RiTeamLine,
+						},
+						{
+							title: "eRecruitment Approval",
+							url: "/admin/erecruitment",
+							icon: RiUserAddLine,
 						},
 						{
 							title: "Lead Categories",

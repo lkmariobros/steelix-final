@@ -25,6 +25,7 @@ export type CommissionSchemeResolved = {
 	projectName: string;
 	blockListingId: string | null;
 	blockListingTitle: string | null;
+	blockType: string | null;
 	incSst: boolean;
 	sstPercent: number;
 	sstBorneBy: "client" | "agent";
@@ -126,6 +127,7 @@ export async function listCommissionSchemesAdmin(opts: {
 		projectName: r.scheme.projectName,
 		blockListingId: r.scheme.blockListingId ?? null,
 		blockListingTitle: r.blockTitle ?? null,
+		blockType: r.scheme.blockType ?? null,
 		incSst: r.scheme.incSst,
 		sstPercent: Number(r.scheme.sstPercent),
 		sstBorneBy: sstBorneBySchema.parse(r.scheme.sstBorneBy),
@@ -172,6 +174,7 @@ export async function createCommissionSchemeAdmin(input: {
 	description: string;
 	projectName: string;
 	blockListingId?: string | null;
+	blockType?: string | null;
 	isActive: boolean;
 	incSst: boolean;
 	sstPercent: number;
@@ -194,6 +197,7 @@ export async function createCommissionSchemeAdmin(input: {
 			description: input.description,
 			projectName: input.projectName,
 			blockListingId: input.blockListingId ?? null,
+			blockType: input.blockType ?? null,
 			isActive: input.isActive,
 			incSst: input.incSst,
 			sstPercent: String(input.sstPercent),
@@ -226,6 +230,7 @@ export async function updateCommissionSchemeAdmin(input: {
 		description: string;
 		projectName: string;
 		blockListingId: string | null;
+		blockType: string | null;
 		isActive: boolean;
 		incSst: boolean;
 		sstPercent: number;
@@ -252,6 +257,7 @@ export async function updateCommissionSchemeAdmin(input: {
 			...("blockListingId" in input.patch
 				? { blockListingId: input.patch.blockListingId }
 				: {}),
+			...("blockType" in input.patch ? { blockType: input.patch.blockType } : {}),
 			...("isActive" in input.patch ? { isActive: input.patch.isActive } : {}),
 			...("incSst" in input.patch ? { incSst: input.patch.incSst } : {}),
 			...("sstPercent" in input.patch
@@ -302,6 +308,7 @@ export async function duplicateCommissionSchemeAdmin(opts: {
 			description: existing.description,
 			projectName: existing.projectName,
 			blockListingId: existing.blockListingId ?? null,
+			blockType: existing.blockType ?? null,
 			isActive: false,
 			incSst: existing.incSst,
 			sstPercent: String(existing.sstPercent),

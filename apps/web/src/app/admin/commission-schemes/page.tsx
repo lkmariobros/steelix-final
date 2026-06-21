@@ -40,6 +40,7 @@ import { toast } from "sonner";
 import { BulkUpdateDialog } from "./_components/bulk-update-dialog";
 import { SchemeFormDialog } from "./_components/scheme-form-dialog";
 import { SchemeTiersRow } from "./_components/scheme-tiers-row";
+import { formatSchemeBlockLabel } from "@/lib/commission-scheme-block-types";
 
 export default function CommissionSchemesAdminPage() {
 	const { data: session } = authClient.useSession();
@@ -255,7 +256,12 @@ export default function CommissionSchemesAdminPage() {
 													<td className="px-4 py-3">
 														<div className="font-medium">{s.schemeName}</div>
 														<div className="text-muted-foreground text-xs">
-															{s.blockListingTitle ? `Block: ${s.blockListingTitle}` : "No block linked"}
+															{formatSchemeBlockLabel(
+																(s as { blockType?: string | null }).blockType,
+																s.blockListingTitle,
+															) !== "No block selected"
+																? `Block: ${formatSchemeBlockLabel((s as { blockType?: string | null }).blockType, s.blockListingTitle)}`
+																: "No block linked"}
 															{" · "}
 															{s.isActive ? "Active" : "Inactive"}
 														</div>

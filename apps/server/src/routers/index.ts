@@ -10,6 +10,7 @@ import { commissionSchemesRouter } from "../controllers/commission-schemes";
 import { crmRouter } from "../controllers/crm";
 import { dashboardRouter } from "../controllers/dashboard";
 import { documentsRouter } from "../controllers/documents";
+import { erecruitmentRouter } from "../controllers/erecruitment";
 import { feedbackRouter } from "../controllers/feedback";
 import { leadTasksRouter } from "../controllers/lead-tasks";
 import { listingsRouter } from "../controllers/listings";
@@ -38,6 +39,7 @@ export const appRouter = router({
 	commissionSchemes: commissionSchemesRouter,
 	commissionPayouts: commissionPayoutsRouter,
 	feedback: feedbackRouter,
+	erecruitment: erecruitmentRouter,
 	leadTasks: leadTasksRouter,
 	listings: listingsRouter,
 });

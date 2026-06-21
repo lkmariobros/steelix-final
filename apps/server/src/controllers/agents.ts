@@ -38,8 +38,10 @@ const listAgentsInput = z.object({
 	agencyId: z.string().uuid().optional(),
 	searchQuery: z.string().optional(),
 	isActive: z.boolean().optional(),
-	sortBy: z.enum(["name", "email", "createdAt", "agentTier"]).default("name"),
-	sortOrder: z.enum(["asc", "desc"]).default("asc"),
+	sortBy: z
+		.enum(["name", "email", "createdAt", "agentTier", "agentCode"])
+		.default("agentCode"),
+	sortOrder: z.enum(["asc", "desc"]).default("desc"),
 });
 
 const agentIdInput = z.object({
@@ -98,6 +100,24 @@ const setAgentActiveInput = z.object({
 	agentId: z.string(),
 	isActive: z.boolean(),
 });
+
+const approveAgentInput = z.object({
+	agentId: z.string(),
+});
+
+async function getNextAgentCode(): Promise<string> {
+	const [row] = await db
+		.select({
+			maxCode: sql<number | null>`max(
+        CASE
+          WHEN ${user.agentCode} ~ '^[0-9]+$' THEN cast(${user.agentCode} AS integer)
+          ELSE NULL
+        END
+      )`,
+		})
+		.from(user);
+	return String(Number(row?.maxCode ?? 0) + 1);
+}
 
 const agentPerformanceInput = z.object({
 	agentId: z.string(),
@@ -190,7 +210,15 @@ export const agentsRouter = router({
 					? user.email
 					: input.sortBy === "createdAt"
 						? user.createdAt
-						: user.agentTier;
+						: input.sortBy === "agentCode"
+							? sql`coalesce(
+                  CASE
+                    WHEN ${user.agentCode} ~ '^[0-9]+$' THEN cast(${user.agentCode} AS integer)
+                    ELSE NULL
+                  END,
+                  0
+                )`
+							: user.agentTier;
 
 		const orderByClause =
 			input.sortOrder === "asc" ? orderByColumn : desc(orderByColumn);
@@ -478,6 +506,7 @@ export const agentsRouter = router({
 		const now = new Date();
 		const userId = crypto.randomUUID();
 		const passwordHash = await hashPassword(input.password);
+		const agentCode = await getNextAgentCode();
 
 		const [createdUser] = await db
 			.insert(user)
@@ -501,6 +530,8 @@ export const agentsRouter = router({
 				tierPromotedBy: ctx.session.user.id,
 				recruitedBy: null,
 				recruitedAt: null,
+				agentCode,
+				agentStatus: "active",
 				createdAt: now,
 				updatedAt: now,
 			})
@@ -535,6 +566,26 @@ export const agentsRouter = router({
 				.set({
 					isActive: input.isActive,
 					deactivatedAt: input.isActive ? null : now,
+					agentStatus: input.isActive ? "active" : "inactive",
+					updatedAt: now,
+				})
+				.where(eq(user.id, input.agentId))
+				.returning();
+			if (!updated) throw new Error("Agent not found");
+			return updated;
+		}),
+
+	// Approve pending agent (admin only)
+	approve: adminProcedure
+		.input(approveAgentInput)
+		.mutation(async ({ input }) => {
+			const now = new Date();
+			const [updated] = await db
+				.update(user)
+				.set({
+					agentStatus: "active",
+					isActive: true,
+					deactivatedAt: null,
 					updatedAt: now,
 				})
 				.where(eq(user.id, input.agentId))
@@ -712,14 +763,20 @@ export const agentsRouter = router({
 
 	// Get agent statistics (admin only)
 	getStats: adminProcedure.query(async () => {
+		const now = new Date();
+		const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+		const startOfYear = new Date(now.getFullYear(), 0, 1);
+
 		// Overall agent stats
 		const [agentStats] = await db
 			.select({
 				totalAgents: sql<number>`count(*)`,
-				activeAgents: sql<number>`count(*) filter (where role = 'agent')`,
+				activeAgents: sql<number>`count(*) filter (where role = 'agent' and is_active = true)`,
 				teamLeads: sql<number>`count(*) filter (where role = 'team_lead')`,
 				admins: sql<number>`count(*) filter (where role = 'admin')`,
 				superAdmins: sql<number>`count(*) filter (where role = 'super_admin')`,
+				monthlyAgents: sql<number>`count(*) filter (where role in ('agent', 'team_lead') and created_at >= ${startOfMonth})`,
+				yearlyAgents: sql<number>`count(*) filter (where role in ('agent', 'team_lead') and created_at >= ${startOfYear})`,
 			})
 			.from(user);
 

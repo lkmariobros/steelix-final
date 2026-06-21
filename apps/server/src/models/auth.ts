@@ -21,6 +21,15 @@ export const agentTierEnum = pgEnum("agent_tier", [
 	"supreme_leader",
 ]);
 
+// Agent lifecycle status (separate from isActive toggle)
+export const agentStatusEnum = pgEnum("agent_status", [
+	"active",
+	"inactive",
+	"suspended",
+	"pending_approval",
+	"terminated",
+]);
+
 // Agencies table - top level of hierarchy
 export const agencies = pgTable("agencies", {
 	id: uuid("id").primaryKey().defaultRandom(),
@@ -73,6 +82,9 @@ export const user = pgTable(
 		// Recruitment/upline tracking for Leadership Bonus (1-level direct upline only)
 		recruitedBy: text("recruited_by"), // User ID of direct upline who recruited this agent
 		recruitedAt: timestamp("recruited_at"), // Date when agent was recruited
+		/** Display/sort code (e.g. 10, 9, 8…) — higher = listed first in admin directory */
+		agentCode: text("agent_code"),
+		agentStatus: agentStatusEnum("agent_status").default("pending_approval"),
 		createdAt: timestamp("created_at").notNull(),
 		updatedAt: timestamp("updated_at").notNull(),
 	},
@@ -81,6 +93,8 @@ export const user = pgTable(
 		agentTierIdx: index("idx_user_agent_tier").on(table.agentTier),
 		phoneIdx: index("idx_user_phone").on(table.phone),
 		activeIdx: index("idx_user_is_active").on(table.isActive),
+		agentCodeIdx: index("idx_user_agent_code").on(table.agentCode),
+		agentStatusIdx: index("idx_user_agent_status").on(table.agentStatus),
 	}),
 );
 
@@ -385,15 +399,6 @@ export type LeadershipBonusPayment = z.infer<
 	typeof leadershipBonusPaymentSchema
 >;
 export type UserWithTier = z.infer<typeof userWithTierSchema>;
-
-// Agent status enum for management
-export const agentStatusEnum = pgEnum("agent_status", [
-	"active",
-	"inactive",
-	"suspended",
-	"pending_approval",
-	"terminated",
-]);
 
 // Agent activity tracking
 export const agentActivities = pgTable(

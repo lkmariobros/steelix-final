@@ -75,6 +75,8 @@ export const commissionSchemesRouter = router({
 					effectiveTo: t.effectiveTo ?? null,
 					isActive: t.isActive ?? true,
 				})),
+				blockType: input.blockType ?? null,
+				blockListingId: input.blockListingId ?? null,
 				actorId: ctx.session.user.id,
 			});
 		}),

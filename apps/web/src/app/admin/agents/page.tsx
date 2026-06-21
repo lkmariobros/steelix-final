@@ -41,6 +41,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useUserRole } from "@/hooks/use-user-role";
 import { accountRoleBadgeClass, formatAccountRole } from "@/lib/user-role";
+import {
+	agentStatusBadgeClass,
+	formatAgentStatus,
+	isPendingAgentStatus,
+} from "@/lib/agent-status";
 import { trpc } from "@/utils/trpc";
 import {
 	RiAddLine,
@@ -75,6 +80,8 @@ interface AgentData {
 	companyCommissionSplit: number | null;
 	createdAt: string | null;
 	isActive?: boolean | null;
+	agentCode?: string | null;
+	agentStatus?: string | null;
 }
 
 type AccountRoleFilter =
@@ -150,6 +157,15 @@ export default function AdminAgentsPage() {
 		onError: (e) => toast.error(e.message || "Failed to update agent status"),
 	});
 
+	const approveAgentMutation = trpc.agents.approve.useMutation({
+		onSuccess: () => {
+			toast.success("Agent approved");
+			utils.agents.list.invalidate();
+			utils.agents.getStats.invalidate();
+		},
+		onError: (e) => toast.error(e.message || "Failed to approve agent"),
+	});
+
 	const resetPasswordMutation = trpc.agents.resetPassword.useMutation({
 		onSuccess: () => {
 			toast.success("Password updated");
@@ -179,8 +195,8 @@ export default function AdminAgentsPage() {
 				activeFilter === "all"
 					? undefined
 					: activeFilter === "active",
-			sortBy: "name",
-			sortOrder: "asc",
+			sortBy: "agentCode",
+			sortOrder: "desc",
 		},
 		{
 			enabled: !!session,
@@ -436,7 +452,7 @@ export default function AdminAgentsPage() {
 														<RiUserLine className="h-5 w-5 text-primary" />
 													</div>
 													<div className="space-y-1">
-														<div className="flex items-center gap-2">
+														<div className="flex flex-wrap items-center gap-2">
 															<span className="font-medium">
 																{agentItem.agent.name}
 															</span>
@@ -452,6 +468,21 @@ export default function AdminAgentsPage() {
 																	showIcon={true}
 																/>
 															)}
+															<span
+																className={`rounded-full px-2 py-1 text-xs ${agentStatusBadgeClass(
+																	(agentItem.agent as AgentData).agentStatus,
+																)}`}
+															>
+																{formatAgentStatus(
+																	(agentItem.agent as AgentData).agentStatus,
+																)}
+															</span>
+															{(agentItem.agent as AgentData).agentCode ? (
+																<span className="rounded-full bg-muted px-2 py-1 font-mono text-xs">
+																	Code{" "}
+																	{(agentItem.agent as AgentData).agentCode}
+																</span>
+															) : null}
 														</div>
 														<p className="text-muted-foreground text-sm">
 															{agentItem.agent.email}
@@ -461,6 +492,22 @@ export default function AdminAgentsPage() {
 													</div>
 												</div>
 												<div className="flex flex-wrap justify-end gap-2">
+													{isPendingAgentStatus(
+														(agentItem.agent as AgentData).agentStatus,
+													) && (
+														<Button
+															size="sm"
+															variant="secondary"
+															onClick={() =>
+																approveAgentMutation.mutate({
+																	agentId: agentItem.agent.id,
+																})
+															}
+															disabled={approveAgentMutation.isPending}
+														>
+															Approve
+														</Button>
+													)}
 													{isSuperAdmin &&
 														agentItem.agent.role !== "super_admin" && (
 														<Button

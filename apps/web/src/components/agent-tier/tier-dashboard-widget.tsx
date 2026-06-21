@@ -2,9 +2,7 @@
 
 import { trpc } from "@/utils/trpc"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Progress } from "@/components/ui/progress"
 import { Skeleton } from "@/components/ui/skeleton"
-import { TierBadge } from "./tier-badge"
 import {
   type AgentTier,
   AGENT_TIER_CONFIG,
@@ -14,8 +12,8 @@ import {
 import {
   RiBarChartBoxLine,
   RiTeamLine,
-  RiArrowUpLine,
-  RiStarLine,
+  RiCalendarLine,
+  RiCalendar2Line,
 } from "@remixicon/react"
 
 interface TierDashboardWidgetProps {
@@ -23,31 +21,38 @@ interface TierDashboardWidgetProps {
 }
 
 export function TierDashboardWidget({ className }: TierDashboardWidgetProps) {
-  const { data: agentsWithTiers, isLoading } = trpc.agentTiers.getAllAgentsWithTiers.useQuery({
-    limit: 100,
-    offset: 0,
-  })
+  const { data: agentStats, isLoading: statsLoading } =
+    trpc.agents.getStats.useQuery()
+  const { data: agentsWithTiers, isLoading: tiersLoading } =
+    trpc.agentTiers.getAllAgentsWithTiers.useQuery({
+      limit: 100,
+      offset: 0,
+    })
+
+  const isLoading = statsLoading || tiersLoading
 
   if (isLoading) {
     return <TierDashboardSkeleton className={className} />
   }
 
-  // Calculate tier distribution
+  const salesAgents =
+    agentsWithTiers?.filter(
+      (a) => a.role === "agent" || a.role === "team_lead",
+    ) ?? []
+
   const tierCounts = TIER_ORDER.reduce((acc, tier) => {
     acc[tier] = 0
     return acc
   }, {} as Record<AgentTier, number>)
 
-  agentsWithTiers?.forEach((agent) => {
-    const tier = (agent.agentTier || 'advisor') as AgentTier
+  salesAgents.forEach((agent) => {
+    const tier = (agent.agentTier || "advisor") as AgentTier
     tierCounts[tier]++
   })
 
-  const totalAgents = agentsWithTiers?.length || 0
-  const topTierAgents = tierCounts['supreme_leader'] + tierCounts['group_leader']
-  const avgCommission = totalAgents > 0
-    ? agentsWithTiers!.reduce((sum, a) => sum + (a.companyCommissionSplit || 60), 0) / totalAgents
-    : 60
+  const totalAgents = salesAgents.length
+  const monthlyAgents = agentStats?.monthlyAgents ?? 0
+  const yearlyAgents = agentStats?.yearlyAgents ?? 0
 
   return (
     <Card className={className}>
@@ -58,7 +63,6 @@ export function TierDashboardWidget({ className }: TierDashboardWidgetProps) {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
-        {/* Summary Stats */}
         <div className="grid grid-cols-3 gap-4">
           <div className="text-center p-3 rounded-lg bg-muted/50">
             <div className="flex items-center justify-center gap-1 text-2xl font-bold text-primary">
@@ -69,21 +73,20 @@ export function TierDashboardWidget({ className }: TierDashboardWidgetProps) {
           </div>
           <div className="text-center p-3 rounded-lg bg-muted/50">
             <div className="flex items-center justify-center gap-1 text-2xl font-bold text-amber-600">
-              <RiStarLine className="h-5 w-5" />
-              {topTierAgents}
+              <RiCalendarLine className="h-5 w-5" />
+              {monthlyAgents}
             </div>
-            <p className="text-xs text-muted-foreground">Top Tier</p>
+            <p className="text-xs text-muted-foreground">Total Monthly Agents</p>
           </div>
           <div className="text-center p-3 rounded-lg bg-muted/50">
             <div className="flex items-center justify-center gap-1 text-2xl font-bold text-green-600">
-              <RiArrowUpLine className="h-5 w-5" />
-              {avgCommission.toFixed(0)}%
+              <RiCalendar2Line className="h-5 w-5" />
+              {yearlyAgents}
             </div>
-            <p className="text-xs text-muted-foreground">Avg Split</p>
+            <p className="text-xs text-muted-foreground">Total Yearly Agents</p>
           </div>
         </div>
 
-        {/* Tier Distribution Bars */}
         <div className="space-y-3">
           <h4 className="text-sm font-medium text-muted-foreground">Distribution by Tier</h4>
           {TIER_ORDER.map((tier) => {
@@ -115,10 +118,9 @@ export function TierDashboardWidget({ className }: TierDashboardWidgetProps) {
           })}
         </div>
 
-        {/* Quick Actions */}
         <div className="pt-3 border-t text-center">
           <p className="text-xs text-muted-foreground">
-            View agent management to promote agents to higher tiers
+            Monthly and yearly counts include agents joined in the current period
           </p>
         </div>
       </CardContent>
@@ -151,4 +153,3 @@ function TierDashboardSkeleton({ className }: { className?: string }) {
     </Card>
   )
 }
-

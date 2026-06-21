@@ -12,6 +12,7 @@ import {
 import { z } from "zod";
 import { listings } from "./listings";
 import { user } from "./auth";
+import { commissionSchemeBlockTypeSchema } from "./commission-scheme-block-types";
 
 export const sstBorneByEnum = pgEnum("sst_borne_by", ["client", "agent"]);
 
@@ -22,10 +23,12 @@ export const commissionSchemes = pgTable(
 		schemeName: text("scheme_name").notNull(),
 		shortform: text("shortform").notNull(),
 		description: text("description").notNull(),
-		/** Linked to a "block" / listing (optional, but required to be usable for auto-calc) */
+		/** Linked to a "block" / listing (optional legacy link) */
 		blockListingId: uuid("block_listing_id").references(() => listings.id, {
 			onDelete: "set null",
 		}),
+		/** Block type label (Block, Tower A, Landed, etc.) */
+		blockType: text("block_type"),
 		/** Convenience snapshot for search/filter even if listing is deleted/renamed */
 		projectName: text("project_name").notNull(),
 		isActive: boolean("is_active").notNull().default(true),
@@ -48,6 +51,7 @@ export const commissionSchemes = pgTable(
 		shortformIdx: index("idx_commission_schemes_shortform").on(t.shortform),
 		projectIdx: index("idx_commission_schemes_project").on(t.projectName),
 		blockIdx: index("idx_commission_schemes_block_listing_id").on(t.blockListingId),
+		blockTypeIdx: index("idx_commission_schemes_block_type").on(t.blockType),
 		activeIdx: index("idx_commission_schemes_is_active").on(t.isActive),
 	}),
 );
@@ -103,6 +107,7 @@ export const insertCommissionSchemeSchema = z.object({
 	description: z.string().min(1),
 	projectName: z.string().min(1),
 	blockListingId: z.string().uuid().optional().nullable(),
+	blockType: commissionSchemeBlockTypeSchema.optional().nullable(),
 	isActive: z.boolean().default(true),
 	incSst: z.boolean(),
 	sstPercent: z.coerce.number().min(0).max(100).default(8),

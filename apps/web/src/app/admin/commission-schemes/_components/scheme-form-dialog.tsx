@@ -1,8 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { trpc } from "@/utils/trpc";
+import {
+	COMMISSION_SCHEME_BLOCK_TYPES,
+	isCommissionSchemeBlockType,
+	type CommissionSchemeBlockType,
+} from "@/lib/commission-scheme-block-types";
 import { Button } from "@/components/ui/button";
 import {
 	Dialog,
@@ -56,19 +61,9 @@ export function SchemeFormDialog({
 }) {
 	const isEdit = mode === "edit";
 
-	const { data: blocks } = trpc.commissionSchemes.listBlocks.useQuery(undefined, {
-		enabled: open,
-		staleTime: 60_000,
-	});
-
 	const { data: existing } = trpc.commissionSchemes.get.useQuery(
 		{ id: schemeId ?? "" },
 		{ enabled: open && isEdit && !!schemeId, staleTime: 0 },
-	);
-
-	const blockOptions = useMemo(
-		() => (blocks ?? []).map((b) => ({ id: b.id, title: b.title })),
-		[blocks],
 	);
 
 	const [form, setForm] = useState({
@@ -76,7 +71,7 @@ export function SchemeFormDialog({
 		shortform: "",
 		description: "",
 		projectName: "",
-		blockListingId: "__none__",
+		blockType: "__none__",
 		isActive: true,
 		incSst: false,
 		sstPercent: "8.00",
@@ -87,28 +82,50 @@ export function SchemeFormDialog({
 
 	useEffect(() => {
 		if (!open) return;
-		if (!existing) return;
-		setForm({
-			schemeName: existing.schemeName ?? "",
-			shortform: existing.shortform ?? "",
-			description: existing.description ?? "",
-			projectName: existing.projectName ?? "",
-			blockListingId: existing.blockListingId ?? "__none__",
-			isActive: existing.isActive ?? true,
-			incSst: existing.incSst ?? false,
-			sstPercent: String(existing.sstPercent ?? "8.00"),
-			sstBorneBy: (existing.sstBorneBy as "client" | "agent") ?? "client",
-		});
-		const t = (existing.tiers ?? []).map((x: any) => ({
-			tierName: x.tierName ?? "",
-			commissionPercent: String(x.commissionPercent ?? "0"),
-			overridePercent: String(x.overridePercent ?? "0"),
-			effectiveFrom: String(x.effectiveFrom ?? "").slice(0, 10),
-			effectiveTo: x.effectiveTo ? String(x.effectiveTo).slice(0, 10) : "",
-			isActive: Boolean(x.isActive ?? true),
-		}));
-		setTiers(t.length ? t : [emptyTier()]);
-	}, [open, existing]);
+		if (isEdit && !existing) return;
+		if (isEdit && existing) {
+			const existingBlockType = (existing as { blockType?: string | null })
+				.blockType;
+			setForm({
+				schemeName: existing.schemeName ?? "",
+				shortform: existing.shortform ?? "",
+				description: existing.description ?? "",
+				projectName: existing.projectName ?? "",
+				blockType:
+					existingBlockType && isCommissionSchemeBlockType(existingBlockType)
+						? existingBlockType
+						: "__none__",
+				isActive: existing.isActive ?? true,
+				incSst: existing.incSst ?? false,
+				sstPercent: String(existing.sstPercent ?? "8.00"),
+				sstBorneBy: (existing.sstBorneBy as "client" | "agent") ?? "client",
+			});
+			const t = (existing.tiers ?? []).map((x: any) => ({
+				tierName: x.tierName ?? "",
+				commissionPercent: String(x.commissionPercent ?? "0"),
+				overridePercent: String(x.overridePercent ?? "0"),
+				effectiveFrom: String(x.effectiveFrom ?? "").slice(0, 10),
+				effectiveTo: x.effectiveTo ? String(x.effectiveTo).slice(0, 10) : "",
+				isActive: Boolean(x.isActive ?? true),
+			}));
+			setTiers(t.length ? t : [emptyTier()]);
+			return;
+		}
+		if (!isEdit) {
+			setForm({
+				schemeName: "",
+				shortform: "",
+				description: "",
+				projectName: "",
+				blockType: "__none__",
+				isActive: true,
+				incSst: false,
+				sstPercent: "8.00",
+				sstBorneBy: "client",
+			});
+			setTiers([emptyTier()]);
+		}
+	}, [open, existing, isEdit]);
 
 	const createMutation = trpc.commissionSchemes.create.useMutation({
 		onSuccess: () => {
@@ -130,25 +147,34 @@ export function SchemeFormDialog({
 
 	const isSaving = createMutation.isPending || updateMutation.isPending;
 
-	const toPayload = () => ({
-		schemeName: form.schemeName.trim(),
-		shortform: form.shortform.trim(),
-		description: form.description.trim(),
-		projectName: form.projectName.trim(),
-		blockListingId: form.blockListingId === "__none__" ? null : form.blockListingId,
-		isActive: form.isActive,
-		incSst: form.incSst,
-		sstPercent: Number.parseFloat(form.sstPercent || "0"),
-		sstBorneBy: form.sstBorneBy,
-		tiers: tiers.map((t) => ({
-			tierName: t.tierName.trim(),
-			commissionPercent: Number.parseFloat(t.commissionPercent || "0"),
-			overridePercent: Number.parseFloat(t.overridePercent || "0"),
-			effectiveFrom: new Date(t.effectiveFrom),
-			effectiveTo: t.effectiveTo ? new Date(t.effectiveTo) : null,
-			isActive: t.isActive,
-		})),
-	});
+	const toPayload = () => {
+		const blockType: CommissionSchemeBlockType | null =
+			form.blockType !== "__none__" &&
+			isCommissionSchemeBlockType(form.blockType)
+				? form.blockType
+				: null;
+
+		return {
+			schemeName: form.schemeName.trim(),
+			shortform: form.shortform.trim(),
+			description: form.description.trim(),
+			projectName: form.projectName.trim(),
+			blockListingId: null,
+			blockType,
+			isActive: form.isActive,
+			incSst: form.incSst,
+			sstPercent: Number.parseFloat(form.sstPercent || "0"),
+			sstBorneBy: form.sstBorneBy,
+			tiers: tiers.map((t) => ({
+				tierName: t.tierName.trim(),
+				commissionPercent: Number.parseFloat(t.commissionPercent || "0"),
+				overridePercent: Number.parseFloat(t.overridePercent || "0"),
+				effectiveFrom: new Date(t.effectiveFrom),
+				effectiveTo: t.effectiveTo ? new Date(t.effectiveTo) : null,
+				isActive: t.isActive,
+			})),
+		};
+	};
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
@@ -198,17 +224,17 @@ export function SchemeFormDialog({
 						<div className="col-span-2 space-y-1.5">
 							<Label>Block (listing)</Label>
 							<Select
-								value={form.blockListingId}
-								onValueChange={(v) => setForm((p) => ({ ...p, blockListingId: v }))}
+								value={form.blockType}
+								onValueChange={(v) => setForm((p) => ({ ...p, blockType: v }))}
 							>
 								<SelectTrigger>
-									<SelectValue placeholder="Select block/listing (optional)" />
+									<SelectValue placeholder="Select block type" />
 								</SelectTrigger>
 								<SelectContent>
 									<SelectItem value="__none__">None</SelectItem>
-									{blockOptions.map((b) => (
-										<SelectItem key={b.id} value={b.id}>
-											{b.title}
+									{COMMISSION_SCHEME_BLOCK_TYPES.map((blockType) => (
+										<SelectItem key={blockType} value={blockType}>
+											{blockType}
 										</SelectItem>
 									))}
 								</SelectContent>
