@@ -28,26 +28,56 @@ import {
 	CardTitle,
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import {
-	ApprovalQueueItem,
-	type ApprovalQueueTransaction,
-} from "@/features/approvals/approval-queue-item";
+	ApprovalRequestQueueItem,
+	type ApprovalRequestQueueTransaction,
+} from "@/features/approvals/approval-request-queue-item";
+import { formatRequestItemLabel } from "@/features/transactions/request-items";
 import { trpc } from "@/utils/trpc";
 import {
-	RiCheckboxCircleLine,
 	RiDashboardLine,
+	RiFileList3Line,
 	RiLoader4Line,
 	RiRefreshLine,
 } from "@remixicon/react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
-interface ApprovalDialogState {
+type RequestSegment = "new-project" | "subsale" | "rental";
+
+const SEGMENT_TABS: {
+	value: RequestSegment;
+	label: string;
+	marketType?: "primary" | "secondary";
+	transactionType: "sale" | "rental";
+}[] = [
+	{
+		value: "new-project",
+		label: "New Project",
+		marketType: "primary",
+		transactionType: "sale",
+	},
+	{
+		value: "subsale",
+		label: "Subsale",
+		marketType: "secondary",
+		transactionType: "sale",
+	},
+	{
+		value: "rental",
+		label: "Rental",
+		transactionType: "rental",
+	},
+];
+
+interface RequestDialogState {
 	isOpen: boolean;
-	transaction: ApprovalQueueTransaction | null;
+	transaction: ApprovalRequestQueueTransaction | null;
 	action: "approve" | "reject" | null;
 	reviewNotes: string;
 	isSubmitting: boolean;
@@ -64,12 +94,22 @@ function formatRm(amount: string | number | null | undefined) {
 	}).format(num);
 }
 
-export default function AdminApprovalsPage() {
+export default function AdminApprovalRequestsPage() {
+	const router = useRouter();
+	const searchParams = useSearchParams();
 	const queryClient = useQueryClient();
 	const [page, setPage] = useState(0);
 	const pageSize = 20;
 
-	const [dialogState, setDialogState] = useState<ApprovalDialogState>({
+	const segmentParam = searchParams.get("segment") as RequestSegment | null;
+	const segment: RequestSegment =
+		segmentParam && SEGMENT_TABS.some((t) => t.value === segmentParam)
+			? segmentParam
+			: "new-project";
+
+	const segmentConfig = SEGMENT_TABS.find((t) => t.value === segment)!;
+
+	const [dialogState, setDialogState] = useState<RequestDialogState>({
 		isOpen: false,
 		transaction: null,
 		action: null,
@@ -77,55 +117,50 @@ export default function AdminApprovalsPage() {
 		isSubmitting: false,
 	});
 
-	const {
-		data: approvalsData,
-		isLoading: isLoadingApprovals,
-		refetch: refetchApprovals,
-	} = trpc.admin.getCommissionApprovalQueue.useQuery(
-		{
+	useEffect(() => {
+		setPage(0);
+	}, [segment]);
+
+	const queryInput = useMemo(
+		() => ({
 			limit: pageSize,
 			offset: page * pageSize,
-			status: "pending",
-		},
-		{
-			refetchOnWindowFocus: false,
-			staleTime: 3 * 60 * 1000,
-		},
+			editRequestsOnly: true,
+			marketType: segmentConfig.marketType,
+			transactionType: segmentConfig.transactionType,
+		}),
+		[page, segmentConfig],
 	);
 
-	const processApprovalMutation =
-		trpc.admin.processCommissionApproval.useMutation({
-			onSuccess: (_data, variables) => {
-				const actionText =
-					variables.action === "approve" ? "approved" : "rejected";
-				toast.success(`Transaction ${actionText} successfully`);
+	const { data, isLoading, refetch } = trpc.transactions.adminList.useQuery(
+		queryInput,
+		{ staleTime: 60_000 },
+	);
 
-				queryClient.invalidateQueries({
-					queryKey: [["admin", "getCommissionApprovalQueue"]],
-				});
-				queryClient.invalidateQueries({
-					queryKey: [["admin", "getDashboardSummary"]],
-				});
-				queryClient.invalidateQueries({
-					queryKey: [["commissionPayouts"]],
-				});
+	const processRequestMutation = trpc.admin.processEditRequest.useMutation({
+		onSuccess: (_data, variables) => {
+			const actionText =
+				variables.action === "approve" ? "approved" : "rejected";
+			toast.success(`Edit request ${actionText}`);
+			queryClient.invalidateQueries({
+				queryKey: [["transactions", "adminList"]],
+			});
+			closeDialog();
+		},
+		onError: (error, variables) => {
+			toast.error(
+				`Failed to ${variables.action} request: ${error.message}`,
+			);
+			setDialogState((prev) => ({ ...prev, isSubmitting: false }));
+		},
+	});
 
-				closeDialog();
-			},
-			onError: (error, variables) => {
-				const actionText =
-					variables.action === "approve" ? "approve" : "reject";
-				toast.error(`Failed to ${actionText} transaction: ${error.message}`);
-				setDialogState((prev) => ({ ...prev, isSubmitting: false }));
-			},
-		});
-
-	const handleRefresh = async () => {
-		await refetchApprovals();
+	const handleSegmentChange = (value: string) => {
+		router.replace(`/admin/approvals/requests?segment=${value}`);
 	};
 
-	const handleApprovalAction = (
-		transaction: ApprovalQueueTransaction,
+	const handleRequestAction = (
+		transaction: ApprovalRequestQueueTransaction,
 		action: "approve" | "reject",
 	) => {
 		setDialogState({
@@ -137,17 +172,15 @@ export default function AdminApprovalsPage() {
 		});
 	};
 
-	const submitApprovalDecision = () => {
+	const submitRequestDecision = () => {
 		if (!dialogState.transaction || !dialogState.action) return;
 		const notes = dialogState.reviewNotes.trim();
 		if (!notes) {
 			toast.error("Review notes are required");
 			return;
 		}
-
 		setDialogState((prev) => ({ ...prev, isSubmitting: true }));
-
-		processApprovalMutation.mutate({
+		processRequestMutation.mutate({
 			transactionId: dialogState.transaction.id,
 			action: dialogState.action,
 			reviewNotes: notes,
@@ -164,17 +197,8 @@ export default function AdminApprovalsPage() {
 		});
 	};
 
-	const handlePreviousPage = () => {
-		setPage((prev) => Math.max(0, prev - 1));
-	};
-
-	const handleNextPage = () => {
-		if (approvalsData?.hasMore) {
-			setPage((prev) => prev + 1);
-		}
-	};
-
-	const pendingCount = approvalsData?.totalCount ?? 0;
+	const pendingCount = data?.total ?? 0;
+	const rows = (data?.transactions ?? []) as ApprovalRequestQueueTransaction[];
 
 	return (
 		<>
@@ -190,14 +214,20 @@ export default function AdminApprovalsPage() {
 							<BreadcrumbItem className="hidden md:block">
 								<BreadcrumbLink href="/admin">
 									<RiDashboardLine size={22} aria-hidden="true" />
-									<span className="sr-only">Admin Dashboard</span>
+									<span className="sr-only">Admin</span>
 								</BreadcrumbLink>
 							</BreadcrumbItem>
 							<BreadcrumbSeparator className="hidden md:block" />
 							<BreadcrumbItem>
-								<BreadcrumbPage className="flex items-center gap-2">
-									<RiCheckboxCircleLine size={20} aria-hidden="true" />
+								<BreadcrumbLink href="/admin/approvals">
 									Approvals
+								</BreadcrumbLink>
+							</BreadcrumbItem>
+							<BreadcrumbSeparator />
+							<BreadcrumbItem>
+								<BreadcrumbPage className="flex items-center gap-2">
+									<RiFileList3Line size={20} aria-hidden="true" />
+									Requests
 								</BreadcrumbPage>
 							</BreadcrumbItem>
 						</BreadcrumbList>
@@ -207,125 +237,110 @@ export default function AdminApprovalsPage() {
 					<HeaderActions />
 				</div>
 			</header>
+
 			<div className="flex flex-1 flex-col gap-4 py-4 lg:gap-6 lg:py-6">
 				<div className="flex items-center justify-between gap-4">
 					<div className="space-y-1">
 						<h1 className="flex items-center gap-2 font-semibold text-2xl">
-							<RiCheckboxCircleLine className="size-6" />
-							Approvals
+							<RiFileList3Line className="size-6" />
+							Approval Requests
 						</h1>
 						<p className="text-muted-foreground text-sm">
-							Review and approve agent transaction submissions awaiting your
-							decision. For agent <strong>change requests</strong> on locked
-							cases, use{" "}
-							<Link
-								href="/admin/approvals/requests?segment=new-project"
-								className="text-primary underline-offset-4 hover:underline"
-							>
-								Approval requests
-							</Link>
-							.
+							Agent change requests awaiting your review — only pending
+							requests are shown.
 						</p>
 					</div>
-					<Button variant="outline" size="sm" onClick={() => void handleRefresh()}>
+					<Button
+						variant="outline"
+						size="sm"
+						onClick={() => void refetch()}
+					>
 						<RiRefreshLine className="size-4" />
 					</Button>
 				</div>
 
-				{isLoadingApprovals ? (
+				{isLoading ? (
 					<Card className="max-w-sm">
-						<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+						<CardHeader className="pb-2">
 							<Skeleton className="h-3.5 w-28" />
-							<Skeleton className="h-4 w-4 rounded" />
 						</CardHeader>
-						<CardContent className="space-y-2">
+						<CardContent>
 							<Skeleton className="h-8 w-16" />
-							<Skeleton className="h-3 w-28" />
 						</CardContent>
 					</Card>
 				) : (
 					<Card className="max-w-sm">
 						<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
 							<CardTitle className="font-medium text-sm">
-								Pending Approvals
+								Pending Requests
 							</CardTitle>
-							<RiCheckboxCircleLine className="h-4 w-4 text-muted-foreground" />
+							<RiFileList3Line className="h-4 w-4 text-muted-foreground" />
 						</CardHeader>
 						<CardContent>
 							<div className="font-bold text-2xl">{pendingCount}</div>
 							<p className="text-muted-foreground text-xs">
-								Awaiting your review
+								Awaiting your review ({segmentConfig.label})
 							</p>
 						</CardContent>
 					</Card>
 				)}
 
+				<Tabs value={segment} onValueChange={handleSegmentChange}>
+					<TabsList>
+						{SEGMENT_TABS.map((tab) => (
+							<TabsTrigger key={tab.value} value={tab.value}>
+								{tab.label}
+							</TabsTrigger>
+						))}
+					</TabsList>
+				</Tabs>
+
 				<Card>
 					<CardHeader>
-						<CardTitle>Approval Queue</CardTitle>
+						<CardTitle>{segmentConfig.label} Requests</CardTitle>
 						<CardDescription>
-							Transactions awaiting approval — new project, subsale, and rental
+							Case no., agent & code, status, and request-specific fields
 						</CardDescription>
 					</CardHeader>
 					<CardContent>
-						{isLoadingApprovals ? (
+						{isLoading ? (
 							<div className="space-y-3">
-								{["sk-b1", "sk-b2", "sk-b3", "sk-b4"].map((id) => (
-									<div
-										key={id}
-										className="flex items-center justify-between rounded-lg border p-4"
-									>
-										<div className="space-y-2">
-											<div className="flex items-center gap-2">
-												<Skeleton className="h-4 w-32" />
-												<Skeleton className="h-5 w-20 rounded-full" />
-											</div>
-											<Skeleton className="h-3 w-72" />
-											<Skeleton className="h-3 w-56" />
-										</div>
-										<div className="flex gap-2">
-											<Skeleton className="h-8 w-20 rounded-md" />
-											<Skeleton className="h-8 w-16 rounded-md" />
-										</div>
-									</div>
+								{["sk-r1", "sk-r2", "sk-r3"].map((id) => (
+									<Skeleton key={id} className="h-28 w-full rounded-lg" />
 								))}
 							</div>
-						) : approvalsData?.transactions &&
-							approvalsData.transactions.length > 0 ? (
+						) : rows.length > 0 ? (
 							<div className="space-y-4">
-								{approvalsData.transactions.map((transaction) => (
-									<ApprovalQueueItem
+								{rows.map((transaction) => (
+									<ApprovalRequestQueueItem
 										key={transaction.id}
-										transaction={transaction as ApprovalQueueTransaction}
-										onApprove={(tx) => handleApprovalAction(tx, "approve")}
-										onReject={(tx) => handleApprovalAction(tx, "reject")}
+										transaction={transaction}
+										onApprove={(tx) => handleRequestAction(tx, "approve")}
+										onReject={(tx) => handleRequestAction(tx, "reject")}
 									/>
 								))}
 
-								{(approvalsData.totalCount > pageSize || page > 0) && (
+								{(pendingCount > pageSize || page > 0) && (
 									<div className="flex items-center justify-between border-t pt-4">
 										<p className="text-muted-foreground text-sm">
 											Showing {page * pageSize + 1} to{" "}
-											{Math.min(
-												(page + 1) * pageSize,
-												approvalsData.totalCount,
-											)}{" "}
-											of {approvalsData.totalCount} transactions
+											{Math.min((page + 1) * pageSize, pendingCount)} of{" "}
+											{pendingCount}
 										</p>
 										<div className="flex gap-2">
 											<Button
 												variant="outline"
 												size="sm"
-												onClick={handlePreviousPage}
 												disabled={page === 0}
+												onClick={() => setPage((p) => Math.max(0, p - 1))}
 											>
 												Previous
 											</Button>
 											<Button
 												variant="outline"
 												size="sm"
-												onClick={handleNextPage}
-												disabled={!approvalsData.hasMore}
+												disabled={!data?.hasMore}
+												onClick={() => setPage((p) => p + 1)}
 											>
 												Next
 											</Button>
@@ -335,20 +350,19 @@ export default function AdminApprovalsPage() {
 							</div>
 						) : (
 							<div className="py-8 text-center">
-								<RiCheckboxCircleLine
+								<RiFileList3Line
 									size={48}
 									className="mx-auto mb-4 text-muted-foreground"
 								/>
 								<h3 className="mb-2 font-semibold text-lg">
-									No Pending Approvals
+									No Pending Requests
 								</h3>
 								<p className="mb-4 text-muted-foreground">
-									All transaction submissions have been processed. New requests
-									will appear here.
+									No {segmentConfig.label.toLowerCase()} change requests are
+									waiting for approval.
 								</p>
-								<Button variant="outline" onClick={() => void handleRefresh()}>
-									<RiRefreshLine className="mr-2 h-4 w-4" />
-									Refresh Queue
+								<Button variant="outline" asChild>
+									<Link href="/admin/approvals">View transaction approvals</Link>
 								</Button>
 							</div>
 						)}
@@ -365,8 +379,7 @@ export default function AdminApprovalsPage() {
 				<DialogContent>
 					<DialogHeader>
 						<DialogTitle>
-							{dialogState.action === "approve" ? "Approve" : "Reject"}{" "}
-							Transaction
+							{dialogState.action === "approve" ? "Approve" : "Reject"} Request
 						</DialogTitle>
 						<DialogDescription asChild>
 							<div className="space-y-1 text-sm">
@@ -374,15 +387,16 @@ export default function AdminApprovalsPage() {
 									<>
 										<p>
 											{dialogState.action === "approve" ? "Approve" : "Reject"}{" "}
-											submission for case{" "}
+											<strong>
+												{formatRequestItemLabel(
+													dialogState.transaction.requestItem,
+												)}
+											</strong>{" "}
+											for case{" "}
 											<strong>
 												{dialogState.transaction.caseNo ?? "—"}
-											</strong>{" "}
-											(submitted by{" "}
-											<strong>
-												{dialogState.transaction.agentName || "Unknown Agent"}
 											</strong>
-											).
+											.
 										</p>
 										<p>
 											Commission:{" "}
@@ -390,6 +404,11 @@ export default function AdminApprovalsPage() {
 												{formatRm(dialogState.transaction.commissionAmount)}
 											</strong>
 										</p>
+										{dialogState.action === "approve" ? (
+											<p className="text-muted-foreground">
+												The case will reopen for the agent to edit.
+											</p>
+										) : null}
 									</>
 								) : null}
 							</div>
@@ -398,15 +417,18 @@ export default function AdminApprovalsPage() {
 
 					<div className="space-y-4">
 						<div>
-							<label htmlFor="review-notes" className="font-medium text-sm">
+							<label
+								htmlFor="request-review-notes"
+								className="font-medium text-sm"
+							>
 								Review notes <span className="text-red-500">*</span>
 							</label>
 							<Textarea
-								id="review-notes"
+								id="request-review-notes"
 								placeholder={
 									dialogState.action === "approve"
-										? "Required: e.g. verified booking, SPA & nett price checked…"
-										: "Required: rejection reason (agent will see this)…"
+										? "Required: e.g. approved — please update unit details…"
+										: "Required: reason for rejection (agent will see this)…"
 								}
 								value={dialogState.reviewNotes}
 								onChange={(e) =>
@@ -418,10 +440,6 @@ export default function AdminApprovalsPage() {
 								className="mt-1"
 								rows={4}
 							/>
-							<p className="mt-1 text-muted-foreground text-xs">
-								Notes are stored on the transaction for audit and agent
-								visibility.
-							</p>
 						</div>
 					</div>
 
@@ -434,7 +452,7 @@ export default function AdminApprovalsPage() {
 							Cancel
 						</Button>
 						<Button
-							onClick={submitApprovalDecision}
+							onClick={submitRequestDecision}
 							disabled={
 								dialogState.isSubmitting || !dialogState.reviewNotes.trim()
 							}

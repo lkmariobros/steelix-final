@@ -133,7 +133,7 @@ export const TRANSACTIONS_SIDEBAR_SECTIONS = [
 		items: [
 			{ title: "Sold Units", url: "/admin/transactions/new-project/sold-units" },
 			{ title: "Approval", url: "/admin/transactions/new-project/approval" },
-			{ title: "Requests", url: "/admin/transactions/new-project/requests" },
+			{ title: "Requests", url: "/admin/approvals/requests?segment=new-project" },
 		],
 	},
 	{
@@ -141,7 +141,7 @@ export const TRANSACTIONS_SIDEBAR_SECTIONS = [
 		items: [
 			{ title: "Subsale Units", url: "/admin/transactions/subsale/units" },
 			{ title: "Approval", url: "/admin/transactions/subsale/approval" },
-			{ title: "Requests", url: "/admin/transactions/subsale/requests" },
+			{ title: "Requests", url: "/admin/approvals/requests?segment=subsale" },
 		],
 	},
 	{
@@ -149,7 +149,7 @@ export const TRANSACTIONS_SIDEBAR_SECTIONS = [
 		items: [
 			{ title: "Rental Units", url: "/admin/transactions/rental/units" },
 			{ title: "Approval", url: "/admin/transactions/rental/approval" },
-			{ title: "Requests", url: "/admin/transactions/rental/requests" },
+			{ title: "Requests", url: "/admin/approvals/requests?segment=rental" },
 		],
 	},
 ] as const;

@@ -196,6 +196,10 @@ export const transactions = pgTable("transactions", {
 	status: transactionStatusEnum("status").default("draft"),
 	/** When true, agent may edit while status is pending (admin reopened case). */
 	agentEditAllowed: boolean("agent_edit_allowed").default(false),
+	/** Agent-submitted change request awaiting admin review (locked cases). */
+	pendingEditRequest: boolean("pending_edit_request").default(false),
+	requestItem: text("request_item"),
+	requestSubmittedAt: timestamp("request_submitted_at"),
 	submittedAt: timestamp("submitted_at"),
 	reviewedAt: timestamp("reviewed_at"),
 	reviewedBy: text("reviewed_by"),

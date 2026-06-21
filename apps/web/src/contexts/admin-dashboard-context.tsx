@@ -40,6 +40,10 @@ export interface CommissionApprovalItem {
 	agentId: string | null;
 	agentName: string | null;
 	agentEmail: string | null;
+	agentCode?: string | null;
+	coAgentName?: string | null;
+	coAgentCode?: string | null;
+	isCoBroking?: boolean | null;
 	clientData: {
 		name?: string;
 		email?: string;
@@ -57,6 +61,7 @@ export interface CommissionApprovalItem {
 		listingTitle?: string;
 		spaPrice?: number;
 		nettPrice?: number;
+		purchasingMethod?: "cash" | "loan";
 	} | null;
 	transactionType: string;
 	marketType?: string | null;

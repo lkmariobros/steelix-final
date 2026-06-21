@@ -19,6 +19,9 @@ import {
 	assertCanAccessTransactionMessages,
 	listTransactionMessages,
 } from "../services/transaction-messages";
+import {
+	transactionRequestItemSchema,
+} from "../utils/transaction-request-items";
 import { db } from "../utils/db";
 import {
 	agentCanEditTransaction,
@@ -212,6 +215,7 @@ const addMessageInput = z.object({
 	messageType: z
 		.enum(["remark", "edit_request", "status_note", "admin_reply"])
 		.default("remark"),
+	requestItem: transactionRequestItemSchema.optional(),
 });
 
 const listTransactionsInput = z.object({
@@ -455,10 +459,7 @@ export const transactionsRouter = router({
 				);
 			}
 			if (input.editRequestsOnly) {
-				conditions.push(eq(transactions.agentEditAllowed, true));
-				conditions.push(
-					inArray(transactions.status, ["pending", "submitted", "under_review"]),
-				);
+				conditions.push(eq(transactions.pendingEditRequest, true));
 			}
 
 			if (input.status) {
@@ -787,17 +788,73 @@ export const transactionsRouter = router({
 				role: sessionUser.role,
 				roles: sessionUser.roles,
 			});
-			const authorRole = isAdmin ? "admin" : "agent";
+			const [txRow] = await db
+				.select({ agentId: transactions.agentId })
+				.from(transactions)
+				.where(eq(transactions.id, input.transactionId))
+				.limit(1);
+
+			if (!txRow) {
+				throw new TRPCError({
+					code: "NOT_FOUND",
+					message: "Transaction not found",
+				});
+			}
+
+			const isTransactionAgent = txRow.agentId === ctx.session.user.id;
+			const isEditRequest = input.messageType === "edit_request";
+
+			const authorRole =
+				isTransactionAgent && isEditRequest
+					? "agent"
+					: isAdmin
+						? "admin"
+						: "agent";
+
 			if (!isAdmin && input.messageType === "admin_reply") {
 				throw new TRPCError({ code: "FORBIDDEN", message: "Not allowed" });
 			}
-			return await addTransactionMessage({
+
+			if (isEditRequest && isTransactionAgent && !input.requestItem) {
+				throw new TRPCError({
+					code: "BAD_REQUEST",
+					message: "Request item is required for edit requests",
+				});
+			}
+
+			const message = await addTransactionMessage({
 				transactionId: input.transactionId,
 				authorId: ctx.session.user.id,
 				authorRole,
 				body: input.body,
 				messageType: input.messageType,
 			});
+
+			// Queue for admin Approval Requests when the case owner submits an edit request
+			// (works even if the user also has admin role in their session).
+			if (isEditRequest && isTransactionAgent && input.requestItem) {
+				try {
+					await db
+						.update(transactions)
+						.set({
+							pendingEditRequest: true,
+							requestItem: input.requestItem,
+							requestSubmittedAt: new Date(),
+							updatedAt: new Date(),
+						})
+						.where(eq(transactions.id, input.transactionId));
+				} catch (err) {
+					if (isTransactionsSchemaOutdatedError(err)) {
+						throw new TRPCError({
+							code: "PRECONDITION_FAILED",
+							message: transactionsSchemaOutdatedMessage(),
+						});
+					}
+					throw err;
+				}
+			}
+
+			return message;
 		}),
 
 	// Delete a transaction (only if in draft status)

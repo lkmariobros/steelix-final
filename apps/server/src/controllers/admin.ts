@@ -13,6 +13,7 @@ import {
 } from "../models/auth";
 import { transactions } from "../models/transactions";
 import { ensurePayoutsForApprovedTransaction } from "../services/commission-payouts";
+import { addTransactionMessage } from "../services/transaction-messages";
 import { db } from "../utils/db";
 import { resolveUserRole } from "../utils/rbac";
 import {
@@ -39,6 +40,15 @@ const commissionApprovalInput = z.object({
 	transactionId: z.string().uuid(),
 	action: z.enum(["approve", "reject"]),
 	/** Required for both approve and reject (audit trail). */
+	reviewNotes: z
+		.string()
+		.min(1, "Review notes are required")
+		.max(5000),
+});
+
+const editRequestInput = z.object({
+	transactionId: z.string().uuid(),
+	action: z.enum(["approve", "reject"]),
 	reviewNotes: z
 		.string()
 		.min(1, "Review notes are required")
@@ -147,9 +157,11 @@ export const adminRouter = router({
 					unitNo: transactions.unitNo,
 					blockListingId: transactions.blockListingId,
 					notes: transactions.notes,
-					// Join agent info
+					isCoBroking: transactions.isCoBroking,
+					coBrokingData: transactions.coBrokingData,
 					agentName: user.name,
 					agentEmail: user.email,
+					agentCode: user.agentCode,
 				})
 				.from(transactions)
 				.leftJoin(user, eq(transactions.agentId, user.id))
@@ -158,6 +170,47 @@ export const adminRouter = router({
 				.limit(input.limit)
 				.offset(input.offset);
 
+			const coAgentIds = [
+				...new Set(
+					pendingTransactions
+						.map((row) => {
+							const co = row.coBrokingData as
+								| { internalAgentId?: string }
+								| null;
+							return co?.internalAgentId;
+						})
+						.filter((id): id is string => Boolean(id)),
+				),
+			];
+
+			const coAgents =
+				coAgentIds.length > 0
+					? await db
+							.select({
+								id: user.id,
+								name: user.name,
+								agentCode: user.agentCode,
+							})
+							.from(user)
+							.where(inArray(user.id, coAgentIds))
+					: [];
+
+			const coAgentMap = new Map(coAgents.map((a) => [a.id, a]));
+
+			const enrichedTransactions = pendingTransactions.map((row) => {
+				const co = row.coBrokingData as
+					| { internalAgentId?: string; agentName?: string }
+					| null;
+				const coAgent = co?.internalAgentId
+					? coAgentMap.get(co.internalAgentId)
+					: null;
+				return {
+					...row,
+					coAgentName: coAgent?.name ?? co?.agentName ?? null,
+					coAgentCode: coAgent?.agentCode ?? null,
+				};
+			});
+
 			// Get total count for pagination
 			const [totalCount] = await db
 				.select({ count: count() })
@@ -165,7 +218,7 @@ export const adminRouter = router({
 				.where(and(...whereConditions));
 
 			return {
-				transactions: pendingTransactions,
+				transactions: enrichedTransactions,
 				totalCount: totalCount.count,
 				hasMore: input.offset + input.limit < totalCount.count,
 			};
@@ -240,6 +293,76 @@ export const adminRouter = router({
 					console.warn("ensurePayoutsForApprovedTransaction:", e);
 				}
 			}
+
+			return updatedTransaction;
+		}),
+
+	processEditRequest: adminProcedure
+		.input(editRequestInput)
+		.mutation(async ({ ctx, input }) => {
+			const reviewerId = ctx.session.user.id;
+
+			const [existingTransaction] = await db
+				.select()
+				.from(transactions)
+				.where(
+					and(
+						eq(transactions.id, input.transactionId),
+						eq(transactions.pendingEditRequest, true),
+					),
+				)
+				.limit(1);
+
+			if (!existingTransaction) {
+				throw new Error("Edit request not found or already processed");
+			}
+
+			if (ctx.userRole === "team_lead") {
+				const [agentInfo] = await db
+					.select({ teamId: user.teamId })
+					.from(user)
+					.where(eq(user.id, existingTransaction.agentId))
+					.limit(1);
+
+				const [reviewerInfo] = await db
+					.select({ teamId: user.teamId })
+					.from(user)
+					.where(eq(user.id, reviewerId))
+					.limit(1);
+
+				if (agentInfo?.teamId !== reviewerInfo?.teamId) {
+					throw new Error(
+						"Team lead can only review their team's edit requests",
+					);
+				}
+			}
+
+			const patch: Record<string, unknown> = {
+				pendingEditRequest: false,
+				reviewedAt: new Date(),
+				reviewedBy: reviewerId,
+				reviewNotes: input.reviewNotes,
+				updatedAt: new Date(),
+			};
+
+			if (input.action === "approve") {
+				patch.status = "pending";
+				patch.agentEditAllowed = true;
+			}
+
+			const [updatedTransaction] = await db
+				.update(transactions)
+				.set(patch)
+				.where(eq(transactions.id, input.transactionId))
+				.returning();
+
+			await addTransactionMessage({
+				transactionId: input.transactionId,
+				authorId: reviewerId,
+				authorRole: "admin",
+				body: input.reviewNotes,
+				messageType: "admin_reply",
+			});
 
 			return updatedTransaction;
 		}),

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useState } from "react";
 import type * as React from "react";
 
@@ -217,7 +217,11 @@ function AnnouncementNotification({
 	);
 }
 
-function isNavItemActive(pathname: string, url: string): boolean {
+function isNavItemActive(
+	pathname: string,
+	url: string,
+	searchParams?: { get: (key: string) => string | null },
+): boolean {
 	if (!url || url === "#") return false;
 	if (url === "/admin") {
 		return pathname === "/admin" || pathname === "/admin/";
@@ -225,11 +229,26 @@ function isNavItemActive(pathname: string, url: string): boolean {
 	if (url === "/dashboard") {
 		return pathname === "/dashboard" || pathname === "/dashboard/";
 	}
-	return pathname === url || pathname.startsWith(`${url}/`);
+	if (url === "/admin/approvals" || url.startsWith("/admin/approvals?")) {
+		return pathname === "/admin/approvals";
+	}
+
+	const [path, query] = url.split("?");
+	const pathMatch = pathname === path || pathname.startsWith(`${path}/`);
+	if (!pathMatch) return false;
+	if (!query || !searchParams) return true;
+
+	const urlParams = new URLSearchParams(query);
+	const segment = urlParams.get("segment");
+	if (segment) {
+		return searchParams.get("segment") === segment;
+	}
+	return true;
 }
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 	const pathname = usePathname();
+	const searchParams = useSearchParams();
 	const router = useRouter();
 	const [isAnnouncementPopoverOpen, setIsAnnouncementPopoverOpen] = useState(false);
 	const { session, hasAdminAccess } = useUserRole();
@@ -424,7 +443,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 													<SidebarMenuSubItem key={sub.url}>
 														<SidebarMenuSubButton
 															asChild
-															isActive={isNavItemActive(pathname, sub.url)}
+															isActive={isNavItemActive(pathname, sub.url, searchParams)}
 														>
 															<Link href={sub.url}>{sub.title}</Link>
 														</SidebarMenuSubButton>
@@ -437,7 +456,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 										<SidebarMenuButton
 											asChild
 											className="group/menu-button h-9 gap-3 rounded-md bg-gradient-to-r font-medium hover:bg-transparent hover:from-sidebar-accent hover:to-sidebar-accent/40 data-[active=true]:from-primary/20 data-[active=true]:to-primary/5"
-											isActive={isNavItemActive(pathname, "/admin/approvals")}
+											isActive={isNavItemActive(pathname, "/admin/approvals", searchParams)}
 										>
 											<Link href="/admin/approvals" className="flex items-center gap-3">
 												<RiCheckboxCircleLine
@@ -452,7 +471,25 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 										<SidebarMenuButton
 											asChild
 											className="group/menu-button h-9 gap-3 rounded-md bg-gradient-to-r font-medium hover:bg-transparent hover:from-sidebar-accent hover:to-sidebar-accent/40 data-[active=true]:from-primary/20 data-[active=true]:to-primary/5"
-											isActive={isNavItemActive(pathname, "/admin/commissions")}
+											isActive={pathname.startsWith("/admin/approvals/requests")}
+										>
+											<Link
+												href="/admin/approvals/requests?segment=new-project"
+												className="flex items-center gap-3"
+											>
+												<RiFileList3Line
+													className="text-muted-foreground/60 group-data-[active=true]/menu-button:text-primary"
+													size={22}
+												/>
+												<span>Approval requests</span>
+											</Link>
+										</SidebarMenuButton>
+									</SidebarMenuItem>
+									<SidebarMenuItem>
+										<SidebarMenuButton
+											asChild
+											className="group/menu-button h-9 gap-3 rounded-md bg-gradient-to-r font-medium hover:bg-transparent hover:from-sidebar-accent hover:to-sidebar-accent/40 data-[active=true]:from-primary/20 data-[active=true]:to-primary/5"
+											isActive={isNavItemActive(pathname, "/admin/commissions", searchParams)}
 										>
 											<Link href="/admin/commissions" className="flex items-center gap-3">
 												<RiMoneyDollarCircleLine
@@ -471,7 +508,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 											<SidebarMenuButton
 												asChild
 												className="group/menu-button h-9 gap-3 rounded-md bg-gradient-to-r font-medium hover:bg-transparent hover:from-sidebar-accent hover:to-sidebar-accent/40 data-[active=true]:from-primary/20 data-[active=true]:to-primary/5 [&>svg]:size-auto"
-												isActive={isNavItemActive(pathname, menuItem.url)}
+												isActive={isNavItemActive(pathname, menuItem.url, searchParams)}
 											>
 												<Link
 													href={menuItem.url}

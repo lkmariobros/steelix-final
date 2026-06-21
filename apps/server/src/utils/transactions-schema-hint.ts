@@ -32,6 +32,10 @@ ALTER TABLE public.transactions ADD COLUMN IF NOT EXISTS block_listing_id uuid;
 ALTER TABLE public.transactions ADD COLUMN IF NOT EXISTS commission_scheme_snapshot jsonb;
 ALTER TABLE public.transactions ADD COLUMN IF NOT EXISTS commission_breakdown jsonb;
 ALTER TABLE public.transactions ADD COLUMN IF NOT EXISTS commission_override_agent_net numeric(12,2);
+
+ALTER TABLE public.transactions ADD COLUMN IF NOT EXISTS pending_edit_request boolean NOT NULL DEFAULT false;
+ALTER TABLE public.transactions ADD COLUMN IF NOT EXISTS request_item text;
+ALTER TABLE public.transactions ADD COLUMN IF NOT EXISTS request_submitted_at timestamptz;
 `.trim();
 
 export function isTransactionsSchemaOutdatedError(err: unknown): boolean {

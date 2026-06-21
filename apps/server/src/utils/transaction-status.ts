@@ -17,12 +17,11 @@ type TransactionStatusDb = NonNullable<
 	typeof transactions.$inferSelect.status
 >;
 
-/** Default admin approval queue (excludes draft / terminal cases). */
+/** Default admin approval queue — transactions awaiting review only. */
 export const ADMIN_QUEUE_DB_STATUSES = [
 	"submitted",
 	"under_review",
 	"pending",
-	"verified",
 ] as const satisfies readonly TransactionStatusDb[];
 
 /** Map a canonical filter to DB values (includes legacy aliases). */
