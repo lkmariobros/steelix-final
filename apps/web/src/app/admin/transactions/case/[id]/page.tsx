@@ -95,7 +95,7 @@ export default function AdminTransactionDetailPage() {
 						</Link>
 					</Button>
 					<Button variant="outline" size="sm" asChild>
-						<Link href="/admin/transactions">All transactions</Link>
+						<Link href="/admin/transactions/new-project/sold-units">All transactions</Link>
 					</Button>
 				</div>
 

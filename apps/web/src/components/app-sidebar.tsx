@@ -17,6 +17,9 @@ import {
 	SidebarMenu,
 	SidebarMenuButton,
 	SidebarMenuItem,
+	SidebarMenuSub,
+	SidebarMenuSubButton,
+	SidebarMenuSubItem,
 	SidebarRail,
 } from "@/components/sidebar";
 import { Badge } from "@/components/ui/badge";
@@ -30,6 +33,7 @@ import { authClient } from "@/lib/auth-client";
 import type { AuthSessionData } from "@/lib/auth-client";
 import { useUserRole } from "@/hooks/use-user-role";
 import { PORTAL_PATHS } from "@/lib/user-role";
+import { TRANSACTIONS_SIDEBAR_SECTIONS } from "@/features/admin-transactions/segment-config";
 import { trpc } from "@/utils/trpc";
 import { TeamSwitcher } from "@/components/team-switcher";
 import { formatDistanceToNow } from "date-fns";
@@ -283,27 +287,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 							url: "/admin/leads",
 							icon: RiFileList3Line,
 						},
-						{
-							title: "Transactions",
-							url: "/admin/reports",
-							icon: RiFileTextLine,
-						},
-						{
-							title: "Commission approvals",
-							url: "/admin/approvals",
-							icon: RiCheckboxCircleLine,
-						},
-						{
-							title: "All transactions",
-							url: "/admin/transactions",
-							icon: RiFileList3Line,
-						},
-						{
-							title: "Commission payout",
-							url: "/admin/commissions",
-							icon: RiMoneyDollarCircleLine,
-						},
 					],
+				},
+				{
+					title: "Transactions",
+					url: "#",
+					isTransactionsGroup: true as const,
 				},
 				{
 					title: "Management",
@@ -417,40 +406,93 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 				<SearchForm className="mt-3" />
 			</SidebarHeader>
 			<SidebarContent>
-				{/* We create a SidebarGroup for each parent. */}
 				{navigationItems.map((item) => (
 					<SidebarGroup key={item.title}>
 						<SidebarGroupLabel className="text-muted-foreground/60 uppercase">
 							{item.title}
 						</SidebarGroupLabel>
 						<SidebarGroupContent className="px-2">
-							<SidebarMenu>
-								{item.items.map((menuItem) => (
-									<SidebarMenuItem key={menuItem.title}>
+							{"isTransactionsGroup" in item && item.isTransactionsGroup ? (
+								<SidebarMenu>
+									{TRANSACTIONS_SIDEBAR_SECTIONS.map((section) => (
+										<SidebarMenuItem key={section.label}>
+											<SidebarMenuButton className="pointer-events-none h-8 font-semibold text-muted-foreground text-xs uppercase hover:bg-transparent">
+												<span>{section.label}</span>
+											</SidebarMenuButton>
+											<SidebarMenuSub>
+												{section.items.map((sub) => (
+													<SidebarMenuSubItem key={sub.url}>
+														<SidebarMenuSubButton
+															asChild
+															isActive={isNavItemActive(pathname, sub.url)}
+														>
+															<Link href={sub.url}>{sub.title}</Link>
+														</SidebarMenuSubButton>
+													</SidebarMenuSubItem>
+												))}
+											</SidebarMenuSub>
+										</SidebarMenuItem>
+									))}
+									<SidebarMenuItem>
 										<SidebarMenuButton
 											asChild
-											className="group/menu-button h-9 gap-3 rounded-md bg-gradient-to-r font-medium hover:bg-transparent hover:from-sidebar-accent hover:to-sidebar-accent/40 data-[active=true]:from-primary/20 data-[active=true]:to-primary/5 [&>svg]:size-auto"
-											isActive={isNavItemActive(pathname, menuItem.url)}
+											className="group/menu-button h-9 gap-3 rounded-md bg-gradient-to-r font-medium hover:bg-transparent hover:from-sidebar-accent hover:to-sidebar-accent/40 data-[active=true]:from-primary/20 data-[active=true]:to-primary/5"
+											isActive={isNavItemActive(pathname, "/admin/approvals")}
 										>
-											<Link
-												href={menuItem.url}
-												className="relative flex w-full items-center justify-between"
-											>
-												<div className="flex items-center gap-3">
-													{menuItem.icon && (
-														<menuItem.icon
-															className="text-muted-foreground/60 group-data-[active=true]/menu-button:text-primary"
-															size={22}
-															aria-hidden="true"
-														/>
-													)}
-													<span>{menuItem.title}</span>
-												</div>
+											<Link href="/admin/approvals" className="flex items-center gap-3">
+												<RiCheckboxCircleLine
+													className="text-muted-foreground/60 group-data-[active=true]/menu-button:text-primary"
+													size={22}
+												/>
+												<span>Commission approvals</span>
 											</Link>
 										</SidebarMenuButton>
 									</SidebarMenuItem>
-								))}
-							</SidebarMenu>
+									<SidebarMenuItem>
+										<SidebarMenuButton
+											asChild
+											className="group/menu-button h-9 gap-3 rounded-md bg-gradient-to-r font-medium hover:bg-transparent hover:from-sidebar-accent hover:to-sidebar-accent/40 data-[active=true]:from-primary/20 data-[active=true]:to-primary/5"
+											isActive={isNavItemActive(pathname, "/admin/commissions")}
+										>
+											<Link href="/admin/commissions" className="flex items-center gap-3">
+												<RiMoneyDollarCircleLine
+													className="text-muted-foreground/60 group-data-[active=true]/menu-button:text-primary"
+													size={22}
+												/>
+												<span>Commission payout</span>
+											</Link>
+										</SidebarMenuButton>
+									</SidebarMenuItem>
+								</SidebarMenu>
+							) : (
+								<SidebarMenu>
+									{item.items?.map((menuItem) => (
+										<SidebarMenuItem key={menuItem.title}>
+											<SidebarMenuButton
+												asChild
+												className="group/menu-button h-9 gap-3 rounded-md bg-gradient-to-r font-medium hover:bg-transparent hover:from-sidebar-accent hover:to-sidebar-accent/40 data-[active=true]:from-primary/20 data-[active=true]:to-primary/5 [&>svg]:size-auto"
+												isActive={isNavItemActive(pathname, menuItem.url)}
+											>
+												<Link
+													href={menuItem.url}
+													className="relative flex w-full items-center justify-between"
+												>
+													<div className="flex items-center gap-3">
+														{menuItem.icon && (
+															<menuItem.icon
+																className="text-muted-foreground/60 group-data-[active=true]/menu-button:text-primary"
+																size={22}
+																aria-hidden="true"
+															/>
+														)}
+														<span>{menuItem.title}</span>
+													</div>
+												</Link>
+											</SidebarMenuButton>
+										</SidebarMenuItem>
+									))}
+								</SidebarMenu>
+							)}
 						</SidebarGroupContent>
 					</SidebarGroup>
 				))}

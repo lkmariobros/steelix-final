@@ -567,7 +567,7 @@ export default function AdminApprovalsPage() {
 														asChild
 													>
 														<Link
-															href={`/admin/transactions/${transaction.id}`}
+															href={`/admin/transactions/case/${transaction.id}`}
 														>
 															<RiFileList3Line className="mr-1 h-4 w-4" />
 															View details

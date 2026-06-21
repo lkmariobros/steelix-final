@@ -549,7 +549,7 @@ export default function AdminReportsPage() {
 																			>
 																				<td className="px-3 py-2">
 																					<Link
-																						href={`/admin/transactions/${txn.id}`}
+																						href={`/admin/transactions/case/${txn.id}`}
 																						className="block hover:underline"
 																					>
 																						<div className="font-medium">
@@ -756,7 +756,7 @@ export default function AdminReportsPage() {
 														<TableRow key={t.id} className="cursor-pointer hover:bg-muted/50">
 															<TableCell className="font-medium">
 																<Link
-																	href={`/admin/transactions/${t.id}`}
+																	href={`/admin/transactions/case/${t.id}`}
 																	className="hover:underline"
 																>
 																	{t.agentName}

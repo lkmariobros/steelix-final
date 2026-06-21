@@ -1,6 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
+import { user } from "../models/auth";
 import {
 	type NewTransaction,
 	type Transaction,
@@ -230,6 +231,10 @@ const adminListTransactionsInput = z.object({
 	blockListingId: z.string().uuid().optional(),
 	agentId: z.string().optional(),
 	status: z.enum(TRANSACTION_STATUS_VALUES).optional(),
+	marketType: z.enum(["primary", "secondary"]).optional(),
+	transactionType: z.enum(["sale", "lease", "rental"]).optional(),
+	pendingApprovalOnly: z.boolean().optional(),
+	editRequestsOnly: z.boolean().optional(),
 	dateFrom: z.coerce.date().optional(),
 	dateTo: z.coerce.date().optional(),
 });
@@ -428,6 +433,34 @@ export const transactionsRouter = router({
 		.query(async ({ input }) => {
 			const conditions: any[] = [];
 
+			if (input.marketType) {
+				conditions.push(eq(transactions.marketType, input.marketType));
+			}
+			if (input.transactionType) {
+				if (input.transactionType === "rental") {
+					conditions.push(
+						inArray(transactions.transactionType, ["rental", "lease"]),
+					);
+				} else {
+					conditions.push(eq(transactions.transactionType, input.transactionType));
+				}
+			}
+			if (input.pendingApprovalOnly) {
+				conditions.push(
+					inArray(transactions.status, [
+						"pending",
+						"submitted",
+						"under_review",
+					]),
+				);
+			}
+			if (input.editRequestsOnly) {
+				conditions.push(eq(transactions.agentEditAllowed, true));
+				conditions.push(
+					inArray(transactions.status, ["pending", "submitted", "under_review"]),
+				);
+			}
+
 			if (input.status) {
 				conditions.push(
 					inArray(transactions.status, dbStatusesForCanonicalFilter(input.status)),
@@ -455,7 +488,7 @@ export const transactionsRouter = router({
 			if (input.search) {
 				const q = `%${input.search.toLowerCase()}%`;
 				conditions.push(
-					sql`(lower(${transactions.caseNo}) like ${q} or lower(${transactions.unitNo}) like ${q} or lower(${transactions.clientData}::text) like ${q})`,
+					sql`(lower(${transactions.caseNo}) like ${q} or lower(${transactions.unitNo}) like ${q} or lower(${transactions.projectName}) like ${q} or lower(${transactions.clientData}::text) like ${q} or lower(${user.name}) like ${q})`,
 				);
 			}
 
@@ -464,10 +497,17 @@ export const transactionsRouter = router({
 			if (input.dateTo)
 				conditions.push(sql`${transactions.bookingDate} <= ${input.dateTo}`);
 
+			const whereClause = conditions.length ? and(...conditions) : undefined;
+
 			const rows = await db
-				.select()
+				.select({
+					transaction: transactions,
+					agentName: user.name,
+					agentCode: user.agentCode,
+				})
 				.from(transactions)
-				.where(conditions.length ? and(...conditions) : undefined)
+				.leftJoin(user, eq(transactions.agentId, user.id))
+				.where(whereClause)
 				.orderBy(desc(transactions.updatedAt))
 				.limit(input.limit)
 				.offset(input.offset);
@@ -475,13 +515,53 @@ export const transactionsRouter = router({
 			const [{ count }] = await db
 				.select({ count: sql<number>`count(*)` })
 				.from(transactions)
-				.where(conditions.length ? and(...conditions) : undefined);
+				.leftJoin(user, eq(transactions.agentId, user.id))
+				.where(whereClause);
+
+			const coAgentIds = [
+				...new Set(
+					rows
+						.map((r) => {
+							const co = r.transaction.coBrokingData as
+								| { internalAgentId?: string }
+								| null;
+							return co?.internalAgentId;
+						})
+						.filter((id): id is string => Boolean(id)),
+				),
+			];
+
+			const coAgents =
+				coAgentIds.length > 0
+					? await db
+							.select({
+								id: user.id,
+								name: user.name,
+								agentCode: user.agentCode,
+							})
+							.from(user)
+							.where(inArray(user.id, coAgentIds))
+					: [];
+
+			const coAgentMap = new Map(coAgents.map((a) => [a.id, a]));
 
 			return {
-				transactions: rows.map((t: any) => ({
-					...t,
-					status: normalizeLegacyStatus(t.status),
-				})),
+				transactions: rows.map((r) => {
+					const co = r.transaction.coBrokingData as
+						| { internalAgentId?: string; agentName?: string }
+						| null;
+					const coAgent = co?.internalAgentId
+						? coAgentMap.get(co.internalAgentId)
+						: null;
+					return {
+						...r.transaction,
+						status: normalizeLegacyStatus(r.transaction.status),
+						agentName: r.agentName,
+						agentCode: r.agentCode,
+						coAgentName: coAgent?.name ?? co?.agentName ?? null,
+						coAgentCode: coAgent?.agentCode ?? null,
+					};
+				}),
 				total: count,
 				hasMore: input.offset + input.limit < count,
 			};

@@ -302,7 +302,7 @@ export function CommissionApprovalQueue({
 													<div className="flex justify-end gap-2">
 														<Button size="sm" variant="secondary" asChild>
 															<Link
-																href={`/admin/transactions/${transaction.id}`}
+																href={`/admin/transactions/case/${transaction.id}`}
 															>
 																<RiEyeLine size={14} className="mr-1" />
 																View
