@@ -354,6 +354,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 							icon: RiMoneyDollarCircleLine,
 						},
 						{
+							title: "Primary schemes",
+							url: "/admin/commission-schemes",
+							icon: RiFileList3Line,
+						},
+						{
 							title: "Reports & analytics",
 							url: "/admin/reports",
 							icon: RiBarChartLine,

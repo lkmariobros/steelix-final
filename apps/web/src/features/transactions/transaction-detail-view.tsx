@@ -303,6 +303,19 @@ export function TransactionDetailView({
 							{typeof bd.sstAmount === "number" ? (
 								<DetailRow label="SST" value={formatRm(bd.sstAmount)} />
 							) : null}
+							{typeof bd.overridePercent === "number" ? (
+								<DetailRow
+									label="Upline override"
+									value={`${bd.overridePercent}%`}
+								/>
+							) : null}
+							{typeof bd.overrideGrossCommission === "number" &&
+							bd.overrideGrossCommission > 0 ? (
+								<DetailRow
+									label="Override gross"
+									value={formatRm(bd.overrideGrossCommission)}
+								/>
+							) : null}
 							{typeof bd.agentNetCommission === "number" ? (
 								<DetailRow
 									label="Net to agent"

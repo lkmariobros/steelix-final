@@ -182,8 +182,9 @@ export function SchemeFormDialog({
 				<DialogHeader className="border-b px-6 py-4 text-left">
 					<DialogTitle>{isEdit ? "Edit scheme" : "New scheme"}</DialogTitle>
 					<DialogDescription>
-						Schemes are linked to a block/listing and contain one or more effective
-						tiers.
+						Primary market: set <strong>Commission %</strong> (agent receives 100%
+						of scheme net) and <strong>Upline override %</strong> (paid separately
+						to recruiter / team leader).
 					</DialogDescription>
 				</DialogHeader>
 
@@ -240,7 +241,155 @@ export function SchemeFormDialog({
 								</SelectContent>
 							</Select>
 						</div>
+					</div>
 
+					<div className="mt-6 flex items-center justify-between">
+						<div>
+							<p className="font-medium text-sm">Commission rate tiers</p>
+							<p className="text-muted-foreground text-xs">
+								Commission % and upline override % are set here for primary market
+								deals.
+							</p>
+						</div>
+						<Button
+							type="button"
+							variant="outline"
+							size="sm"
+							className="h-8"
+							onClick={() => setTiers((p) => [...p, emptyTier()])}
+						>
+							<RiAddLine className="mr-1 size-4" />
+							Add tier
+						</Button>
+					</div>
+
+					<div className="mt-3 space-y-3">
+						{tiers.map((t, idx) => (
+							<div
+								key={idx}
+								className="rounded-md border border-primary/20 bg-primary/5 p-3"
+							>
+								<div className="flex items-center justify-between">
+									<p className="font-medium text-sm">Tier {idx + 1}</p>
+									<Button
+										type="button"
+										variant="ghost"
+										size="sm"
+										className="h-7 px-2 text-destructive"
+										disabled={tiers.length <= 1}
+										onClick={() => setTiers((p) => p.filter((_, i) => i !== idx))}
+									>
+										<RiDeleteBinLine className="mr-1 size-4" />
+										Remove
+									</Button>
+								</div>
+								<div className="mt-3 grid grid-cols-2 gap-3">
+									<div className="space-y-1.5">
+										<Label>Commission %</Label>
+										<p className="text-muted-foreground text-xs">
+											Announced scheme rate — agent receives 100% of net
+										</p>
+										<Input
+											value={t.commissionPercent}
+											onChange={(e) =>
+												setTiers((p) =>
+													p.map((x, i) =>
+														i === idx
+															? { ...x, commissionPercent: e.target.value }
+															: x,
+													),
+												)
+											}
+										/>
+									</div>
+									<div className="space-y-1.5">
+										<Label>Upline override %</Label>
+										<p className="text-muted-foreground text-xs">
+											Paid separately to recruiter upline (not deducted from
+											agent)
+										</p>
+										<Input
+											value={t.overridePercent}
+											onChange={(e) =>
+												setTiers((p) =>
+													p.map((x, i) =>
+														i === idx ? { ...x, overridePercent: e.target.value } : x,
+													),
+												)
+											}
+										/>
+									</div>
+									<div className="space-y-1.5">
+										<Label>Tier name</Label>
+										<Input
+											value={t.tierName}
+											onChange={(e) =>
+												setTiers((p) =>
+													p.map((x, i) =>
+														i === idx ? { ...x, tierName: e.target.value } : x,
+													),
+												)
+											}
+										/>
+									</div>
+									<div className="space-y-1.5">
+										<Label>Active</Label>
+										<Select
+											value={t.isActive ? "yes" : "no"}
+											onValueChange={(v) =>
+												setTiers((p) =>
+													p.map((x, i) =>
+														i === idx ? { ...x, isActive: v === "yes" } : x,
+													),
+												)
+											}
+										>
+											<SelectTrigger>
+												<SelectValue />
+											</SelectTrigger>
+											<SelectContent>
+												<SelectItem value="yes">Yes</SelectItem>
+												<SelectItem value="no">No</SelectItem>
+											</SelectContent>
+										</Select>
+									</div>
+									<div className="space-y-1.5">
+										<Label>Effective from</Label>
+										<Input
+											type="date"
+											value={t.effectiveFrom}
+											onChange={(e) =>
+												setTiers((p) =>
+													p.map((x, i) =>
+														i === idx ? { ...x, effectiveFrom: e.target.value } : x,
+													),
+												)
+											}
+										/>
+									</div>
+									<div className="space-y-1.5">
+										<Label>Effective to</Label>
+										<Input
+											type="date"
+											value={t.effectiveTo}
+											onChange={(e) =>
+												setTiers((p) =>
+													p.map((x, i) =>
+														i === idx ? { ...x, effectiveTo: e.target.value } : x,
+													),
+												)
+											}
+										/>
+									</div>
+								</div>
+							</div>
+						))}
+					</div>
+
+					<div className="mt-6 grid grid-cols-2 gap-4 border-t pt-6">
+						<div className="col-span-2">
+							<p className="font-medium text-sm">SST & status</p>
+						</div>
 						<div className="space-y-1.5">
 							<Label>Inc SST? *</Label>
 							<Select
@@ -296,141 +445,6 @@ export function SchemeFormDialog({
 								</SelectContent>
 							</Select>
 						</div>
-					</div>
-
-					<div className="mt-6 flex items-center justify-between">
-						<div>
-							<p className="font-medium text-sm">Commission rate tiers</p>
-							<p className="text-muted-foreground text-xs">
-								Scheme must have at least one active tier to be usable.
-							</p>
-						</div>
-						<Button
-							type="button"
-							variant="outline"
-							size="sm"
-							className="h-8"
-							onClick={() => setTiers((p) => [...p, emptyTier()])}
-						>
-							<RiAddLine className="mr-1 size-4" />
-							Add tier
-						</Button>
-					</div>
-
-					<div className="mt-3 space-y-3">
-						{tiers.map((t, idx) => (
-							<div key={idx} className="rounded-md border p-3">
-								<div className="flex items-center justify-between">
-									<p className="font-medium text-sm">Tier {idx + 1}</p>
-									<Button
-										type="button"
-										variant="ghost"
-										size="sm"
-										className="h-7 px-2 text-destructive"
-										disabled={tiers.length <= 1}
-										onClick={() => setTiers((p) => p.filter((_, i) => i !== idx))}
-									>
-										<RiDeleteBinLine className="mr-1 size-4" />
-										Remove
-									</Button>
-								</div>
-								<div className="mt-3 grid grid-cols-2 gap-3">
-									<div className="space-y-1.5">
-										<Label>Tier name</Label>
-										<Input
-											value={t.tierName}
-											onChange={(e) =>
-												setTiers((p) =>
-													p.map((x, i) =>
-														i === idx ? { ...x, tierName: e.target.value } : x,
-													),
-												)
-											}
-										/>
-									</div>
-									<div className="space-y-1.5">
-										<Label>Commission %</Label>
-										<Input
-											value={t.commissionPercent}
-											onChange={(e) =>
-												setTiers((p) =>
-													p.map((x, i) =>
-														i === idx
-															? { ...x, commissionPercent: e.target.value }
-															: x,
-													),
-												)
-											}
-										/>
-									</div>
-									<div className="space-y-1.5">
-										<Label>Upline override %</Label>
-										<p className="text-muted-foreground text-xs">
-											Paid separately to recruiter upline (primary market only)
-										</p>
-										<Input
-											value={t.overridePercent}
-											onChange={(e) =>
-												setTiers((p) =>
-													p.map((x, i) =>
-														i === idx ? { ...x, overridePercent: e.target.value } : x,
-													),
-												)
-											}
-										/>
-									</div>
-									<div className="space-y-1.5">
-										<Label>Effective from</Label>
-										<Input
-											type="date"
-											value={t.effectiveFrom}
-											onChange={(e) =>
-												setTiers((p) =>
-													p.map((x, i) =>
-														i === idx ? { ...x, effectiveFrom: e.target.value } : x,
-													),
-												)
-											}
-										/>
-									</div>
-									<div className="space-y-1.5">
-										<Label>Effective to</Label>
-										<Input
-											type="date"
-											value={t.effectiveTo}
-											onChange={(e) =>
-												setTiers((p) =>
-													p.map((x, i) =>
-														i === idx ? { ...x, effectiveTo: e.target.value } : x,
-													),
-												)
-											}
-										/>
-									</div>
-									<div className="space-y-1.5">
-										<Label>Active</Label>
-										<Select
-											value={t.isActive ? "yes" : "no"}
-											onValueChange={(v) =>
-												setTiers((p) =>
-													p.map((x, i) =>
-														i === idx ? { ...x, isActive: v === "yes" } : x,
-													),
-												)
-											}
-										>
-											<SelectTrigger>
-												<SelectValue />
-											</SelectTrigger>
-											<SelectContent>
-												<SelectItem value="yes">Yes</SelectItem>
-												<SelectItem value="no">No</SelectItem>
-											</SelectContent>
-										</Select>
-									</div>
-								</div>
-							</div>
-						))}
 					</div>
 				</div>
 

@@ -44,6 +44,19 @@ export default function CommissionSettingsPage() {
 	);
 
 	const activeSchemeCount = schemesData?.schemes?.length ?? 0;
+	const primarySchemeRates = (schemesData?.schemes ?? [])
+		.slice(0, 6)
+		.map((s) => {
+			const activeTier =
+				s.tiers?.find((t) => t.isActive) ?? s.tiers?.[0] ?? null;
+			return {
+				id: s.id,
+				name: s.schemeName,
+				project: s.projectName,
+				commission: activeTier?.commissionPercent ?? null,
+				override: activeTier?.overridePercent ?? null,
+			};
+		});
 	const secondaryTiers = TIER_ORDER.map((tier) => {
 		const config = tierConfigs?.find((c) => c.tier === tier);
 		return {
@@ -131,6 +144,40 @@ export default function CommissionSettingsPage() {
 								{activeSchemeCount} active scheme
 								{activeSchemeCount === 1 ? "" : "s"} configured
 							</p>
+							{primarySchemeRates.length > 0 ? (
+								<div className="rounded-md border bg-muted/30 p-3 text-sm">
+									<p className="mb-2 font-medium text-muted-foreground text-xs uppercase tracking-wide">
+										Commission & upline override
+									</p>
+									<div className="space-y-2">
+										{primarySchemeRates.map((s) => (
+											<div
+												key={s.id}
+												className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b pb-2 last:border-0 last:pb-0"
+											>
+												<span className="min-w-0 truncate">
+													{s.name}
+													<span className="text-muted-foreground">
+														{" "}
+														· {s.project}
+													</span>
+												</span>
+												<span className="shrink-0 font-medium tabular-nums">
+													{s.commission != null ? `${s.commission}%` : "—"} /{" "}
+													<span className="text-primary">
+														override{" "}
+														{s.override != null ? `${s.override}%` : "—"}
+													</span>
+												</span>
+											</div>
+										))}
+									</div>
+									<p className="mt-2 text-muted-foreground text-xs">
+										Edit upline override % in Primary schemes → Edit scheme →
+										Commission rate tiers.
+									</p>
+								</div>
+							) : null}
 							<Button asChild className="mt-auto w-fit">
 								<Link href="/admin/commission-schemes">
 									Manage primary schemes

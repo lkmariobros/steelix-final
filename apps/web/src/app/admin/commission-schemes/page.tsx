@@ -230,6 +230,8 @@ export default function CommissionSchemesAdminPage() {
 											<th className="px-4 py-3 text-left">Scheme</th>
 											<th className="px-4 py-3 text-left">Shortform</th>
 											<th className="px-4 py-3 text-left">Project</th>
+											<th className="px-4 py-3 text-left">Commission %</th>
+											<th className="px-4 py-3 text-left">Upline override %</th>
 											<th className="px-4 py-3 text-left">Description</th>
 											<th className="px-4 py-3 text-left">SST</th>
 											<th className="px-4 py-3 text-left">Updated</th>
@@ -268,6 +270,26 @@ export default function CommissionSchemesAdminPage() {
 													</td>
 													<td className="px-4 py-3 font-mono text-xs">{s.shortform}</td>
 													<td className="px-4 py-3">{s.projectName}</td>
+													<td className="px-4 py-3 font-medium tabular-nums">
+														{(() => {
+															const tier =
+																s.tiers?.find((t) => t.isActive) ??
+																s.tiers?.[0];
+															return tier
+																? `${tier.commissionPercent.toFixed(2)}%`
+																: "—";
+														})()}
+													</td>
+													<td className="px-4 py-3 font-medium text-primary tabular-nums">
+														{(() => {
+															const tier =
+																s.tiers?.find((t) => t.isActive) ??
+																s.tiers?.[0];
+															return tier
+																? `${tier.overridePercent.toFixed(2)}%`
+																: "—";
+														})()}
+													</td>
 													<td className="px-4 py-3">{s.description}</td>
 													<td className="px-4 py-3 text-xs">
 														{s.incSst ? "Inc SST" : "Exc SST"} · {s.sstPercent}% ·{" "}
@@ -319,7 +341,7 @@ export default function CommissionSchemesAdminPage() {
 												</tr>
 												{expanded.has(s.id) ? (
 													<tr className="border-b bg-muted/10">
-														<td colSpan={8} className="px-4 py-3">
+														<td colSpan={10} className="px-4 py-3">
 															<SchemeTiersRow tiers={s.tiers} />
 														</td>
 													</tr>
@@ -328,7 +350,7 @@ export default function CommissionSchemesAdminPage() {
 										))}
 										{schemes.length === 0 ? (
 											<tr>
-												<td colSpan={8} className="px-4 py-10 text-center text-muted-foreground">
+												<td colSpan={10} className="px-4 py-10 text-center text-muted-foreground">
 													No schemes found.
 												</td>
 											</tr>

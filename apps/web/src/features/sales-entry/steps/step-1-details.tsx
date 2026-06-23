@@ -2,6 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ArrowRight, Search, UserPlus } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
@@ -48,6 +49,13 @@ import {
 import type { StepNavigationOptions } from "./step-nav";
 
 const NO_PROJECT = "__none__";
+
+function getActiveSchemeTier(
+	scheme: { tiers?: Array<{ isActive?: boolean; commissionPercent: number; overridePercent: number }> } | null,
+) {
+	if (!scheme?.tiers?.length) return null;
+	return scheme.tiers.find((t) => t.isActive) ?? scheme.tiers[0] ?? null;
+}
 
 type DetailsFormValues = z.infer<typeof detailsStepSchema>;
 
@@ -116,6 +124,7 @@ export function StepDetails({
 	const representationType = form.watch("representationType");
 	const propertyPrice = form.watch("propertyData.price");
 	const commissionValue = form.watch("commissionValue");
+	const schemeId = form.watch("propertyData.schemeId");
 
 	const { data: schemesForProject } = trpc.commissionSchemes.listByProject.useQuery(
 		{ projectName: projectName ?? "" },
@@ -139,10 +148,19 @@ export function StepDetails({
 		},
 	);
 
+	const schemes = schemesForProject?.schemes ?? [];
+
 	const selectedScheme = useMemo(() => {
-		const schemes = schemesForProject?.schemes ?? [];
+		if (schemeId) {
+			return schemes.find((s) => s.id === schemeId) ?? schemes[0] ?? null;
+		}
 		return schemes[0] ?? null;
-	}, [schemesForProject]);
+	}, [schemes, schemeId]);
+
+	const activeSchemeTier = useMemo(
+		() => getActiveSchemeTier(selectedScheme),
+		[selectedScheme],
+	);
 
 	useEffect(() => {
 		if (!selectedScheme) return;
@@ -150,6 +168,11 @@ export function StepDetails({
 		form.setValue("propertyData.listingId", selectedScheme.blockListingId ?? undefined);
 		form.setValue("propertyData.listingTitle", selectedScheme.blockListingTitle ?? undefined);
 		form.setValue("propertyData.schemeId", selectedScheme.id);
+		const tier = getActiveSchemeTier(selectedScheme);
+		if (tier) {
+			form.setValue("commissionType", "percentage");
+			form.setValue("commissionValue", tier.commissionPercent);
+		}
 	}, [selectedScheme, form]);
 
 	const { data: coBrokingAgents = [], isLoading: coBrokingAgentsLoading } =
@@ -443,6 +466,45 @@ export function StepDetails({
 									)}
 								/>
 
+								{marketType === "primary" && schemes.length > 1 ? (
+									<FormField
+										control={form.control}
+										name="propertyData.schemeId"
+										render={({ field }) => (
+											<FormItem>
+												<RequiredLabel>Commission Scheme</RequiredLabel>
+												<Select
+													value={field.value ?? selectedScheme?.id ?? ""}
+													onValueChange={(v) => {
+														field.onChange(v);
+														syncToParent();
+													}}
+												>
+													<FormControl>
+														<SelectTrigger>
+															<SelectValue placeholder="Select scheme" />
+														</SelectTrigger>
+													</FormControl>
+													<SelectContent>
+														{schemes.map((s) => {
+															const tier = getActiveSchemeTier(s);
+															return (
+																<SelectItem key={s.id} value={s.id}>
+																	{s.schemeName}
+																	{tier
+																		? ` · ${tier.commissionPercent}% / override ${tier.overridePercent}%`
+																		: ""}
+																</SelectItem>
+															);
+														})}
+													</SelectContent>
+												</Select>
+												<FormMessage />
+											</FormItem>
+										)}
+									/>
+								) : null}
+
 								{marketType === "secondary" ? (
 									<FormField
 										control={form.control}
@@ -467,6 +529,46 @@ export function StepDetails({
 											</FormItem>
 										)}
 									/>
+								) : null}
+
+								{marketType === "primary" && activeSchemeTier ? (
+									<>
+										<FormItem>
+											<FormLabel>Commission Rate (%)</FormLabel>
+											<FormControl>
+												<Input
+													type="number"
+													readOnly
+													className="bg-muted/50"
+													value={activeSchemeTier.commissionPercent}
+												/>
+											</FormControl>
+											<p className="text-muted-foreground text-xs">
+												From project scheme — you receive 100% of scheme net
+											</p>
+										</FormItem>
+										<FormItem>
+											<FormLabel>Upline Override (%)</FormLabel>
+											<FormControl>
+												<Input
+													type="number"
+													readOnly
+													className="bg-muted/50"
+													value={activeSchemeTier.overridePercent}
+												/>
+											</FormControl>
+											<p className="text-muted-foreground text-xs">
+												Paid separately to recruiter upline (not deducted from
+												your share).{" "}
+												<Link
+													href="/admin/commission-schemes"
+													className="text-primary underline-offset-4 hover:underline"
+												>
+													Edit in Primary schemes
+												</Link>
+											</p>
+										</FormItem>
+									</>
 								) : null}
 
 								{marketType === "primary" ? (
@@ -517,24 +619,6 @@ export function StepDetails({
 												minimumFractionDigits: 2,
 											})}
 										</p>
-									</div>
-								) : null}
-
-								{marketType === "primary" && selectedScheme?.tiers?.[0] ? (
-									<div className="md:col-span-2 rounded-lg border bg-muted/30 p-3 text-sm">
-										<p className="font-medium">Primary scheme preview</p>
-										<p className="mt-1 text-muted-foreground">
-											Announced commission:{" "}
-											{selectedScheme.tiers[0].commissionPercent.toFixed(2)}% — you
-											receive 100% of scheme net
-										</p>
-										{selectedScheme.tiers[0].overridePercent > 0 ? (
-											<p className="mt-1 text-muted-foreground">
-												Upline override:{" "}
-												{selectedScheme.tiers[0].overridePercent.toFixed(2)}% (paid
-												separately, not deducted from your share)
-											</p>
-										) : null}
 									</div>
 								) : null}
 
