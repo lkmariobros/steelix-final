@@ -14,6 +14,7 @@ import { erecruitmentRouter } from "../controllers/erecruitment";
 import { feedbackRouter } from "../controllers/feedback";
 import { leadTasksRouter } from "../controllers/lead-tasks";
 import { listingsRouter } from "../controllers/listings";
+import { portalFilesRouter } from "../controllers/portal-files";
 import { reportsRouter } from "../controllers/reports";
 import { tagsRouter } from "../controllers/tags";
 import { transactionsRouter } from "../controllers/transactions";
@@ -42,6 +43,7 @@ export const appRouter = router({
 	erecruitment: erecruitmentRouter,
 	leadTasks: leadTasksRouter,
 	listings: listingsRouter,
+	portalFiles: portalFilesRouter,
 });
 
 export type AppRouter = typeof appRouter;

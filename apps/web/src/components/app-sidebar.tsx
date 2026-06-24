@@ -56,6 +56,7 @@ import {
 	RiPushpinLine,
 	RiArrowRightLine,
 	RiUserAddLine,
+	RiFolderCloudLine,
 } from "@remixicon/react";
 
 // Clean data structure - no mock teams
@@ -337,6 +338,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 							url: "/admin/calendar",
 							icon: RiCalendarLine,
 						},
+						{
+							title: "Files",
+							url: "/admin/files",
+							icon: RiFolderCloudLine,
+						},
 					],
 				},
 				{
@@ -412,6 +418,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 							title: "Calendar",
 							url: "/dashboard/calendar",
 							icon: RiCalendarLine,
+						},
+						{
+							title: "Files",
+							url: "/dashboard/files",
+							icon: RiFolderCloudLine,
 						},
 						{
 							title: "Settings",

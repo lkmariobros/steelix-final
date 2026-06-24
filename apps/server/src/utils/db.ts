@@ -13,6 +13,7 @@ import * as reportsSchema from "../models/reports";
 import * as transactionSchema from "../models/transactions";
 import * as whatsappSchema from "../models/whatsapp";
 import * as erecruitmentSchema from "../models/erecruitment";
+import * as portalFilesSchema from "../models/portal-files";
 
 const schema = {
 	...authSchema,
@@ -27,6 +28,7 @@ const schema = {
 	...whatsappSchema,
 	...calendarSchema,
 	...erecruitmentSchema,
+	...portalFilesSchema,
 };
 
 const globalForPool = globalThis as typeof globalThis & {
