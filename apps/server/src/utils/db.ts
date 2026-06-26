@@ -88,12 +88,13 @@ function resolvePoolSsl(connectionString: string): PoolConfig["ssl"] | undefined
 	const mode = process.env.DATABASE_SSL?.toLowerCase();
 
 	if (mode === "false") return false;
-	if (mode !== "true") return undefined;
-
-	// Supabase session pooler works without Pool.ssl; forcing it breaks connectivity.
-	if (isSupabasePooler(connectionString)) return undefined;
-
 	if (isLocalDatabase(connectionString)) return undefined;
+
+	if (isSupabasePooler(connectionString)) {
+		return { rejectUnauthorized: false };
+	}
+
+	if (mode !== "true") return undefined;
 
 	const strict =
 		process.env.DATABASE_SSL_REJECT_UNAUTHORIZED?.toLowerCase() === "true";
