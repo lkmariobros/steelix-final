@@ -78,7 +78,7 @@ import {
 import { FileSpreadsheet, FileText } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRedirectUnauthenticated } from "@/hooks/use-redirect-unauthenticated";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -95,6 +95,7 @@ import {
 } from "./_utils/crm-export";
 import { LeadTasksCard } from "@/app/admin/leads/_components/lead-tasks-card";
 import { TodayTasksWidget } from "@/app/admin/leads/_components/today-tasks-widget";
+import { FollowerSelector } from "@/components/follower-selector";
 
 // Pipeline stages for Kanban board
 type LeadType = "personal" | "company";
@@ -122,6 +123,9 @@ interface Prospect {
 	agentId: string | null; // Can be null for unclaimed company leads
 	agentName?: string | null; // Agent name (from backend join)
 	agentEmail?: string | null;
+	followerIds?: string[];
+	followerNames?: string[];
+	isFollower?: boolean;
 	createdAt: Date | string;
 	updatedAt: Date | string;
 }
@@ -246,6 +250,10 @@ export default function CRMPage() {
 	const { data: tagsData } = trpc.tags.list.useQuery(
 		{ page: 1, limit: 100 },
 		{ enabled: !!session, staleTime: 30_000 },
+	);
+	const { data: followerAgents = [] } = trpc.crm.agentsForFollowers.useQuery(
+		undefined,
+		{ enabled: !!session, staleTime: 60_000 },
 	);
 
 	// Fetch prospects with tRPC - only when session is available
@@ -418,8 +426,27 @@ export default function CRMPage() {
 	};
 
 	const canManageTasksForSelected =
-		Boolean(selectedProspect?.agentId) &&
+		Boolean(selectedProspect) &&
+		(selectedProspect?.agentId === session?.user?.id ||
+			selectedProspect?.isFollower === true);
+
+	const canEditFollowersForSelected =
+		Boolean(selectedProspect) &&
 		selectedProspect?.agentId === session?.user?.id;
+
+	const [followerIds, setFollowerIds] = useState<string[]>([]);
+
+	useEffect(() => {
+		setFollowerIds(selectedProspect?.followerIds ?? []);
+	}, [selectedProspect?.id, selectedProspect?.followerIds]);
+
+	const setFollowersMutation = trpc.crm.setFollowers.useMutation({
+		onSuccess: () => {
+			toast.success("Followers updated");
+			refetchProspects();
+		},
+		onError: (error) => toast.error(error.message),
+	});
 
 	const [newNoteContent, setNewNoteContent] = useState("");
 
@@ -1128,6 +1155,56 @@ export default function CRMPage() {
 													</div>
 												</div>
 											)}
+											<div className="space-y-2">
+												<div className="flex items-center gap-2 text-muted-foreground text-sm">
+													<RiUserLine className="size-4" />
+													Followers
+												</div>
+												{canEditFollowersForSelected ? (
+													<div className="flex gap-2">
+														<FollowerSelector
+															value={followerIds}
+															onChange={setFollowerIds}
+															agents={followerAgents}
+															excludeUserId={selectedProspect.agentId}
+															className="flex-1"
+														/>
+														<Button
+															size="sm"
+															disabled={
+																setFollowersMutation.isPending ||
+																JSON.stringify(followerIds) ===
+																	JSON.stringify(
+																		selectedProspect.followerIds ?? [],
+																	)
+															}
+															onClick={() =>
+																setFollowersMutation.mutate({
+																	id: selectedProspect.id,
+																	followerIds,
+																})
+															}
+														>
+															{setFollowersMutation.isPending ? (
+																<RiLoader4Line className="size-4 animate-spin" />
+															) : (
+																"Save"
+															)}
+														</Button>
+													</div>
+												) : selectedProspect.followerNames &&
+												  selectedProspect.followerNames.length > 0 ? (
+													<div className="flex flex-wrap gap-1">
+														{selectedProspect.followerNames.map((name) => (
+															<Badge key={name} variant="secondary">
+																{name}
+															</Badge>
+														))}
+													</div>
+												) : (
+													<span className="text-muted-foreground text-sm">—</span>
+												)}
+											</div>
 											{selectedProspect.projectName && (
 												<div className="flex items-center justify-between">
 													<div className="flex items-center gap-2 text-muted-foreground text-sm">

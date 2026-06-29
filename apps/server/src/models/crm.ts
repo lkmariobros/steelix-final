@@ -150,6 +150,31 @@ export const crmTags = pgTable(
 	}),
 );
 
+// Agents who follow a lead (e.g. sales leaders monitoring team leads)
+export const prospectFollowers = pgTable(
+	"prospect_followers",
+	{
+		id: uuid("id").primaryKey().defaultRandom(),
+		prospectId: uuid("prospect_id")
+			.notNull()
+			.references(() => prospects.id, { onDelete: "cascade" }),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+	},
+	(table) => ({
+		prospectIdIdx: index("idx_prospect_followers_prospect_id").on(
+			table.prospectId,
+		),
+		userIdIdx: index("idx_prospect_followers_user_id").on(table.userId),
+		uniqueProspectFollower: index("idx_prospect_followers_unique").on(
+			table.prospectId,
+			table.userId,
+		),
+	}),
+);
+
 // Junction table for many-to-many relationship between prospects and tags
 export const prospectTags = pgTable(
 	"prospect_tags",

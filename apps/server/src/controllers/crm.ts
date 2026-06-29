@@ -25,7 +25,7 @@ import {
 	updateCrmProjectSchema,
 	updateProspectSchema,
 } from "../models/crm";
-import { getLeadActivityAdmin, importProspectsBulkForAgent } from "../services/leads";
+import { getLeadActivityAdmin, importProspectsBulkForAgent, buildAgentPersonalLeadsCondition, canAgentAccessProspect, fetchFollowersByProspectIds, getAgentsWithLeads, getProspectFollowers, setProspectFollowers } from "../services/leads";
 import { db } from "../utils/db";
 import { adminProcedure, protectedProcedure, router } from "../utils/trpc";
 
@@ -139,7 +139,7 @@ export const crmRouter = router({
 					conditions.push(eq(prospects.leadType, "company"));
 					conditions.push(isNull(prospects.agentId));
 				} else {
-					conditions.push(eq(prospects.agentId, agentId));
+					conditions.push(buildAgentPersonalLeadsCondition(agentId));
 				}
 
 				// Search filter (name, email, or phone)
@@ -338,6 +338,9 @@ export const crmRouter = router({
 					tagsByProspectId[item.prospectId].push(item.tag);
 				}
 
+				const followersByProspectId =
+					await fetchFollowersByProspectIds(prospectIds);
+
 				const effectivePage = exportAll ? 1 : page;
 				const effectiveTotalPages = exportAll
 					? 1
@@ -368,6 +371,15 @@ export const crmRouter = router({
 							tagIds: tagsByProspectId[r.prospect.id]?.map((t) => t.id) || [],
 							tagNames:
 								tagsByProspectId[r.prospect.id]?.map((t) => t.name) || [],
+							followerIds:
+								followersByProspectId[r.prospect.id]?.ids ?? [],
+							followerNames:
+								followersByProspectId[r.prospect.id]?.names ?? [],
+							isFollower:
+								r.prospect.agentId !== agentId &&
+								(followersByProspectId[r.prospect.id]?.ids ?? []).includes(
+									agentId,
+								),
 						};
 					}),
 					pagination: {
@@ -450,24 +462,27 @@ export const crmRouter = router({
 			const { id } = input;
 			const agentId = ctx.session.user.id;
 
-			// Get prospect (can be agent's own or unclaimed company lead)
+			const allowed = await canAgentAccessProspect(id, agentId, {
+				allowUnclaimedCompany: true,
+			});
+			if (!allowed) {
+				throw new TRPCError({
+					code: "NOT_FOUND",
+					message: "Prospect not found",
+				});
+			}
+
 			const [prospect] = await db
 				.select()
 				.from(prospects)
-				.where(
-					and(
-						eq(prospects.id, id),
-						or(
-							eq(prospects.agentId, agentId),
-							and(eq(prospects.leadType, "company"), isNull(prospects.agentId)),
-						) ?? sql`false`,
-					),
-				)
+				.where(eq(prospects.id, id))
 				.limit(1);
 
 			if (!prospect) {
 				throw new Error("Prospect not found");
 			}
+
+			const followers = await getProspectFollowers(id);
 
 			// Get notes for this prospect with agent names
 			const notes = await db
@@ -516,6 +531,10 @@ export const crmRouter = router({
 					...selectProspectSchema.parse(prospectForParse),
 					tagIds: prospectTagsData.map((t) => t.tag.id),
 					tagNames: prospectTagsData.map((t) => t.tag.name),
+					followerIds: followers.ids,
+					followerNames: followers.names,
+					isFollower:
+						prospect.agentId !== agentId && followers.ids.includes(agentId),
 				},
 				notes: notes.map((n) => ({
 					...selectProspectNoteSchema.parse(n.note),
@@ -651,19 +670,17 @@ export const crmRouter = router({
 			const { id, leadType: _leadType, ...updateData } = input;
 			const agentId = ctx.session.user.id;
 
-			// Verify prospect belongs to the agent OR is an unclaimed company lead
+			const allowed = await canAgentAccessProspect(id, agentId, {
+				allowUnclaimedCompany: true,
+			});
+			if (!allowed) {
+				throw new Error("Prospect not found");
+			}
+
 			const [existing] = await db
 				.select()
 				.from(prospects)
-				.where(
-					and(
-						eq(prospects.id, id),
-						or(
-							eq(prospects.agentId, agentId),
-							and(eq(prospects.leadType, "company"), isNull(prospects.agentId)),
-						) ?? sql`false`,
-					),
-				)
+				.where(eq(prospects.id, id))
 				.limit(1);
 
 			if (!existing) {
@@ -745,11 +762,15 @@ export const crmRouter = router({
 			const { id, stage } = input;
 			const agentId = ctx.session.user.id;
 
-			// Verify prospect belongs to the agent
+			const allowed = await canAgentAccessProspect(id, agentId);
+			if (!allowed) {
+				throw new Error("Prospect not found");
+			}
+
 			const [existing] = await db
 				.select()
 				.from(prospects)
-				.where(and(eq(prospects.agentId, agentId), eq(prospects.id, id)))
+				.where(eq(prospects.id, id))
 				.limit(1);
 
 			if (!existing) {
@@ -827,19 +848,17 @@ export const crmRouter = router({
 			const { prospectId, content } = input;
 			const agentId = ctx.session.user.id;
 
-			// Verify prospect exists and agent has access
+			const allowed = await canAgentAccessProspect(prospectId, agentId, {
+				allowUnclaimedCompany: true,
+			});
+			if (!allowed) {
+				throw new Error("Prospect not found");
+			}
+
 			const [prospect] = await db
 				.select()
 				.from(prospects)
-				.where(
-					and(
-						eq(prospects.id, prospectId),
-						or(
-							eq(prospects.agentId, agentId),
-							and(eq(prospects.leadType, "company"), isNull(prospects.agentId)),
-						) ?? sql`false`,
-					),
-				)
+				.where(eq(prospects.id, prospectId))
 				.limit(1);
 
 			if (!prospect) {
@@ -878,22 +897,10 @@ export const crmRouter = router({
 			const { id } = input;
 			const agentId = ctx.session.user.id;
 
-			// Verify prospect exists and agent has access
-			const [prospect] = await db
-				.select()
-				.from(prospects)
-				.where(
-					and(
-						eq(prospects.id, id),
-						or(
-							eq(prospects.agentId, agentId),
-							and(eq(prospects.leadType, "company"), isNull(prospects.agentId)),
-						) ?? sql`false`,
-					),
-				)
-				.limit(1);
-
-			if (!prospect) {
+			const allowed = await canAgentAccessProspect(id, agentId, {
+				allowUnclaimedCompany: true,
+			});
+			if (!allowed) {
 				throw new Error("Prospect not found");
 			}
 
@@ -918,23 +925,9 @@ export const crmRouter = router({
 		.input(z.object({ leadId: z.string().uuid() }))
 		.query(async ({ ctx, input }) => {
 			const agentId = ctx.session.user.id;
-			const [row] = await db
-				.select({
-					id: prospects.id,
-					agentId: prospects.agentId,
-					leadType: prospects.leadType,
-				})
-				.from(prospects)
-				.where(eq(prospects.id, input.leadId))
-				.limit(1);
-
-			if (!row) {
-				throw new TRPCError({ code: "NOT_FOUND", message: "Lead not found" });
-			}
-
-			const allowed =
-				row.agentId === agentId ||
-				(row.leadType === "company" && row.agentId === null);
+			const allowed = await canAgentAccessProspect(input.leadId, agentId, {
+				allowUnclaimedCompany: true,
+			});
 
 			if (!allowed) {
 				throw new TRPCError({
@@ -944,5 +937,41 @@ export const crmRouter = router({
 			}
 
 			return await getLeadActivityAdmin(input.leadId);
+		}),
+
+	agentsForFollowers: protectedProcedure.query(async () => {
+		return await getAgentsWithLeads();
+	}),
+
+	setFollowers: protectedProcedure
+		.input(
+			z.object({
+				id: z.string().uuid(),
+				followerIds: z.array(z.string()).default([]),
+			}),
+		)
+		.mutation(async ({ input, ctx }) => {
+			const agentId = ctx.session.user.id;
+			const [prospect] = await db
+				.select({ agentId: prospects.agentId })
+				.from(prospects)
+				.where(eq(prospects.id, input.id))
+				.limit(1);
+
+			if (!prospect) {
+				throw new TRPCError({ code: "NOT_FOUND", message: "Lead not found" });
+			}
+			if (prospect.agentId !== agentId) {
+				throw new TRPCError({
+					code: "FORBIDDEN",
+					message: "Only the assigned agent can edit followers",
+				});
+			}
+
+			return await setProspectFollowers(
+				input.id,
+				input.followerIds,
+				agentId,
+			);
 		}),
 });

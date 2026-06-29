@@ -19,6 +19,8 @@ export type Lead = {
 	agentEmail: string | null;
 	tagIds: string[];
 	tagNames: string[];
+	followerIds: string[];
+	followerNames: string[];
 	notes: string | null;
 	createdAt: Date | string;
 	updatedAt: Date | string;

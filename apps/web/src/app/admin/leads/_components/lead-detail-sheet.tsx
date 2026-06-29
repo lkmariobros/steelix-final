@@ -1,9 +1,10 @@
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { toast } from "sonner";
 import { trpc } from "@/utils/trpc";
+import { FollowerSelector } from "@/components/follower-selector";
 import { useTransactionModalActions } from "@/contexts/transaction-modal-context";
 import { stashTransactionPrefillOnce } from "@/features/sales-entry/prefill-stash";
 import {
@@ -76,6 +77,7 @@ export function LeadDetailSheet({
 	const [inputContent, setInputContent] = useState("");
 	const [newStage, setNewStage] = useState<string>("");
 	const [assignAgentId, setAssignAgentId] = useState<string>("");
+	const [followerIds, setFollowerIds] = useState<string[]>([]);
 
 	const invalidate = () => {
 		queryClient.invalidateQueries({ queryKey: [["adminLeads", "get"]] });
@@ -123,6 +125,15 @@ export function LeadDetailSheet({
 		onError: (e) => toast.error(e.message),
 	});
 
+	const setFollowersMutation = trpc.adminLeads.setFollowers.useMutation({
+		onSuccess: () => {
+			toast.success("Followers updated");
+			onRefresh();
+			invalidate();
+		},
+		onError: (e) => toast.error(e.message),
+	});
+
 	const assignAgentOptions = useMemo(() => {
 		const current = detail?.lead ?? lead;
 		return withCurrentAssigneeOption(agents, {
@@ -131,6 +142,11 @@ export function LeadDetailSheet({
 			agentEmail: current?.agentEmail ?? null,
 		});
 	}, [agents, lead, detail?.lead]);
+
+	useEffect(() => {
+		const current = detail?.lead ?? lead;
+		setFollowerIds(current?.followerIds ?? []);
+	}, [detail?.lead, lead]);
 
 	if (!lead) return null;
 
@@ -377,6 +393,44 @@ export function LeadDetailSheet({
 										<RiLoader4Line className="size-4 animate-spin" />
 									) : (
 										"Assign"
+									)}
+								</Button>
+							</CardContent>
+						</Card>
+
+						<Card>
+							<CardHeader className="pb-3">
+								<CardTitle className="text-sm">Followers</CardTitle>
+								<CardDescription className="text-xs">
+									Sales leaders can follow leads to track team activity
+								</CardDescription>
+							</CardHeader>
+							<CardContent className="flex gap-2">
+								<FollowerSelector
+									value={followerIds}
+									onChange={setFollowerIds}
+									agents={agents}
+									excludeUserId={activeLead.agentId}
+									className="flex-1"
+								/>
+								<Button
+									size="sm"
+									disabled={
+										setFollowersMutation.isPending ||
+										JSON.stringify(followerIds) ===
+											JSON.stringify(activeLead.followerIds ?? [])
+									}
+									onClick={() =>
+										setFollowersMutation.mutate({
+											id: lead.id,
+											followerIds,
+										})
+									}
+								>
+									{setFollowersMutation.isPending ? (
+										<RiLoader4Line className="size-4 animate-spin" />
+									) : (
+										"Save"
 									)}
 								</Button>
 							</CardContent>

@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, ilike, isNull, or, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, ilike, inArray, isNull, or, sql } from "drizzle-orm";
 import { isAssignableLeadAgentRole } from "../utils/user-roles";
 import type { SQL } from "drizzle-orm";
 import {
@@ -20,6 +20,7 @@ import {
 	normalisePipelineStage,
 	pipelineStageSchema,
 	prospectNotes,
+	prospectFollowers,
 	prospectTags,
 	prospects,
 	prospectStatusSchema,
@@ -71,6 +72,8 @@ export interface LeadWithAgent {
 	agentEmail: string | null;
 	tagIds: string[];
 	tagNames: string[];
+	followerIds: string[];
+	followerNames: string[];
 	createdAt: Date;
 	updatedAt: Date;
 }
@@ -237,6 +240,8 @@ export async function getAllLeadsAdmin(filter: AdminLeadsFilter = {}) {
 		tagsByProspect[t.prospectId].names.push(t.tagName);
 	}
 
+	const followersByProspect = await fetchFollowersByProspectIds(prospectIds);
+
 	const leads: LeadWithAgent[] = rows.map((r) => {
 		const parsed = selectProspectSchema.parse({
 			...r.prospect,
@@ -252,6 +257,8 @@ export async function getAllLeadsAdmin(filter: AdminLeadsFilter = {}) {
 			agentEmail: r.agentEmail ?? null,
 			tagIds: tagsByProspect[r.prospect.id]?.ids ?? [],
 			tagNames: tagsByProspect[r.prospect.id]?.names ?? [],
+			followerIds: followersByProspect[r.prospect.id]?.ids ?? [],
+			followerNames: followersByProspect[r.prospect.id]?.names ?? [],
 		};
 	});
 
@@ -278,6 +285,186 @@ export async function getAllLeadsAdmin(filter: AdminLeadsFilter = {}) {
 		}
 		throw e;
 	}
+}
+
+type FollowersByProspect = Record<
+	string,
+	{ ids: string[]; names: string[] }
+>;
+
+export async function fetchFollowersByProspectIds(
+	prospectIds: string[],
+): Promise<FollowersByProspect> {
+	const result: FollowersByProspect = {};
+	if (prospectIds.length === 0) return result;
+
+	try {
+		const rows = await db
+			.select({
+				prospectId: prospectFollowers.prospectId,
+				userId: user.id,
+				userName: user.name,
+				userEmail: user.email,
+			})
+			.from(prospectFollowers)
+			.innerJoin(user, eq(prospectFollowers.userId, user.id))
+			.where(
+				prospectIds.length === 1
+					? eq(prospectFollowers.prospectId, prospectIds[0])
+					: sql`${prospectFollowers.prospectId} = ANY(ARRAY[${sql.join(
+							prospectIds.map((id) => sql`${id}::uuid`),
+							sql`, `,
+						)}])`,
+			);
+
+		for (const row of rows) {
+			if (!result[row.prospectId]) {
+				result[row.prospectId] = { ids: [], names: [] };
+			}
+			result[row.prospectId].ids.push(row.userId);
+			result[row.prospectId].names.push(
+				row.userName ?? row.userEmail ?? row.userId,
+			);
+		}
+	} catch {
+		// Table may not be migrated yet
+	}
+
+	return result;
+}
+
+export async function getProspectFollowers(prospectId: string) {
+	const byProspect = await fetchFollowersByProspectIds([prospectId]);
+	return byProspect[prospectId] ?? { ids: [], names: [] };
+}
+
+export async function isAgentProspectFollower(
+	prospectId: string,
+	agentId: string,
+): Promise<boolean> {
+	try {
+		const [row] = await db
+			.select({ id: prospectFollowers.id })
+			.from(prospectFollowers)
+			.where(
+				and(
+					eq(prospectFollowers.prospectId, prospectId),
+					eq(prospectFollowers.userId, agentId),
+				),
+			)
+			.limit(1);
+		return !!row;
+	} catch {
+		return false;
+	}
+}
+
+/** Agent can access if they own the lead, follow it, or (optionally) it's unclaimed company pool. */
+export async function canAgentAccessProspect(
+	prospectId: string,
+	agentId: string,
+	opts?: { allowUnclaimedCompany?: boolean },
+): Promise<boolean> {
+	const [row] = await db
+		.select({
+			agentId: prospects.agentId,
+			leadType: prospects.leadType,
+		})
+		.from(prospects)
+		.where(eq(prospects.id, prospectId))
+		.limit(1);
+
+	if (!row) return false;
+	if (row.agentId === agentId) return true;
+	if (
+		opts?.allowUnclaimedCompany &&
+		row.leadType === "company" &&
+		row.agentId === null
+	) {
+		return true;
+	}
+	return isAgentProspectFollower(prospectId, agentId);
+}
+
+/** SQL condition for agent "My Leads" tab: assigned or followed. */
+export function buildAgentPersonalLeadsCondition(agentId: string): SQL {
+	return (
+		or(
+			eq(prospects.agentId, agentId),
+			inArray(
+				prospects.id,
+				db
+					.select({ id: prospectFollowers.prospectId })
+					.from(prospectFollowers)
+					.where(eq(prospectFollowers.userId, agentId)),
+			),
+		) ?? sql`false`
+	);
+}
+
+export async function setProspectFollowers(
+	prospectId: string,
+	followerIds: string[],
+	actorId?: string,
+) {
+	const [prospect] = await db
+		.select({ agentId: prospects.agentId })
+		.from(prospects)
+		.where(eq(prospects.id, prospectId))
+		.limit(1);
+
+	if (!prospect) throw new Error("Lead not found");
+
+	const uniqueIds = [...new Set(followerIds)];
+	for (const followerId of uniqueIds) {
+		await assertAssignableLeadAgent(followerId);
+	}
+
+	const filtered = uniqueIds.filter((id) => id !== prospect.agentId);
+	const before = await getProspectFollowers(prospectId);
+
+	try {
+		await db
+			.delete(prospectFollowers)
+			.where(eq(prospectFollowers.prospectId, prospectId));
+		if (filtered.length > 0) {
+			await db.insert(prospectFollowers).values(
+				filtered.map((userId) => ({ prospectId, userId })),
+			);
+		}
+	} catch (e) {
+		const msg = e instanceof Error ? e.message : String(e);
+		if (/prospect_followers/i.test(msg) && /does not exist/i.test(msg)) {
+			throw new Error(
+				"Lead followers table is missing. Run apps/server/sql/prospect-followers-setup.sql on your database.",
+			);
+		}
+		throw e;
+	}
+
+	if (actorId) {
+		const beforeLabel =
+			before.names.length > 0 ? before.names.join(", ") : "None";
+		const after = await getProspectFollowers(prospectId);
+		const afterLabel =
+			after.names.length > 0 ? after.names.join(", ") : "None";
+
+		if (beforeLabel !== afterLabel) {
+			await logActivity({
+				prospectId,
+				eventType: "lead_updated",
+				actorId,
+				content: `Followers updated from "${beforeLabel}" to "${afterLabel}"`,
+				metadata: {
+					field: "followers",
+					from: beforeLabel,
+					to: afterLabel,
+				},
+			});
+		}
+	}
+
+	return getProspectFollowers(prospectId);
 }
 
 /**
@@ -322,6 +509,8 @@ export async function getLeadByIdAdmin(leadId: string) {
 		// skip if tables not ready
 	}
 
+	const followers = await getProspectFollowers(leadId);
+
 	const parsed = selectProspectSchema.parse({
 		...row.prospect,
 		type: normaliseType(row.prospect.type),
@@ -338,6 +527,8 @@ export async function getLeadByIdAdmin(leadId: string) {
 			agentEmail: row.agentEmail ?? null,
 			tagIds: tagRows.map((t) => t.tagId),
 			tagNames: tagRows.map((t) => t.tagName),
+			followerIds: followers.ids,
+			followerNames: followers.names,
 		},
 		notes: noteRows.map((n) => ({
 			...selectProspectNoteSchema.parse(n.note),

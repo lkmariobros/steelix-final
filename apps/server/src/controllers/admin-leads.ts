@@ -20,6 +20,7 @@ import {
 	getLeadsStatsAdmin,
 	logCallForLeadAdmin,
 	logEmailForLeadAdmin,
+	setProspectFollowers,
 	updateLeadAdmin,
 } from "../services/leads";
 import { adminProcedure, router } from "../utils/trpc";
@@ -58,6 +59,11 @@ const adminUpdateLeadInput = updateProspectSchema.extend({
 const adminAssignLeadInput = z.object({
 	id: z.string().uuid(),
 	agentId: z.string().nullable(), // null = unassign
+});
+
+const adminSetFollowersInput = z.object({
+	id: z.string().uuid(),
+	followerIds: z.array(z.string()).default([]),
 });
 
 const adminBulkUpdateStageInput = z.object({
@@ -222,6 +228,16 @@ export const adminLeadsRouter = router({
 			return await assignLeadAdmin(
 				input.id,
 				input.agentId,
+				ctx.session.user.id,
+			);
+		}),
+
+	setFollowers: adminProcedure
+		.input(adminSetFollowersInput)
+		.mutation(async ({ input, ctx }) => {
+			return await setProspectFollowers(
+				input.id,
+				input.followerIds,
 				ctx.session.user.id,
 			);
 		}),

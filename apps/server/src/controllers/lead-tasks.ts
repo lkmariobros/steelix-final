@@ -10,7 +10,6 @@ import {
 	createLeadTask,
 	deleteLeadTask,
 	getLeadTasksReport,
-	getProspectAgentId,
 	getTaskProspectAgentId,
 	getTasksForAgentToday,
 	getTasksForLead,
@@ -18,31 +17,30 @@ import {
 	getUpcomingTasks,
 	updateLeadTask,
 } from "../services/lead-tasks";
+import { canAgentAccessProspect } from "../services/leads";
 import { hasAdminAccess } from "../utils/user-roles";
 import { adminProcedure, protectedProcedure, router } from "../utils/trpc";
 
-async function assertAgentOwnsProspect(agentId: string, prospectId: string) {
-	const ownerId = await getProspectAgentId(prospectId);
-	if (ownerId === null) {
-		throw new TRPCError({ code: "NOT_FOUND", message: "Lead not found" });
-	}
-	if (ownerId !== agentId) {
+async function assertAgentCanManageProspect(agentId: string, prospectId: string) {
+	const allowed = await canAgentAccessProspect(prospectId, agentId);
+	if (!allowed) {
 		throw new TRPCError({
 			code: "FORBIDDEN",
-			message: "You can only manage tasks on your assigned leads",
+			message: "You can only manage tasks on leads you own or follow",
 		});
 	}
 }
 
-async function assertAgentOwnsTask(agentId: string, taskId: string) {
+async function assertAgentCanManageTask(agentId: string, taskId: string) {
 	const meta = await getTaskProspectAgentId(taskId);
 	if (!meta) {
 		throw new TRPCError({ code: "NOT_FOUND", message: "Task not found" });
 	}
-	if (meta.agentId !== agentId) {
+	const allowed = await canAgentAccessProspect(meta.prospectId, agentId);
+	if (!allowed) {
 		throw new TRPCError({
 			code: "FORBIDDEN",
-			message: "You can only manage tasks on your assigned leads",
+			message: "You can only manage tasks on leads you own or follow",
 		});
 	}
 }
@@ -58,7 +56,7 @@ function assertAdminOrAgentProspect(
 	prospectId: string,
 ) {
 	if (hasAdminAccess(sessionUser(ctx))) return Promise.resolve();
-	return assertAgentOwnsProspect(ctx.session.user.id, prospectId);
+	return assertAgentCanManageProspect(ctx.session.user.id, prospectId);
 }
 
 function assertAdminOrAgentTask(
@@ -66,7 +64,7 @@ function assertAdminOrAgentTask(
 	taskId: string,
 ) {
 	if (hasAdminAccess(sessionUser(ctx))) return Promise.resolve();
-	return assertAgentOwnsTask(ctx.session.user.id, taskId);
+	return assertAgentCanManageTask(ctx.session.user.id, taskId);
 }
 
 export const leadTasksRouter = router({
