@@ -785,6 +785,123 @@ export async function bulkUpdateLeadsStageAdmin(
 	return { success: true, updated: leadIds.length };
 }
 
+export type BulkLeadCategoryMode = "replace" | "add" | "remove";
+
+/**
+ * Bulk update lead categories (replace all, add, or remove) for multiple leads.
+ */
+export async function bulkUpdateLeadCategoriesAdmin(
+	leadIds: string[],
+	tagIds: string[],
+	mode: BulkLeadCategoryMode,
+	actorId?: string,
+) {
+	if (leadIds.length === 0) return { success: true as const, updated: 0 };
+
+	if (tagIds.length === 0) {
+		if (mode === "replace") {
+			// Allow clearing all categories
+		} else {
+			throw new Error("Select at least one category");
+		}
+	}
+
+	const tagNameById = new Map<string, string>();
+	if (tagIds.length > 0) {
+		const tagRows = await db
+			.select({ id: crmTags.id, name: crmTags.name })
+			.from(crmTags)
+			.where(inArray(crmTags.id, tagIds));
+		for (const row of tagRows) {
+			tagNameById.set(row.id, row.name);
+		}
+	}
+
+	const formatTagNames = (ids: string[]) =>
+		ids.map((id) => tagNameById.get(id) ?? id).join(", ") || "None";
+
+	for (const leadId of leadIds) {
+		let beforeIds: string[] = [];
+		try {
+			const existing = await db
+				.select({ tagId: prospectTags.tagId })
+				.from(prospectTags)
+				.where(eq(prospectTags.prospectId, leadId));
+			beforeIds = existing.map((r) => r.tagId);
+		} catch {
+			// tags table may be missing
+		}
+
+		if (mode === "replace") {
+			await db.delete(prospectTags).where(eq(prospectTags.prospectId, leadId));
+			if (tagIds.length > 0) {
+				await db
+					.insert(prospectTags)
+					.values(tagIds.map((tagId) => ({ prospectId: leadId, tagId })));
+			}
+			await db
+				.update(prospects)
+				.set({ tags: null, updatedAt: new Date() })
+				.where(eq(prospects.id, leadId));
+		} else if (mode === "add") {
+			const existingSet = new Set(beforeIds);
+			const toAdd = tagIds.filter((id) => !existingSet.has(id));
+			if (toAdd.length > 0) {
+				await db
+					.insert(prospectTags)
+					.values(toAdd.map((tagId) => ({ prospectId: leadId, tagId })));
+			}
+		} else {
+			if (tagIds.length > 0) {
+				await db
+					.delete(prospectTags)
+					.where(
+						and(
+							eq(prospectTags.prospectId, leadId),
+							inArray(prospectTags.tagId, tagIds),
+						),
+					);
+			}
+		}
+
+		if (actorId) {
+			const beforeRows =
+				beforeIds.length > 0
+					? await db
+							.select({ name: crmTags.name })
+							.from(crmTags)
+							.where(inArray(crmTags.id, beforeIds))
+					: [];
+			const beforeLabel =
+				beforeRows.map((r) => r.name).join(", ") || "None";
+
+			const modeLabel =
+				mode === "replace"
+					? "replaced with"
+					: mode === "add"
+						? "added"
+						: "removed";
+
+			await logActivity({
+				prospectId: leadId,
+				eventType: "lead_updated",
+				actorId,
+				content:
+					mode === "replace"
+						? `Categories ${modeLabel} "${formatTagNames(tagIds)}" (was: ${beforeLabel})`
+						: `Categories ${modeLabel}: ${formatTagNames(tagIds)}`,
+				metadata: {
+					field: "categories",
+					mode,
+					tagIds: tagIds.join(","),
+				},
+			});
+		}
+	}
+
+	return { success: true as const, updated: leadIds.length };
+}
+
 /**
  * Add a note to any lead (admin author).
  */

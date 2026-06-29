@@ -63,6 +63,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/tooltip";
 import { AdminLeadsPageHeader } from "./_components/admin-leads-page-header";
 import { BulkStageDialog } from "./_components/bulk-stage-dialog";
 import { BulkAssignDialog } from "./_components/bulk-assign-dialog";
+import { BulkCategoriesDialog } from "./_components/bulk-categories-dialog";
 import { BulkDeleteDialog } from "./_components/bulk-delete-dialog";
 import { CreateLeadDialog } from "./_components/create-lead-dialog";
 import { DeleteLeadDialog } from "./_components/delete-lead-dialog";
@@ -118,6 +119,7 @@ export default function AdminLeadsPage() {
 	const [isCreateOpen, setIsCreateOpen] = useState(false);
 	const [isBulkStageOpen, setIsBulkStageOpen] = useState(false);
 	const [isBulkAssignOpen, setIsBulkAssignOpen] = useState(false);
+	const [isBulkCategoriesOpen, setIsBulkCategoriesOpen] = useState(false);
 	const [isBulkDeleteOpen, setIsBulkDeleteOpen] = useState(false);
 	const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 	const [isExporting, setIsExporting] = useState(false);
@@ -833,6 +835,14 @@ export default function AdminLeadsPage() {
 											</Button>
 											<Button
 												size="sm"
+												variant="outline"
+												className="h-7 text-xs"
+												onClick={() => setIsBulkCategoriesOpen(true)}
+											>
+												Edit Categories
+											</Button>
+											<Button
+												size="sm"
 												variant="destructive"
 												className="h-7 text-xs"
 												onClick={() => setIsBulkDeleteOpen(true)}
@@ -1529,6 +1539,15 @@ export default function AdminLeadsPage() {
 				open={isBulkAssignOpen}
 				onClose={() => setIsBulkAssignOpen(false)}
 				agents={agents}
+				onSuccess={() => {
+					handleRefresh();
+					setSelectedIds(new Set());
+				}}
+			/>
+			<BulkCategoriesDialog
+				selectedIds={Array.from(selectedIds)}
+				open={isBulkCategoriesOpen}
+				onClose={() => setIsBulkCategoriesOpen(false)}
 				onSuccess={() => {
 					handleRefresh();
 					setSelectedIds(new Set());

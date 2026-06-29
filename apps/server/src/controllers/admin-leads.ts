@@ -8,6 +8,7 @@ import {
 	addNoteToLeadAdmin,
 	assignLeadAdmin,
 	bulkAssignLeadsAdmin,
+	bulkUpdateLeadCategoriesAdmin,
 	bulkUpdateLeadsStageAdmin,
 	checkLeadDuplicateAdmin,
 	createLeadAdmin,
@@ -74,6 +75,12 @@ const adminBulkUpdateStageInput = z.object({
 const adminBulkAssignInput = z.object({
 	ids: z.array(z.string().uuid()).min(1),
 	agentId: z.string().nullable(),
+});
+
+const adminBulkUpdateCategoriesInput = z.object({
+	ids: z.array(z.string().uuid()).min(1),
+	tagIds: z.array(z.string().uuid()).default([]),
+	mode: z.enum(["replace", "add", "remove"]),
 });
 
 const adminAddNoteInput = z.object({
@@ -257,6 +264,17 @@ export const adminLeadsRouter = router({
 			return await bulkAssignLeadsAdmin(
 				input.ids,
 				input.agentId,
+				ctx.session.user.id,
+			);
+		}),
+
+	bulkUpdateCategories: adminProcedure
+		.input(adminBulkUpdateCategoriesInput)
+		.mutation(async ({ input, ctx }) => {
+			return await bulkUpdateLeadCategoriesAdmin(
+				input.ids,
+				input.tagIds,
+				input.mode,
 				ctx.session.user.id,
 			);
 		}),
