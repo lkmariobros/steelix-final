@@ -1182,13 +1182,13 @@ export default function AdminLeadsPage() {
 																{lead.name}
 															</p>
 															<p className="text-muted-foreground text-xs md:hidden">
-																{lead.email ?? "—"}
+																{lead.phone}
 															</p>
 														</TableCell>
 														<TableCell className="hidden md:table-cell">
-															<p className="text-sm">{lead.email ?? "—"}</p>
+															<p className="font-medium text-sm">{lead.phone}</p>
 															<p className="text-muted-foreground text-xs">
-																{lead.phone}
+																{lead.email ?? "—"}
 															</p>
 															<p
 																className="max-w-[180px] truncate text-muted-foreground text-xs"
