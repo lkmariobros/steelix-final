@@ -86,7 +86,6 @@ import { z } from "zod";
 import { ImportLeadsDialog } from "./_components/import-leads-dialog";
 import type { AgentCrmImportMode } from "./_components/import-leads-dialog";
 import { PIPELINE_STAGES } from "@/app/admin/leads/_components/lead-constants";
-import { LeadTasksReport } from "@/app/admin/leads/_components/lead-tasks-report";
 import {
 	exportProspectsToCsv,
 	exportProspectsToExcelHtml,
@@ -223,9 +222,6 @@ export default function CRMPage() {
 	const [searchQuery, setSearchQuery] = useState("");
 	const [stageFilter, setStageFilter] = useState<PipelineStage | "all">("all");
 	const [categoryFilter, setCategoryFilter] = useState<string>("all"); // tagId
-	const [taskStatusFilter, setTaskStatusFilter] = useState<
-		"__all__" | "open" | "overdue" | "completed"
-	>("__all__");
 	const [currentPage, setCurrentPage] = useState(1);
 	const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
 	const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
@@ -737,19 +733,9 @@ export default function CRMPage() {
 							</Button>
 						</div>
 						</div>
-						{activeTab === "company" ? (
-							<p className="text-muted-foreground text-sm">
-								Company leads (lead type = Company Lead).
-							</p>
-						) : null}
 					</div>
 
 					<TodayTasksWidget scope="agent" onViewLead={handleViewLeadById} />
-					<LeadTasksReport
-						enabled={true}
-						status={taskStatusFilter}
-						onStatusChange={setTaskStatusFilter}
-					/>
 
 					{/* Add Prospect Dialog */}
 					<Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
@@ -1480,20 +1466,6 @@ export default function CRMPage() {
 							</SelectContent>
 						</Select>
 
-						<Select
-							value={taskStatusFilter}
-							onValueChange={(v) => setTaskStatusFilter(v as typeof taskStatusFilter)}
-						>
-							<SelectTrigger className="w-40">
-								<SelectValue placeholder="Task Status" />
-							</SelectTrigger>
-							<SelectContent>
-								<SelectItem value="__all__">All tasks</SelectItem>
-								<SelectItem value="open">Open</SelectItem>
-								<SelectItem value="overdue">Overdue</SelectItem>
-								<SelectItem value="completed">Completed</SelectItem>
-							</SelectContent>
-						</Select>
 					</div>
 
 					{/* Prospects View - Kanban or List */}

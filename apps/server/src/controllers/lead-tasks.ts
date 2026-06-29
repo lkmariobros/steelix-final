@@ -9,7 +9,6 @@ import {
 	completeLeadTask,
 	createLeadTask,
 	deleteLeadTask,
-	getLeadTasksReport,
 	getTaskProspectAgentId,
 	getTasksForAgentToday,
 	getTasksForLead,
@@ -91,22 +90,6 @@ export const leadTasksRouter = router({
 	listToday: adminProcedure.query(async () => {
 		return await getTodaysTasks();
 	}),
-
-	/**
-	 * Admin: task report with filters
-	 */
-	listReport: adminProcedure
-		.input(
-			z.object({
-				agentId: z.string().optional(),
-				status: z.enum(["open", "completed", "overdue"]).optional(),
-				limit: z.number().min(1).max(200).default(50),
-				offset: z.number().min(0).default(0),
-			}),
-		)
-		.query(async ({ input }) => {
-			return await getLeadTasksReport(input);
-		}),
 
 	/**
 	 * Get upcoming tasks for the next N days (admin)
