@@ -37,6 +37,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/utils/trpc";
+import { isRentalTransactionType } from "@/features/transactions/payment-method-utils";
 
 import {
 	type CompleteTransactionData,
@@ -124,8 +125,7 @@ export function StepDetails({
 	const projectName = form.watch("projectName");
 	const marketType = form.watch("marketType");
 	const transactionType = form.watch("transactionType");
-	const isRentalDeal =
-		transactionType === "lease" || transactionType === "rental";
+	const isRentalDeal = isRentalTransactionType(transactionType);
 	const representationType = form.watch("representationType");
 	const propertyPrice = form.watch("propertyData.price");
 	const commissionValue = form.watch("commissionValue");
