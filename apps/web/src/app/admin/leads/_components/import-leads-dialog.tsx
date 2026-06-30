@@ -38,7 +38,7 @@ type LeadFieldKey =
 	| "email"
 	| "source"
 	| "notes"
-	| "tags"
+	| "categories"
 	| "leadType"
 	| "agent"
 	| "skip";
@@ -49,11 +49,21 @@ const FIELD_OPTIONS: Array<{ key: LeadFieldKey; label: string }> = [
 	{ key: "email", label: "Email" },
 	{ key: "source", label: "Source" },
 	{ key: "notes", label: "Notes" },
-	{ key: "tags", label: "Categories" },
+	{ key: "categories", label: "Categories" },
 	{ key: "leadType", label: "Lead Type" },
 	{ key: "agent", label: "Assigned Agent" },
 	{ key: "skip", label: "Skip column" },
 ];
+
+function displayCsvColumnName(header: string): string {
+	const n = header.trim().toLowerCase();
+	if (n === "tags" || n === "tag") return "Categories";
+	return header;
+}
+
+function fieldLabel(key: LeadFieldKey): string {
+	return FIELD_OPTIONS.find((o) => o.key === key)?.label ?? key;
+}
 
 function firstNonEmptySample(values: string[]) {
 	return values.find((v) => String(v ?? "").trim() !== "") ?? "";
@@ -114,7 +124,7 @@ export function ImportLeadsDialog({
 		email: true,
 		source: true,
 		notes: true,
-		tags: true,
+		categories: true,
 		leadType: true,
 		agent: true,
 	});
@@ -199,7 +209,13 @@ export function ImportLeadsDialog({
 				else if (n === "email" || n.includes("e-mail")) seed[h] = "email";
 				else if (n === "source") seed[h] = "source";
 				else if (n === "notes" || n.includes("remark")) seed[h] = "notes";
-				else if (n === "tags" || n.includes("tag")) seed[h] = "tags";
+				else if (
+					n === "tags" ||
+					n === "tag" ||
+					n.includes("category") ||
+					n.includes("categories")
+				)
+					seed[h] = "categories";
 				else if (
 					n === "leadtype" ||
 					n === "lead type" ||
@@ -233,12 +249,14 @@ export function ImportLeadsDialog({
 		const required: LeadFieldKey[] = ["name", "phone"];
 		for (const r of required) {
 			if ((used.get(r)?.length ?? 0) === 0) {
-				warnings.push(`Missing mapping for required field: ${r}`);
+				warnings.push(`Missing mapping for required field: ${fieldLabel(r)}`);
 			}
 		}
 		for (const [k, cols] of used.entries()) {
 			if (k !== "skip" && cols.length > 1) {
-				warnings.push(`Field “${k}” mapped multiple times: ${cols.join(", ")}`);
+				warnings.push(
+					`Field “${fieldLabel(k)}” mapped multiple times: ${cols.map(displayCsvColumnName).join(", ")}`,
+				);
 			}
 		}
 		return warnings;
@@ -262,6 +280,7 @@ export function ImportLeadsDialog({
 				// Map to server import aliases
 				if (field === "agent") next["Assigned Agent"] = v;
 				else if (field === "leadType") next["Lead Type"] = v;
+				else if (field === "categories") next["Categories"] = v;
 				else next[field] = v;
 			}
 			out.push(next);
@@ -509,7 +528,9 @@ export function ImportLeadsDialog({
 														mapped !== "skip" && mapped !== "name" && mapped !== "phone";
 													return (
 														<tr key={h} className="border-b last:border-b-0">
-															<td className="px-3 py-2 font-medium text-xs">{h}</td>
+															<td className="px-3 py-2 font-medium text-xs">
+																{displayCsvColumnName(h)}
+															</td>
 															<td className="px-3 py-2 text-muted-foreground text-xs">
 																{sample || "—"}
 															</td>

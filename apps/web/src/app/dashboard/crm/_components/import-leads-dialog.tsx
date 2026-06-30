@@ -38,7 +38,7 @@ type LeadFieldKey =
 	| "email"
 	| "source"
 	| "notes"
-	| "tags"
+	| "categories"
 	| "stage"
 	| "status"
 	| "type"
@@ -54,7 +54,7 @@ const FIELD_OPTIONS: Array<{ key: LeadFieldKey; label: string }> = [
 	{ key: "email", label: "Email" },
 	{ key: "source", label: "Source" },
 	{ key: "notes", label: "Notes" },
-	{ key: "tags", label: "Categories" },
+	{ key: "categories", label: "Categories" },
 	{ key: "stage", label: "Lead Stage" },
 	{ key: "status", label: "Status" },
 	{ key: "type", label: "Type" },
@@ -64,6 +64,16 @@ const FIELD_OPTIONS: Array<{ key: LeadFieldKey; label: string }> = [
 	{ key: "nextContact", label: "Next Contact" },
 	{ key: "skip", label: "Skip column" },
 ];
+
+function displayCsvColumnName(header: string): string {
+	const n = header.trim().toLowerCase();
+	if (n === "tags" || n === "tag") return "Categories";
+	return header;
+}
+
+function fieldLabel(key: LeadFieldKey): string {
+	return FIELD_OPTIONS.find((o) => o.key === key)?.label ?? key;
+}
 
 function firstNonEmptySample(values: string[]) {
 	return values.find((v) => String(v ?? "").trim() !== "") ?? "";
@@ -126,7 +136,7 @@ export function ImportLeadsDialog({
 		email: true,
 		source: true,
 		notes: true,
-		tags: true,
+		categories: true,
 		stage: true,
 		status: true,
 		type: true,
@@ -255,8 +265,13 @@ export function ImportLeadsDialog({
 				else if (n === "email" || n.includes("e-mail")) seed[h] = "email";
 				else if (n === "source") seed[h] = "source";
 				else if (n === "notes" || n.includes("remark")) seed[h] = "notes";
-				else if (n === "tags" || n.includes("tag") || n.includes("category"))
-					seed[h] = "tags";
+				else if (
+					n === "tags" ||
+					n === "tag" ||
+					n.includes("category") ||
+					n.includes("categories")
+				)
+					seed[h] = "categories";
 				else if (n === "stage") seed[h] = "stage";
 				else if (n === "status") seed[h] = "status";
 				else if (n === "type") seed[h] = "type";
@@ -290,12 +305,14 @@ export function ImportLeadsDialog({
 		const required: LeadFieldKey[] = ["name", "phone"];
 		for (const r of required) {
 			if ((used.get(r)?.length ?? 0) === 0) {
-				warnings.push(`Missing mapping for required field: ${r}`);
+				warnings.push(`Missing mapping for required field: ${fieldLabel(r)}`);
 			}
 		}
 		for (const [k, cols] of used.entries()) {
 			if (k !== "skip" && cols.length > 1) {
-				warnings.push(`Field “${k}” mapped multiple times: ${cols.join(", ")}`);
+				warnings.push(
+					`Field “${fieldLabel(k)}” mapped multiple times: ${cols.map(displayCsvColumnName).join(", ")}`,
+				);
 			}
 		}
 		return warnings;
@@ -320,7 +337,7 @@ export function ImportLeadsDialog({
 				else if (field === "email") next["Email"] = v;
 				else if (field === "source") next["Source"] = v;
 				else if (field === "notes") next["Notes"] = v;
-				else if (field === "tags") next["Categories"] = v;
+				else if (field === "categories") next["Categories"] = v;
 				else if (field === "stage") next["Stage"] = v;
 				else if (field === "status") next["Status"] = v;
 				else if (field === "type") next["Type"] = v;
@@ -333,6 +350,8 @@ export function ImportLeadsDialog({
 		}
 		return out;
 	}, [rawRows, headers, columnMap, skipEmptyByField]);
+
+	const previewRows = useMemo(() => mappedRows.slice(0, 5), [mappedRows]);
 
 	const handleImport = () => {
 		if (mappedRows.length === 0 || importMutation.isPending) return;
@@ -454,7 +473,9 @@ export function ImportLeadsDialog({
 												mapped === "skip" ? false : skipEmptyByField[mapped];
 											return (
 												<tr key={h} className="border-b last:border-0">
-													<td className="px-3 py-2 font-medium">{h}</td>
+													<td className="px-3 py-2 font-medium">
+														{displayCsvColumnName(h)}
+													</td>
 													<td className="px-3 py-2 text-muted-foreground">{sample || "—"}</td>
 													<td className="px-3 py-2">
 														<Select
@@ -512,18 +533,84 @@ export function ImportLeadsDialog({
 						</TabsContent>
 
 						<TabsContent value="3" className="space-y-3">
-							{requiredMissing.length > 0 && (
-								<div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-destructive text-sm">
-									Missing required fields: {requiredMissing.join(", ")}. Please go back to Mapping.
+							{rawRows.length === 0 ? (
+								<p className="text-muted-foreground text-sm">
+									Upload a CSV to continue.
+								</p>
+							) : (
+								<div className="space-y-3">
+									{requiredMissing.length > 0 && (
+										<div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-destructive text-sm">
+											Missing required fields: {requiredMissing.join(", ")}.
+											Please go back to Mapping.
+										</div>
+									)}
+
+									<div className="flex items-start justify-between gap-3">
+										<div>
+											<p className="font-medium text-sm">
+												Step 3 — Review &amp; import
+											</p>
+											<p className="text-muted-foreground text-xs">
+												Preview the first 5 mapped rows.
+											</p>
+										</div>
+										<div className="text-muted-foreground text-xs">
+											Importing:{" "}
+											<span className="font-medium text-foreground">
+												{mappedRows.length}
+											</span>{" "}
+											row{mappedRows.length === 1 ? "" : "s"}
+										</div>
+									</div>
+
+									<div className="overflow-x-auto rounded-md border">
+										<table className="min-w-[720px] w-full text-left text-sm">
+											<thead className="border-b bg-muted/30">
+												<tr>
+													<th className="px-3 py-2 font-medium text-xs">#</th>
+													{Object.keys(previewRows[0] ?? {}).map((k) => (
+														<th
+															key={k}
+															className="px-3 py-2 font-medium text-xs"
+														>
+															{k}
+														</th>
+													))}
+												</tr>
+											</thead>
+											<tbody>
+												{previewRows.length === 0 ? (
+													<tr>
+														<td
+															colSpan={999}
+															className="px-3 py-6 text-center text-muted-foreground text-sm"
+														>
+															No preview rows (check your mapping).
+														</td>
+													</tr>
+												) : (
+													previewRows.map((r, idx) => (
+														<tr
+															key={idx}
+															className="border-b last:border-b-0"
+														>
+															<td className="px-3 py-2 text-muted-foreground text-xs">
+																{idx + 1}
+															</td>
+															{Object.keys(previewRows[0] ?? {}).map((k) => (
+																<td key={k} className="px-3 py-2 text-xs">
+																	{String(r[k] ?? "") || "—"}
+																</td>
+															))}
+														</tr>
+													))
+												)}
+											</tbody>
+										</table>
+									</div>
 								</div>
 							)}
-
-							<div className="rounded-lg border bg-muted/20 p-3 text-sm">
-								<p className="font-medium">Preview (first 5 rows)</p>
-								<pre className="mt-2 overflow-x-auto rounded bg-muted p-2 text-[11px] leading-tight">
-									{JSON.stringify(mappedRows.slice(0, 5), null, 2)}
-								</pre>
-							</div>
 						</TabsContent>
 
 						<TabsContent value="4" className="space-y-3">
