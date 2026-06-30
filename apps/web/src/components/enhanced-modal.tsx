@@ -131,7 +131,7 @@ export function EnhancedModal({
 							)}
 						</div>
 					)}
-					<div className="overflow-y-auto max-h-[calc(90vh-8rem)] sm:max-h-[calc(85vh-8rem)]">
+					<div className="overflow-y-auto max-h-[calc(90vh-8rem)] sm:max-h-[calc(85vh-8rem)] [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
 						{children}
 					</div>
 				</div>
@@ -210,7 +210,7 @@ export function EnhancedModal({
 						)}
 
 						{/* Content */}
-						<div className="overflow-y-auto max-h-[calc(90vh-8rem)] sm:max-h-[calc(85vh-8rem)]">
+						<div className="overflow-y-auto max-h-[calc(90vh-8rem)] sm:max-h-[calc(85vh-8rem)] [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
 							{children}
 						</div>
 					</motion.div>

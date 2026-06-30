@@ -51,6 +51,7 @@ const baseTransactionInput = z.object({
 			salesPackage: z.string().optional(),
 			rebateAmount: z.number().nonnegative().optional(),
 			purchasingMethod: z.enum(["cash", "loan"]).optional(),
+			sstPayBy: z.enum(["landlord", "agent"]).optional(),
 			listingReferralShareType: z.enum(["percentage", "fixed"]).optional(),
 			listingReferralShareValue: z.number().nonnegative().optional(),
 			price: z.number().positive("Price must be positive"),

@@ -34,8 +34,10 @@ import {
 	detailsStepSchema,
 	purchasingMethodOptions,
 	representationTypeOptions,
+	sstPayByOptions,
 	stepConfig,
 } from "../transaction-schema";
+import { isRentalTransactionType } from "@/features/transactions/payment-method-utils";
 
 interface StepVerifyProps {
 	data: Partial<CompleteTransactionData>;
@@ -61,10 +63,19 @@ export function StepVerify({
 		representationTypeOptions.find((o) => o.value === data.representationType)
 			?.label ?? "Direct";
 
-	const getPurchasingLabel = () =>
-		purchasingMethodOptions.find(
-			(o) => o.value === data.propertyData?.purchasingMethod,
-		)?.label ?? "—";
+	const getPurchasingLabel = () => {
+		if (isRentalTransactionType(data.transactionType)) {
+			return (
+				sstPayByOptions.find((o) => o.value === data.propertyData?.sstPayBy)
+					?.label ?? "—"
+			);
+		}
+		return (
+			purchasingMethodOptions.find(
+				(o) => o.value === data.propertyData?.purchasingMethod,
+			)?.label ?? "—"
+		);
+	};
 
 	const validate = (): ValidationError[] => {
 		const errors: ValidationError[] = [];
@@ -199,7 +210,11 @@ export function StepVerify({
 								</dd>
 							</div>
 							<div>
-								<dt className="text-muted-foreground">Purchasing Method</dt>
+								<dt className="text-muted-foreground">
+									{isRentalTransactionType(data.transactionType)
+										? "SST Pay By"
+										: "Purchasing Method"}
+								</dt>
 								<dd>{getPurchasingLabel()}</dd>
 							</div>
 							<div>

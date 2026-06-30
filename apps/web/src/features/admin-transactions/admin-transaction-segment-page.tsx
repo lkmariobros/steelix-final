@@ -17,7 +17,6 @@ import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-	Table,
 	TableBody,
 	TableCell,
 	TableHead,
@@ -28,6 +27,10 @@ import { useTransactionModalActions } from "@/contexts/transaction-modal-context
 import type { AdminTransactionSegmentConfig } from "@/features/admin-transactions/segment-config";
 import { getSegmentPageUrl } from "@/features/admin-transactions/segment-config";
 import { stashTransactionPrefillOnce } from "@/features/sales-entry/prefill-stash";
+import {
+	formatPaymentMethodField,
+	paymentMethodColumnLabel,
+} from "@/features/transactions/payment-method-utils";
 import {
 	formatRm,
 	formatStatusLabel,
@@ -47,6 +50,7 @@ type AdminTxRow = {
 	caseNo: string | null;
 	bookingDate: Date | string | null;
 	transactionDate: Date | string;
+	transactionType?: string | null;
 	projectName: string | null;
 	unitNo: string | null;
 	status: string | null;
@@ -62,6 +66,7 @@ type AdminTxRow = {
 		spaPrice?: number;
 		nettPrice?: number;
 		purchasingMethod?: "cash" | "loan";
+		sstPayBy?: "landlord" | "agent";
 	} | null;
 };
 
@@ -72,11 +77,6 @@ function formatAging(date: Date | string | null | undefined) {
 	const days = differenceInCalendarDays(new Date(), d);
 	if (days < 0) return "0d";
 	return `${days}d`;
-}
-
-function formatCashLoan(method?: string | null) {
-	if (!method) return "—";
-	return method === "cash" ? "Cash" : method === "loan" ? "Loan" : method;
 }
 
 function AgentCell({
@@ -223,7 +223,7 @@ export function AdminTransactionSegmentPage({
 							{total} case{total === 1 ? "" : "s"}
 						</CardTitle>
 					</CardHeader>
-					<CardContent className="overflow-x-auto">
+					<CardContent className="overflow-hidden">
 						{isLoading ? (
 							<Skeleton className="h-40 w-full" />
 						) : rows.length === 0 ? (
@@ -231,7 +231,8 @@ export function AdminTransactionSegmentPage({
 								No cases match this view.
 							</p>
 						) : (
-							<Table>
+							<div className="w-full overflow-hidden rounded-md border">
+								<table className="w-full table-fixed caption-bottom text-sm">
 								<TableHeader>
 									<TableRow>
 										<TableHead>Case No</TableHead>
@@ -264,7 +265,9 @@ export function AdminTransactionSegmentPage({
 												<TableHead>Commission Amount</TableHead>
 											</>
 										)}
-										<TableHead>Cash/Loan</TableHead>
+										<TableHead>
+											{paymentMethodColumnLabel(undefined, config.segment)}
+										</TableHead>
 										<TableHead>Agent(s)</TableHead>
 									</TableRow>
 								</TableHeader>
@@ -326,8 +329,11 @@ export function AdminTransactionSegmentPage({
 														</TableCell>
 													</>
 												)}
-												<TableCell>
-													{formatCashLoan(prop?.purchasingMethod)}
+												<TableCell className="truncate">
+													{formatPaymentMethodField(
+														row.transactionType,
+														prop,
+													)}
 												</TableCell>
 												<TableCell>
 													<AgentsCell row={row} />
@@ -336,7 +342,8 @@ export function AdminTransactionSegmentPage({
 										);
 									})}
 								</TableBody>
-							</Table>
+							</table>
+							</div>
 						)}
 
 						{total > PAGE_SIZE ? (

@@ -45,6 +45,7 @@ import {
 	marketTypeOptions,
 	purchasingMethodOptions,
 	representationTypeOptions,
+	sstPayByOptions,
 } from "../transaction-schema";
 import type { StepNavigationOptions } from "./step-nav";
 
@@ -98,6 +99,7 @@ export function StepDetails({
 				salesPackage: formData.propertyData?.salesPackage ?? "",
 				rebateAmount: formData.propertyData?.rebateAmount,
 				purchasingMethod: formData.propertyData?.purchasingMethod,
+				sstPayBy: formData.propertyData?.sstPayBy,
 				listingId: formData.propertyData?.listingId,
 				listingTitle: formData.propertyData?.listingTitle,
 				schemeId: formData.propertyData?.schemeId,
@@ -121,6 +123,9 @@ export function StepDetails({
 
 	const projectName = form.watch("projectName");
 	const marketType = form.watch("marketType");
+	const transactionType = form.watch("transactionType");
+	const isRentalDeal =
+		transactionType === "lease" || transactionType === "rental";
 	const representationType = form.watch("representationType");
 	const propertyPrice = form.watch("propertyData.price");
 	const commissionValue = form.watch("commissionValue");
@@ -650,36 +655,69 @@ export function StepDetails({
 									)}
 								/>
 
-								<FormField
-									control={form.control}
-									name="propertyData.purchasingMethod"
-									render={({ field }) => (
-										<FormItem>
-											<FormLabel>Purchasing Method</FormLabel>
-											<Select
-												value={field.value ?? ""}
-												onValueChange={(v) => {
-													field.onChange(v as "cash" | "loan");
-													syncToParent();
-												}}
-											>
-												<FormControl>
-													<SelectTrigger>
-														<SelectValue placeholder="Cash or Loan" />
-													</SelectTrigger>
-												</FormControl>
-												<SelectContent>
-													{purchasingMethodOptions.map((o) => (
-														<SelectItem key={o.value} value={o.value}>
-															{o.label}
-														</SelectItem>
-													))}
-												</SelectContent>
-											</Select>
-											<FormMessage />
-										</FormItem>
-									)}
-								/>
+								{isRentalDeal ? (
+									<FormField
+										control={form.control}
+										name="propertyData.sstPayBy"
+										render={({ field }) => (
+											<FormItem>
+												<FormLabel>SST Pay By</FormLabel>
+												<Select
+													value={field.value ?? ""}
+													onValueChange={(v) => {
+														field.onChange(v as "landlord" | "agent");
+														syncToParent();
+													}}
+												>
+													<FormControl>
+														<SelectTrigger>
+															<SelectValue placeholder="Landlord or Agent" />
+														</SelectTrigger>
+													</FormControl>
+													<SelectContent>
+														{sstPayByOptions.map((o) => (
+															<SelectItem key={o.value} value={o.value}>
+																{o.label}
+															</SelectItem>
+														))}
+													</SelectContent>
+												</Select>
+												<FormMessage />
+											</FormItem>
+										)}
+									/>
+								) : (
+									<FormField
+										control={form.control}
+										name="propertyData.purchasingMethod"
+										render={({ field }) => (
+											<FormItem>
+												<FormLabel>Purchasing Method</FormLabel>
+												<Select
+													value={field.value ?? ""}
+													onValueChange={(v) => {
+														field.onChange(v as "cash" | "loan");
+														syncToParent();
+													}}
+												>
+													<FormControl>
+														<SelectTrigger>
+															<SelectValue placeholder="Cash or Loan" />
+														</SelectTrigger>
+													</FormControl>
+													<SelectContent>
+														{purchasingMethodOptions.map((o) => (
+															<SelectItem key={o.value} value={o.value}>
+																{o.label}
+															</SelectItem>
+														))}
+													</SelectContent>
+												</Select>
+												<FormMessage />
+											</FormItem>
+										)}
+									/>
+								)}
 							</div>
 
 							<Separator />

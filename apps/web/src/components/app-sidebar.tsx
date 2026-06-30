@@ -57,6 +57,7 @@ import {
 	RiArrowRightLine,
 	RiUserAddLine,
 	RiFolderCloudLine,
+	RiHistoryLine,
 } from "@remixicon/react";
 
 // Clean data structure - no mock teams
@@ -413,6 +414,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 							title: "Reports & analytics",
 							url: "/admin/reports",
 							icon: RiBarChartLine,
+						},
+						{
+							title: "Record Log",
+							url: "/admin/record-log",
+							icon: RiHistoryLine,
 						},
 					],
 				},

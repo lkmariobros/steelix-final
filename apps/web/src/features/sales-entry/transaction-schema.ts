@@ -41,6 +41,7 @@ export const propertySchema = z.object({
 	salesPackage: z.string().optional(),
 	rebateAmount: z.number().nonnegative().optional(),
 	purchasingMethod: z.enum(["cash", "loan"]).optional(),
+	sstPayBy: z.enum(["landlord", "agent"]).optional(),
 	listingReferralShareType: z.enum(["percentage", "fixed"]).optional(),
 	listingReferralShareValue: z.number().nonnegative().optional(),
 	address: z.string().optional(),
@@ -437,6 +438,11 @@ export const clientSourceOptions = [
 export const purchasingMethodOptions = [
 	{ value: "cash", label: "Cash" },
 	{ value: "loan", label: "Loan" },
+] as const;
+
+export const sstPayByOptions = [
+	{ value: "landlord", label: "Landlord" },
+	{ value: "agent", label: "Agent" },
 ] as const;
 
 export const genderOptions = [

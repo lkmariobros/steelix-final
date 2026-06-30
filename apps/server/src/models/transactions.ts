@@ -89,6 +89,7 @@ export const transactions = pgTable("transactions", {
 		salesPackage?: string;
 		rebateAmount?: number;
 		purchasingMethod?: "cash" | "loan";
+		sstPayBy?: "landlord" | "agent";
 		listingReferralShareType?: "percentage" | "fixed";
 		listingReferralShareValue?: number;
 		bedrooms?: number;
