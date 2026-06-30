@@ -25,7 +25,7 @@ import {
 	updateCrmProjectSchema,
 	updateProspectSchema,
 } from "../models/crm";
-import { getLeadActivityAdmin, importProspectsBulkForAgent, buildAgentPersonalLeadsCondition, canAgentAccessProspect, fetchFollowersByProspectIds, getAgentsWithLeads, getProspectFollowers, setProspectFollowers } from "../services/leads";
+import { getLeadActivityAdmin, importProspectsBulkForAgent, buildAgentPersonalLeadsCondition, canAgentAccessProspect, fetchFollowersByProspectIds, getAgentsWithLeads, getProspectFollowers, setProspectFollowers, setProspectTagIds } from "../services/leads";
 import { db } from "../utils/db";
 import { adminProcedure, protectedProcedure, router } from "../utils/trpc";
 
@@ -973,5 +973,33 @@ export const crmRouter = router({
 				input.followerIds,
 				agentId,
 			);
+		}),
+
+	setCategories: protectedProcedure
+		.input(
+			z.object({
+				id: z.string().uuid(),
+				tagIds: z.array(z.string().uuid()).default([]),
+			}),
+		)
+		.mutation(async ({ input, ctx }) => {
+			const agentId = ctx.session.user.id;
+			const [prospect] = await db
+				.select({ agentId: prospects.agentId })
+				.from(prospects)
+				.where(eq(prospects.id, input.id))
+				.limit(1);
+
+			if (!prospect) {
+				throw new TRPCError({ code: "NOT_FOUND", message: "Lead not found" });
+			}
+			if (prospect.agentId !== agentId) {
+				throw new TRPCError({
+					code: "FORBIDDEN",
+					message: "Only the assigned agent can edit categories",
+				});
+			}
+
+			return await setProspectTagIds(input.id, input.tagIds, agentId);
 		}),
 });

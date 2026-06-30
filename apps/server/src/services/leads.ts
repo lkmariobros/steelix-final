@@ -468,6 +468,83 @@ export async function setProspectFollowers(
 }
 
 /**
+ * Set lead categories from admin-managed tags only (junction table).
+ */
+export async function setProspectTagIds(
+	prospectId: string,
+	tagIds: string[],
+	actorId?: string,
+) {
+	const uniqueTagIds = [...new Set(tagIds)];
+
+	if (uniqueTagIds.length > 0) {
+		const existing = await db
+			.select({ id: crmTags.id, name: crmTags.name })
+			.from(crmTags)
+			.where(inArray(crmTags.id, uniqueTagIds));
+		if (existing.length !== uniqueTagIds.length) {
+			throw new Error(
+				"One or more categories are invalid. Choose from admin-defined categories only.",
+			);
+		}
+	}
+
+	let beforeNames: string[] = [];
+	try {
+		const beforeRows = await db
+			.select({ tagName: crmTags.name })
+			.from(prospectTags)
+			.innerJoin(crmTags, eq(prospectTags.tagId, crmTags.id))
+			.where(eq(prospectTags.prospectId, prospectId));
+		beforeNames = beforeRows.map((r) => r.tagName);
+	} catch {
+		// tags table may be missing
+	}
+
+	await db.delete(prospectTags).where(eq(prospectTags.prospectId, prospectId));
+	if (uniqueTagIds.length > 0) {
+		await db
+			.insert(prospectTags)
+			.values(uniqueTagIds.map((tagId) => ({ prospectId, tagId })));
+	}
+	await db
+		.update(prospects)
+		.set({ tags: null, updatedAt: new Date() })
+		.where(eq(prospects.id, prospectId));
+
+	const afterRows =
+		uniqueTagIds.length > 0
+			? await db
+					.select({ id: crmTags.id, name: crmTags.name })
+					.from(crmTags)
+					.where(inArray(crmTags.id, uniqueTagIds))
+			: [];
+
+	const afterNames = afterRows.map((r) => r.name);
+	const beforeLabel = beforeNames.length > 0 ? beforeNames.join(", ") : "None";
+	const afterLabel = afterNames.length > 0 ? afterNames.join(", ") : "None";
+
+	if (actorId && beforeLabel !== afterLabel) {
+		await logActivity({
+			prospectId,
+			eventType: "lead_updated",
+			actorId,
+			content: `Categories updated from "${beforeLabel}" to "${afterLabel}"`,
+			metadata: {
+				field: "categories",
+				from: beforeLabel,
+				to: afterLabel,
+			},
+		});
+	}
+
+	return {
+		tagIds: afterRows.map((r) => r.id),
+		tagNames: afterNames,
+	};
+}
+
+/**
  * Get a single lead by ID — admin can access any lead.
  */
 export async function getLeadByIdAdmin(leadId: string) {
@@ -1467,7 +1544,13 @@ export async function importLeadsBulkAdmin(
 			"lead_type",
 		);
 		const source = pickCsvField(row, "source", "Source");
-		const tags = pickCsvField(row, "tags", "Tags");
+		const tags = pickCsvField(
+			row,
+			"tags",
+			"Tags",
+			"categories",
+			"Categories",
+		);
 		const agentEmail = pickCsvField(
 			row,
 			"agentemail",
@@ -1771,6 +1854,13 @@ export async function importProspectsBulkForAgent(
 		const statusRaw = pickCsvField(row, "status", "Status");
 		const typeRaw = pickCsvField(row, "type", "Type");
 		const source = pickCsvField(row, "source", "Source");
+		const tagsRaw = pickCsvField(
+			row,
+			"categories",
+			"Categories",
+			"tags",
+			"Tags",
+		);
 		const lastContactRaw = pickCsvField(
 			row,
 			"lastcontact",
@@ -1821,6 +1911,10 @@ export async function importProspectsBulkForAgent(
 		const lastContact = parseOptionalDate(lastContactRaw);
 		const nextContact = parseOptionalDate(nextContactRaw);
 
+		const tagNames = parseCsvTagNames(tagsRaw);
+		const resolvedTags =
+			tagNames.length > 0 ? await resolveTagIdsFromCsv(tagsRaw) : null;
+
 		const baseUpsert = {
 			name: name.trim(),
 			...(emailNorm ? { email: emailNorm } : {}),
@@ -1866,6 +1960,7 @@ export async function importProspectsBulkForAgent(
 					}
 					await updateLeadAdmin(existing.id, {
 						...validated.data,
+						...(resolvedTags ? { tagIds: resolvedTags.tagIds } : {}),
 						_actorId: agentId,
 					});
 					await assignLeadAdmin(existing.id, agentId, agentId);
@@ -1884,6 +1979,7 @@ export async function importProspectsBulkForAgent(
 					await updateLeadAdmin(existing.id, {
 						...validated.data,
 						leadType: "company",
+						...(resolvedTags ? { tagIds: resolvedTags.tagIds } : {}),
 						_actorId: agentId,
 					});
 					leadId = existing.id;
@@ -1894,6 +1990,7 @@ export async function importProspectsBulkForAgent(
 					...validated.data,
 					leadType: forcedLeadType,
 					agentId: assignAgentId ?? undefined,
+					...(resolvedTags ? { tagIds: resolvedTags.tagIds } : {}),
 					_actorId: agentId,
 				});
 				leadId = newLead.id;
@@ -1901,6 +1998,12 @@ export async function importProspectsBulkForAgent(
 			}
 			if (notesVal) {
 				await addNoteToLeadAdmin(leadId, notesVal, agentId);
+			}
+			if (resolvedTags && resolvedTags.unknownNames.length > 0) {
+				result.warnings.push({
+					rowIndex: rowNum,
+					message: `Unknown categories skipped (create them in Lead Categories first): ${resolvedTags.unknownNames.join(", ")}`,
+				});
 			}
 		} catch (e) {
 			result.skippedInvalid++;

@@ -86,6 +86,7 @@ import { z } from "zod";
 import { ImportLeadsDialog } from "./_components/import-leads-dialog";
 import type { AgentCrmImportMode } from "./_components/import-leads-dialog";
 import { PIPELINE_STAGES } from "@/app/admin/leads/_components/lead-constants";
+import { StageBadge } from "@/app/admin/leads/_components/lead-ui";
 import {
 	exportProspectsToCsv,
 	exportProspectsToExcelHtml,
@@ -95,6 +96,7 @@ import {
 import { LeadTasksCard } from "@/app/admin/leads/_components/lead-tasks-card";
 import { TodayTasksWidget } from "@/app/admin/leads/_components/today-tasks-widget";
 import { FollowerSelector } from "@/components/follower-selector";
+import { TagSelector } from "@/components/tag-selector";
 
 // Pipeline stages for Kanban board
 type LeadType = "personal" | "company";
@@ -430,15 +432,37 @@ export default function CRMPage() {
 		Boolean(selectedProspect) &&
 		selectedProspect?.agentId === session?.user?.id;
 
+	const canEditCategoriesForSelected = canEditFollowersForSelected;
+
 	const [followerIds, setFollowerIds] = useState<string[]>([]);
+	const [categoryTagIds, setCategoryTagIds] = useState<string[]>([]);
 
 	useEffect(() => {
 		setFollowerIds(selectedProspect?.followerIds ?? []);
 	}, [selectedProspect?.id, selectedProspect?.followerIds]);
 
+	useEffect(() => {
+		setCategoryTagIds(selectedProspect?.tagIds ?? []);
+	}, [selectedProspect?.id, selectedProspect?.tagIds]);
+
 	const setFollowersMutation = trpc.crm.setFollowers.useMutation({
 		onSuccess: () => {
 			toast.success("Followers updated");
+			refetchProspects();
+		},
+		onError: (error) => toast.error(error.message),
+	});
+
+	const setCategoriesMutation = trpc.crm.setCategories.useMutation({
+		onSuccess: (result) => {
+			toast.success("Categories updated");
+			if (selectedProspect) {
+				setSelectedProspect({
+					...selectedProspect,
+					tagIds: result.tagIds,
+					tagNames: result.tagNames,
+				});
+			}
 			refetchProspects();
 		},
 		onError: (error) => toast.error(error.message),
@@ -1090,45 +1114,76 @@ export default function CRMPage() {
 													{String(selectedProspect.stage).replaceAll("_", " ")}
 												</Badge>
 											</div>
-											<div className="flex items-start justify-between gap-2">
+											<div className="space-y-2">
 												<div className="flex items-center gap-2 text-muted-foreground text-sm">
 													<RiPriceTagLine className="size-4 shrink-0" />
 													Categories
 												</div>
-												<div className="text-right">
-													{selectedProspect.tagNames &&
-													selectedProspect.tagNames.length > 0 ? (
-														<div className="flex flex-wrap justify-end gap-1">
-															{selectedProspect.tagNames.map((tag) => (
+												{canEditCategoriesForSelected ? (
+													<>
+														<TagSelector
+															value={categoryTagIds}
+															onChange={setCategoryTagIds}
+															placeholder="Add categories…"
+														/>
+														<p className="text-muted-foreground text-xs">
+															Choose from admin-defined categories only.
+														</p>
+														<Button
+															size="sm"
+															disabled={
+																setCategoriesMutation.isPending ||
+																JSON.stringify(categoryTagIds) ===
+																	JSON.stringify(
+																		selectedProspect.tagIds ?? [],
+																	)
+															}
+															onClick={() =>
+																setCategoriesMutation.mutate({
+																	id: selectedProspect.id,
+																	tagIds: categoryTagIds,
+																})
+															}
+														>
+															{setCategoriesMutation.isPending ? (
+																<RiLoader4Line className="size-4 animate-spin" />
+															) : (
+																"Save Categories"
+															)}
+														</Button>
+													</>
+												) : selectedProspect.tagNames &&
+												  selectedProspect.tagNames.length > 0 ? (
+													<div className="flex flex-wrap gap-1">
+														{selectedProspect.tagNames.map((tag) => (
+															<Badge
+																key={tag}
+																variant="secondary"
+																className="text-xs"
+															>
+																{tag}
+															</Badge>
+														))}
+													</div>
+												) : selectedProspect.tags?.trim() ? (
+													<div className="flex flex-wrap gap-1">
+														{selectedProspect.tags
+															.split(",")
+															.map((tag) => (
 																<Badge
-																	key={tag}
+																	key={tag.trim()}
 																	variant="secondary"
 																	className="text-xs"
 																>
-																	{tag}
+																	{tag.trim()}
 																</Badge>
 															))}
-														</div>
-													) : selectedProspect.tags?.trim() ? (
-														<div className="flex flex-wrap justify-end gap-1">
-															{selectedProspect.tags
-																.split(",")
-																.map((tag) => (
-																	<Badge
-																		key={tag.trim()}
-																		variant="secondary"
-																		className="text-xs"
-																	>
-																		{tag.trim()}
-																	</Badge>
-																))}
-														</div>
-													) : (
-														<span className="text-muted-foreground text-sm">
-															—
-														</span>
-													)}
-												</div>
+													</div>
+												) : (
+													<span className="text-muted-foreground text-sm">
+														—
+													</span>
+												)}
 											</div>
 											{selectedProspect.agentName && (
 												<div className="flex items-center justify-between">
@@ -1650,25 +1705,11 @@ export default function CRMPage() {
 															</span>
 														</div>
 														<div className="flex items-center gap-2">
-															<RiPriceTagLine className="size-4 text-muted-foreground" />
-															<Badge
-																variant="outline"
-																className={`capitalize ${
-																	prospect.status === "active"
-																		? "border-green-500/60 text-green-600 dark:text-green-400"
-																		: prospect.status === "pending"
-																			? "border-amber-500/60 text-amber-600 dark:text-amber-400"
-																			: "border-slate-500/60 text-slate-600 dark:text-slate-300"
-																}`}
-															>
-																{prospect.status}
-															</Badge>
-														</div>
-														<div className="flex items-center gap-2">
-															<RiHomeLine className="size-4 text-muted-foreground" />
+															<RiLinksLine className="size-4 text-muted-foreground" />
 															<span className="text-muted-foreground">
-																Property: {prospect.property || "Not specified"}
+																Lead Stage:
 															</span>
+															<StageBadge stage={prospect.stage} />
 														</div>
 														{prospect.projectName && (
 															<div className="flex items-center gap-2">
@@ -1713,8 +1754,7 @@ export default function CRMPage() {
 														variant="outline"
 														size="sm"
 														onClick={() => handleView(prospect)}
-														style={{ color: "#5858ff" }}
-														className="cursor-pointer border-blue-500/50 text-blue-600 hover:bg-blue-500/10 hover:text-blue-700 dark:text-blue-400 dark:hover:bg-blue-500/20 dark:hover:text-blue-300"
+														className="cursor-pointer border-green-600/60 text-green-600 hover:bg-green-600/10 hover:text-green-700 dark:border-green-500/50 dark:text-green-400 dark:hover:bg-green-600/20 dark:hover:text-green-300"
 													>
 														<RiEyeLine className="mr-2 h-4 w-4" />
 														View
