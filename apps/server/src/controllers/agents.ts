@@ -16,6 +16,7 @@ import {
 } from "../models/auth";
 import { performanceMetrics } from "../models/reports";
 import { transactions } from "../models/transactions";
+import { getNextAgentCode } from "../services/sequential-codes";
 import { db } from "../utils/db";
 import { hasSuperAdminAccess } from "../utils/user-roles";
 import { adminProcedure, protectedProcedure, router, superAdminProcedure } from "../utils/trpc";
@@ -70,6 +71,7 @@ const updateAgentInput = z.object({
 	teamId: z.string().uuid().optional(),
 	agencyId: z.string().uuid().optional(),
 	permissions: z.string().optional(),
+	agentCode: z.string().min(1).max(32).optional(),
 });
 
 const createAgentInput = z.object({
@@ -103,21 +105,8 @@ const setAgentActiveInput = z.object({
 
 const approveAgentInput = z.object({
 	agentId: z.string(),
+	agentCode: z.string().min(1).max(32).optional(),
 });
-
-async function getNextAgentCode(): Promise<string> {
-	const [row] = await db
-		.select({
-			maxCode: sql<number | null>`max(
-        CASE
-          WHEN ${user.agentCode} ~ '^[0-9]+$' THEN cast(${user.agentCode} AS integer)
-          ELSE NULL
-        END
-      )`,
-		})
-		.from(user);
-	return String(Number(row?.maxCode ?? 0) + 1);
-}
 
 const agentPerformanceInput = z.object({
 	agentId: z.string(),
@@ -177,6 +166,10 @@ const bulkAgentActionInput = z.object({
 });
 
 export const agentsRouter = router({
+	previewNextAgentCode: adminProcedure.query(async () => {
+		return { agentCode: await getNextAgentCode() };
+	}),
+
 	// List all agents (admin only)
 	list: adminProcedure.input(listAgentsInput).query(async ({ input }) => {
 		const conditions = [];
@@ -213,6 +206,8 @@ export const agentsRouter = router({
 						: input.sortBy === "agentCode"
 							? sql`coalesce(
                   CASE
+                    WHEN ${user.agentCode} ~ '^DT[0-9]+$'
+                    THEN cast(SUBSTRING(${user.agentCode} FROM 3) AS integer)
                     WHEN ${user.agentCode} ~ '^[0-9]+$' THEN cast(${user.agentCode} AS integer)
                     ELSE NULL
                   END,
@@ -423,6 +418,20 @@ export const agentsRouter = router({
 				throw new Error("Agent not found");
 			}
 
+			if (updateData.agentCode) {
+				const [duplicate] = await db
+					.select({ id: user.id })
+					.from(user)
+					.where(eq(user.agentCode, updateData.agentCode))
+					.limit(1);
+				if (duplicate && duplicate.id !== id) {
+					throw new TRPCError({
+						code: "BAD_REQUEST",
+						message: "Agent code is already in use",
+					});
+				}
+			}
+
 			// Update agent
 			const [updatedAgent] = await db
 				.update(user)
@@ -600,7 +609,24 @@ export const agentsRouter = router({
 			}
 
 			const agentCode =
-				existing.agentCode?.trim() || (await getNextAgentCode());
+				input.agentCode?.trim() ||
+				existing.agentCode?.trim() ||
+				(await getNextAgentCode());
+
+			if (!existing.agentCode?.trim() || input.agentCode?.trim()) {
+				const [duplicate] = await db
+					.select({ id: user.id })
+					.from(user)
+					.where(eq(user.agentCode, agentCode))
+					.limit(1);
+				if (duplicate && duplicate.id !== input.agentId) {
+					throw new TRPCError({
+						code: "BAD_REQUEST",
+						message: "Agent code is already in use",
+					});
+				}
+			}
+
 			const now = new Date();
 			const [updated] = await db
 				.update(user)

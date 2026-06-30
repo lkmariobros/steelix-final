@@ -203,6 +203,7 @@ export const transactions = pgTable("transactions", {
 	requestSubmittedAt: timestamp("request_submitted_at"),
 	submittedAt: timestamp("submitted_at"),
 	reviewedAt: timestamp("reviewed_at"),
+	convertedAt: timestamp("converted_at"),
 	reviewedBy: text("reviewed_by"),
 	reviewNotes: text("review_notes"),
 

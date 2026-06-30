@@ -4,8 +4,10 @@ import { account, user } from "../models/auth";
 import {
 	erecruitmentApplications,
 	erecruitmentLinks,
+	type ERecruitmentDocumentFile,
 	type ERecruitmentDocuments,
 } from "../models/erecruitment";
+import { getNextAgentCode } from "./sequential-codes";
 import { db } from "../utils/db";
 import { supabaseAdmin } from "../utils/supabase";
 
@@ -15,18 +17,52 @@ function generateToken(): string {
 	return crypto.randomUUID().replace(/-/g, "");
 }
 
-async function getNextAgentCode(): Promise<string> {
-	const [row] = await db
-		.select({
-			maxCode: sql<number | null>`max(
-        CASE
-          WHEN ${user.agentCode} ~ '^[0-9]+$' THEN cast(${user.agentCode} AS integer)
-          ELSE NULL
-        END
-      )`,
-		})
-		.from(user);
-	return String(Number(row?.maxCode ?? 0) + 1);
+async function resolveDocumentUrl(
+	file: ERecruitmentDocumentFile | undefined,
+): Promise<ERecruitmentDocumentFile | undefined> {
+	if (!file) return undefined;
+	if (file.dataUrl) return file;
+
+	if (file.storagePath && supabaseAdmin) {
+		const { data, error } = await supabaseAdmin.storage
+			.from("transaction-documents")
+			.createSignedUrl(file.storagePath, 3600);
+		if (!error && data?.signedUrl) {
+			return { ...file, url: data.signedUrl };
+		}
+	}
+
+	return file.url ? file : undefined;
+}
+
+async function enrichRecruitmentDocuments(
+	docs: ERecruitmentDocuments | null | undefined,
+): Promise<ERecruitmentDocuments> {
+	if (!docs) return {};
+	const [icFront, icBack, registrationFeeReceipt] = await Promise.all([
+		resolveDocumentUrl(docs.icFront),
+		resolveDocumentUrl(docs.icBack),
+		resolveDocumentUrl(docs.registrationFeeReceipt),
+	]);
+	return {
+		...(icFront ? { icFront } : {}),
+		...(icBack ? { icBack } : {}),
+		...(registrationFeeReceipt ? { registrationFeeReceipt } : {}),
+	};
+}
+
+async function assertAgentCodeAvailable(
+	agentCode: string,
+	excludeUserId?: string,
+) {
+	const [existing] = await db
+		.select({ id: user.id })
+		.from(user)
+		.where(eq(user.agentCode, agentCode))
+		.limit(1);
+	if (existing && existing.id !== excludeUserId) {
+		throw new Error("Agent code is already in use");
+	}
 }
 
 export async function resolveRecruitmentLink(token: string) {
@@ -230,13 +266,18 @@ export async function getRecruitmentApplication(id: string) {
 		.from(erecruitmentApplications)
 		.where(eq(erecruitmentApplications.id, id))
 		.limit(1);
-	return row ?? null;
+	if (!row) return null;
+	return {
+		...row,
+		documents: await enrichRecruitmentDocuments(row.documents),
+	};
 }
 
 export async function approveRecruitmentApplication(opts: {
 	applicationId: string;
 	reviewerId: string;
 	temporaryPassword?: string;
+	agentCode?: string;
 }) {
 	const application = await getRecruitmentApplication(opts.applicationId);
 	if (!application) throw new Error("Application not found");
@@ -259,7 +300,9 @@ export async function approveRecruitmentApplication(opts: {
 	const passwordHash = await hashPassword(tempPassword);
 	const now = new Date();
 	const userId = crypto.randomUUID();
-	const agentCode = await getNextAgentCode();
+	const agentCode =
+		opts.agentCode?.trim() || (await getNextAgentCode());
+	await assertAgentCodeAvailable(agentCode);
 
 	const [createdUser] = await db
 		.insert(user)

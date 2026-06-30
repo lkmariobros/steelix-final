@@ -139,6 +139,7 @@ export const erecruitmentRouter = router({
 			z.object({
 				applicationId: z.string().uuid(),
 				temporaryPassword: z.string().min(8).optional(),
+				agentCode: z.string().min(1).max(32).optional(),
 			}),
 		)
 		.mutation(async ({ ctx, input }) => {
@@ -147,6 +148,7 @@ export const erecruitmentRouter = router({
 					applicationId: input.applicationId,
 					reviewerId: ctx.session.user.id,
 					temporaryPassword: input.temporaryPassword,
+					agentCode: input.agentCode,
 				});
 			} catch (e) {
 				throw new TRPCError({

@@ -55,7 +55,7 @@ import {
 	RiTeamLine,
 	RiUserLine,
 } from "@remixicon/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 // Agent Tier Management Components
@@ -105,6 +105,9 @@ export default function AdminAgentsPage() {
 	const [isViewModalOpen, setIsViewModalOpen] = useState(false);
 	const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
 	const [isResetPasswordOpen, setIsResetPasswordOpen] = useState(false);
+	const [isApproveDialogOpen, setIsApproveDialogOpen] = useState(false);
+	const [approveAgentId, setApproveAgentId] = useState<string | null>(null);
+	const [approveAgentCode, setApproveAgentCode] = useState("");
 	const [resetAgentId, setResetAgentId] = useState<string | null>(null);
 
 	const [newAgentName, setNewAgentName] = useState("");
@@ -160,11 +163,25 @@ export default function AdminAgentsPage() {
 	const approveAgentMutation = trpc.agents.approve.useMutation({
 		onSuccess: () => {
 			toast.success("Agent approved");
+			setIsApproveDialogOpen(false);
+			setApproveAgentId(null);
+			setApproveAgentCode("");
 			utils.agents.list.invalidate();
 			utils.agents.getStats.invalidate();
 		},
 		onError: (e) => toast.error(e.message || "Failed to approve agent"),
 	});
+
+	const nextAgentCodeQuery = trpc.agents.previewNextAgentCode.useQuery(
+		undefined,
+		{ enabled: isApproveDialogOpen },
+	);
+
+	useEffect(() => {
+		if (isApproveDialogOpen && nextAgentCodeQuery.data?.agentCode) {
+			setApproveAgentCode(nextAgentCodeQuery.data.agentCode);
+		}
+	}, [isApproveDialogOpen, nextAgentCodeQuery.data?.agentCode]);
 
 	const resetPasswordMutation = trpc.agents.resetPassword.useMutation({
 		onSuccess: () => {
@@ -498,11 +515,10 @@ export default function AdminAgentsPage() {
 														<Button
 															size="sm"
 															variant="secondary"
-															onClick={() =>
-																approveAgentMutation.mutate({
-																	agentId: agentItem.agent.id,
-																})
-															}
+															onClick={() => {
+																setApproveAgentId(agentItem.agent.id);
+																setIsApproveDialogOpen(true);
+															}}
 															disabled={approveAgentMutation.isPending}
 														>
 															Approve
@@ -786,6 +802,49 @@ export default function AdminAgentsPage() {
 							}}
 						>
 							Save
+						</Button>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
+
+			<Dialog open={isApproveDialogOpen} onOpenChange={setIsApproveDialogOpen}>
+				<DialogContent className="sm:max-w-[420px]">
+					<DialogHeader>
+						<DialogTitle>Approve agent</DialogTitle>
+						<DialogDescription>
+							Assign an agent code before activating this account.
+						</DialogDescription>
+					</DialogHeader>
+					<div className="space-y-2">
+						<Label>Agent code</Label>
+						<Input
+							value={approveAgentCode}
+							onChange={(e) => setApproveAgentCode(e.target.value)}
+							placeholder="DT00001"
+							className="font-mono"
+						/>
+						<p className="text-muted-foreground text-xs">
+							Preset from the next available code. You can edit before approving.
+						</p>
+					</div>
+					<DialogFooter>
+						<Button
+							variant="outline"
+							onClick={() => setIsApproveDialogOpen(false)}
+						>
+							Cancel
+						</Button>
+						<Button
+							onClick={() =>
+								approveAgentId &&
+								approveAgentMutation.mutate({
+									agentId: approveAgentId,
+									agentCode: approveAgentCode.trim() || undefined,
+								})
+							}
+							disabled={approveAgentMutation.isPending || !approveAgentCode.trim()}
+						>
+							Confirm approval
 						</Button>
 					</DialogFooter>
 				</DialogContent>

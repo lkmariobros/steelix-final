@@ -3,6 +3,7 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
 	Select,
@@ -30,6 +31,7 @@ type CanonicalStatus = (typeof CANONICAL_TRANSACTION_STATUSES)[number];
 interface AdminTransactionStatusPanelProps {
 	transactionId: string;
 	currentStatus: string | null | undefined;
+	caseNo?: string | null;
 	agentEditAllowed?: boolean | null;
 	onUpdated?: () => void;
 }
@@ -37,6 +39,7 @@ interface AdminTransactionStatusPanelProps {
 export function AdminTransactionStatusPanel({
 	transactionId,
 	currentStatus,
+	caseNo,
 	agentEditAllowed,
 	onUpdated,
 }: AdminTransactionStatusPanelProps) {
@@ -48,11 +51,16 @@ export function AdminTransactionStatusPanel({
 	const [allowAgentEdit, setAllowAgentEdit] = useState(
 		agentEditAllowed === true,
 	);
+	const [caseNoValue, setCaseNoValue] = useState(caseNo ?? "");
 
 	useEffect(() => {
 		setStatus(normalizeTransactionStatus(currentStatus) as CanonicalStatus);
 		setAllowAgentEdit(agentEditAllowed === true);
 	}, [currentStatus, agentEditAllowed]);
+
+	useEffect(() => {
+		setCaseNoValue(caseNo ?? "");
+	}, [caseNo]);
 
 	const changeStatus = trpc.transactions.adminChangeStatus.useMutation({
 		onSuccess: async () => {
@@ -68,6 +76,15 @@ export function AdminTransactionStatusPanel({
 			onUpdated?.();
 		},
 		onError: (e) => toast.error(e.message || "Failed to update status"),
+	});
+
+	const updateCaseNo = trpc.transactions.adminUpdate.useMutation({
+		onSuccess: async () => {
+			toast.success("Case number updated");
+			invalidateTransactionQueries(queryClient);
+			onUpdated?.();
+		},
+		onError: (e) => toast.error(e.message || "Failed to update case number"),
 	});
 
 	const applyStatus = (next: CanonicalStatus, opts?: { allowEdit?: boolean }) => {
@@ -121,6 +138,40 @@ export function AdminTransactionStatusPanel({
 
 	return (
 		<div className="space-y-4 rounded-lg border bg-muted/20 p-4">
+			<div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
+				<div className="space-y-2">
+					<Label htmlFor="case-no">Case No</Label>
+					<Input
+						id="case-no"
+						value={caseNoValue}
+						onChange={(e) => setCaseNoValue(e.target.value)}
+						placeholder="P001001"
+						className="font-mono"
+					/>
+				</div>
+				<Button
+					type="button"
+					variant="outline"
+					disabled={
+						updateCaseNo.isPending ||
+						!caseNoValue.trim() ||
+						caseNoValue.trim() === (caseNo ?? "").trim()
+					}
+					onClick={() =>
+						updateCaseNo.mutate({
+							id: transactionId,
+							caseNo: caseNoValue.trim(),
+						})
+					}
+				>
+					{updateCaseNo.isPending ? (
+						<Loader2 className="h-4 w-4 animate-spin" />
+					) : (
+						"Save case no."
+					)}
+				</Button>
+			</div>
+
 			<div className="flex flex-wrap items-center gap-2">
 				<span className="font-medium text-sm">Status</span>
 				<Badge className={getStatusBadgeClass(currentStatus)}>

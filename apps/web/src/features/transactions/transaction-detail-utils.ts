@@ -1,3 +1,5 @@
+import { differenceInCalendarDays } from "date-fns";
+
 export function formatRm(amount: string | number | null | undefined) {
 	if (amount === null || amount === undefined || amount === "") return "—";
 	const num = typeof amount === "string" ? Number.parseFloat(amount) : amount;
@@ -122,4 +124,29 @@ export function getStatusBadgeClass(status: string | null | undefined): string {
 		default:
 			return "bg-muted text-muted-foreground";
 	}
+}
+
+/** Days from booking/offer date; stops at converted date when status is converted. */
+export function formatTransactionAging(
+	bookingDate: Date | string | null | undefined,
+	status: string | null | undefined,
+	convertedAt?: Date | string | null,
+	reviewedAt?: Date | string | null,
+): string {
+	if (!bookingDate) return "—";
+	const start =
+		typeof bookingDate === "string" ? new Date(bookingDate) : bookingDate;
+	if (Number.isNaN(start.getTime())) return "—";
+
+	let end = new Date();
+	if (normalizeTransactionStatus(status) === "converted") {
+		const anchor = convertedAt ?? reviewedAt;
+		if (anchor) {
+			end = typeof anchor === "string" ? new Date(anchor) : anchor;
+		}
+	}
+
+	const days = differenceInCalendarDays(end, start);
+	if (days < 0) return "0d";
+	return `${days}d`;
 }

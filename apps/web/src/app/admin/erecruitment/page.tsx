@@ -50,7 +50,7 @@ import {
 	RiTeamLine,
 	RiUserAddLine,
 } from "@remixicon/react";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { toast } from "sonner";
 
 type ApplicationStatus = "pending_review" | "approved" | "rejected";
@@ -77,6 +77,7 @@ export default function ERecruitmentAdminPage() {
 	const [selectedId, setSelectedId] = useState<string | null>(null);
 	const [rejectReason, setRejectReason] = useState("");
 	const [tempPassword, setTempPassword] = useState("");
+	const [agentCode, setAgentCode] = useState("");
 	const [isRejectOpen, setIsRejectOpen] = useState(false);
 	const [isApproveOpen, setIsApproveOpen] = useState(false);
 
@@ -91,6 +92,17 @@ export default function ERecruitmentAdminPage() {
 		{ id: selectedId! },
 		{ enabled: !!selectedId },
 	);
+
+	const nextAgentCodeQuery = trpc.agents.previewNextAgentCode.useQuery(
+		undefined,
+		{ enabled: isApproveOpen },
+	);
+
+	useEffect(() => {
+		if (isApproveOpen && nextAgentCodeQuery.data?.agentCode) {
+			setAgentCode(nextAgentCodeQuery.data.agentCode);
+		}
+	}, [isApproveOpen, nextAgentCodeQuery.data?.agentCode]);
 
 	const { data: recruiters } = trpc.agents.list.useQuery({
 		limit: 100,
@@ -116,6 +128,7 @@ export default function ERecruitmentAdminPage() {
 			setIsApproveOpen(false);
 			setSelectedId(null);
 			setTempPassword("");
+			setAgentCode("");
 			void listQuery.refetch();
 			void utils.agents.list.invalidate();
 		},
@@ -448,14 +461,28 @@ export default function ERecruitmentAdminPage() {
 							This creates an agent account. Leave password blank to auto-generate one.
 						</DialogDescription>
 					</DialogHeader>
-					<div className="space-y-2">
-						<Label>Temporary password (optional)</Label>
-						<Input
-							type="password"
-							value={tempPassword}
-							onChange={(e) => setTempPassword(e.target.value)}
-							placeholder="Min 8 characters"
-						/>
+					<div className="space-y-4">
+						<div className="space-y-2">
+							<Label>Agent code</Label>
+							<Input
+								value={agentCode}
+								onChange={(e) => setAgentCode(e.target.value)}
+								placeholder="DT00001"
+								className="font-mono"
+							/>
+							<p className="text-muted-foreground text-xs">
+								Preset from the next available code. You can edit before approving.
+							</p>
+						</div>
+						<div className="space-y-2">
+							<Label>Temporary password (optional)</Label>
+							<Input
+								type="password"
+								value={tempPassword}
+								onChange={(e) => setTempPassword(e.target.value)}
+								placeholder="Min 8 characters"
+							/>
+						</div>
 					</div>
 					<DialogFooter>
 						<Button
@@ -464,6 +491,7 @@ export default function ERecruitmentAdminPage() {
 								approveMutation.mutate({
 									applicationId: selectedId,
 									temporaryPassword: tempPassword.trim() || undefined,
+									agentCode: agentCode.trim() || undefined,
 								})
 							}
 							disabled={approveMutation.isPending}
@@ -532,7 +560,8 @@ function DocButton({
 	file?: { url?: string; dataUrl?: string; fileName?: string };
 	onOpen: (url?: string, dataUrl?: string) => void;
 }) {
-	if (!file?.url && !file?.dataUrl) {
+	const target = file?.url || file?.dataUrl;
+	if (!target) {
 		return (
 			<Button variant="outline" size="sm" disabled>
 				{label} (missing)
@@ -543,7 +572,7 @@ function DocButton({
 		<Button
 			variant="outline"
 			size="sm"
-			onClick={() => onOpen(file.url, file.dataUrl)}
+			onClick={() => onOpen(file?.url, file?.dataUrl)}
 		>
 			{label}
 		</Button>

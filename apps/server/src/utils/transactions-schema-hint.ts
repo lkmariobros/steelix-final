@@ -36,6 +36,7 @@ ALTER TABLE public.transactions ADD COLUMN IF NOT EXISTS commission_override_age
 ALTER TABLE public.transactions ADD COLUMN IF NOT EXISTS pending_edit_request boolean NOT NULL DEFAULT false;
 ALTER TABLE public.transactions ADD COLUMN IF NOT EXISTS request_item text;
 ALTER TABLE public.transactions ADD COLUMN IF NOT EXISTS request_submitted_at timestamptz;
+ALTER TABLE public.transactions ADD COLUMN IF NOT EXISTS converted_at timestamptz;
 `.trim();
 
 export function isTransactionsSchemaOutdatedError(err: unknown): boolean {
@@ -55,7 +56,7 @@ export function isTransactionsSchemaOutdatedError(err: unknown): boolean {
 
 export function transactionsSchemaOutdatedMessage(): string {
 	return [
-		"Database schema is missing columns on public.transactions (case_no, team_leader_agent_id, booking_date, project_name, unit_no, block_listing_id, commission_* jsonb columns, etc.).",
+		"Database schema is missing columns on public.transactions (case_no, converted_at, team_leader_agent_id, booking_date, project_name, unit_no, block_listing_id, commission_* jsonb columns, etc.).",
 		"Run this SQL in Supabase SQL Editor:",
 		"",
 		TRANSACTIONS_TABLE_SQL_PATCH,

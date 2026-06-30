@@ -103,6 +103,7 @@ export default function AdminTransactionDetailPage() {
 					<AdminTransactionStatusPanel
 						transactionId={tx.id}
 						currentStatus={tx.status}
+						caseNo={tx.caseNo}
 						agentEditAllowed={
 							(tx as { agentEditAllowed?: boolean }).agentEditAllowed
 						}

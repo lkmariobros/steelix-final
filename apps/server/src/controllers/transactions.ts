@@ -15,6 +15,10 @@ import {
 } from "../services/agent-tier";
 import { lockCommissionOnSubmit } from "../services/commission-calculation";
 import {
+	getNextCaseNumber,
+	resolveCaseNumberPrefix,
+} from "../services/sequential-codes";
+import {
 	addTransactionMessage,
 	assertCanAccessTransactionMessages,
 	listTransactionMessages,
@@ -113,6 +117,7 @@ const baseTransactionInput = z.object({
 		)
 		.optional(),
 	notes: z.string().optional(),
+	caseNo: z.string().min(1).max(32).optional(),
 });
 
 // Input schemas with Primary Market → Sale validation and Co-broking validation
@@ -648,12 +653,22 @@ export const transactionsRouter = router({
 				// If commission tables aren't migrated yet, submission should still work.
 			}
 
+			let caseNo = existingTransaction.caseNo?.trim();
+			if (!caseNo) {
+				const prefix = resolveCaseNumberPrefix(
+					existingTransaction.marketType ?? "secondary",
+					existingTransaction.transactionType ?? "sale",
+				);
+				caseNo = await getNextCaseNumber(prefix);
+			}
+
 			const [updatedTransaction] = await db
 				.update(transactions)
 				.set({
 					status: "pending",
 					submittedAt: new Date(),
 					agentEditAllowed: false,
+					caseNo,
 					...schemePatch,
 					updatedAt: new Date(),
 				})
@@ -668,6 +683,25 @@ export const transactionsRouter = router({
 		.input(changeStatusInput)
 		.mutation(async ({ ctx, input }) => {
 			const mappedStatus = mapIncomingStatus(input.status) as (typeof TRANSACTION_STATUS_VALUES)[number];
+
+			const [existing] = await db
+				.select({
+					convertedAt: transactions.convertedAt,
+					caseNo: transactions.caseNo,
+					marketType: transactions.marketType,
+					transactionType: transactions.transactionType,
+				})
+				.from(transactions)
+				.where(eq(transactions.id, input.id))
+				.limit(1);
+
+			if (!existing) {
+				throw new TRPCError({
+					code: "NOT_FOUND",
+					message: "Transaction not found",
+				});
+			}
+
 			const patch: Record<string, unknown> = {
 				status: mappedStatus,
 				reviewedAt: new Date(),
@@ -675,6 +709,18 @@ export const transactionsRouter = router({
 				reviewNotes: input.reviewNotes,
 				updatedAt: new Date(),
 			};
+
+			if (mappedStatus === "converted" && !existing.convertedAt) {
+				patch.convertedAt = new Date();
+			}
+
+			if (!existing.caseNo?.trim() && mappedStatus !== "draft") {
+				const prefix = resolveCaseNumberPrefix(
+					existing.marketType ?? "secondary",
+					existing.transactionType ?? "sale",
+				);
+				patch.caseNo = await getNextCaseNumber(prefix);
+			}
 
 			if (input.allowAgentEdit !== undefined) {
 				patch.agentEditAllowed = input.allowAgentEdit;
@@ -705,18 +751,48 @@ export const transactionsRouter = router({
 		.input(changeStatusInput)
 		.mutation(async ({ ctx, input }) => {
 			const mappedStatus = mapIncomingStatus(input.status) as (typeof TRANSACTION_STATUS_VALUES)[number];
+
+			const [existing] = await db
+				.select({
+					convertedAt: transactions.convertedAt,
+					caseNo: transactions.caseNo,
+					marketType: transactions.marketType,
+					transactionType: transactions.transactionType,
+				})
+				.from(transactions)
+				.where(eq(transactions.id, input.id))
+				.limit(1);
+
+			if (!existing) {
+				throw new Error("Transaction not found");
+			}
+
+			const patch: Record<string, unknown> = {
+				status: mappedStatus,
+				reviewedAt: new Date(),
+				reviewedBy: ctx.session.user.id,
+				reviewNotes: input.reviewNotes,
+				updatedAt: new Date(),
+				...(input.allowAgentEdit !== undefined
+					? { agentEditAllowed: input.allowAgentEdit }
+					: {}),
+			};
+
+			if (mappedStatus === "converted" && !existing.convertedAt) {
+				patch.convertedAt = new Date();
+			}
+
+			if (!existing.caseNo?.trim() && mappedStatus !== "draft") {
+				const prefix = resolveCaseNumberPrefix(
+					existing.marketType ?? "secondary",
+					existing.transactionType ?? "sale",
+				);
+				patch.caseNo = await getNextCaseNumber(prefix);
+			}
+
 			const [updatedTransaction] = await db
 				.update(transactions)
-				.set({
-					status: mappedStatus,
-					reviewedAt: new Date(),
-					reviewedBy: ctx.session.user.id,
-					reviewNotes: input.reviewNotes,
-					updatedAt: new Date(),
-					...(input.allowAgentEdit !== undefined
-						? { agentEditAllowed: input.allowAgentEdit }
-						: {}),
-				})
+				.set(patch)
 				.where(eq(transactions.id, input.id))
 				.returning();
 
@@ -731,6 +807,19 @@ export const transactionsRouter = router({
 		.input(baseTransactionInput.partial().extend({ id: z.string().uuid() }))
 		.mutation(async ({ input }) => {
 			const { id, ...updateData } = input;
+			if (updateData.caseNo) {
+				const [duplicate] = await db
+					.select({ id: transactions.id })
+					.from(transactions)
+					.where(eq(transactions.caseNo, updateData.caseNo))
+					.limit(1);
+				if (duplicate && duplicate.id !== id) {
+					throw new TRPCError({
+						code: "BAD_REQUEST",
+						message: "Case number is already in use",
+					});
+				}
+			}
 			const processedUpdateData: Record<string, unknown> = {
 				...updateData,
 				updatedAt: new Date(),

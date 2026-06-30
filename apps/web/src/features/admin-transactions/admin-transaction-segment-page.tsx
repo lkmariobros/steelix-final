@@ -34,12 +34,12 @@ import {
 import {
 	formatRm,
 	formatStatusLabel,
+	formatTransactionAging,
 	formatTransactionDate,
 	getStatusBadgeClass,
 } from "@/features/transactions/transaction-detail-utils";
 import { trpc } from "@/utils/trpc";
 import { RiAddLine, RiDashboardLine, RiFileList3Line } from "@remixicon/react";
-import { differenceInCalendarDays } from "date-fns";
 import Link from "next/link";
 import { Fragment, useMemo, useState } from "react";
 
@@ -54,6 +54,8 @@ type AdminTxRow = {
 	projectName: string | null;
 	unitNo: string | null;
 	status: string | null;
+	convertedAt?: Date | string | null;
+	reviewedAt?: Date | string | null;
 	commissionAmount: string | null;
 	isCoBroking?: boolean | null;
 	agentName?: string | null;
@@ -69,15 +71,6 @@ type AdminTxRow = {
 		sstPayBy?: "landlord" | "agent";
 	} | null;
 };
-
-function formatAging(date: Date | string | null | undefined) {
-	if (!date) return "—";
-	const d = typeof date === "string" ? new Date(date) : date;
-	if (Number.isNaN(d.getTime())) return "—";
-	const days = differenceInCalendarDays(new Date(), d);
-	if (days < 0) return "0d";
-	return `${days}d`;
-}
 
 function AgentCell({
 	name,
@@ -223,7 +216,7 @@ export function AdminTransactionSegmentPage({
 							{total} case{total === 1 ? "" : "s"}
 						</CardTitle>
 					</CardHeader>
-					<CardContent className="overflow-hidden">
+					<CardContent>
 						{isLoading ? (
 							<Skeleton className="h-40 w-full" />
 						) : rows.length === 0 ? (
@@ -231,8 +224,8 @@ export function AdminTransactionSegmentPage({
 								No cases match this view.
 							</p>
 						) : (
-							<div className="w-full overflow-hidden rounded-md border">
-								<table className="w-full table-fixed caption-bottom text-sm">
+							<div className="max-h-[min(70vh,720px)] w-full overflow-auto rounded-md border [scrollbar-gutter:stable] [scrollbar-width:thin] [scrollbar-color:hsl(var(--border))_transparent] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-muted/30 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border hover:[&::-webkit-scrollbar-thumb]:bg-muted-foreground/50">
+								<table className="w-full caption-bottom text-sm">
 								<TableHeader>
 									<TableRow>
 										<TableHead>Case No</TableHead>
@@ -307,7 +300,14 @@ export function AdminTransactionSegmentPage({
 													</Badge>
 												</TableCell>
 												{isPrimaryUnits ? (
-													<TableCell>{formatAging(offerOrBooking)}</TableCell>
+													<TableCell>
+														{formatTransactionAging(
+															offerOrBooking,
+															row.status,
+															row.convertedAt,
+															row.reviewedAt,
+														)}
+													</TableCell>
 												) : null}
 												{isPrimaryUnits ? (
 													<>
