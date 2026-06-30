@@ -41,9 +41,38 @@ import {
 	RiRefreshLine,
 } from "@remixicon/react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
+
+type ApprovalSegment = "new-project" | "subsale" | "rental";
+
+const SEGMENT_TABS: {
+	value: ApprovalSegment;
+	label: string;
+	marketType?: "primary" | "secondary";
+	transactionType: "sale" | "rental";
+}[] = [
+	{
+		value: "new-project",
+		label: "New Project",
+		marketType: "primary",
+		transactionType: "sale",
+	},
+	{
+		value: "subsale",
+		label: "Subsale",
+		marketType: "secondary",
+		transactionType: "sale",
+	},
+	{
+		value: "rental",
+		label: "Rental",
+		transactionType: "rental",
+	},
+];
 
 interface ApprovalDialogState {
 	isOpen: boolean;
@@ -65,9 +94,40 @@ function formatRm(amount: string | number | null | undefined) {
 }
 
 export default function AdminApprovalsPage() {
+	const router = useRouter();
+	const searchParams = useSearchParams();
 	const queryClient = useQueryClient();
 	const [page, setPage] = useState(0);
 	const pageSize = 20;
+
+	const segmentParam = searchParams.get("segment") as ApprovalSegment | null;
+	const segment: ApprovalSegment =
+		segmentParam && SEGMENT_TABS.some((t) => t.value === segmentParam)
+			? segmentParam
+			: "new-project";
+
+	const segmentConfig = SEGMENT_TABS.find((t) => t.value === segment)!;
+
+	useEffect(() => {
+		if (!segmentParam || !SEGMENT_TABS.some((t) => t.value === segmentParam)) {
+			router.replace("/admin/approvals?segment=new-project");
+		}
+	}, [segmentParam, router]);
+
+	useEffect(() => {
+		setPage(0);
+	}, [segment]);
+
+	const queryInput = useMemo(
+		() => ({
+			limit: pageSize,
+			offset: page * pageSize,
+			status: "pending" as const,
+			marketType: segmentConfig.marketType,
+			transactionType: segmentConfig.transactionType,
+		}),
+		[page, segmentConfig],
+	);
 
 	const [dialogState, setDialogState] = useState<ApprovalDialogState>({
 		isOpen: false,
@@ -81,17 +141,14 @@ export default function AdminApprovalsPage() {
 		data: approvalsData,
 		isLoading: isLoadingApprovals,
 		refetch: refetchApprovals,
-	} = trpc.admin.getCommissionApprovalQueue.useQuery(
-		{
-			limit: pageSize,
-			offset: page * pageSize,
-			status: "pending",
-		},
-		{
+	} = trpc.admin.getCommissionApprovalQueue.useQuery(queryInput, {
 			refetchOnWindowFocus: false,
 			staleTime: 3 * 60 * 1000,
-		},
-	);
+	});
+
+	const handleSegmentChange = (value: string) => {
+		router.replace(`/admin/approvals?segment=${value}`);
+	};
 
 	const processApprovalMutation =
 		trpc.admin.processCommissionApproval.useMutation({
@@ -197,7 +254,7 @@ export default function AdminApprovalsPage() {
 							<BreadcrumbItem>
 								<BreadcrumbPage className="flex items-center gap-2">
 									<RiCheckboxCircleLine size={20} aria-hidden="true" />
-									Approvals
+									Approval requests
 								</BreadcrumbPage>
 							</BreadcrumbItem>
 						</BreadcrumbList>
@@ -212,7 +269,7 @@ export default function AdminApprovalsPage() {
 					<div className="space-y-1">
 						<h1 className="flex items-center gap-2 font-semibold text-2xl">
 							<RiCheckboxCircleLine className="size-6" />
-							Approvals
+							Approval requests
 						</h1>
 						<p className="text-muted-foreground text-sm">
 							Review and approve agent transaction submissions awaiting your
@@ -222,7 +279,7 @@ export default function AdminApprovalsPage() {
 								href="/admin/approvals/requests?segment=new-project"
 								className="text-primary underline-offset-4 hover:underline"
 							>
-								Approval requests
+								edit requests
 							</Link>
 							.
 						</p>
@@ -254,11 +311,21 @@ export default function AdminApprovalsPage() {
 						<CardContent>
 							<div className="font-bold text-2xl">{pendingCount}</div>
 							<p className="text-muted-foreground text-xs">
-								Awaiting your review
+								Awaiting your review ({segmentConfig.label})
 							</p>
 						</CardContent>
 					</Card>
 				)}
+
+				<Tabs value={segment} onValueChange={handleSegmentChange}>
+					<TabsList>
+						{SEGMENT_TABS.map((tab) => (
+							<TabsTrigger key={tab.value} value={tab.value}>
+								{tab.label}
+							</TabsTrigger>
+						))}
+					</TabsList>
+				</Tabs>
 
 				<Card>
 					<CardHeader>

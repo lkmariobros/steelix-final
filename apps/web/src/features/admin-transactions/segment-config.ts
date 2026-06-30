@@ -134,29 +134,41 @@ export function getSegmentPageUrl(config: AdminTransactionSegmentConfig): string
 	return `/admin/transactions/${config.segment}/${config.pageKey}`;
 }
 
+export const TRANSACTION_APPROVAL_REQUESTS_URL =
+	"/admin/approvals?segment=new-project";
+
 export const TRANSACTIONS_SIDEBAR_SECTIONS = [
 	{
 		label: "New Project",
 		items: [
 			{ title: "Sold Units", url: "/admin/transactions/new-project/sold-units" },
-			{ title: "Approval", url: "/admin/transactions/new-project/approval" },
-			{ title: "Requests", url: "/admin/approvals/requests?segment=new-project" },
 		],
 	},
 	{
 		label: "Subsale",
 		items: [
 			{ title: "Subsale Units", url: "/admin/transactions/subsale/units" },
-			{ title: "Approval", url: "/admin/transactions/subsale/approval" },
-			{ title: "Requests", url: "/admin/approvals/requests?segment=subsale" },
 		],
 	},
 	{
 		label: "Rental",
 		items: [
 			{ title: "Rental Units", url: "/admin/transactions/rental/units" },
-			{ title: "Approval", url: "/admin/transactions/rental/approval" },
-			{ title: "Requests", url: "/admin/approvals/requests?segment=rental" },
 		],
+	},
+] as const;
+
+export const FINANCE_SIDEBAR_ITEMS = [
+	{
+		title: "Commission approvals",
+		url: "/admin/commissions?status=pending_approval",
+	},
+	{
+		title: "Incentive",
+		url: "/admin/incentives",
+	},
+	{
+		title: "Commission payout",
+		url: "/admin/commissions",
 	},
 ] as const;

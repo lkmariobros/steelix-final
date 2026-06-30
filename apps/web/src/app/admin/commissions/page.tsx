@@ -48,7 +48,8 @@ import {
 	RiSearchLine,
 } from "@remixicon/react";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 
 function formatRm(n: number | string) {
@@ -96,6 +97,7 @@ function statusBadge(status: string) {
 
 export default function AdminCommissionsPage() {
 	const { data: session } = authClient.useSession();
+	const searchParams = useSearchParams();
 
 	const [search, setSearch] = useState("");
 	const [agentId, setAgentId] = useState("__all__");
@@ -114,6 +116,14 @@ export default function AdminCommissionsPage() {
 	);
 	const [releaseRef, setReleaseRef] = useState("");
 	const [releaseDate, setReleaseDate] = useState("");
+
+	useEffect(() => {
+		const statusParam = searchParams.get("status");
+		if (statusParam === "pending_approval") {
+			setStatus("pending_approval");
+			setPage(0);
+		}
+	}, [searchParams]);
 
 	const filterArgs = useMemo(
 		() => ({

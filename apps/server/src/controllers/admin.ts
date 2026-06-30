@@ -93,6 +93,8 @@ export const adminRouter = router({
 				limit: z.number().min(1).max(100).default(20),
 				offset: z.number().min(0).default(0),
 				status: z.enum(CANONICAL_TRANSACTION_STATUSES).optional(),
+				marketType: z.enum(["primary", "secondary"]).optional(),
+				transactionType: z.enum(["sale", "lease", "rental"]).optional(),
 			}),
 		)
 		.query(async ({ ctx, input }) => {
@@ -111,6 +113,21 @@ export const adminRouter = router({
 				whereConditions.push(
 					inArray(transactions.status, [...ADMIN_QUEUE_DB_STATUSES]),
 				);
+			}
+
+			if (input.marketType) {
+				whereConditions.push(eq(transactions.marketType, input.marketType));
+			}
+			if (input.transactionType) {
+				if (input.transactionType === "rental") {
+					whereConditions.push(
+						inArray(transactions.transactionType, ["rental", "lease"]),
+					);
+				} else {
+					whereConditions.push(
+						eq(transactions.transactionType, input.transactionType),
+					);
+				}
 			}
 
 			// Role-based filtering

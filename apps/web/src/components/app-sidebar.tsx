@@ -33,7 +33,7 @@ import { authClient } from "@/lib/auth-client";
 import type { AuthSessionData } from "@/lib/auth-client";
 import { useUserRole } from "@/hooks/use-user-role";
 import { PORTAL_PATHS } from "@/lib/user-role";
-import { TRANSACTIONS_SIDEBAR_SECTIONS } from "@/features/admin-transactions/segment-config";
+import { TRANSACTIONS_SIDEBAR_SECTIONS, FINANCE_SIDEBAR_ITEMS, TRANSACTION_APPROVAL_REQUESTS_URL } from "@/features/admin-transactions/segment-config";
 import { trpc } from "@/utils/trpc";
 import { TeamSwitcher } from "@/components/team-switcher";
 import { formatDistanceToNow } from "date-fns";
@@ -231,7 +231,33 @@ function isNavItemActive(
 		return pathname === "/dashboard" || pathname === "/dashboard/";
 	}
 	if (url === "/admin/approvals" || url.startsWith("/admin/approvals?")) {
+		if (!searchParams || !url.includes("?")) {
+			return pathname === "/admin/approvals";
+		}
+		const urlParams = new URLSearchParams(url.split("?")[1]);
+		const segment = urlParams.get("segment");
+		if (segment) {
+			return (
+				pathname === "/admin/approvals" &&
+				searchParams.get("segment") === segment
+			);
+		}
 		return pathname === "/admin/approvals";
+	}
+	if (url.startsWith("/admin/commissions?")) {
+		if (pathname !== "/admin/commissions" || !searchParams) return false;
+		const urlParams = new URLSearchParams(url.split("?")[1]);
+		const status = urlParams.get("status");
+		if (status) {
+			return searchParams.get("status") === status;
+		}
+		return !searchParams.get("status");
+	}
+	if (url === "/admin/commissions") {
+		return (
+			pathname === "/admin/commissions" &&
+			(!searchParams || !searchParams.get("status"))
+		);
 	}
 
 	const [path, query] = url.split("?");
@@ -313,6 +339,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 					title: "Transactions",
 					url: "#",
 					isTransactionsGroup: true as const,
+				},
+				{
+					title: "Finance",
+					url: "#",
+					isFinanceGroup: true as const,
 				},
 				{
 					title: "Management",
@@ -472,28 +503,17 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 										<SidebarMenuButton
 											asChild
 											className="group/menu-button h-9 gap-3 rounded-md bg-gradient-to-r font-medium hover:bg-transparent hover:from-sidebar-accent hover:to-sidebar-accent/40 data-[active=true]:from-primary/20 data-[active=true]:to-primary/5"
-											isActive={isNavItemActive(pathname, "/admin/approvals", searchParams)}
-										>
-											<Link href="/admin/approvals" className="flex items-center gap-3">
-												<RiCheckboxCircleLine
-													className="text-muted-foreground/60 group-data-[active=true]/menu-button:text-primary"
-													size={22}
-												/>
-												<span>Commission approvals</span>
-											</Link>
-										</SidebarMenuButton>
-									</SidebarMenuItem>
-									<SidebarMenuItem>
-										<SidebarMenuButton
-											asChild
-											className="group/menu-button h-9 gap-3 rounded-md bg-gradient-to-r font-medium hover:bg-transparent hover:from-sidebar-accent hover:to-sidebar-accent/40 data-[active=true]:from-primary/20 data-[active=true]:to-primary/5"
-											isActive={pathname.startsWith("/admin/approvals/requests")}
+											isActive={isNavItemActive(
+												pathname,
+												TRANSACTION_APPROVAL_REQUESTS_URL,
+												searchParams,
+											)}
 										>
 											<Link
-												href="/admin/approvals/requests?segment=new-project"
+												href={TRANSACTION_APPROVAL_REQUESTS_URL}
 												className="flex items-center gap-3"
 											>
-												<RiFileList3Line
+												<RiCheckboxCircleLine
 													className="text-muted-foreground/60 group-data-[active=true]/menu-button:text-primary"
 													size={22}
 												/>
@@ -501,21 +521,29 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 											</Link>
 										</SidebarMenuButton>
 									</SidebarMenuItem>
-									<SidebarMenuItem>
-										<SidebarMenuButton
-											asChild
-											className="group/menu-button h-9 gap-3 rounded-md bg-gradient-to-r font-medium hover:bg-transparent hover:from-sidebar-accent hover:to-sidebar-accent/40 data-[active=true]:from-primary/20 data-[active=true]:to-primary/5"
-											isActive={isNavItemActive(pathname, "/admin/commissions", searchParams)}
-										>
-											<Link href="/admin/commissions" className="flex items-center gap-3">
-												<RiMoneyDollarCircleLine
-													className="text-muted-foreground/60 group-data-[active=true]/menu-button:text-primary"
-													size={22}
-												/>
-												<span>Commission payout</span>
-											</Link>
-										</SidebarMenuButton>
-									</SidebarMenuItem>
+								</SidebarMenu>
+							) : "isFinanceGroup" in item && item.isFinanceGroup ? (
+								<SidebarMenu>
+									{FINANCE_SIDEBAR_ITEMS.map((menuItem) => (
+										<SidebarMenuItem key={menuItem.url}>
+											<SidebarMenuButton
+												asChild
+												className="group/menu-button h-9 gap-3 rounded-md bg-gradient-to-r font-medium hover:bg-transparent hover:from-sidebar-accent hover:to-sidebar-accent/40 data-[active=true]:from-primary/20 data-[active=true]:to-primary/5"
+												isActive={isNavItemActive(pathname, menuItem.url, searchParams)}
+											>
+												<Link
+													href={menuItem.url}
+													className="flex items-center gap-3"
+												>
+													<RiMoneyDollarCircleLine
+														className="text-muted-foreground/60 group-data-[active=true]/menu-button:text-primary"
+														size={22}
+													/>
+													<span>{menuItem.title}</span>
+												</Link>
+											</SidebarMenuButton>
+										</SidebarMenuItem>
+									))}
 								</SidebarMenu>
 							) : (
 								<SidebarMenu>

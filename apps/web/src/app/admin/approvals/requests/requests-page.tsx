@@ -219,8 +219,8 @@ export default function AdminApprovalRequestsPage() {
 							</BreadcrumbItem>
 							<BreadcrumbSeparator className="hidden md:block" />
 							<BreadcrumbItem>
-								<BreadcrumbLink href="/admin/approvals">
-									Approvals
+								<BreadcrumbLink href="/admin/approvals?segment=new-project">
+									Approval requests
 								</BreadcrumbLink>
 							</BreadcrumbItem>
 							<BreadcrumbSeparator />
@@ -362,7 +362,7 @@ export default function AdminApprovalRequestsPage() {
 									waiting for approval.
 								</p>
 								<Button variant="outline" asChild>
-									<Link href="/admin/approvals">View transaction approvals</Link>
+									<Link href="/admin/approvals?segment=new-project">View transaction approvals</Link>
 								</Button>
 							</div>
 						)}

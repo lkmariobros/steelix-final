@@ -18,6 +18,9 @@ export default function AdminTransactionSegmentRoutePage() {
 		if (config?.view === "requests") {
 			router.replace(`/admin/approvals/requests?segment=${config.segment}`);
 		}
+		if (config?.view === "approval") {
+			router.replace(`/admin/approvals?segment=${config.segment}`);
+		}
 	}, [config, router]);
 
 	if (!segment || !view) {
@@ -26,8 +29,8 @@ export default function AdminTransactionSegmentRoutePage() {
 
 	if (!config) notFound();
 
-	if (config.view === "requests") {
-		return <LoadingScreen text="Loading requests..." />;
+	if (config.view === "requests" || config.view === "approval") {
+		return <LoadingScreen text="Loading..." />;
 	}
 
 	return <AdminTransactionSegmentPage config={config} />;
