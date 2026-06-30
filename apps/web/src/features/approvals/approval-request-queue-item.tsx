@@ -169,9 +169,8 @@ function RequestDetails({ tx }: { tx: ApprovalRequestQueueTransaction }) {
 			<div className="grid gap-x-6 gap-y-1 text-sm sm:grid-cols-2 lg:grid-cols-4">
 				<DetailField label="Request Date" value={formatDate(requestDate)} />
 				<DetailField label="Address" value={prop?.address?.trim() || "—"} />
-				<DetailField label="Rental Amount" value={formatRm(nett ?? spa)} />
 				<DetailField
-					label="Case Commission"
+					label="Commission Amount"
 					value={formatRm(tx.commissionAmount)}
 				/>
 				<DetailField

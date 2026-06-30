@@ -134,7 +134,13 @@ export function getSegmentPageUrl(config: AdminTransactionSegmentConfig): string
 	return `/admin/transactions/${config.segment}/${config.pageKey}`;
 }
 
-export const TRANSACTION_APPROVAL_REQUESTS_URL =
+export const AGENT_APPROVAL_REQUESTS_URL =
+	"/admin/approvals/requests?segment=new-project";
+
+/** @deprecated Use AGENT_APPROVAL_REQUESTS_URL — kept for imports during transition */
+export const TRANSACTION_APPROVAL_REQUESTS_URL = AGENT_APPROVAL_REQUESTS_URL;
+
+export const TRANSACTION_APPROVAL_QUEUE_URL =
 	"/admin/approvals?segment=new-project";
 
 export const TRANSACTIONS_SIDEBAR_SECTIONS = [

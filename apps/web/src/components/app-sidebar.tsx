@@ -33,7 +33,7 @@ import { authClient } from "@/lib/auth-client";
 import type { AuthSessionData } from "@/lib/auth-client";
 import { useUserRole } from "@/hooks/use-user-role";
 import { PORTAL_PATHS } from "@/lib/user-role";
-import { TRANSACTIONS_SIDEBAR_SECTIONS, FINANCE_SIDEBAR_ITEMS, TRANSACTION_APPROVAL_REQUESTS_URL } from "@/features/admin-transactions/segment-config";
+import { TRANSACTIONS_SIDEBAR_SECTIONS, FINANCE_SIDEBAR_ITEMS, AGENT_APPROVAL_REQUESTS_URL, TRANSACTION_APPROVAL_QUEUE_URL } from "@/features/admin-transactions/segment-config";
 import { trpc } from "@/utils/trpc";
 import { TeamSwitcher } from "@/components/team-switcher";
 import { formatDistanceToNow } from "date-fns";
@@ -229,6 +229,20 @@ function isNavItemActive(
 	}
 	if (url === "/dashboard") {
 		return pathname === "/dashboard" || pathname === "/dashboard/";
+	}
+	if (url === "/admin/approvals/requests" || url.startsWith("/admin/approvals/requests?")) {
+		if (!searchParams || !url.includes("?")) {
+			return pathname === "/admin/approvals/requests";
+		}
+		const urlParams = new URLSearchParams(url.split("?")[1]);
+		const segment = urlParams.get("segment");
+		if (segment) {
+			return (
+				pathname === "/admin/approvals/requests" &&
+				searchParams.get("segment") === segment
+			);
+		}
+		return pathname === "/admin/approvals/requests";
 	}
 	if (url === "/admin/approvals" || url.startsWith("/admin/approvals?")) {
 		if (!searchParams || !url.includes("?")) {
@@ -505,19 +519,41 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 											className="group/menu-button h-9 gap-3 rounded-md bg-gradient-to-r font-medium hover:bg-transparent hover:from-sidebar-accent hover:to-sidebar-accent/40 data-[active=true]:from-primary/20 data-[active=true]:to-primary/5"
 											isActive={isNavItemActive(
 												pathname,
-												TRANSACTION_APPROVAL_REQUESTS_URL,
+												AGENT_APPROVAL_REQUESTS_URL,
 												searchParams,
 											)}
 										>
 											<Link
-												href={TRANSACTION_APPROVAL_REQUESTS_URL}
+												href={AGENT_APPROVAL_REQUESTS_URL}
+												className="flex items-center gap-3"
+											>
+												<RiFileList3Line
+													className="text-muted-foreground/60 group-data-[active=true]/menu-button:text-primary"
+													size={22}
+												/>
+												<span>Approval requests</span>
+											</Link>
+										</SidebarMenuButton>
+									</SidebarMenuItem>
+									<SidebarMenuItem>
+										<SidebarMenuButton
+											asChild
+											className="group/menu-button h-9 gap-3 rounded-md bg-gradient-to-r font-medium hover:bg-transparent hover:from-sidebar-accent hover:to-sidebar-accent/40 data-[active=true]:from-primary/20 data-[active=true]:to-primary/5"
+											isActive={isNavItemActive(
+												pathname,
+												TRANSACTION_APPROVAL_QUEUE_URL,
+												searchParams,
+											)}
+										>
+											<Link
+												href={TRANSACTION_APPROVAL_QUEUE_URL}
 												className="flex items-center gap-3"
 											>
 												<RiCheckboxCircleLine
 													className="text-muted-foreground/60 group-data-[active=true]/menu-button:text-primary"
 													size={22}
 												/>
-												<span>Approval requests</span>
+												<span>Transaction approvals</span>
 											</Link>
 										</SidebarMenuButton>
 									</SidebarMenuItem>
