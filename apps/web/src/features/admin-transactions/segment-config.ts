@@ -24,12 +24,12 @@ const configs: AdminTransactionSegmentConfig[] = [
 		segment: "new-project",
 		view: "units",
 		pageKey: "sold-units",
-		title: "Sold Units",
+		title: "New Project",
 		description: "Primary market project sales — all sold units.",
 		marketType: "primary",
 		transactionType: "sale",
 		showNewTransaction: true,
-		breadcrumb: ["Transactions", "New Project", "Sold Units"],
+		breadcrumb: ["Transactions", "New Project"],
 	},
 	{
 		segment: "new-project",
@@ -57,12 +57,12 @@ const configs: AdminTransactionSegmentConfig[] = [
 		segment: "subsale",
 		view: "units",
 		pageKey: "units",
-		title: "Subsale Units",
+		title: "Subsale",
 		description: "Secondary market subsale transactions.",
 		marketType: "secondary",
 		transactionType: "sale",
 		showNewTransaction: true,
-		breadcrumb: ["Transactions", "Subsale", "Subsale Units"],
+		breadcrumb: ["Transactions", "Subsale"],
 	},
 	{
 		segment: "subsale",
@@ -90,11 +90,11 @@ const configs: AdminTransactionSegmentConfig[] = [
 		segment: "rental",
 		view: "units",
 		pageKey: "units",
-		title: "Rental Units",
+		title: "Rental",
 		description: "Rental market transactions.",
 		transactionType: "rental",
 		showNewTransaction: true,
-		breadcrumb: ["Transactions", "Rental", "Rental Units"],
+		breadcrumb: ["Transactions", "Rental"],
 	},
 	{
 		segment: "rental",
@@ -143,26 +143,31 @@ export const TRANSACTION_APPROVAL_REQUESTS_URL = AGENT_APPROVAL_REQUESTS_URL;
 export const TRANSACTION_APPROVAL_QUEUE_URL =
 	"/admin/approvals?segment=new-project";
 
-export const TRANSACTIONS_SIDEBAR_SECTIONS = [
+export const TRANSACTIONS_SIDEBAR_ITEMS = [
 	{
-		label: "New Project",
-		items: [
-			{ title: "Sold Units", url: "/admin/transactions/new-project/sold-units" },
-		],
+		title: "New Project",
+		url: "/admin/transactions/new-project/sold-units",
 	},
 	{
-		label: "Subsale",
-		items: [
-			{ title: "Subsale Units", url: "/admin/transactions/subsale/units" },
-		],
+		title: "Subsale",
+		url: "/admin/transactions/subsale/units",
 	},
 	{
-		label: "Rental",
-		items: [
-			{ title: "Rental Units", url: "/admin/transactions/rental/units" },
-		],
+		title: "Rental",
+		url: "/admin/transactions/rental/units",
+	},
+	{
+		title: "Approvals",
+		url: TRANSACTION_APPROVAL_QUEUE_URL,
+	},
+	{
+		title: "Requests",
+		url: AGENT_APPROVAL_REQUESTS_URL,
 	},
 ] as const;
+
+/** @deprecated Use TRANSACTIONS_SIDEBAR_ITEMS */
+export const TRANSACTIONS_SIDEBAR_SECTIONS = TRANSACTIONS_SIDEBAR_ITEMS;
 
 export const FINANCE_SIDEBAR_ITEMS = [
 	{

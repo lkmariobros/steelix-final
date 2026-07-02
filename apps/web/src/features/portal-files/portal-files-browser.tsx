@@ -53,10 +53,12 @@ import { toast } from "sonner";
 import { formatFileSize, isPreviewableType } from "./portal-files-utils";
 import { usePortalFileUpload } from "./use-portal-file-upload";
 
+export const PORTAL_SHARED_OWNER_SELECT_VALUE = "__shared__";
+
 export type PortalFilesMode = "agent" | "admin";
 
 export function PortalFilesBrowser({ mode }: { mode: PortalFilesMode }) {
-	const isAdmin = mode === "admin";
+	const isAdminMode = mode === "admin";
 	const [ownerUserId, setOwnerUserId] = useState<string | undefined>(undefined);
 	const [folderId, setFolderId] = useState<string | null>(null);
 	const [search, setSearch] = useState("");
@@ -74,11 +76,22 @@ export function PortalFilesBrowser({ mode }: { mode: PortalFilesMode }) {
 	>(null);
 	const fileInputRef = useRef<HTMLInputElement>(null);
 
-	const effectiveOwner = isAdmin ? ownerUserId : undefined;
+	const { data: capabilities } = trpc.portalFiles.getCapabilities.useQuery();
+	const canUpload = capabilities?.canUpload ?? isAdminMode;
+	const canDownload = capabilities?.canDownload ?? isAdminMode;
+	const canManage = capabilities?.canManage ?? isAdminMode;
+	const canView = capabilities?.canView ?? true;
+
+	const effectiveOwner =
+		isAdminMode && ownerUserId === PORTAL_SHARED_OWNER_SELECT_VALUE
+			? PORTAL_SHARED_OWNER_SELECT_VALUE
+			: isAdminMode
+				? ownerUserId
+				: undefined;
 
 	const usageQuery = trpc.portalFiles.getStorageUsage.useQuery(
 		{ ownerUserId: effectiveOwner },
-		{ enabled: !isAdmin || !!effectiveOwner || ownerUserId === undefined },
+		{ enabled: canUpload && (!isAdminMode || !!effectiveOwner || ownerUserId === undefined) },
 	);
 
 	const foldersQuery = trpc.portalFiles.listFolders.useQuery({
@@ -94,7 +107,7 @@ export function PortalFilesBrowser({ mode }: { mode: PortalFilesMode }) {
 
 	const agentsQuery = trpc.agents.list.useQuery(
 		{ limit: 100, offset: 0, sortBy: "name", sortOrder: "asc" },
-		{ enabled: isAdmin },
+		{ enabled: isAdminMode },
 	);
 
 	const utils = trpc.useUtils();
@@ -159,6 +172,7 @@ export function PortalFilesBrowser({ mode }: { mode: PortalFilesMode }) {
 			void filesQuery.refetch();
 			void usageQuery.refetch();
 		},
+		disabled: !canUpload,
 	});
 
 	const handlePreview = useCallback(
@@ -177,11 +191,12 @@ export function PortalFilesBrowser({ mode }: { mode: PortalFilesMode }) {
 	const onDrop = useCallback(
 		(e: React.DragEvent) => {
 			e.preventDefault();
+			if (!canUpload) return;
 			if (e.dataTransfer.files?.length) {
 				void uploadFiles(e.dataTransfer.files);
 			}
 		},
-		[uploadFiles],
+		[canUpload, uploadFiles],
 	);
 
 	const handleConfirmDelete = () => {
@@ -211,21 +226,26 @@ export function PortalFilesBrowser({ mode }: { mode: PortalFilesMode }) {
 
 	return (
 		<div className="space-y-4">
-			{isAdmin ? (
+			{isAdminMode ? (
 				<div className="flex flex-wrap items-end gap-3">
 					<div className="min-w-[240px] flex-1 space-y-1.5">
-						<Label>View files for</Label>
+						<Label>Manage files for</Label>
 						<Select
 							value={ownerUserId ?? "__me__"}
 							onValueChange={(v) => {
-								setOwnerUserId(v === "__me__" ? undefined : v);
+								setOwnerUserId(
+									v === "__me__" ? undefined : v,
+								);
 								setFolderId(null);
 							}}
 						>
 							<SelectTrigger>
-								<SelectValue placeholder="Select agent" />
+								<SelectValue placeholder="Select location" />
 							</SelectTrigger>
 							<SelectContent>
+								<SelectItem value={PORTAL_SHARED_OWNER_SELECT_VALUE}>
+									Company files (all agents)
+								</SelectItem>
 								<SelectItem value="__me__">My files (admin)</SelectItem>
 								{agents.map((row) => (
 									<SelectItem key={row.agent.id} value={row.agent.id}>
@@ -236,9 +256,14 @@ export function PortalFilesBrowser({ mode }: { mode: PortalFilesMode }) {
 						</Select>
 					</div>
 				</div>
-			) : null}
+			) : (
+				<p className="text-muted-foreground text-sm">
+					View company and personal files shared with you. Contact an admin if you
+					need a file downloaded.
+				</p>
+			)}
 
-			{usage ? (
+			{usage && canUpload ? (
 				<div className="space-y-1.5">
 					<div className="flex justify-between text-muted-foreground text-sm">
 						<span>Storage used</span>
@@ -251,24 +276,28 @@ export function PortalFilesBrowser({ mode }: { mode: PortalFilesMode }) {
 			) : null}
 
 			<div className="flex flex-wrap items-center gap-2">
-				<Button
-					type="button"
-					size="sm"
-					onClick={() => fileInputRef.current?.click()}
-					disabled={uploading}
-				>
-					<RiUploadCloud2Line className="mr-1.5 size-4" />
-					Upload
-				</Button>
-				<Button
-					type="button"
-					size="sm"
-					variant="outline"
-					onClick={() => setNewFolderOpen(true)}
-				>
-					<RiFolderAddLine className="mr-1.5 size-4" />
-					New folder
-				</Button>
+				{canUpload ? (
+					<>
+						<Button
+							type="button"
+							size="sm"
+							onClick={() => fileInputRef.current?.click()}
+							disabled={uploading}
+						>
+							<RiUploadCloud2Line className="mr-1.5 size-4" />
+							Upload
+						</Button>
+						<Button
+							type="button"
+							size="sm"
+							variant="outline"
+							onClick={() => setNewFolderOpen(true)}
+						>
+							<RiFolderAddLine className="mr-1.5 size-4" />
+							New folder
+						</Button>
+					</>
+				) : null}
 				<Button
 					type="button"
 					size="sm"
@@ -302,28 +331,32 @@ export function PortalFilesBrowser({ mode }: { mode: PortalFilesMode }) {
 				</div>
 			</div>
 
-			<input
-				ref={fileInputRef}
-				type="file"
-				multiple
-				className="hidden"
-				accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.jpg,.jpeg,.png,.webp,.gif,.mp4,.mov,.webm"
-				onChange={(e) => {
-					if (e.target.files?.length) {
-						void uploadFiles(e.target.files);
-						e.target.value = "";
-					}
-				}}
-			/>
+			{canUpload ? (
+				<input
+					ref={fileInputRef}
+					type="file"
+					multiple
+					className="hidden"
+					accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.jpg,.jpeg,.png,.webp,.gif,.mp4,.mov,.webm"
+					onChange={(e) => {
+						if (e.target.files?.length) {
+							void uploadFiles(e.target.files);
+							e.target.value = "";
+						}
+					}}
+				/>
+			) : null}
 
-			<div
-				className="rounded-lg border border-dashed bg-muted/20 p-6 text-center text-muted-foreground text-sm"
-				onDragOver={(e) => e.preventDefault()}
-				onDrop={onDrop}
-			>
-				Drag and drop files here, or use Upload (PDF, Office, images, video up to
-				100MB)
-			</div>
+			{canUpload ? (
+				<div
+					className="rounded-lg border border-dashed bg-muted/20 p-6 text-center text-muted-foreground text-sm"
+					onDragOver={(e) => e.preventDefault()}
+					onDrop={onDrop}
+				>
+					Drag and drop files here, or use Upload (PDF, Office, images, video up to
+					100MB)
+				</div>
+			) : null}
 
 			{Object.keys(progress).length > 0 ? (
 				<div className="space-y-2">
@@ -350,22 +383,29 @@ export function PortalFilesBrowser({ mode }: { mode: PortalFilesMode }) {
 							>
 								<RiFolderLine className="size-5 shrink-0 text-primary" />
 								<span className="truncate font-medium text-sm">{folder.name}</span>
+								{"isShared" in folder && folder.isShared ? (
+									<Badge variant="secondary" className="text-xs">
+										Company
+									</Badge>
+								) : null}
 							</button>
-							<Button
-								type="button"
-								variant="ghost"
-								size="sm"
-								className="h-8 w-8 shrink-0 p-0 text-destructive"
-								onClick={() =>
-									setDeleteTarget({
-										type: "folder",
-										id: folder.id,
-										name: folder.name,
-									})
-								}
-							>
-								<RiDeleteBinLine className="size-4" />
-							</Button>
+							{canManage ? (
+								<Button
+									type="button"
+									variant="ghost"
+									size="sm"
+									className="h-8 w-8 shrink-0 p-0 text-destructive"
+									onClick={() =>
+										setDeleteTarget({
+											type: "folder",
+											id: folder.id,
+											name: folder.name,
+										})
+									}
+								>
+									<RiDeleteBinLine className="size-4" />
+								</Button>
+							) : null}
 						</div>
 					))}
 				</div>
@@ -376,6 +416,7 @@ export function PortalFilesBrowser({ mode }: { mode: PortalFilesMode }) {
 					<TableHeader>
 						<TableRow>
 							<TableHead>Name</TableHead>
+							<TableHead>Source</TableHead>
 							<TableHead>Type</TableHead>
 							<TableHead>Size</TableHead>
 							<TableHead>Uploaded</TableHead>
@@ -387,6 +428,17 @@ export function PortalFilesBrowser({ mode }: { mode: PortalFilesMode }) {
 							<TableRow key={file.id}>
 								<TableCell className="max-w-[240px] truncate font-medium">
 									{file.fileName}
+								</TableCell>
+								<TableCell>
+									{file.isShared ? (
+										<Badge variant="secondary" className="text-xs">
+											Company
+										</Badge>
+									) : (
+										<Badge variant="outline" className="text-xs">
+											Personal
+										</Badge>
+									)}
 								</TableCell>
 								<TableCell>
 									<Badge variant="outline" className="font-mono text-xs">
@@ -401,13 +453,17 @@ export function PortalFilesBrowser({ mode }: { mode: PortalFilesMode }) {
 								</TableCell>
 								<TableCell className="text-right">
 									<div className="flex justify-end gap-1">
-										{isPreviewableType(file.fileType) ? (
+										{canView ? (
 											<Button
 												type="button"
 												variant="ghost"
 												size="sm"
 												className="h-8 w-8 p-0"
-												title="Preview"
+												title={
+													isPreviewableType(file.fileType)
+														? "Preview"
+														: "View"
+												}
 												onClick={() =>
 													void handlePreview(
 														file.id,
@@ -419,32 +475,36 @@ export function PortalFilesBrowser({ mode }: { mode: PortalFilesMode }) {
 												<RiEyeLine className="size-4" />
 											</Button>
 										) : null}
-										<Button
-											type="button"
-											variant="ghost"
-											size="sm"
-											className="h-8 w-8 p-0"
-											title="Download"
-											onClick={() => void handleDownload(file.id)}
-										>
-											<RiDownloadLine className="size-4" />
-										</Button>
-										<Button
-											type="button"
-											variant="ghost"
-											size="sm"
-											className="h-8 w-8 p-0 text-destructive"
-											title="Delete"
-											onClick={() =>
-												setDeleteTarget({
-													type: "file",
-													id: file.id,
-													name: file.fileName,
-												})
-											}
-										>
-											<RiDeleteBinLine className="size-4" />
-										</Button>
+										{canDownload ? (
+											<Button
+												type="button"
+												variant="ghost"
+												size="sm"
+												className="h-8 w-8 p-0"
+												title="Download"
+												onClick={() => void handleDownload(file.id)}
+											>
+												<RiDownloadLine className="size-4" />
+											</Button>
+										) : null}
+										{canManage ? (
+											<Button
+												type="button"
+												variant="ghost"
+												size="sm"
+												className="h-8 w-8 p-0 text-destructive"
+												title="Delete"
+												onClick={() =>
+													setDeleteTarget({
+														type: "file",
+														id: file.id,
+														name: file.fileName,
+													})
+												}
+											>
+												<RiDeleteBinLine className="size-4" />
+											</Button>
+										) : null}
 									</div>
 								</TableCell>
 							</TableRow>
@@ -452,7 +512,7 @@ export function PortalFilesBrowser({ mode }: { mode: PortalFilesMode }) {
 						{files.length === 0 && !foldersQuery.isLoading ? (
 							<TableRow>
 								<TableCell
-									colSpan={5}
+									colSpan={6}
 									className="py-10 text-center text-muted-foreground"
 								>
 									No files in this folder yet.

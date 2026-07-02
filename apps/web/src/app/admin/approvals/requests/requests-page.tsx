@@ -486,7 +486,7 @@ export default function AdminApprovalRequestsPage() {
 							<BreadcrumbItem>
 								<BreadcrumbPage className="flex items-center gap-2">
 									<RiFileList3Line size={20} aria-hidden="true" />
-									Approval Requests
+									Requests
 								</BreadcrumbPage>
 							</BreadcrumbItem>
 						</BreadcrumbList>
@@ -502,7 +502,7 @@ export default function AdminApprovalRequestsPage() {
 					<div className="space-y-1">
 						<h1 className="flex items-center gap-2 font-semibold text-2xl">
 							<RiFileList3Line className="size-6" />
-							Approval Requests
+							Requests
 						</h1>
 						<p className="text-muted-foreground text-sm">
 							Agent change requests awaiting your review — only pending

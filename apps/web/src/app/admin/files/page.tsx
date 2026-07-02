@@ -47,7 +47,7 @@ export default function AdminFilesPage() {
 				<div>
 					<h1 className="font-bold text-2xl tracking-tight">Portal files</h1>
 					<p className="text-muted-foreground text-sm">
-						Manage your files or browse and upload on behalf of any agent.
+						Upload, download, and manage company files or agent-specific documents.
 					</p>
 				</div>
 
@@ -55,7 +55,8 @@ export default function AdminFilesPage() {
 					<CardHeader>
 						<CardTitle>File drive</CardTitle>
 						<CardDescription>
-							Shared storage for admins and agents — PDF, Office, images, video
+							Admins and super admins can upload and download. Use &ldquo;Company
+							files&rdquo; for documents all agents can view.
 						</CardDescription>
 					</CardHeader>
 					<CardContent>

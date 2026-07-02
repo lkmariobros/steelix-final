@@ -254,7 +254,7 @@ export default function AdminApprovalsPage() {
 							<BreadcrumbItem>
 								<BreadcrumbPage className="flex items-center gap-2">
 									<RiCheckboxCircleLine size={20} aria-hidden="true" />
-									Transaction approvals
+									Approvals
 								</BreadcrumbPage>
 							</BreadcrumbItem>
 						</BreadcrumbList>
@@ -269,7 +269,7 @@ export default function AdminApprovalsPage() {
 					<div className="space-y-1">
 						<h1 className="flex items-center gap-2 font-semibold text-2xl">
 							<RiCheckboxCircleLine className="size-6" />
-							Transaction approvals
+							Approvals
 						</h1>
 						<p className="text-muted-foreground text-sm">
 							Review and approve agent transaction submissions awaiting your
@@ -279,7 +279,7 @@ export default function AdminApprovalsPage() {
 								href="/admin/approvals/requests?segment=new-project"
 								className="text-primary underline-offset-4 hover:underline"
 							>
-								Approval requests
+								Requests
 							</Link>
 							.
 						</p>

@@ -17,9 +17,6 @@ import {
 	SidebarMenu,
 	SidebarMenuButton,
 	SidebarMenuItem,
-	SidebarMenuSub,
-	SidebarMenuSubButton,
-	SidebarMenuSubItem,
 	SidebarRail,
 } from "@/components/sidebar";
 import { Badge } from "@/components/ui/badge";
@@ -33,7 +30,7 @@ import { authClient } from "@/lib/auth-client";
 import type { AuthSessionData } from "@/lib/auth-client";
 import { useUserRole } from "@/hooks/use-user-role";
 import { PORTAL_PATHS } from "@/lib/user-role";
-import { TRANSACTIONS_SIDEBAR_SECTIONS, FINANCE_SIDEBAR_ITEMS, AGENT_APPROVAL_REQUESTS_URL, TRANSACTION_APPROVAL_QUEUE_URL } from "@/features/admin-transactions/segment-config";
+import { TRANSACTIONS_SIDEBAR_ITEMS, FINANCE_SIDEBAR_ITEMS } from "@/features/admin-transactions/segment-config";
 import { trpc } from "@/utils/trpc";
 import { TeamSwitcher } from "@/components/team-switcher";
 import { formatDistanceToNow } from "date-fns";
@@ -500,69 +497,42 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 						<SidebarGroupContent className="px-2">
 							{"isTransactionsGroup" in item && item.isTransactionsGroup ? (
 								<SidebarMenu>
-									{TRANSACTIONS_SIDEBAR_SECTIONS.map((section) => (
-										<SidebarMenuItem key={section.label}>
-											<SidebarMenuButton className="pointer-events-none h-8 font-semibold text-muted-foreground text-xs uppercase hover:bg-transparent">
-												<span>{section.label}</span>
+									{TRANSACTIONS_SIDEBAR_ITEMS.map((menuItem) => (
+										<SidebarMenuItem key={menuItem.url}>
+											<SidebarMenuButton
+												asChild
+												className="group/menu-button h-9 gap-3 rounded-md bg-gradient-to-r font-medium hover:bg-transparent hover:from-sidebar-accent hover:to-sidebar-accent/40 data-[active=true]:from-primary/20 data-[active=true]:to-primary/5"
+												isActive={isNavItemActive(
+													pathname,
+													menuItem.url,
+													searchParams,
+												)}
+											>
+												<Link
+													href={menuItem.url}
+													className="flex items-center gap-3"
+												>
+													{menuItem.title === "Approvals" ? (
+														<RiCheckboxCircleLine
+															className="text-muted-foreground/60 group-data-[active=true]/menu-button:text-primary"
+															size={22}
+														/>
+													) : menuItem.title === "Requests" ? (
+														<RiFileList3Line
+															className="text-muted-foreground/60 group-data-[active=true]/menu-button:text-primary"
+															size={22}
+														/>
+													) : (
+														<RiFileTextLine
+															className="text-muted-foreground/60 group-data-[active=true]/menu-button:text-primary"
+															size={22}
+														/>
+													)}
+													<span>{menuItem.title}</span>
+												</Link>
 											</SidebarMenuButton>
-											<SidebarMenuSub>
-												{section.items.map((sub) => (
-													<SidebarMenuSubItem key={sub.url}>
-														<SidebarMenuSubButton
-															asChild
-															isActive={isNavItemActive(pathname, sub.url, searchParams)}
-														>
-															<Link href={sub.url}>{sub.title}</Link>
-														</SidebarMenuSubButton>
-													</SidebarMenuSubItem>
-												))}
-											</SidebarMenuSub>
 										</SidebarMenuItem>
 									))}
-									<SidebarMenuItem>
-										<SidebarMenuButton
-											asChild
-											className="group/menu-button h-9 gap-3 rounded-md bg-gradient-to-r font-medium hover:bg-transparent hover:from-sidebar-accent hover:to-sidebar-accent/40 data-[active=true]:from-primary/20 data-[active=true]:to-primary/5"
-											isActive={isNavItemActive(
-												pathname,
-												AGENT_APPROVAL_REQUESTS_URL,
-												searchParams,
-											)}
-										>
-											<Link
-												href={AGENT_APPROVAL_REQUESTS_URL}
-												className="flex items-center gap-3"
-											>
-												<RiFileList3Line
-													className="text-muted-foreground/60 group-data-[active=true]/menu-button:text-primary"
-													size={22}
-												/>
-												<span>Approval requests</span>
-											</Link>
-										</SidebarMenuButton>
-									</SidebarMenuItem>
-									<SidebarMenuItem>
-										<SidebarMenuButton
-											asChild
-											className="group/menu-button h-9 gap-3 rounded-md bg-gradient-to-r font-medium hover:bg-transparent hover:from-sidebar-accent hover:to-sidebar-accent/40 data-[active=true]:from-primary/20 data-[active=true]:to-primary/5"
-											isActive={isNavItemActive(
-												pathname,
-												TRANSACTION_APPROVAL_QUEUE_URL,
-												searchParams,
-											)}
-										>
-											<Link
-												href={TRANSACTION_APPROVAL_QUEUE_URL}
-												className="flex items-center gap-3"
-											>
-												<RiCheckboxCircleLine
-													className="text-muted-foreground/60 group-data-[active=true]/menu-button:text-primary"
-													size={22}
-												/>
-												<span>Transaction approvals</span>
-											</Link>
-										</SidebarMenuButton>
-									</SidebarMenuItem>
 								</SidebarMenu>
 							) : "isFinanceGroup" in item && item.isFinanceGroup ? (
 								<SidebarMenu>

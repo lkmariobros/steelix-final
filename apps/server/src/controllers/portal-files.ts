@@ -1,25 +1,33 @@
 import { TRPCError } from "@trpc/server";
-import { and, desc, eq, ilike, isNull } from "drizzle-orm";
+import { and, desc, eq, ilike, inArray, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { portalFiles, portalFolders } from "../models/portal-files";
 import {
 	PORTAL_BASE64_MAX_BYTES,
 	PORTAL_FILES_BUCKET,
 	PORTAL_FILE_QUOTA_BYTES,
+	PORTAL_SHARED_OWNER_ID,
+	agentAccessibleOwnerIds,
 	assertAllowedPortalMimeType,
 	assertCanAccessPortalFile,
+	assertCanDownloadPortalFiles,
+	assertCanManagePortalFiles,
+	assertCanUploadPortalFiles,
 	assertPortalFileSize,
 	assertPortalFolderAccess,
 	assertPortalQuota,
 	buildPortalStoragePath,
 	createPortalSignedUrl,
+	getPortalFileCapabilities,
 	getPortalFileForAccess,
 	getPortalStorageUsageBytes,
 	mapPortalFileRow,
+	normalisePortalOwnerInput,
 	resolvePortalOwnerUserId,
 	requireSupabaseAdmin,
 } from "../services/portal-files";
 import { db } from "../utils/db";
+import { hasAdminAccess } from "../utils/user-roles";
 import { protectedProcedure, router } from "../utils/trpc";
 
 const ownerInput = z.object({
@@ -39,12 +47,56 @@ function sessionUser(ctx: { session: { user: { id: string } & Record<string, unk
 	};
 }
 
+function resolveListOwnerScope(
+	user: ReturnType<typeof sessionUser>,
+	requestedOwnerUserId?: string | null,
+) {
+	const isAdmin = hasAdminAccess({ role: user.role, roles: user.roles ?? [] });
+	const normalised = normalisePortalOwnerInput(requestedOwnerUserId);
+
+	if (isAdmin) {
+		const ownerUserId = resolvePortalOwnerUserId(user, requestedOwnerUserId);
+		return { ownerUserIds: [ownerUserId], ownerUserId };
+	}
+
+	if (
+		normalised &&
+		normalised !== user.id &&
+		normalised !== PORTAL_SHARED_OWNER_ID
+	) {
+		throw new TRPCError({
+			code: "FORBIDDEN",
+			message: "You can only access your own files",
+		});
+	}
+
+	if (normalised === PORTAL_SHARED_OWNER_ID) {
+		return {
+			ownerUserIds: [PORTAL_SHARED_OWNER_ID],
+			ownerUserId: PORTAL_SHARED_OWNER_ID,
+		};
+	}
+
+	if (normalised === user.id) {
+		return { ownerUserIds: [user.id], ownerUserId: user.id };
+	}
+
+	return {
+		ownerUserIds: agentAccessibleOwnerIds(user.id),
+		ownerUserId: user.id,
+	};
+}
+
 export const portalFilesRouter = router({
+	getCapabilities: protectedProcedure.query(async ({ ctx }) => {
+		return getPortalFileCapabilities(sessionUser(ctx));
+	}),
+
 	getStorageUsage: protectedProcedure
 		.input(ownerInput)
 		.query(async ({ ctx, input }) => {
 			const user = sessionUser(ctx);
-			const ownerUserId = resolvePortalOwnerUserId(user, input.ownerUserId);
+			const { ownerUserId } = resolveListOwnerScope(user, input.ownerUserId);
 			const usedBytes = await getPortalStorageUsageBytes(ownerUserId);
 			return {
 				usedBytes,
@@ -61,7 +113,7 @@ export const portalFilesRouter = router({
 		)
 		.query(async ({ ctx, input }) => {
 			const user = sessionUser(ctx);
-			const ownerUserId = resolvePortalOwnerUserId(user, input.ownerUserId);
+			const { ownerUserIds } = resolveListOwnerScope(user, input.ownerUserId);
 			const parentFolderId = input.parentFolderId ?? null;
 
 			const rows = await db
@@ -69,7 +121,7 @@ export const portalFilesRouter = router({
 				.from(portalFolders)
 				.where(
 					and(
-						eq(portalFolders.ownerUserId, ownerUserId),
+						inArray(portalFolders.ownerUserId, ownerUserIds),
 						parentFolderId
 							? eq(portalFolders.parentFolderId, parentFolderId)
 							: isNull(portalFolders.parentFolderId),
@@ -82,6 +134,7 @@ export const portalFilesRouter = router({
 				name: f.name,
 				parentFolderId: f.parentFolderId,
 				ownerUserId: f.ownerUserId,
+				isShared: f.ownerUserId === PORTAL_SHARED_OWNER_ID,
 				createdAt: f.createdAt.toISOString(),
 			}));
 		}),
@@ -94,11 +147,11 @@ export const portalFilesRouter = router({
 		)
 		.query(async ({ ctx, input }) => {
 			const user = sessionUser(ctx);
-			const ownerUserId = resolvePortalOwnerUserId(user, input.ownerUserId);
+			const { ownerUserIds } = resolveListOwnerScope(user, input.ownerUserId);
 			const folderId = input.folderId ?? null;
 
 			const conditions = [
-				eq(portalFiles.ownerUserId, ownerUserId),
+				inArray(portalFiles.ownerUserId, ownerUserIds),
 				isNull(portalFiles.deletedAt),
 				folderId ? eq(portalFiles.folderId, folderId) : isNull(portalFiles.folderId),
 			];
@@ -125,6 +178,7 @@ export const portalFilesRouter = router({
 		)
 		.mutation(async ({ ctx, input }) => {
 			const user = sessionUser(ctx);
+			assertCanManagePortalFiles(user);
 			const ownerUserId = resolvePortalOwnerUserId(user, input.ownerUserId);
 			const parentFolderId = input.parentFolderId ?? null;
 
@@ -169,6 +223,7 @@ export const portalFilesRouter = router({
 		)
 		.mutation(async ({ ctx, input }) => {
 			const user = sessionUser(ctx);
+			assertCanUploadPortalFiles(user);
 			const ownerUserId = resolvePortalOwnerUserId(user, input.ownerUserId);
 
 			assertAllowedPortalMimeType(input.fileType);
@@ -246,6 +301,7 @@ export const portalFilesRouter = router({
 		)
 		.mutation(async ({ ctx, input }) => {
 			const user = sessionUser(ctx);
+			assertCanUploadPortalFiles(user);
 			const ownerUserId = resolvePortalOwnerUserId(user, input.ownerUserId);
 
 			assertAllowedPortalMimeType(input.fileType);
@@ -309,6 +365,7 @@ export const portalFilesRouter = router({
 		.input(z.object({ fileId: z.string().uuid() }))
 		.mutation(async ({ ctx, input }) => {
 			const user = sessionUser(ctx);
+			assertCanUploadPortalFiles(user);
 			const file = await getPortalFileForAccess(input.fileId);
 			assertCanAccessPortalFile(user, file);
 
@@ -351,8 +408,12 @@ export const portalFilesRouter = router({
 			const user = sessionUser(ctx);
 			const file = await getPortalFileForAccess(input.fileId);
 			assertCanAccessPortalFile(user, file);
+			assertCanDownloadPortalFiles(user);
 
-			const url = await createPortalSignedUrl(file.storagePath, file.fileName);
+			const url = await createPortalSignedUrl(file.storagePath, {
+				forceDownload: true,
+				downloadFileName: file.fileName,
+			});
 			return {
 				url,
 				fileName: file.fileName,
@@ -367,7 +428,9 @@ export const portalFilesRouter = router({
 			const file = await getPortalFileForAccess(input.fileId);
 			assertCanAccessPortalFile(user, file);
 
-			const url = await createPortalSignedUrl(file.storagePath);
+			const url = await createPortalSignedUrl(file.storagePath, {
+				forceDownload: false,
+			});
 			return {
 				url,
 				fileName: file.fileName,
@@ -381,6 +444,7 @@ export const portalFilesRouter = router({
 			const user = sessionUser(ctx);
 			const file = await getPortalFileForAccess(input.fileId);
 			assertCanAccessPortalFile(user, file);
+			assertCanManagePortalFiles(user);
 
 			const storage = requireSupabaseAdmin();
 			const { error } = await storage.storage
@@ -407,6 +471,7 @@ export const portalFilesRouter = router({
 		)
 		.mutation(async ({ ctx, input }) => {
 			const user = sessionUser(ctx);
+			assertCanManagePortalFiles(user);
 			const ownerUserId = resolvePortalOwnerUserId(user, input.ownerUserId);
 			await assertPortalFolderAccess(ownerUserId, input.folderId);
 
@@ -454,6 +519,7 @@ export const portalFilesRouter = router({
 			const user = sessionUser(ctx);
 			const file = await getPortalFileForAccess(input.fileId);
 			assertCanAccessPortalFile(user, file);
+			assertCanManagePortalFiles(user);
 
 			const [updated] = await db
 				.update(portalFiles)

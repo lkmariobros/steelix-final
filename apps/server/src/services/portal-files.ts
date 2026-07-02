@@ -1,9 +1,13 @@
 import { TRPCError } from "@trpc/server";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { portalFiles, portalFolders } from "../models/portal-files";
 import { db } from "../utils/db";
 import { supabaseAdmin, assertSupabaseConfigured } from "../utils/supabase";
 import { hasAdminAccess } from "../utils/user-roles";
+
+/** Reserved owner id for company-wide files visible to all agents (view-only). */
+export const PORTAL_SHARED_OWNER_ID = "__portal_shared__";
+export const PORTAL_SHARED_OWNER_ALIAS = "__shared__";
 
 export const PORTAL_FILES_BUCKET =
 	process.env.PORTAL_FILES_BUCKET?.trim() || "portal-files";
@@ -36,21 +40,94 @@ type SessionUser = {
 	roles?: string[] | null;
 };
 
+export type PortalFileCapabilities = {
+	canUpload: boolean;
+	canDownload: boolean;
+	canManage: boolean;
+	canView: boolean;
+};
+
+export function isPortalSharedOwner(ownerUserId: string): boolean {
+	return ownerUserId === PORTAL_SHARED_OWNER_ID;
+}
+
+export function normalisePortalOwnerInput(
+	requestedOwnerUserId?: string | null,
+): string | null {
+	if (!requestedOwnerUserId) return null;
+	if (
+		requestedOwnerUserId === PORTAL_SHARED_OWNER_ID ||
+		requestedOwnerUserId === PORTAL_SHARED_OWNER_ALIAS
+	) {
+		return PORTAL_SHARED_OWNER_ID;
+	}
+	return requestedOwnerUserId;
+}
+
+export function getPortalFileCapabilities(user: SessionUser): PortalFileCapabilities {
+	const isAdmin = hasAdminAccess({ role: user.role, roles: user.roles ?? [] });
+	return {
+		canUpload: isAdmin,
+		canDownload: isAdmin,
+		canManage: isAdmin,
+		canView: true,
+	};
+}
+
+export function assertCanUploadPortalFiles(user: SessionUser) {
+	if (!getPortalFileCapabilities(user).canUpload) {
+		throw new TRPCError({
+			code: "FORBIDDEN",
+			message: "Only admins can upload files",
+		});
+	}
+}
+
+export function assertCanDownloadPortalFiles(user: SessionUser) {
+	if (!getPortalFileCapabilities(user).canDownload) {
+		throw new TRPCError({
+			code: "FORBIDDEN",
+			message: "Only admins can download files",
+		});
+	}
+}
+
+export function assertCanManagePortalFiles(user: SessionUser) {
+	if (!getPortalFileCapabilities(user).canManage) {
+		throw new TRPCError({
+			code: "FORBIDDEN",
+			message: "Only admins can manage files and folders",
+		});
+	}
+}
+
 export function resolvePortalOwnerUserId(
 	user: SessionUser,
 	requestedOwnerUserId?: string | null,
 ): string {
 	const isAdmin = hasAdminAccess({ role: user.role, roles: user.roles ?? [] });
-	if (requestedOwnerUserId && requestedOwnerUserId !== user.id) {
+	const normalised = normalisePortalOwnerInput(requestedOwnerUserId);
+
+	if (normalised === PORTAL_SHARED_OWNER_ID) {
+		return PORTAL_SHARED_OWNER_ID;
+	}
+
+	if (normalised && normalised !== user.id) {
 		if (!isAdmin) {
 			throw new TRPCError({
 				code: "FORBIDDEN",
 				message: "You can only access your own files",
 			});
 		}
-		return requestedOwnerUserId;
+		return normalised;
 	}
-	return requestedOwnerUserId ?? user.id;
+
+	return normalised ?? user.id;
+}
+
+/** Owner ids an agent may list or view (company shared + personal). */
+export function agentAccessibleOwnerIds(userId: string): string[] {
+	return [PORTAL_SHARED_OWNER_ID, userId];
 }
 
 export function sanitizePortalFileName(name: string): string {
@@ -148,9 +225,16 @@ export function assertCanAccessPortalFile(
 	file: { ownerUserId: string },
 ) {
 	const isAdmin = hasAdminAccess({ role: user.role, roles: user.roles ?? [] });
-	if (!isAdmin && file.ownerUserId !== user.id) {
-		throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
+	if (isAdmin) return;
+
+	if (
+		file.ownerUserId === user.id ||
+		isPortalSharedOwner(file.ownerUserId)
+	) {
+		return;
 	}
+
+	throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
 }
 
 export function requireSupabaseAdmin() {
@@ -172,13 +256,16 @@ export function requireSupabaseAdmin() {
 
 export async function createPortalSignedUrl(
 	storagePath: string,
-	downloadFileName?: string,
+	options?: { downloadFileName?: string; forceDownload?: boolean },
 ): Promise<string> {
 	const storage = requireSupabaseAdmin();
+	const forceDownload = options?.forceDownload === true;
 	const { data, error } = await storage.storage
 		.from(PORTAL_FILES_BUCKET)
 		.createSignedUrl(storagePath, PORTAL_SIGNED_URL_TTL_SECONDS, {
-			download: downloadFileName ?? true,
+			download: forceDownload
+				? (options?.downloadFileName ?? true)
+				: false,
 		});
 	if (error || !data?.signedUrl) {
 		throw new TRPCError({
@@ -193,6 +280,7 @@ export function mapPortalFileRow(file: typeof portalFiles.$inferSelect) {
 	return {
 		id: file.id,
 		ownerUserId: file.ownerUserId,
+		isShared: isPortalSharedOwner(file.ownerUserId),
 		folderId: file.folderId,
 		fileName: file.fileName,
 		fileType: file.fileType,

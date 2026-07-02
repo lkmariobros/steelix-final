@@ -9,6 +9,7 @@ type UploadOpts = {
 	ownerUserId?: string;
 	folderId?: string | null;
 	onComplete?: () => void;
+	disabled?: boolean;
 };
 
 export function usePortalFileUpload(opts: UploadOpts) {
@@ -28,6 +29,10 @@ export function usePortalFileUpload(opts: UploadOpts) {
 
 	const uploadFile = useCallback(
 		async (file: File) => {
+			if (opts.disabled) {
+				toast.error("You do not have permission to upload files");
+				return;
+			}
 			if (file.size > 100 * 1024 * 1024) {
 				toast.error("File exceeds 100MB limit");
 				return;
@@ -95,6 +100,7 @@ export function usePortalFileUpload(opts: UploadOpts) {
 			invalidate,
 			opts.folderId,
 			opts.ownerUserId,
+			opts.disabled,
 			sessionMutation,
 			uploadMutation,
 		],

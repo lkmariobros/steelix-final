@@ -57,10 +57,9 @@ export default function AgentFilesPage() {
 
 				<div className="flex flex-1 flex-col gap-6 py-6">
 					<div>
-						<h1 className="font-bold text-2xl tracking-tight">My files</h1>
+						<h1 className="font-bold text-2xl tracking-tight">Files</h1>
 						<p className="text-muted-foreground text-sm">
-							Upload and download documents, images, and videos stored in your
-							portal drive.
+							View company documents and files shared with you by your admin team.
 						</p>
 					</div>
 
@@ -68,7 +67,8 @@ export default function AgentFilesPage() {
 						<CardHeader>
 							<CardTitle>File drive</CardTitle>
 							<CardDescription>
-								PDF, Office, images, and video (up to 100MB per file, 5GB total)
+								View-only access — preview files in your browser. Admins can upload
+								and download on your behalf.
 							</CardDescription>
 						</CardHeader>
 						<CardContent>
