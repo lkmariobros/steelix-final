@@ -26,6 +26,11 @@ export type Lead = {
 	updatedAt: Date | string;
 };
 
+/** Short display ID for leads (first 8 chars of UUID). */
+export function formatLeadId(id: string): string {
+	return id.slice(0, 8).toUpperCase();
+}
+
 export type AssignableAgentOption = {
 	agentId: string;
 	agentName: string | null;

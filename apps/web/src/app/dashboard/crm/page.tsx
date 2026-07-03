@@ -86,7 +86,8 @@ import { z } from "zod";
 import { ImportLeadsDialog } from "./_components/import-leads-dialog";
 import type { AgentCrmImportMode } from "./_components/import-leads-dialog";
 import { PIPELINE_STAGES } from "@/app/admin/leads/_components/lead-constants";
-import { StageBadge } from "@/app/admin/leads/_components/lead-ui";
+import { formatLeadId } from "@/app/admin/leads/_components/lead-models";
+import { StageBadge, StatusBadge } from "@/app/admin/leads/_components/lead-ui";
 import {
 	exportProspectsToCsv,
 	exportProspectsToExcelHtml,
@@ -418,32 +419,62 @@ export default function CRMPage() {
 		setIsViewDialogOpen(true);
 	};
 
-	const handleViewLeadById = (leadId: string) => {
+	const handleViewLeadById = async (leadId: string) => {
 		const lead = prospects.find((p) => p.id === leadId);
-		if (lead) handleView(lead);
+		if (lead) {
+			handleView(lead);
+			return;
+		}
+		try {
+			const data = await trpcUtils.crm.get.fetch({ id: leadId });
+			handleView(data.prospect as Prospect);
+		} catch {
+			toast.error("Could not open this lead. It may not be in your current list.");
+		}
 	};
-
-	const canManageTasksForSelected =
-		Boolean(selectedProspect) &&
-		(selectedProspect?.agentId === session?.user?.id ||
-			selectedProspect?.isFollower === true);
-
-	const canEditFollowersForSelected =
-		Boolean(selectedProspect) &&
-		selectedProspect?.agentId === session?.user?.id;
-
-	const canEditCategoriesForSelected = canEditFollowersForSelected;
 
 	const [followerIds, setFollowerIds] = useState<string[]>([]);
 	const [categoryTagIds, setCategoryTagIds] = useState<string[]>([]);
+	const [newNoteContent, setNewNoteContent] = useState("");
+	const [notesPage, setNotesPage] = useState(1);
+	const NOTES_PER_PAGE = 5;
+
+	// Fetch fresh prospect detail when view dialog is open
+	const { data: prospectDetailData } = trpc.crm.get.useQuery(
+		{ id: selectedProspect?.id || "" },
+		{
+			enabled: !!selectedProspect?.id && isViewDialogOpen,
+			staleTime: 0,
+		},
+	);
+
+	const activeProspect = (prospectDetailData?.prospect ??
+		selectedProspect) as Prospect | null;
 
 	useEffect(() => {
-		setFollowerIds(selectedProspect?.followerIds ?? []);
-	}, [selectedProspect?.id, selectedProspect?.followerIds]);
+		setNotesPage(1);
+	}, [selectedProspect?.id, isViewDialogOpen]);
+
+	const canManageTasksForSelected =
+		Boolean(activeProspect) &&
+		(activeProspect?.agentId === session?.user?.id ||
+			activeProspect?.isFollower === true);
+
+	const canEditFollowersForSelected =
+		Boolean(activeProspect) &&
+		activeProspect?.agentId === session?.user?.id;
+
+	const canEditCategoriesForSelected = canEditFollowersForSelected;
 
 	useEffect(() => {
-		setCategoryTagIds(selectedProspect?.tagIds ?? []);
-	}, [selectedProspect?.id, selectedProspect?.tagIds]);
+		const current = prospectDetailData?.prospect ?? selectedProspect;
+		setFollowerIds(current?.followerIds ?? []);
+	}, [prospectDetailData?.prospect, selectedProspect?.id, selectedProspect?.followerIds]);
+
+	useEffect(() => {
+		const current = prospectDetailData?.prospect ?? selectedProspect;
+		setCategoryTagIds(current?.tagIds ?? []);
+	}, [prospectDetailData?.prospect, selectedProspect?.id, selectedProspect?.tagIds]);
 
 	const setFollowersMutation = trpc.crm.setFollowers.useMutation({
 		onSuccess: () => {
@@ -467,8 +498,6 @@ export default function CRMPage() {
 		},
 		onError: (error) => toast.error(error.message),
 	});
-
-	const [newNoteContent, setNewNoteContent] = useState("");
 
 	// Add note mutation
 	const addNoteMutation = trpc.crm.addNote.useMutation({
@@ -1024,19 +1053,34 @@ export default function CRMPage() {
 
 					{/* View Prospect Dialog */}
 					<Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
-						<DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[700px]">
-							<DialogHeader>
+						<DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[700px] [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+							<DialogHeader className="pr-8">
 								<DialogTitle className="flex items-center gap-2">
 									<RiUserLine className="size-5" />
-									Lead Detail
+									{activeProspect?.name ?? "Lead Detail"}
 								</DialogTitle>
 								<DialogDescription>
 									View complete information about this lead.
 								</DialogDescription>
 							</DialogHeader>
 
-							{selectedProspect && (
+							{activeProspect && (
 								<div className="space-y-6 py-4">
+									{/* Lead ID */}
+									<div className="space-y-2" style={{ marginBottom: "15px" }}>
+										<div className="font-medium text-muted-foreground text-sm">
+											Lead ID
+										</div>
+										<button
+											type="button"
+											className="font-mono font-semibold text-primary text-sm hover:underline"
+											onClick={() => handleView(activeProspect)}
+											title="Open lead detail"
+										>
+											{formatLeadId(activeProspect.id)}
+										</button>
+									</div>
+
 									{/* Name Section */}
 									<div className="space-y-2" style={{ marginBottom: "15px" }}>
 										<div className="flex items-center gap-2 font-medium text-muted-foreground text-sm">
@@ -1044,7 +1088,7 @@ export default function CRMPage() {
 											Full Name
 										</div>
 										<div className="font-semibold text-base">
-											{selectedProspect.name}
+											{activeProspect.name}
 										</div>
 									</div>
 
@@ -1061,7 +1105,7 @@ export default function CRMPage() {
 														Email
 													</div>
 													<div className="font-medium text-sm">
-														{selectedProspect.email}
+														{activeProspect.email}
 													</div>
 												</div>
 											</div>
@@ -1072,7 +1116,7 @@ export default function CRMPage() {
 														Phone
 													</div>
 													<div className="font-medium text-sm">
-														{selectedProspect.phone}
+														{activeProspect.phone}
 													</div>
 												</div>
 											</div>
@@ -1091,7 +1135,7 @@ export default function CRMPage() {
 													Source
 												</div>
 												<div className="font-medium text-sm">
-													{selectedProspect.source}
+													{activeProspect.source}
 												</div>
 											</div>
 											<div className="flex items-center justify-between">
@@ -1100,20 +1144,34 @@ export default function CRMPage() {
 													Lead Type
 												</div>
 												<Badge variant="outline" className="capitalize">
-													{selectedProspect.leadType === "company"
+													{activeProspect.leadType === "company"
 														? "Company Lead"
 														: "Personal Lead"}
 												</Badge>
 											</div>
 											<div className="flex items-center justify-between">
 												<div className="flex items-center gap-2 text-muted-foreground text-sm">
+													Status
+												</div>
+												<StatusBadge status={activeProspect.status} />
+											</div>
+											<div className="flex items-center justify-between">
+												<div className="flex items-center gap-2 text-muted-foreground text-sm">
 													<RiLinksLine className="size-4" />
 													Lead Stage
 												</div>
-												<Badge variant="secondary" className="capitalize">
-													{String(selectedProspect.stage).replaceAll("_", " ")}
-												</Badge>
+												<StageBadge stage={activeProspect.stage} />
 											</div>
+											{activeProspect.property?.trim() && (
+												<div className="space-y-1">
+													<div className="text-muted-foreground text-sm">
+														Description
+													</div>
+													<p className="break-words font-medium text-sm leading-relaxed">
+														{activeProspect.property}
+													</p>
+												</div>
+											)}
 											<div className="space-y-2">
 												<div className="flex items-center gap-2 text-muted-foreground text-sm">
 													<RiPriceTagLine className="size-4 shrink-0" />
@@ -1135,12 +1193,12 @@ export default function CRMPage() {
 																setCategoriesMutation.isPending ||
 																JSON.stringify(categoryTagIds) ===
 																	JSON.stringify(
-																		selectedProspect.tagIds ?? [],
+																		activeProspect.tagIds ?? [],
 																	)
 															}
 															onClick={() =>
 																setCategoriesMutation.mutate({
-																	id: selectedProspect.id,
+																	id: activeProspect.id,
 																	tagIds: categoryTagIds,
 																})
 															}
@@ -1152,10 +1210,10 @@ export default function CRMPage() {
 															)}
 														</Button>
 													</>
-												) : selectedProspect.tagNames &&
-												  selectedProspect.tagNames.length > 0 ? (
+												) : activeProspect.tagNames &&
+												  activeProspect.tagNames.length > 0 ? (
 													<div className="flex flex-wrap gap-1">
-														{selectedProspect.tagNames.map((tag) => (
+														{activeProspect.tagNames.map((tag) => (
 															<Badge
 																key={tag}
 																variant="secondary"
@@ -1165,9 +1223,9 @@ export default function CRMPage() {
 															</Badge>
 														))}
 													</div>
-												) : selectedProspect.tags?.trim() ? (
+												) : activeProspect.tags?.trim() ? (
 													<div className="flex flex-wrap gap-1">
-														{selectedProspect.tags
+														{activeProspect.tags
 															.split(",")
 															.map((tag) => (
 																<Badge
@@ -1185,14 +1243,14 @@ export default function CRMPage() {
 													</span>
 												)}
 											</div>
-											{selectedProspect.agentName && (
+											{activeProspect.agentName && (
 												<div className="flex items-center justify-between">
 													<div className="flex items-center gap-2 text-muted-foreground text-sm">
 														<RiUserLine className="size-4" />
 														Owner
 													</div>
 													<div className="font-medium text-sm">
-														{selectedProspect.agentName}
+														{activeProspect.agentName}
 													</div>
 												</div>
 											)}
@@ -1207,7 +1265,7 @@ export default function CRMPage() {
 															value={followerIds}
 															onChange={setFollowerIds}
 															agents={followerAgents}
-															excludeUserId={selectedProspect.agentId}
+															excludeUserId={activeProspect.agentId}
 															className="flex-1"
 														/>
 														<Button
@@ -1216,12 +1274,12 @@ export default function CRMPage() {
 																setFollowersMutation.isPending ||
 																JSON.stringify(followerIds) ===
 																	JSON.stringify(
-																		selectedProspect.followerIds ?? [],
+																		activeProspect.followerIds ?? [],
 																	)
 															}
 															onClick={() =>
 																setFollowersMutation.mutate({
-																	id: selectedProspect.id,
+																	id: activeProspect.id,
 																	followerIds,
 																})
 															}
@@ -1233,10 +1291,10 @@ export default function CRMPage() {
 															)}
 														</Button>
 													</div>
-												) : selectedProspect.followerNames &&
-												  selectedProspect.followerNames.length > 0 ? (
+												) : activeProspect.followerNames &&
+												  activeProspect.followerNames.length > 0 ? (
 													<div className="flex flex-wrap gap-1">
-														{selectedProspect.followerNames.map((name) => (
+														{activeProspect.followerNames.map((name) => (
 															<Badge key={name} variant="secondary">
 																{name}
 															</Badge>
@@ -1246,14 +1304,14 @@ export default function CRMPage() {
 													<span className="text-muted-foreground text-sm">—</span>
 												)}
 											</div>
-											{selectedProspect.projectName && (
+											{activeProspect.projectName && (
 												<div className="flex items-center justify-between">
 													<div className="flex items-center gap-2 text-muted-foreground text-sm">
 														<RiHomeLine className="size-4" />
 														Developer Project
 													</div>
 													<div className="font-medium text-sm">
-														{selectedProspect.projectName}
+														{activeProspect.projectName}
 													</div>
 												</div>
 											)}
@@ -1261,14 +1319,14 @@ export default function CRMPage() {
 									</div>
 
 									{/* Contact History */}
-									{(selectedProspect.lastContact ||
-										selectedProspect.nextContact) && (
+									{(activeProspect.lastContact ||
+										activeProspect.nextContact) && (
 										<div className="space-y-3">
 											<div className="font-medium text-muted-foreground text-sm">
 												Contact History
 											</div>
 											<div className="space-y-2 rounded-lg border bg-muted/30 p-4">
-												{selectedProspect.lastContact && (
+												{activeProspect.lastContact && (
 													<div className="flex items-center gap-3">
 														<RiCalendarLine className="size-4 text-muted-foreground" />
 														<div className="flex-1">
@@ -1277,13 +1335,13 @@ export default function CRMPage() {
 															</div>
 															<div className="font-medium text-sm">
 																{formatContactDate(
-																	selectedProspect.lastContact,
+																	activeProspect.lastContact,
 																)}
 															</div>
 														</div>
 													</div>
 												)}
-												{selectedProspect.nextContact && (
+												{activeProspect.nextContact && (
 													<div className="flex items-center gap-3">
 														<RiCalendarLine className="size-4 text-muted-foreground" />
 														<div className="flex-1">
@@ -1292,7 +1350,7 @@ export default function CRMPage() {
 															</div>
 															<div className="font-medium text-sm">
 																{formatContactDate(
-																	selectedProspect.nextContact,
+																	activeProspect.nextContact,
 																)}
 															</div>
 														</div>
@@ -1302,10 +1360,10 @@ export default function CRMPage() {
 										</div>
 									)}
 
-									{canManageTasksForSelected && selectedProspect ? (
-										<LeadTasksCard leadId={selectedProspect.id} />
-									) : selectedProspect?.leadType === "company" &&
-									  !selectedProspect.agentId ? (
+									{canManageTasksForSelected && activeProspect ? (
+										<LeadTasksCard leadId={activeProspect.id} />
+									) : activeProspect?.leadType === "company" &&
+									  !activeProspect.agentId ? (
 										<p className="rounded-lg border border-dashed p-4 text-center text-muted-foreground text-sm">
 											Claim this company lead to add tasks and follow-ups.
 										</p>
@@ -1316,18 +1374,19 @@ export default function CRMPage() {
 										<div className="font-medium text-muted-foreground text-sm">
 											Notes & Timeline
 										</div>
-										<div
-											className="max-h-64 space-y-3 overflow-y-auto rounded-lg border bg-muted/30 p-4"
-											style={{ height: "100px" }}
-										>
+										<div className="max-h-64 space-y-3 overflow-y-auto rounded-lg border bg-muted/30 p-4">
 											{notes.length === 0 ? (
 												<div className="py-4 text-center text-muted-foreground text-sm">
 													No notes yet. Add a note to track interactions.
 												</div>
 											) : (
-												notes.map((note) => {
+												notes
+													.slice(
+														(notesPage - 1) * NOTES_PER_PAGE,
+														notesPage * NOTES_PER_PAGE,
+													)
+													.map((note) => {
 													const noteDate = new Date(note.createdAt);
-													// Format date with GMT timezone (e.g., "Dec 23, 2025 04:45 PM (GMT +08)")
 													const formattedDate = noteDate.toLocaleString(
 														"en-US",
 														{
@@ -1339,7 +1398,6 @@ export default function CRMPage() {
 															hour12: true,
 														},
 													);
-													// Get GMT offset
 													const gmtOffset = -noteDate.getTimezoneOffset() / 60;
 													const gmtSign = gmtOffset >= 0 ? "+" : "";
 													const gmtString = `(GMT ${gmtSign}${gmtOffset.toString().padStart(2, "0")})`;
@@ -1349,7 +1407,7 @@ export default function CRMPage() {
 															key={note.id}
 															className="space-y-1 border-b pb-3 last:border-0 last:pb-0"
 														>
-															<div className="text-foreground text-sm">
+															<div className="break-words text-foreground text-sm leading-relaxed">
 																{note.content}
 															</div>
 															<div className="flex items-center gap-2 text-muted-foreground text-xs">
@@ -1368,6 +1426,42 @@ export default function CRMPage() {
 												})
 											)}
 										</div>
+										{notes.length > NOTES_PER_PAGE && (
+											<div className="flex items-center justify-between">
+												<p className="text-muted-foreground text-xs">
+													{(notesPage - 1) * NOTES_PER_PAGE + 1}–
+													{Math.min(
+														notesPage * NOTES_PER_PAGE,
+														notes.length,
+													)}{" "}
+													of {notes.length} notes
+												</p>
+												<div className="flex items-center gap-1">
+													<Button
+														variant="outline"
+														size="sm"
+														className="h-7 px-2 text-xs"
+														disabled={notesPage === 1}
+														onClick={() =>
+															setNotesPage((p) => Math.max(1, p - 1))
+														}
+													>
+														Prev
+													</Button>
+													<Button
+														variant="outline"
+														size="sm"
+														className="h-7 px-2 text-xs"
+														disabled={
+															notesPage * NOTES_PER_PAGE >= notes.length
+														}
+														onClick={() => setNotesPage((p) => p + 1)}
+													>
+														Next
+													</Button>
+												</div>
+											</div>
+										)}
 										{/* Add Note Form */}
 										<div className="flex gap-2">
 											<Input
@@ -1654,6 +1748,13 @@ export default function CRMPage() {
 														<RiUserLine className="size-4 text-muted-foreground" />
 														<span className="font-medium">{prospect.name}</span>
 													</div>
+													<button
+														type="button"
+														className="font-mono text-primary text-xs hover:underline"
+														onClick={() => handleView(prospect)}
+													>
+														Lead ID: {formatLeadId(prospect.id)}
+													</button>
 
 													{/* Contact Info */}
 													<div className="flex flex-wrap items-center gap-4 text-muted-foreground text-sm">

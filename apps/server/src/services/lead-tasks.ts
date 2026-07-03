@@ -274,8 +274,20 @@ export async function deleteLeadTask(id: string): Promise<{ success: true }> {
 	return { success: true };
 }
 
+/** Shared access filter: leads the agent owns or follows. */
+const AGENT_ACCESSIBLE_LEADS_SQL = `
+  (
+    p.agent_id = $1
+    OR EXISTS (
+      SELECT 1
+      FROM public.prospect_followers pf
+      WHERE pf.prospect_id = p.id AND pf.user_id = $1
+    )
+  )
+`;
+
 /**
- * Today's + overdue tasks for an agent (their assigned leads only).
+ * Today's + overdue tasks for an agent (owned or followed leads).
  */
 export async function getTasksForAgentToday(
 	agentId: string,
@@ -303,10 +315,50 @@ export async function getTasksForAgentToday(
     LEFT JOIN public."user"    cu ON cu.id = t.created_by
     WHERE t.completed_at IS NULL
       AND t.due_date::date <= CURRENT_DATE
-      AND p.agent_id = $1
+      AND ${AGENT_ACCESSIBLE_LEADS_SQL}
     ORDER BY t.due_date ASC
     LIMIT 100`,
 		[agentId],
+	);
+
+	return res.rows.map(mapRow);
+}
+
+/**
+ * Reminder tasks for an agent: overdue, due today, and upcoming within N days
+ * on leads they own or follow.
+ */
+export async function getTasksForAgentReminders(
+	agentId: string,
+	upcomingDays = 7,
+): Promise<LeadTask[]> {
+	const res = await pool.query(
+		`SELECT
+      t.id,
+      t.prospect_id,
+      p.name                               AS prospect_name,
+      t.title,
+      t.task_type,
+      t.priority,
+      t.due_date,
+      t.completed_at,
+      t.assigned_to,
+      t.created_by,
+      t.notes,
+      t.created_at,
+      t.updated_at,
+      au.name                              AS assigned_to_name,
+      cu.name                              AS created_by_name
+    FROM  public.lead_tasks t
+    INNER JOIN public.prospects p ON p.id = t.prospect_id
+    LEFT JOIN public."user"    au ON au.id = t.assigned_to
+    LEFT JOIN public."user"    cu ON cu.id = t.created_by
+    WHERE t.completed_at IS NULL
+      AND t.due_date::date <= (CURRENT_DATE + $2::int)
+      AND ${AGENT_ACCESSIBLE_LEADS_SQL}
+    ORDER BY t.due_date ASC
+    LIMIT 100`,
+		[agentId, upcomingDays],
 	);
 
 	return res.rows.map(mapRow);

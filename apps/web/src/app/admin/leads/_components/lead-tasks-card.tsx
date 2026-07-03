@@ -86,6 +86,7 @@ export function LeadTasksCard({ leadId }: { leadId: string }) {
 		queryClient.invalidateQueries({ queryKey: [["leadTasks", "list"]] });
 		queryClient.invalidateQueries({ queryKey: [["leadTasks", "listToday"]] });
 		queryClient.invalidateQueries({ queryKey: [["leadTasks", "listMyToday"]] });
+		queryClient.invalidateQueries({ queryKey: [["leadTasks", "listMyReminders"]] });
 	};
 
 	const createMutation = trpc.leadTasks.create.useMutation({
@@ -170,6 +171,18 @@ export function LeadTasksCard({ leadId }: { leadId: string }) {
 	const pendingTasks = (tasks ?? []).filter((t) => !t.completedAt);
 	const completedTasks = (tasks ?? []).filter((t) => !!t.completedAt);
 	const overduePending = pendingTasks.filter((t) => t.isOverdue);
+
+	const [pendingPage, setPendingPage] = useState(1);
+	const PENDING_PAGE_SIZE = 5;
+	const pendingTotalPages = Math.max(
+		1,
+		Math.ceil(pendingTasks.length / PENDING_PAGE_SIZE),
+	);
+	const safePendingPage = Math.min(pendingPage, pendingTotalPages);
+	const visiblePendingTasks = pendingTasks.slice(
+		(safePendingPage - 1) * PENDING_PAGE_SIZE,
+		safePendingPage * PENDING_PAGE_SIZE,
+	);
 
 	return (
 		<Card>
@@ -329,7 +342,7 @@ export function LeadTasksCard({ leadId }: { leadId: string }) {
 				) : (
 					<div className="space-y-2">
 						{/* Pending tasks */}
-						{pendingTasks.map((task) =>
+						{visiblePendingTasks.map((task) =>
 							editingTaskId === task.id ? (
 								/* ── Inline Edit Form ── */
 								<div
@@ -486,7 +499,7 @@ export function LeadTasksCard({ leadId }: { leadId: string }) {
 												</span>
 											</div>
 											{task.notes && (
-												<p className="mt-1 line-clamp-2 text-muted-foreground text-xs">
+												<p className="mt-1 line-clamp-2 break-words text-muted-foreground text-xs">
 													{task.notes}
 												</p>
 											)}
@@ -530,6 +543,45 @@ export function LeadTasksCard({ leadId }: { leadId: string }) {
 									</div>
 								</div>
 							),
+						)}
+
+						{pendingTotalPages > 1 && (
+							<div className="flex items-center justify-between pt-1">
+								<p className="text-muted-foreground text-xs">
+									{(safePendingPage - 1) * PENDING_PAGE_SIZE + 1}–
+									{Math.min(
+										safePendingPage * PENDING_PAGE_SIZE,
+										pendingTasks.length,
+									)}{" "}
+									of {pendingTasks.length} pending
+								</p>
+								<div className="flex items-center gap-1">
+									<Button
+										variant="outline"
+										size="sm"
+										className="h-7 px-2 text-xs"
+										disabled={safePendingPage === 1}
+										onClick={() =>
+											setPendingPage((p) => Math.max(1, p - 1))
+										}
+									>
+										Prev
+									</Button>
+									<Button
+										variant="outline"
+										size="sm"
+										className="h-7 px-2 text-xs"
+										disabled={safePendingPage === pendingTotalPages}
+										onClick={() =>
+											setPendingPage((p) =>
+												Math.min(pendingTotalPages, p + 1),
+											)
+										}
+									>
+										Next
+									</Button>
+								</div>
+							</div>
 						)}
 
 						{/* Completed tasks (collapsed indicator) */}

@@ -10,6 +10,7 @@ import { stashTransactionPrefillOnce } from "@/features/sales-entry/prefill-stas
 import {
 	type ActivityEventType,
 	type Lead,
+	formatLeadId,
 	getLeadDisplayTags,
 	withCurrentAssigneeOption,
 } from "./lead-models";
@@ -50,7 +51,7 @@ import {
 	RiStickyNoteLine,
 	RiUserLine,
 } from "@remixicon/react";
-import { StageBadge, ActivityEventIcon } from "./lead-ui";
+import { StageBadge, ActivityEventIcon, StatusBadge } from "./lead-ui";
 import { LeadTasksCard } from "./lead-tasks-card";
 
 export function LeadDetailSheet({
@@ -215,13 +216,14 @@ export function LeadDetailSheet({
 	return (
 		<Sheet open={open} onOpenChange={(v) => !v && onClose()}>
 			<SheetContent className="w-full overflow-y-auto sm:max-w-2xl">
-				<SheetHeader className="mb-4">
+				<SheetHeader className="mb-4 pr-8">
 					<SheetTitle className="flex items-center gap-2">
 						<RiUserLine size={20} />
 						{activeLead.name}
 					</SheetTitle>
 					<SheetDescription>
-						Lead details, activity timeline, and management actions
+						Lead ID: {formatLeadId(activeLead.id)} · Lead details, activity
+						timeline, and management actions
 					</SheetDescription>
 				</SheetHeader>
 
@@ -237,6 +239,16 @@ export function LeadDetailSheet({
 								<CardTitle className="text-sm">Contact Info</CardTitle>
 							</CardHeader>
 							<CardContent className="grid grid-cols-2 gap-3 text-sm">
+								<div>
+									<span className="text-muted-foreground">Lead ID</span>
+									<p className="font-mono font-medium">{formatLeadId(activeLead.id)}</p>
+								</div>
+								<div>
+									<span className="text-muted-foreground">Status</span>
+									<div className="mt-0.5">
+										<StatusBadge status={activeLead.status} />
+									</div>
+								</div>
 								<div>
 									<span className="text-muted-foreground">Email</span>
 									<p className="truncate font-medium">
@@ -274,8 +286,14 @@ export function LeadDetailSheet({
 									)}
 								</div>
 								<div className="col-span-2">
+									<span className="text-muted-foreground">Description</span>
+									<p className="mt-0.5 break-words whitespace-pre-line font-medium leading-relaxed">
+										{activeLead.property?.trim() || "—"}
+									</p>
+								</div>
+								<div className="col-span-2">
 									<span className="text-muted-foreground">Notes</span>
-									<p className="mt-0.5 whitespace-pre-line font-medium leading-relaxed">
+									<p className="mt-0.5 break-words whitespace-pre-line font-medium leading-relaxed">
 										{displayNotes || "—"}
 									</p>
 								</div>
@@ -562,7 +580,7 @@ export function LeadDetailSheet({
 																</span>
 															</div>
 															{event.content && (
-																<p className="mt-1.5 whitespace-pre-line text-foreground/90 text-sm leading-relaxed">
+																<p className="mt-1.5 break-words whitespace-pre-line text-foreground/90 text-sm leading-relaxed">
 																	{event.content}
 																</p>
 															)}

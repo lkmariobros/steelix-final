@@ -1,6 +1,7 @@
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { trpc } from "@/utils/trpc";
 import { cn } from "@/lib/utils";
@@ -13,12 +14,31 @@ import {
 	RiEyeLine,
 	RiTodoLine,
 } from "@remixicon/react";
-import type { TaskPriority, TaskType } from "./lead-models";
+import type { LeadTask, TaskPriority, TaskType } from "./lead-models";
 import {
 	TASK_PRIORITY_CONFIG,
 	TASK_TYPE_ICONS,
 	TASK_TYPE_LABELS,
 } from "./lead-constants";
+
+const PAGE_SIZE = 6;
+
+function isDueToday(dueDate: Date | string): boolean {
+	const dt = new Date(dueDate);
+	const now = new Date();
+	return (
+		dt.getFullYear() === now.getFullYear() &&
+		dt.getMonth() === now.getMonth() &&
+		dt.getDate() === now.getDate()
+	);
+}
+
+function categorizeTasks(tasks: LeadTask[]) {
+	const overdue = tasks.filter((t) => t.isOverdue);
+	const dueToday = tasks.filter((t) => !t.isOverdue && isDueToday(t.dueDate));
+	const upcoming = tasks.filter((t) => !t.isOverdue && !isDueToday(t.dueDate));
+	return { overdue, dueToday, upcoming };
+}
 
 export function TodayTasksWidget({
 	onViewLead,
@@ -33,15 +53,19 @@ export function TodayTasksWidget({
 		staleTime: 3 * 60 * 1000,
 		enabled: enabled && scope === "admin",
 	});
-	const agentQuery = trpc.leadTasks.listMyToday.useQuery(undefined, {
-		staleTime: 3 * 60 * 1000,
-		enabled: enabled && scope === "agent",
-	});
+	const agentQuery = trpc.leadTasks.listMyReminders.useQuery(
+		{ upcomingDays: 7 },
+		{
+			staleTime: 3 * 60 * 1000,
+			enabled: enabled && scope === "agent",
+		},
+	);
 
 	const { data: tasks, isLoading } =
 		scope === "agent" ? agentQuery : adminQuery;
 
 	const queryClient = useQueryClient();
+	const [page, setPage] = useState(1);
 
 	const completeMutation = trpc.leadTasks.complete.useMutation({
 		onSuccess: (task) => {
@@ -50,6 +74,18 @@ export function TodayTasksWidget({
 		},
 		onError: (e) => toast.error(e.message),
 	});
+
+	const { overdue, dueToday, upcoming } = useMemo(
+		() => categorizeTasks(tasks ?? []),
+		[tasks],
+	);
+
+	const totalPages = Math.max(1, Math.ceil((tasks?.length ?? 0) / PAGE_SIZE));
+	const safePage = Math.min(page, totalPages);
+	const visible = (tasks ?? []).slice(
+		(safePage - 1) * PAGE_SIZE,
+		safePage * PAGE_SIZE,
+	);
 
 	if (isLoading) {
 		return (
@@ -90,11 +126,12 @@ export function TodayTasksWidget({
 
 	if (!tasks || tasks.length === 0) return null;
 
-	const overdue = tasks.filter((t) => t.isOverdue);
-	const dueToday = tasks.filter((t) => !t.isOverdue);
-
-	const MAX_VISIBLE = 9;
-	const visible = tasks.slice(0, MAX_VISIBLE);
+	const headerTitle =
+		scope === "agent" ? "Tasks & Reminders" : "Tasks Due Today";
+	const headerSubtitle =
+		scope === "agent"
+			? "Overdue, due today, and upcoming follow-ups on your leads"
+			: "Follow-ups & tasks that need your attention";
 
 	return (
 		<div className="overflow-hidden rounded-xl border bg-card shadow-sm">
@@ -105,13 +142,11 @@ export function TodayTasksWidget({
 						<RiTodoLine className="size-4 text-amber-600 dark:text-amber-400" />
 					</div>
 					<div>
-						<h3 className="font-semibold text-sm">Tasks Due Today</h3>
-						<p className="text-muted-foreground text-xs">
-							Follow-ups & tasks that need your attention
-						</p>
+						<h3 className="font-semibold text-sm">{headerTitle}</h3>
+						<p className="text-muted-foreground text-xs">{headerSubtitle}</p>
 					</div>
 				</div>
-				<div className="flex items-center gap-1.5">
+				<div className="flex flex-wrap items-center justify-end gap-1.5">
 					{overdue.length > 0 && (
 						<span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2.5 py-1 font-semibold text-red-700 text-xs dark:bg-red-900/20 dark:text-red-400">
 							<RiAlarmWarningLine className="size-3" />
@@ -123,143 +158,195 @@ export function TodayTasksWidget({
 							{dueToday.length} today
 						</span>
 					)}
+					{scope === "agent" && upcoming.length > 0 && (
+						<span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-1 font-semibold text-blue-700 text-xs dark:bg-blue-900/20 dark:text-blue-400">
+							{upcoming.length} upcoming
+						</span>
+					)}
 				</div>
 			</div>
 
 			{/* ── Card Grid ── */}
 			<div className="grid gap-2.5 p-4 sm:grid-cols-2 xl:grid-cols-3">
-				{visible.map((task) => (
-					<div
-						key={task.id}
-						className={cn(
-							"group relative flex flex-col gap-2 overflow-hidden rounded-lg border transition-all hover:shadow-sm",
-							task.isOverdue
-								? "border-red-200 bg-red-50/40 dark:border-red-900/40 dark:bg-red-950/20"
-								: "border-amber-200/70 bg-amber-50/30 dark:border-amber-900/30 dark:bg-amber-950/10",
-						)}
-					>
-						{/* Left accent bar */}
+				{visible.map((task) => {
+					const isUpcoming = !task.isOverdue && !isDueToday(task.dueDate);
+					return (
 						<div
+							key={task.id}
 							className={cn(
-								"absolute inset-y-0 left-0 w-0.5",
-								task.isOverdue ? "bg-red-500" : "bg-amber-400",
+								"group relative flex flex-col gap-2 overflow-hidden rounded-lg border transition-all hover:shadow-sm",
+								task.isOverdue
+									? "border-red-200 bg-red-50/40 dark:border-red-900/40 dark:bg-red-950/20"
+									: isUpcoming
+										? "border-blue-200/70 bg-blue-50/30 dark:border-blue-900/30 dark:bg-blue-950/10"
+										: "border-amber-200/70 bg-amber-50/30 dark:border-amber-900/30 dark:bg-amber-950/10",
 							)}
-						/>
+						>
+							<div
+								className={cn(
+									"absolute inset-y-0 left-0 w-0.5",
+									task.isOverdue
+										? "bg-red-500"
+										: isUpcoming
+											? "bg-blue-400"
+											: "bg-amber-400",
+								)}
+							/>
 
-						<div className="flex flex-col gap-2 pl-3 pr-3 pt-2.5 pb-2.5">
-							{/* Top row: icon + title */}
-							<div className="flex items-start gap-2">
-								<div
-									className={cn(
-										"mt-0.5 flex size-6 shrink-0 items-center justify-center rounded",
-										task.isOverdue
-											? "bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400"
-											: "bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400",
-									)}
-								>
-									{TASK_TYPE_ICONS[task.taskType as TaskType]}
-								</div>
-								<p
-									className={cn(
-										"line-clamp-2 font-semibold text-sm leading-snug",
-										task.isOverdue && "text-red-700 dark:text-red-400",
-									)}
-								>
-									{task.title}
-								</p>
-							</div>
-
-							{/* Lead + type */}
-							<p className="truncate pl-8 text-muted-foreground text-xs">
-								<span className="font-medium text-foreground/70">
-									{task.prospectName ?? "Unknown Lead"}
-								</span>
-								<span className="mx-1 opacity-40">·</span>
-								{TASK_TYPE_LABELS[task.taskType as TaskType]}
-							</p>
-
-							{/* Footer: due chip + priority + actions */}
-							<div className="flex items-center justify-between pl-8">
-								<div className="flex items-center gap-1.5">
-									{/* Due chip */}
-									{task.isOverdue ? (
-										<span className="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 font-semibold text-red-700 text-[0.65rem] dark:bg-red-900/20 dark:text-red-400">
-											<RiAlarmWarningLine className="mr-1 size-2.5" />
-											{new Date(task.dueDate).toLocaleDateString([], {
-												month: "short",
-												day: "numeric",
-											})}
-										</span>
-									) : (
-										<span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 font-semibold text-amber-700 text-[0.65rem] dark:bg-amber-900/20 dark:text-amber-400">
-											<RiCalendar2Line className="mr-1 size-2.5" />
-											{new Date(task.dueDate).toLocaleTimeString([], {
-												hour: "2-digit",
-												minute: "2-digit",
-											})}
-										</span>
-									)}
-
-									{/* Priority badge */}
-									<span
+							<div className="flex flex-col gap-2 pt-2.5 pr-3 pb-2.5 pl-3">
+								<div className="flex items-start gap-2">
+									<div
 										className={cn(
-											"inline-flex items-center rounded-full px-2 py-0.5 font-medium text-[0.65rem]",
-											{
-												"bg-muted text-muted-foreground":
-													task.priority === "low",
-												"bg-blue-100 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400":
-													task.priority === "normal",
-												"bg-orange-100 text-orange-700 dark:bg-orange-900/20 dark:text-orange-400":
-													task.priority === "high",
-												"bg-red-100 text-red-700 dark:bg-red-900/20 dark:text-red-400":
-													task.priority === "urgent",
-											},
+											"mt-0.5 flex size-6 shrink-0 items-center justify-center rounded",
+											task.isOverdue
+												? "bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400"
+												: isUpcoming
+													? "bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400"
+													: "bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400",
 										)}
 									>
-										{TASK_PRIORITY_CONFIG[task.priority as TaskPriority].label}
+										{TASK_TYPE_ICONS[task.taskType as TaskType]}
+									</div>
+									<p
+										className={cn(
+											"line-clamp-2 font-semibold text-sm leading-snug",
+											task.isOverdue && "text-red-700 dark:text-red-400",
+										)}
+									>
+										{task.title}
+									</p>
+								</div>
+
+								<div className="pl-8 text-xs">
+									<span className="text-muted-foreground">Lead: </span>
+									<button
+										type="button"
+										className="font-medium text-primary hover:underline"
+										onClick={() => onViewLead(task.prospectId)}
+									>
+										{task.prospectName ?? "View lead"}
+									</button>
+									<span className="mx-1 opacity-40">·</span>
+									<span className="text-muted-foreground">
+										{TASK_TYPE_LABELS[task.taskType as TaskType]}
 									</span>
 								</div>
 
-								{/* Action buttons */}
-								<div className="flex items-center gap-0.5">
-									<Button
-										variant="ghost"
-										size="sm"
-										className="size-6 p-0 text-muted-foreground hover:bg-green-100 hover:text-green-700 dark:hover:bg-green-900/20 dark:hover:text-green-400"
-										title="Mark complete"
-										onClick={() =>
-											completeMutation.mutate({
-												id: task.id,
-												completed: true,
-											})
-										}
-										disabled={completeMutation.isPending}
-									>
-										<RiCheckLine className="size-3" />
-									</Button>
-									<Button
-										variant="ghost"
-										size="sm"
-										className="size-6 p-0 text-muted-foreground hover:bg-accent"
-										title="View lead"
-										onClick={() => onViewLead(task.prospectId)}
-									>
-										<RiEyeLine className="size-3" />
-									</Button>
+								<div className="flex items-center justify-between pl-8">
+									<div className="flex items-center gap-1.5">
+										{task.isOverdue ? (
+											<span className="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 font-semibold text-red-700 text-[0.65rem] dark:bg-red-900/20 dark:text-red-400">
+												<RiAlarmWarningLine className="mr-1 size-2.5" />
+												{new Date(task.dueDate).toLocaleDateString([], {
+													month: "short",
+													day: "numeric",
+												})}
+											</span>
+										) : isUpcoming ? (
+											<span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 font-semibold text-blue-700 text-[0.65rem] dark:bg-blue-900/20 dark:text-blue-400">
+												<RiCalendar2Line className="mr-1 size-2.5" />
+												{new Date(task.dueDate).toLocaleDateString([], {
+													month: "short",
+													day: "numeric",
+												})}
+											</span>
+										) : (
+											<span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 font-semibold text-amber-700 text-[0.65rem] dark:bg-amber-900/20 dark:text-amber-400">
+												<RiCalendar2Line className="mr-1 size-2.5" />
+												{new Date(task.dueDate).toLocaleTimeString([], {
+													hour: "2-digit",
+													minute: "2-digit",
+												})}
+											</span>
+										)}
+
+										<span
+											className={cn(
+												"inline-flex items-center rounded-full px-2 py-0.5 font-medium text-[0.65rem]",
+												{
+													"bg-muted text-muted-foreground":
+														task.priority === "low",
+													"bg-blue-100 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400":
+														task.priority === "normal",
+													"bg-orange-100 text-orange-700 dark:bg-orange-900/20 dark:text-orange-400":
+														task.priority === "high",
+													"bg-red-100 text-red-700 dark:bg-red-900/20 dark:text-red-400":
+														task.priority === "urgent",
+												},
+											)}
+										>
+											{
+												TASK_PRIORITY_CONFIG[task.priority as TaskPriority]
+													.label
+											}
+										</span>
+									</div>
+
+									<div className="flex items-center gap-0.5">
+										<Button
+											variant="ghost"
+											size="sm"
+											className="size-6 p-0 text-muted-foreground hover:bg-green-100 hover:text-green-700 dark:hover:bg-green-900/20 dark:hover:text-green-400"
+											title="Mark complete"
+											onClick={() =>
+												completeMutation.mutate({
+													id: task.id,
+													completed: true,
+												})
+											}
+											disabled={completeMutation.isPending}
+										>
+											<RiCheckLine className="size-3" />
+										</Button>
+										<Button
+											variant="ghost"
+											size="sm"
+											className="size-6 p-0 text-muted-foreground hover:bg-accent"
+											title="View lead"
+											onClick={() => onViewLead(task.prospectId)}
+										>
+											<RiEyeLine className="size-3" />
+										</Button>
+									</div>
 								</div>
 							</div>
 						</div>
-					</div>
-				))}
+					);
+				})}
 			</div>
 
-			{tasks.length > MAX_VISIBLE && (
-				<div className="border-t bg-muted/20 px-4 py-2.5 text-center text-muted-foreground text-xs">
-					+{tasks.length - MAX_VISIBLE} more tasks — open individual leads to see
-					all
+			{totalPages > 1 && (
+				<div className="flex items-center justify-between border-t bg-muted/20 px-4 py-2.5">
+					<p className="text-muted-foreground text-xs">
+						Showing {(safePage - 1) * PAGE_SIZE + 1}–
+						{Math.min(safePage * PAGE_SIZE, tasks.length)} of {tasks.length}{" "}
+						tasks
+					</p>
+					<div className="flex items-center gap-2">
+						<Button
+							variant="outline"
+							size="sm"
+							className="h-7 px-2 text-xs"
+							disabled={safePage === 1}
+							onClick={() => setPage((p) => Math.max(1, p - 1))}
+						>
+							Prev
+						</Button>
+						<span className="text-muted-foreground text-xs">
+							{safePage} / {totalPages}
+						</span>
+						<Button
+							variant="outline"
+							size="sm"
+							className="h-7 px-2 text-xs"
+							disabled={safePage === totalPages}
+							onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+						>
+							Next
+						</Button>
+					</div>
 				</div>
 			)}
 		</div>
 	);
 }
-

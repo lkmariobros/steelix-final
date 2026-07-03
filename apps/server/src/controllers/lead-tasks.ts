@@ -11,6 +11,7 @@ import {
 	deleteLeadTask,
 	getTaskProspectAgentId,
 	getTasksForAgentToday,
+	getTasksForAgentReminders,
 	getTasksForLead,
 	getTodaysTasks,
 	getUpcomingTasks,
@@ -78,11 +79,25 @@ export const leadTasksRouter = router({
 		}),
 
 	/**
-	 * Agent: overdue + today's tasks on assigned leads
+	 * Agent: overdue + today's tasks on owned or followed leads
 	 */
 	listMyToday: protectedProcedure.query(async ({ ctx }) => {
 		return await getTasksForAgentToday(ctx.session.user.id);
 	}),
+
+	/**
+	 * Agent: overdue, today, and upcoming tasks on owned or followed leads
+	 */
+	listMyReminders: protectedProcedure
+		.input(
+			z.object({ upcomingDays: z.number().min(1).max(30).default(7) }).optional(),
+		)
+		.query(async ({ ctx, input }) => {
+			return await getTasksForAgentReminders(
+				ctx.session.user.id,
+				input?.upcomingDays ?? 7,
+			);
+		}),
 
 	/**
 	 * Admin: overdue + today's tasks across all leads
