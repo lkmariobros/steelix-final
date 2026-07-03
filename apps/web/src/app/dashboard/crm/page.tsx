@@ -225,6 +225,7 @@ export default function CRMPage() {
 	const [searchQuery, setSearchQuery] = useState("");
 	const [stageFilter, setStageFilter] = useState<PipelineStage | "all">("all");
 	const [categoryFilter, setCategoryFilter] = useState<string>("all"); // tagId
+	const [agentFilter, setAgentFilter] = useState<string>("all");
 	const [currentPage, setCurrentPage] = useState(1);
 	const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
 	const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
@@ -266,6 +267,12 @@ export default function CRMPage() {
 			search: searchQuery || undefined,
 			stage: stageFilter === "all" ? undefined : stageFilter,
 			tagId: categoryFilter === "all" ? undefined : categoryFilter,
+			filterAgentId:
+				agentFilter === "all"
+					? undefined
+					: agentFilter === "__unassigned__"
+						? ("__unassigned__" as const)
+						: agentFilter,
 			leadType:
 				activeTab === "company" ? ("company" as const) : ("personal" as const),
 			page: currentPage,
@@ -289,6 +296,12 @@ export default function CRMPage() {
 			search: searchQuery || undefined,
 			stage: stageFilter === "all" ? undefined : stageFilter,
 			tagId: categoryFilter === "all" ? undefined : categoryFilter,
+			filterAgentId:
+				agentFilter === "all"
+					? undefined
+					: agentFilter === "__unassigned__"
+						? ("__unassigned__" as const)
+						: agentFilter,
 			leadType:
 				activeTab === "company" ? ("company" as const) : ("personal" as const),
 			page: 1,
@@ -299,6 +312,7 @@ export default function CRMPage() {
 			searchQuery,
 			stageFilter,
 			categoryFilter,
+			agentFilter,
 			activeTab,
 		],
 	);
@@ -1590,6 +1604,28 @@ export default function CRMPage() {
 								{(tagsData?.tags ?? []).map((t) => (
 									<SelectItem key={t.id} value={t.id}>
 										{t.name}
+									</SelectItem>
+								))}
+							</SelectContent>
+						</Select>
+
+						<Select
+							value={agentFilter}
+							onValueChange={(v) => {
+								setAgentFilter(v);
+								setCurrentPage(1);
+							}}
+						>
+							<SelectTrigger className="w-44">
+								<RiUserLine className="mr-1.5 size-4 shrink-0 text-muted-foreground" />
+								<SelectValue placeholder="Agent" />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectItem value="all">All Agents</SelectItem>
+								<SelectItem value="__unassigned__">Unassigned</SelectItem>
+								{followerAgents.map((a) => (
+									<SelectItem key={a.agentId} value={a.agentId}>
+										{a.agentName ?? a.agentEmail}
 									</SelectItem>
 								))}
 							</SelectContent>

@@ -43,6 +43,8 @@ const listProspectsInput = z.object({
 	stage: pipelineStageSchema.optional(), // Filter by pipeline stage
 	leadType: leadTypeSchema.optional(), // Filter by lead type
 	includeCompanyLeads: z.boolean().default(false), // Company tab: unclaimed company pool only
+	/** Filter by assigned agent (My Leads / team monitoring). Use __unassigned__ for unassigned. */
+	filterAgentId: z.union([z.literal("__unassigned__"), z.string().uuid()]).optional(),
 	page: z.number().min(1).default(1),
 	/** Max 5000 when forExport; otherwise capped to 1000 in the handler. */
 	limit: z.number().min(1).max(5000).default(10),
@@ -121,6 +123,7 @@ export const crmRouter = router({
 					stage,
 					leadType,
 					includeCompanyLeads,
+					filterAgentId,
 					page,
 					limit,
 					forExport,
@@ -209,6 +212,15 @@ export const crmRouter = router({
 				// Lead type filter
 				if (leadType) {
 					conditions.push(eq(prospects.leadType, leadType));
+				}
+
+				// Assigned agent filter (leaders monitoring team leads they follow)
+				if (filterAgentId && !includeCompanyLeads) {
+					if (filterAgentId === "__unassigned__") {
+						conditions.push(isNull(prospects.agentId));
+					} else {
+						conditions.push(eq(prospects.agentId, filterAgentId));
+					}
 				}
 
 				// Helper function to execute query with timeout and retry
