@@ -3,6 +3,7 @@
  * Provides endpoints for testing auth, session, and database connectivity.
  */
 import { Hono } from "hono";
+import { getAllowedOrigins } from "../utils/allowed-origins";
 import { auth } from "../utils/auth";
 import { db } from "../utils/db";
 
@@ -13,7 +14,7 @@ const app = new Hono();
 app.get("/debug/auth-config", (c) => {
 	return c.json({
 		betterAuthUrl: process.env.BETTER_AUTH_URL,
-		corsOrigins: process.env.CORS_ORIGIN?.split(",") || [],
+		corsOrigins: getAllowedOrigins(),
 		hasSecret: !!process.env.BETTER_AUTH_SECRET,
 		hasDatabaseUrl: !!process.env.DATABASE_URL,
 		nodeEnv: process.env.NODE_ENV,

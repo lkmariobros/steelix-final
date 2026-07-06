@@ -4,6 +4,7 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { count, eq } from "drizzle-orm";
 import * as schema from "../models/auth";
 import { db } from "./db";
+import { getAllowedOrigins } from "./allowed-origins";
 
 console.log("🔐 Initializing Better Auth...");
 console.log("🔧 Environment variables check:");
@@ -31,17 +32,7 @@ try {
 		secret:
 			process.env.BETTER_AUTH_SECRET ||
 			"fallback-secret-key-change-in-production",
-		trustedOrigins: [
-			// Frontend URLs that can make requests to this auth server
-			...(process.env.CORS_ORIGIN?.split(",") || []),
-			"https://steelix-final-web.vercel.app",
-			"https://steelix-final-web-git-master-lkmariobros-projects.vercel.app",
-			"https://steelix-final-mx4or73lk-lkmariobros-projects.vercel.app",
-			"http://localhost:3000",
-			"http://localhost:3001",
-			"http://localhost:3002",
-			"my-better-t-app://",
-		],
+		trustedOrigins: getAllowedOrigins(),
 		emailAndPassword: {
 			enabled: true,
 		},

@@ -14,6 +14,7 @@ import { db } from "./utils/db";
 import { isAppRole } from "./utils/rbac";
 import { hasAdminAccess, hasSuperAdminAccess } from "./utils/user-roles";
 import { startServer } from "./utils/server";
+import { getAllowedOrigins } from "./utils/allowed-origins";
 
 const app = new Hono();
 
@@ -35,13 +36,7 @@ app.onError((err, c) => {
 
 app.use(logger());
 
-const allowedOrigins = [
-	"http://localhost:3000",
-	"http://localhost:3001",
-	"http://localhost:3002",
-	"https://steelix-final-web.vercel.app",
-	...(process.env.CORS_ORIGIN?.split(",") ?? []),
-];
+const allowedOrigins = getAllowedOrigins();
 
 app.use(
 	"/*",
