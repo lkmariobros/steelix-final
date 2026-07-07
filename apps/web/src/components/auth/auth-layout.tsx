@@ -1,6 +1,6 @@
 "use client";
 
-import { Building2 } from "lucide-react";
+import { BRAND_LOGO_SRC, BRAND_NAME } from "@/lib/brand";
 
 interface AuthLayoutProps {
 	children: React.ReactNode;
@@ -15,11 +15,15 @@ export function AuthLayout({ children, title, subtitle }: AuthLayoutProps) {
 	return (
 		<div className="flex min-h-screen flex-col items-center justify-center bg-zinc-50 px-4 py-10 dark:bg-zinc-950">
 			<div className="mb-8 flex flex-col items-center gap-2">
-				<div className="flex h-11 w-11 items-center justify-center rounded-xl bg-zinc-900 text-white shadow-sm dark:bg-zinc-100 dark:text-zinc-900">
-					<Building2 className="h-6 w-6" aria-hidden />
-				</div>
+				<img
+					src={BRAND_LOGO_SRC}
+					width={44}
+					height={44}
+					alt={`${BRAND_NAME} logo`}
+					className="h-11 w-11 rounded-xl object-cover shadow-sm"
+				/>
 				<span className="font-semibold text-lg tracking-tight text-zinc-900 dark:text-zinc-50">
-					Steelix
+					{BRAND_NAME}
 				</span>
 			</div>
 

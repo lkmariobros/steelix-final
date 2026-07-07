@@ -24,6 +24,7 @@ import {
 import { useKeyboardNavigation } from "@/hooks/use-keyboard-navigation";
 import { useUserRole } from "@/hooks/use-user-role";
 import { cn } from "@/lib/utils";
+import { BRAND_LOGO_SRC } from "@/lib/brand";
 import {
 	PORTAL_PATHS,
 	isAdminPortalPath,
@@ -49,7 +50,7 @@ export function TeamSwitcher({ teams = [] }: TeamSwitcherProps) {
 
 	const displayTeam = teams[0] || {
 		name: "DevotsPortal",
-		logo: "https://raw.githubusercontent.com/origin-space/origin-images/refs/heads/main/exp1/logo-01_kp2j8x.png",
+		logo: BRAND_LOGO_SRC,
 	};
 
 	/** Client navigation between admin/agent layouts — no full page reload. */
