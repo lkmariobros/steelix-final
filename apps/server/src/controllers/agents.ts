@@ -354,7 +354,7 @@ export const agentsRouter = router({
 		}
 		if (input.searchQuery) {
 			conditions.push(
-				sql`(${user.name} ILIKE ${`%${input.searchQuery}%`} OR ${user.email} ILIKE ${`%${input.searchQuery}%`})`,
+				sql`(${user.name} ILIKE ${`%${input.searchQuery}%`} OR ${user.nickName} ILIKE ${`%${input.searchQuery}%`} OR ${user.email} ILIKE ${`%${input.searchQuery}%`} OR ${user.agentCode} ILIKE ${`%${input.searchQuery}%`})`,
 			);
 		}
 		if (input.isActive !== undefined) {
@@ -477,16 +477,18 @@ export const agentsRouter = router({
 			if (input.search?.trim()) {
 				const q = `%${input.search.trim()}%`;
 				conditions.push(
-					sql`(${user.name} ILIKE ${q} OR ${user.email} ILIKE ${q})`,
+					sql`(${user.name} ILIKE ${q} OR ${user.nickName} ILIKE ${q} OR ${user.email} ILIKE ${q} OR ${user.agentCode} ILIKE ${q})`,
 				);
 			}
 			const rows = await db
 				.select({
 					id: user.id,
 					name: user.name,
+					nickName: user.nickName,
 					email: user.email,
 					phone: user.phone,
 					branch: user.branch,
+					agentCode: user.agentCode,
 				})
 				.from(user)
 				.where(and(...conditions))

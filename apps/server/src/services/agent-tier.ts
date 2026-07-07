@@ -75,7 +75,9 @@ export async function getAgentTierInfo(agentId: string) {
 		.select({
 			id: user.id,
 			name: user.name,
+			nickName: user.nickName,
 			email: user.email,
+			agentCode: user.agentCode,
 			agentTier: user.agentTier,
 			companyCommissionSplit: user.companyCommissionSplit,
 			tierEffectiveDate: user.tierEffectiveDate,

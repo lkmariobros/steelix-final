@@ -43,8 +43,10 @@ export default function Providers({
 			<trpc.Provider client={trpcClient} queryClient={queryClient}>
 				<QueryClientProvider client={queryClient}>
 					<TransactionModalProvider>
-						<UserRoleProvider>{children}</UserRoleProvider>
-						<GlobalTransactionModal />
+						<UserRoleProvider>
+							{children}
+							<GlobalTransactionModal />
+						</UserRoleProvider>
 						<ReactQueryDevtools />
 					</TransactionModalProvider>
 				</QueryClientProvider>

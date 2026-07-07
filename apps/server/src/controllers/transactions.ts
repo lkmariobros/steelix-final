@@ -118,6 +118,8 @@ const baseTransactionInput = z.object({
 		.optional(),
 	notes: z.string().optional(),
 	caseNo: z.string().min(1).max(32).optional(),
+	/** Admin may assign the case to a specific agent; agents always use their own id. */
+	agentId: z.string().min(1).optional(),
 });
 
 // Input schemas with Primary Market → Sale validation and Co-broking validation
@@ -135,22 +137,10 @@ const createTransactionInput = baseTransactionInput
 			path: ["transactionType"],
 		},
 	)
-	.refine(
-		(data) => {
-			if ("isCoBroking" in data && data.isCoBroking && data.coBrokingData) {
-				const { internalAgentId, agentName, agentPhone } = data.coBrokingData;
-				if (internalAgentId?.trim()) return true;
-				return Boolean(
-					agentName?.trim() && agentPhone?.trim(),
-				);
-			}
-			return true;
-		},
-		{
+	.refine((data) => isCoBrokingInputValid(data), {
 			message: "Co-broking agent is required when co-broking is enabled",
 			path: ["coBrokingData"],
-		},
-	);
+		});
 
 const updateTransactionInput = baseTransactionInput
 	.partial()
@@ -170,22 +160,10 @@ const updateTransactionInput = baseTransactionInput
 			path: ["transactionType"],
 		},
 	)
-	.refine(
-		(data) => {
-			if ("isCoBroking" in data && data.isCoBroking && data.coBrokingData) {
-				const { internalAgentId, agentName, agentPhone } = data.coBrokingData;
-				if (internalAgentId?.trim()) return true;
-				return Boolean(
-					agentName?.trim() && agentPhone?.trim(),
-				);
-			}
-			return true;
-		},
-		{
-			message: "Co-broking agent is required when co-broking is enabled",
-			path: ["coBrokingData"],
-		},
-	);
+	.refine((data) => isCoBrokingInputValid(data), {
+		message: "Co-broking agent is required when co-broking is enabled",
+		path: ["coBrokingData"],
+	});
 
 const transactionIdInput = z.object({
 	id: z.string().uuid(),
@@ -258,6 +236,91 @@ function mapIncomingStatus(status: string): string {
 	return typeof n === "string" ? n : status;
 }
 
+function sessionIsAdmin(ctx: {
+	session: { user: { role?: string | null; roles?: string[] | null } };
+}) {
+	const u = ctx.session.user;
+	return hasAdminAccess({
+		role: u.role ?? undefined,
+		roles: u.roles ?? undefined,
+	});
+}
+
+function isCoBrokingInputValid(data: {
+	representationType?: string;
+	isCoBroking?: boolean;
+	marketType?: string;
+	coBrokingData?: {
+		internalAgentId?: string;
+		agentName?: string;
+		agentPhone?: string;
+		agencyName?: string;
+	};
+}) {
+	const isCoBroking =
+		data.representationType === "co_broking" || data.isCoBroking === true;
+	if (!isCoBroking || !data.coBrokingData) return true;
+
+	const { internalAgentId, agentName, agentPhone, agencyName } =
+		data.coBrokingData;
+	if (internalAgentId?.trim()) return true;
+	if (
+		data.marketType === "secondary" &&
+		agencyName?.trim() &&
+		agentName?.trim()
+	) {
+		return true;
+	}
+	return Boolean(agentName?.trim() && agentPhone?.trim());
+}
+
+async function resolveTransactionAgentId(
+	ctx: { session: { user: { id: string; role?: string | null; roles?: string[] | null } } },
+	inputAgentId?: string,
+): Promise<string> {
+	const isAdmin = sessionIsAdmin(ctx);
+	if (isAdmin && inputAgentId?.trim()) {
+		const [agent] = await db
+			.select({ id: user.id })
+			.from(user)
+			.where(
+				and(
+					eq(user.id, inputAgentId),
+					eq(user.role, "agent"),
+					eq(user.isActive, true),
+				),
+			)
+			.limit(1);
+		if (!agent) {
+			throw new TRPCError({
+				code: "BAD_REQUEST",
+				message: "Invalid transaction agent",
+			});
+		}
+		return agent.id;
+	}
+	if (!isAdmin && inputAgentId && inputAgentId !== ctx.session.user.id) {
+		throw new TRPCError({
+			code: "FORBIDDEN",
+			message: "Cannot create transactions for other agents",
+		});
+	}
+	return ctx.session.user.id;
+}
+
+function transactionOwnershipCondition(
+	ctx: { session: { user: { id: string; role?: string | null; roles?: string[] | null } } },
+	transactionId: string,
+) {
+	if (sessionIsAdmin(ctx)) {
+		return eq(transactions.id, transactionId);
+	}
+	return and(
+		eq(transactions.id, transactionId),
+		eq(transactions.agentId, ctx.session.user.id),
+	);
+}
+
 // Enhanced commission calculation input - simplified representation type
 const enhancedCommissionInput = z.object({
 	propertyPrice: z.number().positive("Property price must be positive"),
@@ -272,9 +335,11 @@ export const transactionsRouter = router({
 	create: protectedProcedure
 		.input(createTransactionInput)
 		.mutation(async ({ ctx, input }) => {
+			const agentId = await resolveTransactionAgentId(ctx, input.agentId);
+			const { agentId: _omitAgentId, ...transactionInput } = input;
 			const newTransaction = {
-				...input,
-				agentId: ctx.session.user.id,
+				...transactionInput,
+				agentId,
 				status: "draft" as const,
 				agentEditAllowed: true,
 				representationType: input.representationType ?? "direct",
@@ -305,12 +370,7 @@ export const transactionsRouter = router({
 			const existingTransaction = await db
 				.select()
 				.from(transactions)
-				.where(
-					and(
-						eq(transactions.id, id),
-						eq(transactions.agentId, ctx.session.user.id),
-					),
-				)
+				.where(transactionOwnershipCondition(ctx, id))
 				.limit(1);
 
 			if (existingTransaction.length === 0) {
@@ -370,12 +430,7 @@ export const transactionsRouter = router({
 				const [transaction] = await db
 					.select()
 					.from(transactions)
-					.where(
-						and(
-							eq(transactions.id, input.id),
-							eq(transactions.agentId, ctx.session.user.id),
-						),
-					)
+					.where(transactionOwnershipCondition(ctx, input.id))
 					.limit(1);
 
 				if (!transaction) {
@@ -615,12 +670,7 @@ export const transactionsRouter = router({
 			const [existingTransaction] = await db
 				.select()
 				.from(transactions)
-				.where(
-					and(
-						eq(transactions.id, input.id),
-						eq(transactions.agentId, ctx.session.user.id),
-					),
-				)
+				.where(transactionOwnershipCondition(ctx, input.id))
 				.limit(1);
 
 			if (!existingTransaction) {
@@ -647,7 +697,7 @@ export const transactionsRouter = router({
 			try {
 				schemePatch = await lockCommissionOnSubmit(
 					existingTransaction as typeof transactions.$inferSelect,
-					ctx.session.user.id,
+					existingTransaction.agentId,
 				);
 			} catch {
 				// If commission tables aren't migrated yet, submission should still work.
@@ -957,8 +1007,7 @@ export const transactionsRouter = router({
 				.from(transactions)
 				.where(
 					and(
-						eq(transactions.id, input.id),
-						eq(transactions.agentId, ctx.session.user.id),
+						transactionOwnershipCondition(ctx, input.id),
 						eq(transactions.status, "draft"),
 					),
 				)

@@ -3,6 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ArrowRight, Search, UserPlus } from "lucide-react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
@@ -36,6 +37,8 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
+import { useUserRole } from "@/contexts/user-role-context";
+import { formatAgentPickerLabel } from "@/lib/agent-display";
 import { trpc } from "@/utils/trpc";
 import { isRentalTransactionType } from "@/features/transactions/payment-method-utils";
 
@@ -74,11 +77,20 @@ export function StepDetails({
 	hideNavigation = false,
 	nextLabel = "Continue to Upload",
 }: StepDetailsProps) {
+	const pathname = usePathname();
+	const isAdminPortal = pathname.startsWith("/admin");
+	const { session } = useUserRole();
+
 	const [agentSearch, setAgentSearch] = useState("");
+	const [caseAgentSearch, setCaseAgentSearch] = useState("");
 	const [coBrokePickerOpen, setCoBrokePickerOpen] = useState(false);
+	const [caseAgentPickerOpen, setCaseAgentPickerOpen] = useState(false);
 	const [selectedCoBrokeLabel, setSelectedCoBrokeLabel] = useState<
 		string | null
 	>(formData.coBrokingData?.agentName ?? null);
+	const [selectedCaseAgentLabel, setSelectedCaseAgentLabel] = useState<
+		string | null
+	>(null);
 
 	const { data: projects = [] } =
 		trpc.commissionSchemes.listProjectsForAgent.useQuery();
@@ -119,6 +131,9 @@ export function StepDetails({
 			},
 			representationType: formData.representationType ?? "direct",
 			coBrokingData: formData.coBrokingData,
+			agentId:
+				formData.agentId ??
+				(!isAdminPortal ? session?.user?.id : undefined),
 		},
 	});
 
@@ -127,6 +142,8 @@ export function StepDetails({
 	const transactionType = form.watch("transactionType");
 	const isRentalDeal = isRentalTransactionType(transactionType);
 	const representationType = form.watch("representationType");
+	const caseAgentId = form.watch("agentId");
+	const coBrokerSplit = form.watch("coBrokingData.commissionSplit");
 	const propertyPrice = form.watch("propertyData.price");
 	const commissionValue = form.watch("commissionValue");
 	const schemeId = form.watch("propertyData.schemeId");
@@ -143,7 +160,7 @@ export function StepDetails({
 			commissionValue: commissionValue || 1,
 			representationType:
 				representationType === "co_broking" ? "co_broking" : "direct",
-			coBrokerSplitPercentage: form.getValues("coBrokingData.commissionSplit") ?? 50,
+			coBrokerSplitPercentage: coBrokerSplit ?? 50,
 		},
 		{
 			enabled:
@@ -152,6 +169,31 @@ export function StepDetails({
 				(commissionValue ?? 0) > 0,
 		},
 	);
+
+	const { data: myTierInfo } = trpc.agentTiers.getMyTierInfo.useQuery();
+
+	const { data: caseAgentTierInfo } = trpc.agentTiers.getAgentTierInfo.useQuery(
+		{ agentId: caseAgentId! },
+		{ enabled: isAdminPortal && Boolean(caseAgentId) },
+	);
+
+	const effectiveTierInfo = isAdminPortal ? caseAgentTierInfo : myTierInfo;
+
+	useEffect(() => {
+		if (isAdminPortal || !session?.user?.id) return;
+		form.setValue("agentId", session.user.id);
+	}, [isAdminPortal, session?.user?.id, form]);
+
+	useEffect(() => {
+		if (!isAdminPortal || !caseAgentId || !caseAgentTierInfo) return;
+		setSelectedCaseAgentLabel(
+			formatAgentPickerLabel({
+				name: caseAgentTierInfo.name,
+				nickName: caseAgentTierInfo.nickName,
+				agentCode: caseAgentTierInfo.agentCode,
+			}),
+		);
+	}, [isAdminPortal, caseAgentId, caseAgentTierInfo]);
 
 	const schemes = schemesForProject?.schemes ?? [];
 
@@ -166,6 +208,38 @@ export function StepDetails({
 		() => getActiveSchemeTier(selectedScheme),
 		[selectedScheme],
 	);
+
+	const caseAgentLabel = formatAgentPickerLabel({
+		name: effectiveTierInfo?.name ?? session?.user?.name,
+		nickName: effectiveTierInfo?.nickName,
+		agentCode: effectiveTierInfo?.agentCode,
+	});
+	const tierCommissionSplit =
+		effectiveTierInfo?.companyCommissionSplit ??
+		effectiveTierInfo?.tierConfig?.commissionSplit ??
+		70;
+
+	const commissionPercentageLabel = useMemo(() => {
+		if (marketType === "primary") {
+			if (activeSchemeTier?.commissionPercent != null) {
+				return `${activeSchemeTier.commissionPercent}% scheme (100% agent share)`;
+			}
+			return "100% of project commission scheme";
+		}
+
+		if (representationType === "co_broking") {
+			const yourSplit = 100 - (coBrokerSplit ?? 50);
+			return `${tierCommissionSplit}% tier · ${yourSplit}% of gross commission`;
+		}
+
+		return `${tierCommissionSplit}% commission tier`;
+	}, [
+		marketType,
+		activeSchemeTier?.commissionPercent,
+		representationType,
+		coBrokerSplit,
+		tierCommissionSplit,
+	]);
 
 	useEffect(() => {
 		if (!selectedScheme) return;
@@ -191,11 +265,35 @@ export function StepDetails({
 			},
 		);
 
+	const { data: adminAgentsData, isLoading: caseAgentsLoading } =
+		trpc.agents.list.useQuery(
+			{
+				limit: 50,
+				searchQuery: caseAgentSearch.trim() || undefined,
+				role: "agent",
+				isActive: true,
+			},
+			{
+				enabled:
+					isAdminPortal &&
+					caseAgentPickerOpen &&
+					!selectedCaseAgentLabel,
+			},
+		);
+
+	const adminCaseAgents = adminAgentsData?.agents ?? [];
+
 	const showAgentPicker = coBrokePickerOpen && !selectedCoBrokeLabel;
+	const showCaseAgentPicker =
+		isAdminPortal && caseAgentPickerOpen && !selectedCaseAgentLabel;
+	const isSecondaryDeal = marketType === "secondary";
 
 	const syncToParent = () => {
 		const values = form.getValues();
 		const isCoBroking = values.representationType === "co_broking";
+		const resolvedAgentId =
+			values.agentId ??
+			(!isAdminPortal ? session?.user?.id : undefined);
 		onUpdate({
 			marketType: values.marketType,
 			transactionType:
@@ -212,11 +310,15 @@ export function StepDetails({
 			coBrokingData: isCoBroking ? values.coBrokingData : undefined,
 			commissionType: values.commissionType,
 			commissionValue: values.commissionValue,
+			agentId: resolvedAgentId,
 		});
 	};
 
 	const handleSubmit = (values: DetailsFormValues) => {
 		const isCoBroking = values.representationType === "co_broking";
+		const resolvedAgentId =
+			values.agentId ??
+			(!isAdminPortal ? session?.user?.id : undefined);
 		onUpdate({
 			marketType: values.marketType,
 			transactionType:
@@ -233,6 +335,7 @@ export function StepDetails({
 			coBrokingData: isCoBroking ? values.coBrokingData : undefined,
 			commissionType: values.commissionType,
 			commissionValue: values.commissionValue,
+			agentId: resolvedAgentId,
 		});
 		onNext();
 	};
@@ -240,30 +343,51 @@ export function StepDetails({
 	const selectCoBrokingAgent = (agent: {
 		id: string;
 		name: string | null;
+		nickName?: string | null;
 		email: string | null;
 		phone: string | null;
 		branch: string | null;
+		agentCode: string | null;
 	}) => {
+		const label = formatAgentPickerLabel(agent);
 		const coBrokingData = {
 			...(form.getValues("coBrokingData") ?? {}),
 			internalAgentId: agent.id,
 			agentName: agent.name ?? "",
 			agentEmail: agent.email ?? "",
 			agentPhone: agent.phone ?? "",
-			agencyName: agent.branch ?? "Steelix",
+			agencyName: agent.branch ?? "Devots",
 			contactInfo: [agent.email, agent.phone].filter(Boolean).join(" · "),
 			commissionSplit: form.getValues("coBrokingData.commissionSplit") ?? 50,
 		};
 		form.setValue("coBrokingData", coBrokingData, {
 			shouldDirty: true,
-			shouldValidate: true,
+			shouldValidate: false,
 		});
 		form.clearErrors("coBrokingData");
 		setAgentSearch("");
 		setCoBrokePickerOpen(false);
-		setSelectedCoBrokeLabel(agent.name ?? agent.email ?? "Selected agent");
+		setSelectedCoBrokeLabel(label);
 		syncToParent();
 		toast.success(`Co-broke agent: ${agent.name ?? "Selected"}`);
+	};
+
+	const selectCaseAgent = (agent: {
+		id: string;
+		name: string | null;
+		nickName?: string | null;
+		agentCode: string | null;
+	}) => {
+		const label = formatAgentPickerLabel(agent);
+		form.setValue("agentId", agent.id, {
+			shouldDirty: true,
+			shouldValidate: false,
+		});
+		form.clearErrors("agentId");
+		setCaseAgentSearch("");
+		setCaseAgentPickerOpen(false);
+		setSelectedCaseAgentLabel(label);
+		syncToParent();
 	};
 
 	const handleInvalidSubmit = () => {
@@ -279,6 +403,7 @@ export function StepDetails({
 			errors.clientData?.icNo?.message ??
 			errors.clientData?.phone?.message ??
 			errors.clientData?.address?.message ??
+			errors.agentId?.message ??
 			errors.coBrokingData?.agentName?.message ??
 			errors.coBrokingData?.agentPhone?.message ??
 			"Please complete all required fields";
@@ -874,6 +999,112 @@ export function StepDetails({
 
 							<div>
 								<h3 className="mb-4 font-medium text-lg">Representation</h3>
+
+								<div className="mb-4 space-y-3 rounded-lg border p-4">
+									<p className="font-medium text-sm">Transaction agent</p>
+									<p className="text-muted-foreground text-xs">
+										{isAdminPortal
+											? "Select the agent who owns this case."
+											: "You are creating this case under your own agent account."}
+									</p>
+
+									{isAdminPortal ? (
+										<>
+											{selectedCaseAgentLabel ? (
+												<div className="flex items-center justify-between gap-2 rounded-md border bg-muted/40 px-3 py-2 text-sm">
+													<span>
+														<span className="text-muted-foreground">
+															Selected:{" "}
+														</span>
+														{selectedCaseAgentLabel}
+													</span>
+													<Button
+														type="button"
+														variant="ghost"
+														size="sm"
+														onClick={() => {
+															form.setValue("agentId", undefined);
+															setSelectedCaseAgentLabel(null);
+															setCaseAgentSearch("");
+															setCaseAgentPickerOpen(true);
+															syncToParent();
+														}}
+													>
+														Change
+													</Button>
+												</div>
+											) : (
+												<div className="relative">
+													<Search className="absolute top-2.5 left-2.5 h-4 w-4 text-muted-foreground" />
+													<Input
+														className="pl-8"
+														placeholder="Search agents by name, email, or code…"
+														value={caseAgentSearch}
+														onChange={(e) => {
+															setCaseAgentSearch(e.target.value);
+															setCaseAgentPickerOpen(true);
+														}}
+														onFocus={() => setCaseAgentPickerOpen(true)}
+														onKeyDown={(e) => {
+															if (e.key === "Enter") e.preventDefault();
+														}}
+													/>
+												</div>
+											)}
+											{showCaseAgentPicker && (
+												<ul className="max-h-40 space-y-1 overflow-y-auto rounded border p-2">
+													{caseAgentsLoading ? (
+														<li className="px-2 py-1.5 text-muted-foreground text-sm">
+															Loading agents…
+														</li>
+													) : adminCaseAgents.length === 0 ? (
+														<li className="px-2 py-1.5 text-muted-foreground text-sm">
+															No agents found
+														</li>
+													) : (
+														adminCaseAgents.map((row) => (
+															<li key={row.agent.id}>
+																<button
+																	type="button"
+																	className="w-full rounded px-2 py-1.5 text-left text-sm hover:bg-muted"
+																	onMouseDown={(e) => e.preventDefault()}
+																	onClick={(e) => {
+																		e.preventDefault();
+																		e.stopPropagation();
+																		selectCaseAgent({
+																			id: row.agent.id,
+																			name: row.agent.name,
+																			nickName: row.agent.nickName,
+																			agentCode: row.agent.agentCode,
+																		});
+																	}}
+																>
+																	{formatAgentPickerLabel({
+																		name: row.agent.name,
+																		nickName: row.agent.nickName,
+																		agentCode: row.agent.agentCode,
+																		email: row.agent.email,
+																	})}
+																</button>
+															</li>
+														))
+													)}
+												</ul>
+											)}
+											<FormField
+												control={form.control}
+												name="agentId"
+												render={() => <FormMessage />}
+											/>
+										</>
+									) : (
+										<div className="rounded-md border bg-muted/40 px-3 py-2 text-sm">
+											<span className="text-muted-foreground">Agent: </span>
+											<span className="font-medium">{caseAgentLabel}</span>
+										</div>
+									)}
+								</div>
+
 								<FormField
 									control={form.control}
 									name="representationType"
@@ -920,6 +1151,30 @@ export function StepDetails({
 										</FormItem>
 									)}
 								/>
+
+								{representationType === "direct" && (
+									<div className="mt-4 rounded-lg border border-primary/20 bg-primary/5 p-4">
+										<p className="mb-3 font-medium text-sm">
+											Direct representation agent details
+										</p>
+										<div className="grid gap-3 sm:grid-cols-2">
+											<div>
+												<p className="text-muted-foreground text-xs">
+													Agent name (code)
+												</p>
+												<p className="font-medium text-sm">{caseAgentLabel}</p>
+											</div>
+											<div>
+												<p className="text-muted-foreground text-xs">
+													Commission percentage
+												</p>
+												<p className="font-medium text-sm">
+													{commissionPercentageLabel}
+												</p>
+											</div>
+										</div>
+									</div>
+								)}
 
 								{representationType === "co_broking" && (
 									<div className="mt-4 space-y-4 rounded-lg border p-4">
@@ -996,7 +1251,7 @@ export function StepDetails({
 																	selectCoBrokingAgent(a);
 																}}
 															>
-																{a.name} · {a.email}
+																{formatAgentPickerLabel(a)}
 															</button>
 														</li>
 													))
@@ -1024,6 +1279,74 @@ export function StepDetails({
 												</FormItem>
 											)}
 										/>
+
+										{isSecondaryDeal && (
+											<div className="space-y-3 border-t pt-4">
+												<p className="font-medium text-sm">
+													Co-agency (external)
+												</p>
+												<p className="text-muted-foreground text-xs">
+													For subsale and rental deals with an external
+													co-agency, enter the agency and agent name below
+													instead of selecting an internal agent.
+												</p>
+												<div className="grid gap-3 sm:grid-cols-2">
+													<FormField
+														control={form.control}
+														name="coBrokingData.agencyName"
+														render={({ field }) => (
+															<FormItem>
+																<FormLabel>Co-agency name</FormLabel>
+																<FormControl>
+																	<Input
+																		{...field}
+																		value={field.value ?? ""}
+																		onChange={(e) => {
+																			field.onChange(e.target.value);
+																			if (e.target.value.trim()) {
+																				form.setValue(
+																					"coBrokingData.internalAgentId",
+																					undefined,
+																				);
+																				setSelectedCoBrokeLabel(null);
+																			}
+																			syncToParent();
+																		}}
+																	/>
+																</FormControl>
+															</FormItem>
+														)}
+													/>
+													<FormField
+														control={form.control}
+														name="coBrokingData.agentName"
+														render={({ field }) => (
+															<FormItem>
+																<FormLabel>Co-agency agent name</FormLabel>
+																<FormControl>
+																	<Input
+																		{...field}
+																		value={field.value ?? ""}
+																		onChange={(e) => {
+																			field.onChange(e.target.value);
+																			if (e.target.value.trim()) {
+																				form.setValue(
+																					"coBrokingData.internalAgentId",
+																					undefined,
+																				);
+																				setSelectedCoBrokeLabel(null);
+																			}
+																			syncToParent();
+																		}}
+																	/>
+																</FormControl>
+																<FormMessage />
+															</FormItem>
+														)}
+													/>
+												</div>
+											</div>
+										)}
 									</div>
 								)}
 							</div>

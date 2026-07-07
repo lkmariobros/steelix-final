@@ -109,17 +109,21 @@ export const createCoBrokingSchema = () => {
 	return coBrokingBaseSchema.superRefine((data, ctx) => {
 		// If co-broking is selected, validate required fields
 		if (data.representationType === "co_broking") {
-			const { internalAgentId, agentName, agentPhone } =
+			const { internalAgentId, agentName, agentPhone, agencyName } =
 				data.coBrokingData || {};
+			const hasInternal = Boolean(internalAgentId?.trim());
+			const hasCoAgency = Boolean(
+				agencyName?.trim() && agentName?.trim(),
+			);
 
-			if (!internalAgentId?.trim() && !agentName?.trim()) {
+			if (!hasInternal && !hasCoAgency) {
 				ctx.addIssue({
 					code: z.ZodIssueCode.custom,
-					message: "Select a co-broke agent or enter agent name",
+					message: "Select a co-broke agent or enter co-agency details",
 					path: ["coBrokingData", "agentName"],
 				});
 			}
-			if (!agentPhone?.trim()) {
+			if (!hasInternal && !hasCoAgency && !agentPhone?.trim()) {
 				ctx.addIssue({
 					code: z.ZodIssueCode.custom,
 					message: "Phone number is required for co-broking transactions",
@@ -216,6 +220,7 @@ export const detailsStepSchema = z
 		coBrokingData: coBrokingBaseSchema.shape.coBrokingData,
 		commissionType: z.enum(["percentage", "fixed"]).optional(),
 		commissionValue: z.number().optional(),
+		agentId: z.string().min(1).optional(),
 	})
 	.superRefine((data, ctx) => {
 		if (data.marketType === "primary") {
@@ -252,26 +257,35 @@ export const detailsStepSchema = z
 		}
 
 		if (data.representationType === "co_broking") {
-			const { internalAgentId, agentName, agentPhone } =
+			const { internalAgentId, agentName, agentPhone, agencyName } =
 				data.coBrokingData || {};
-			if (!internalAgentId?.trim() && !agentName?.trim()) {
+			const hasInternal = Boolean(internalAgentId?.trim());
+			const hasCoAgency =
+				data.marketType === "secondary" &&
+				Boolean(agencyName?.trim() && agentName?.trim());
+
+			if (!hasInternal && !hasCoAgency) {
 				ctx.addIssue({
 					code: z.ZodIssueCode.custom,
-					message: "Select a co-broke agent",
+					message: "Select a co-broke agent or enter co-agency details",
 					path: ["coBrokingData", "agentName"],
 				});
 			}
-			// Phone only required for manual entry; internal agents may omit phone in profile
-			if (
-				!internalAgentId?.trim() &&
-				!agentPhone?.trim()
-			) {
+			if (!hasInternal && !hasCoAgency && !agentPhone?.trim()) {
 				ctx.addIssue({
 					code: z.ZodIssueCode.custom,
 					message: "Co-broke agent phone is required",
 					path: ["coBrokingData", "agentPhone"],
 				});
 			}
+		}
+
+		if (!data.agentId?.trim()) {
+			ctx.addIssue({
+				code: z.ZodIssueCode.custom,
+				message: "Transaction agent is required",
+				path: ["agentId"],
+			});
 		}
 	});
 
@@ -288,6 +302,7 @@ export const completeTransactionSchema = z
 		propertyData: propertySchema,
 		clientData: clientSchema,
 		...coBrokingBaseSchema.shape,
+		agentId: z.string().min(1).optional(),
 		commissionType: z.enum(["percentage", "fixed"]).optional(),
 		commissionValue: z.number().min(0).optional(),
 		commissionAmount: z.number().min(0).optional(),

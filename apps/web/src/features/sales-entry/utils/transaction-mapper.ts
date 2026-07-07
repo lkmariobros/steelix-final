@@ -57,5 +57,6 @@ export function mapTransactionRowToFormData(
 		commissionAmount: Number(row.commissionAmount),
 		documents: row.documents ?? [],
 		notes: row.notes ?? "",
+		agentId: row.agentId ?? undefined,
 	};
 }
