@@ -99,6 +99,40 @@ async function persistOnboardingDocuments(
 	return Object.keys(stored).length > 0 ? stored : null;
 }
 
+async function enrichOnboardingDocuments(
+	docs: ERecruitmentDocuments | null | undefined,
+): Promise<ERecruitmentDocuments> {
+	if (!docs) return {};
+
+	const resolve = async (
+		file: ERecruitmentDocuments[keyof ERecruitmentDocuments],
+	) => {
+		if (!file) return undefined;
+		if (file.dataUrl || file.url) return file;
+		if (file.storagePath && supabaseAdmin) {
+			const { data, error } = await supabaseAdmin.storage
+				.from("transaction-documents")
+				.createSignedUrl(file.storagePath, 3600);
+			if (!error && data?.signedUrl) {
+				return { ...file, url: data.signedUrl };
+			}
+		}
+		return file.url ? file : undefined;
+	};
+
+	const [icFront, icBack, registrationFeeReceipt] = await Promise.all([
+		resolve(docs.icFront),
+		resolve(docs.icBack),
+		resolve(docs.registrationFeeReceipt),
+	]);
+
+	return {
+		...(icFront ? { icFront } : {}),
+		...(icBack ? { icBack } : {}),
+		...(registrationFeeReceipt ? { registrationFeeReceipt } : {}),
+	};
+}
+
 // Input schemas
 const listAgentsInput = z.object({
 	limit: z.number().min(1).max(100).default(20),
@@ -139,11 +173,24 @@ const agentIdInput = z.object({
 const updateAgentInput = z.object({
 	id: z.string(),
 	name: z.string().min(1).optional(),
+	nickName: z.string().optional(),
+	nric: z.string().optional(),
 	email: z.string().email().optional(),
 	phone: z
 		.string()
 		.regex(/^\+60\d{8,11}$/, "Phone must be in Malaysian format (+60...)")
 		.optional(),
+	address: z.string().optional(),
+	maritalStatus: z.string().optional(),
+	emergencyName: z.string().optional(),
+	emergencyContactNo: z.string().optional(),
+	emergencyRelationship: z.string().optional(),
+	bankName: z.string().optional(),
+	bankAccountNo: z.string().optional(),
+	bankAccountName: z.string().optional(),
+	incomeTaxNo: z.string().optional(),
+	registrationFee: z.string().optional(),
+	paymentMethod: z.string().optional(),
 	branch: z.string().min(1).max(120).optional(),
 	agentTier: z
 		.enum([
@@ -159,6 +206,13 @@ const updateAgentInput = z.object({
 	agencyId: z.string().uuid().optional(),
 	permissions: z.string().optional(),
 	agentCode: z.string().min(1).max(32).optional(),
+	documents: z
+		.object({
+			icFront: onboardingDocumentFileSchema.optional(),
+			icBack: onboardingDocumentFileSchema.optional(),
+			registrationFeeReceipt: onboardingDocumentFileSchema.optional(),
+		})
+		.optional(),
 });
 
 const createAgentInput = z.object({
@@ -459,6 +513,20 @@ export const agentsRouter = router({
 			throw new Error("Agent not found");
 		}
 
+		let recruiter: { id: string; name: string } | null = null;
+		if (agentData.agent.recruitedBy) {
+			const [row] = await db
+				.select({ id: user.id, name: user.name })
+				.from(user)
+				.where(eq(user.id, agentData.agent.recruitedBy))
+				.limit(1);
+			recruiter = row ?? null;
+		}
+
+		const onboardingDocuments = await enrichOnboardingDocuments(
+			agentData.agent.onboardingDocuments,
+		);
+
 		// Get tier history
 		const tierHistory = await db
 			.select({
@@ -509,6 +577,11 @@ export const agentsRouter = router({
 
 		return {
 			...agentData,
+			agent: {
+				...agentData.agent,
+				onboardingDocuments,
+			},
+			recruiter,
 			tierHistory,
 			recentActivities,
 			currentGoals,
@@ -520,7 +593,7 @@ export const agentsRouter = router({
 	update: adminProcedure
 		.input(updateAgentInput)
 		.mutation(async ({ ctx, input }) => {
-			const { id, ...updateData } = input;
+			const { id, documents, ...updateData } = input;
 
 			// Get current agent data for tier change tracking
 			const [currentAgent] = await db
@@ -547,11 +620,23 @@ export const agentsRouter = router({
 				}
 			}
 
+			let onboardingDocuments = currentAgent.onboardingDocuments;
+			if (documents) {
+				const uploaded = await persistOnboardingDocuments(id, documents);
+				if (uploaded) {
+					onboardingDocuments = {
+						...(onboardingDocuments ?? {}),
+						...uploaded,
+					};
+				}
+			}
+
 			// Update agent
 			const [updatedAgent] = await db
 				.update(user)
 				.set({
 					...updateData,
+					...(documents ? { onboardingDocuments } : {}),
 					updatedAt: new Date(),
 				})
 				.where(eq(user.id, id))
