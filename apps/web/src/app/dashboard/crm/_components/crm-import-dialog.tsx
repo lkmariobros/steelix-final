@@ -308,7 +308,7 @@ export function CrmImportDialog({
 										<>
 											<p>
 												Pipeline stage. Use the same labels as an export (e.g.
-												“New Lead”, “Follow Up For Appt.”) or one of the codes
+												“New Lead”, “1 First Follow Up”) or one of the codes
 												below. Empty defaults to{" "}
 												<code className="rounded bg-muted px-1 py-px text-[11px]">
 													new_lead

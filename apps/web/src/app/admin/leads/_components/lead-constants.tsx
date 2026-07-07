@@ -13,7 +13,7 @@ import {
 	RiUserLine,
 } from "@remixicon/react";
 
-/** Active pipeline stages — order matches client CRM spec. */
+/** Active pipeline stages — order matches Kanban columns (client feedback Slide 12). */
 export const PIPELINE_STAGES = [
 	{
 		value: "new_lead",
@@ -21,25 +21,26 @@ export const PIPELINE_STAGES = [
 		color: "bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400",
 	},
 	{
-		value: "follow_up_in_progress",
-		label: "Follow Up In Progress",
+		value: "first_follow_up",
+		label: "1 First Follow Up",
 		color:
 			"bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400",
 	},
 	{
-		value: "no_pick_reply",
-		label: "No Pick Up & No Reply",
-		color: "bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-400",
-	},
-	{
-		value: "can_recycle",
-		label: "Can Recycle",
+		value: "second_follow_up",
+		label: "2 Second Follow Up",
 		color:
-			"bg-slate-100 text-slate-800 dark:bg-slate-900/20 dark:text-slate-400",
+			"bg-amber-100 text-amber-800 dark:bg-amber-900/20 dark:text-amber-400",
 	},
 	{
-		value: "follow_up_for_appointment",
-		label: "Follow Up For Appointment",
+		value: "third_follow_up",
+		label: "3 Third Follow Up",
+		color:
+			"bg-orange-100 text-orange-800 dark:bg-orange-900/20 dark:text-orange-400",
+	},
+	{
+		value: "fourth_follow_up",
+		label: "4 Fourth Follow Up",
 		color:
 			"bg-violet-100 text-violet-800 dark:bg-violet-900/20 dark:text-violet-400",
 	},
@@ -52,13 +53,13 @@ export const PIPELINE_STAGES = [
 		value: "appointment_made",
 		label: "Appointment Made",
 		color:
-			"bg-amber-100 text-amber-800 dark:bg-amber-900/20 dark:text-amber-400",
+			"bg-indigo-100 text-indigo-800 dark:bg-indigo-900/20 dark:text-indigo-400",
 	},
 	{
-		value: "consider_seen",
-		label: "Consider / Seen",
+		value: "need_consider",
+		label: "Need Consider",
 		color:
-			"bg-indigo-100 text-indigo-800 dark:bg-indigo-900/20 dark:text-indigo-400",
+			"bg-slate-100 text-slate-800 dark:bg-slate-900/20 dark:text-slate-400",
 	},
 	{
 		value: "reject_project",
@@ -73,7 +74,7 @@ export const PIPELINE_STAGES = [
 	},
 	{
 		value: "spam_fake_lead",
-		label: "Spam / Fake Lead",
+		label: "Spam/Fake Lead",
 		color: "bg-neutral-100 text-neutral-800 dark:bg-neutral-900/20 dark:text-neutral-400",
 	},
 ] as const;
@@ -81,14 +82,51 @@ export const PIPELINE_STAGES = [
 export type PipelineStageValue =
 	(typeof PIPELINE_STAGES)[number]["value"];
 
+export const PIPELINE_STAGE_VALUES = PIPELINE_STAGES.map(
+	(s) => s.value,
+) as [PipelineStageValue, ...PipelineStageValue[]];
+
+const FOLLOW_UP_STAGE_ORDER: PipelineStageValue[] = [
+	"new_lead",
+	"first_follow_up",
+	"second_follow_up",
+	"third_follow_up",
+	"fourth_follow_up",
+];
+
+/** Next stage when logging a call / contact on a follow-up track lead. */
+export function getNextFollowUpStage(
+	current: string,
+): PipelineStageValue | null {
+	const idx = FOLLOW_UP_STAGE_ORDER.indexOf(current as PipelineStageValue);
+	if (idx === -1 || idx >= FOLLOW_UP_STAGE_ORDER.length - 1) return null;
+	return FOLLOW_UP_STAGE_ORDER[idx + 1] ?? null;
+}
+
+export function formatFollowUpStagePrompt(
+	nextStage: PipelineStageValue,
+): string {
+	const match = PIPELINE_STAGES.find((s) => s.value === nextStage);
+	return match ? `Move lead to ${match.label}?` : "Update lead stage?";
+}
+
+/** Retired stage slugs → active stage (for legacy DB rows & imports). */
+export const RETIRED_PIPELINE_STAGE_LABELS: Record<string, string> = {
+	follow_up_in_progress: "1 First Follow Up",
+	no_pick_reply: "2 Second Follow Up",
+	can_recycle: "4 Fourth Follow Up",
+	follow_up_for_appointment: "3 Third Follow Up",
+	consider_seen: "Need Consider",
+	contacted: "1 First Follow Up",
+	appointment_set: "Appointment Made",
+	converted: "Booking Made",
+};
+
 /** Display label for any stage value (including legacy DB values). */
 export function formatPipelineStageLabel(stage: string): string {
-	const legacy: Record<string, string> = {
-		contacted: "Follow Up In Progress",
-		appointment_set: "Follow Up For Appointment",
-		converted: "Booking Made",
-	};
-	if (legacy[stage]) return legacy[stage];
+	if (RETIRED_PIPELINE_STAGE_LABELS[stage]) {
+		return RETIRED_PIPELINE_STAGE_LABELS[stage];
+	}
 	return stageMap[stage]?.label ?? stage.replace(/_/g, " ");
 }
 

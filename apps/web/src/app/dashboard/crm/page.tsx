@@ -85,7 +85,12 @@ import { z } from "zod";
 
 import { ImportLeadsDialog } from "./_components/import-leads-dialog";
 import type { AgentCrmImportMode } from "./_components/import-leads-dialog";
-import { PIPELINE_STAGES } from "@/app/admin/leads/_components/lead-constants";
+import {
+	formatFollowUpStagePrompt,
+	getNextFollowUpStage,
+	PIPELINE_STAGE_VALUES,
+	PIPELINE_STAGES,
+} from "@/app/admin/leads/_components/lead-constants";
 import { formatLeadId } from "@/app/admin/leads/_components/lead-models";
 import { StageBadge, StatusBadge } from "@/app/admin/leads/_components/lead-ui";
 import {
@@ -159,22 +164,7 @@ const prospectFormSchema = z.object({
 	status: z.enum(["active", "inactive", "pending"], {
 		required_error: "Please select a status",
 	}),
-	stage: z
-		.enum([
-			"new_lead",
-			"follow_up_in_progress",
-			"no_pick_reply",
-			"can_recycle",
-			"follow_up_for_appointment",
-			"potential_lead",
-			"appointment_made",
-			"consider_seen",
-			"reject_project",
-			"booking_made",
-			"spam_fake_lead",
-		])
-		.default("new_lead")
-		.optional(),
+	stage: z.enum(PIPELINE_STAGE_VALUES).default("new_lead").optional(),
 	leadType: z.enum(["personal", "company"]).default("personal").optional(),
 });
 
@@ -404,16 +394,11 @@ export default function CRMPage() {
 		// TODO: Initiate call
 		console.log("Call prospect:", prospect);
 
-		// Show micro-prompt based on current stage
-		if (prospect.stage === "new_lead") {
+		const nextStage = getNextFollowUpStage(prospect.stage);
+		if (nextStage) {
 			setStagePromptProspect(prospect);
-			setStagePromptMessage("Move lead to Follow Up In Progress?");
-			setStagePromptTargetStage("follow_up_in_progress");
-			setIsStagePromptOpen(true);
-		} else if (prospect.stage === "follow_up_in_progress") {
-			setStagePromptProspect(prospect);
-			setStagePromptMessage("Move lead to Follow Up For Appointment?");
-			setStagePromptTargetStage("follow_up_for_appointment");
+			setStagePromptMessage(formatFollowUpStagePrompt(nextStage));
+			setStagePromptTargetStage(nextStage);
 			setIsStagePromptOpen(true);
 		}
 	};

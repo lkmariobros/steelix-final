@@ -713,7 +713,7 @@ export const crmRouter = router({
 				effectiveUpdateData.stage === undefined &&
 				existing.stage === "new_lead"
 			) {
-				effectiveUpdateData.stage = "follow_up_in_progress";
+				effectiveUpdateData.stage = "first_follow_up";
 			}
 
 			const [updated] = await db
@@ -893,7 +893,7 @@ export const crmRouter = router({
 					lastContact: new Date(),
 					stage:
 						prospect.stage === "new_lead"
-							? "follow_up_in_progress"
+							? "first_follow_up"
 							: prospect.stage,
 					updatedAt: new Date(),
 				})

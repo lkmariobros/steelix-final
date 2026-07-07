@@ -44,17 +44,23 @@ export const prospectStatusEnum = pgEnum("prospect_status", [
 // Pipeline stage enum (for Kanban board) — active + legacy values kept for DB compat
 export const pipelineStageEnum = pgEnum("pipeline_stage", [
 	"new_lead",
+	"first_follow_up",
+	"second_follow_up",
+	"third_follow_up",
+	"fourth_follow_up",
+	"potential_lead",
+	"appointment_made",
+	"need_consider",
+	"reject_project",
+	"booking_made",
+	"spam_fake_lead",
+	// Retired (migrated via pipeline-stage-feedback-setup.sql)
 	"follow_up_in_progress",
 	"no_pick_reply",
 	"can_recycle",
 	"follow_up_for_appointment",
-	"potential_lead",
-	"appointment_made",
 	"consider_seen",
-	"reject_project",
-	"booking_made",
-	"spam_fake_lead",
-	// Legacy (migrated away in UI; rows should be updated via SQL patch)
+	// Legacy
 	"contacted",
 	"appointment_set",
 	"converted",
@@ -208,13 +214,13 @@ export const prospectStatusSchema = z.enum(["active", "inactive", "pending"]);
 /** Active pipeline stages only (client CRM spec). */
 export const pipelineStageSchema = z.enum([
 	"new_lead",
-	"follow_up_in_progress",
-	"no_pick_reply",
-	"can_recycle",
-	"follow_up_for_appointment",
+	"first_follow_up",
+	"second_follow_up",
+	"third_follow_up",
+	"fourth_follow_up",
 	"potential_lead",
 	"appointment_made",
-	"consider_seen",
+	"need_consider",
 	"reject_project",
 	"booking_made",
 	"spam_fake_lead",
@@ -222,9 +228,14 @@ export const pipelineStageSchema = z.enum([
 
 /** Maps retired DB enum values to the nearest active stage. */
 export const LEGACY_PIPELINE_STAGE_MAP: Record<string, PipelineStage> = {
-	contacted: "follow_up_in_progress",
-	appointment_set: "follow_up_for_appointment",
+	contacted: "first_follow_up",
+	appointment_set: "appointment_made",
 	converted: "booking_made",
+	follow_up_in_progress: "first_follow_up",
+	no_pick_reply: "second_follow_up",
+	can_recycle: "fourth_follow_up",
+	follow_up_for_appointment: "third_follow_up",
+	consider_seen: "need_consider",
 };
 
 export function normalisePipelineStage(
