@@ -18,12 +18,86 @@ import {
 } from "../models/auth";
 import { reports } from "../models/reports";
 import { performanceMetrics } from "../models/reports";
+import type { ERecruitmentDocuments } from "../models/erecruitment";
 import { transactions } from "../models/transactions";
 import { getNextAgentCode } from "../services/sequential-codes";
 import { db } from "../utils/db";
 import { invalidateUserCache } from "../utils/context";
 import { hasSuperAdminAccess } from "../utils/user-roles";
+import { supabaseAdmin } from "../utils/supabase";
 import { adminProcedure, protectedProcedure, router, superAdminProcedure } from "../utils/trpc";
+
+const onboardingDocumentFileSchema = z.object({
+	fileName: z.string(),
+	fileType: z.string(),
+	url: z.string().optional(),
+	storagePath: z.string().optional(),
+	dataUrl: z.string().optional(),
+	uploadedAt: z.string(),
+});
+
+async function persistOnboardingDocuments(
+	userId: string,
+	documents: ERecruitmentDocuments | undefined,
+): Promise<ERecruitmentDocuments | null> {
+	if (!documents) return null;
+
+	const categories = ["icFront", "icBack", "registrationFeeReceipt"] as const;
+	const stored: ERecruitmentDocuments = {};
+
+	for (const category of categories) {
+		const file = documents[category];
+		if (!file) continue;
+
+		if (file.storagePath || file.url) {
+			stored[category] = file;
+			continue;
+		}
+
+		if (!file.dataUrl) continue;
+
+		const base64 = file.dataUrl.replace(/^data:[^;]+;base64,/, "");
+		const fileBuffer = Buffer.from(base64, "base64");
+		const uniqueFileName = `${Date.now()}-${file.fileName.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
+		const storagePath = `agent-onboarding/${userId}/${category}/${uniqueFileName}`;
+		const uploadedAt = file.uploadedAt || new Date().toISOString();
+
+		if (supabaseAdmin) {
+			const { error } = await supabaseAdmin.storage
+				.from("transaction-documents")
+				.upload(storagePath, fileBuffer, {
+					contentType: file.fileType,
+					upsert: false,
+				});
+
+			if (error) {
+				throw new Error(`Upload failed for ${category}: ${error.message}`);
+			}
+
+			const { data: urlData } = supabaseAdmin.storage
+				.from("transaction-documents")
+				.getPublicUrl(storagePath);
+
+			stored[category] = {
+				fileName: file.fileName,
+				fileType: file.fileType,
+				url: urlData.publicUrl,
+				storagePath,
+				uploadedAt,
+			};
+			continue;
+		}
+
+		stored[category] = {
+			fileName: file.fileName,
+			fileType: file.fileType,
+			dataUrl: file.dataUrl,
+			uploadedAt,
+		};
+	}
+
+	return Object.keys(stored).length > 0 ? stored : null;
+}
 
 // Input schemas
 const listAgentsInput = z.object({
@@ -88,12 +162,33 @@ const updateAgentInput = z.object({
 });
 
 const createAgentInput = z.object({
-	name: z.string().min(1).max(200),
+	fullName: z.string().min(1).max(200),
+	nickName: z.string().optional(),
+	nric: z.string().min(1).max(32),
 	email: z.string().email(),
-	phone: z
+	registrationFee: z.string().optional(),
+	paymentMethod: z.string().optional(),
+	address: z.string().optional(),
+	contactNo: z
 		.string()
-		.regex(/^\+60\d{8,11}$/, "Phone must be in Malaysian format (+60...)")
+		.regex(/^\+60\d{8,11}$/, "Contact no. must be in Malaysian format (+60...)"),
+	maritalStatus: z.string().optional(),
+	emergencyName: z.string().optional(),
+	emergencyContactNo: z.string().optional(),
+	emergencyRelationship: z.string().optional(),
+	bankName: z.string().optional(),
+	bankAccountNo: z.string().optional(),
+	bankAccountName: z.string().optional(),
+	incomeTaxNo: z.string().optional(),
+	documents: z
+		.object({
+			icFront: onboardingDocumentFileSchema,
+			icBack: onboardingDocumentFileSchema,
+			registrationFeeReceipt: onboardingDocumentFileSchema,
+		})
 		.optional(),
+	acceptedCompanyPolicy: z.literal(true),
+	acceptedNda: z.literal(true),
 	password: z.string().min(8),
 	branch: z.string().min(1).max(120).optional(),
 	teamId: z.string().uuid().optional(),
@@ -536,14 +631,32 @@ export const agentsRouter = router({
 		const userId = crypto.randomUUID();
 		const passwordHash = await hashPassword(input.password);
 		const agentCode = await getNextAgentCode();
+		const onboardingDocuments = await persistOnboardingDocuments(
+			userId,
+			input.documents,
+		);
 
 		const [createdUser] = await db
 			.insert(user)
 			.values({
 				id: userId,
-				name: input.name,
+				name: input.fullName,
 				email: input.email.toLowerCase(),
-				phone: input.phone,
+				phone: input.contactNo,
+				nickName: input.nickName?.trim() || null,
+				nric: input.nric.trim(),
+				registrationFee: input.registrationFee?.trim() || null,
+				paymentMethod: input.paymentMethod || null,
+				address: input.address?.trim() || null,
+				maritalStatus: input.maritalStatus || null,
+				emergencyName: input.emergencyName?.trim() || null,
+				emergencyContactNo: input.emergencyContactNo?.trim() || null,
+				emergencyRelationship: input.emergencyRelationship?.trim() || null,
+				bankName: input.bankName?.trim() || null,
+				bankAccountNo: input.bankAccountNo?.trim() || null,
+				bankAccountName: input.bankAccountName?.trim() || null,
+				incomeTaxNo: input.incomeTaxNo?.trim() || null,
+				onboardingDocuments,
 				branch: input.branch,
 				emailVerified: false,
 				image: null,

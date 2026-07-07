@@ -69,6 +69,43 @@ export const user = pgTable(
 		isActive: boolean("is_active").notNull().default(true),
 		deactivatedAt: timestamp("deactivated_at"),
 		branch: text("branch"),
+		nickName: text("nick_name"),
+		nric: text("nric"),
+		registrationFee: text("registration_fee"),
+		paymentMethod: text("payment_method"),
+		address: text("address"),
+		maritalStatus: text("marital_status"),
+		emergencyName: text("emergency_name"),
+		emergencyContactNo: text("emergency_contact_no"),
+		emergencyRelationship: text("emergency_relationship"),
+		bankAccountName: text("bank_account_name"),
+		incomeTaxNo: text("income_tax_no"),
+		onboardingDocuments: jsonb("onboarding_documents").$type<{
+			icFront?: {
+				fileName: string;
+				fileType: string;
+				url?: string;
+				storagePath?: string;
+				dataUrl?: string;
+				uploadedAt: string;
+			};
+			icBack?: {
+				fileName: string;
+				fileType: string;
+				url?: string;
+				storagePath?: string;
+				dataUrl?: string;
+				uploadedAt: string;
+			};
+			registrationFeeReceipt?: {
+				fileName: string;
+				fileType: string;
+				url?: string;
+				storagePath?: string;
+				dataUrl?: string;
+				uploadedAt: string;
+			};
+		}>(),
 		// Hierarchy relationships
 		agencyId: uuid("agency_id").references(() => agencies.id),
 		teamId: uuid("team_id").references(() => teams.id),

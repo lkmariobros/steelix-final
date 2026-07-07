@@ -67,6 +67,7 @@ import {
 	TierDashboardWidget,
 } from "@/components/agent-tier";
 import type { AgentTier } from "@/lib/agent-tier-config";
+import { CreateAgentAccountDialog } from "@/features/erecruitment/create-agent-account-dialog";
 
 // Type for agent data from the API
 interface AgentData {
@@ -117,12 +118,6 @@ export default function AdminAgentsPage() {
 	const [deleteStep, setDeleteStep] = useState<1 | 2>(1);
 	const [deleteConfirmText, setDeleteConfirmText] = useState("");
 
-	const [newAgentName, setNewAgentName] = useState("");
-	const [newAgentEmail, setNewAgentEmail] = useState("");
-	const [newAgentPhone, setNewAgentPhone] = useState("");
-	const [newAgentBranch, setNewAgentBranch] = useState("");
-	const [newAgentPassword, setNewAgentPassword] = useState("");
-	const [newAgentRole, setNewAgentRole] = useState<"agent" | "team_lead" | "admin">("agent");
 	const [resetPassword, setResetPassword] = useState("");
 
 	// For invalidation after mutations
@@ -143,21 +138,6 @@ export default function AdminAgentsPage() {
 		setSelectedAgent(agent);
 		setIsViewModalOpen(true);
 	};
-
-	const createAgentMutation = trpc.agents.create.useMutation({
-		onSuccess: () => {
-			toast.success("Agent account created");
-			setIsCreateDialogOpen(false);
-			setNewAgentName("");
-			setNewAgentEmail("");
-			setNewAgentPhone("");
-			setNewAgentBranch("");
-			setNewAgentPassword("");
-			utils.agents.list.invalidate();
-			utils.agents.getStats.invalidate();
-		},
-		onError: (e) => toast.error(e.message || "Failed to create agent"),
-	});
 
 	const setActiveMutation = trpc.agents.setActive.useMutation({
 		onSuccess: () => {
@@ -739,92 +719,15 @@ export default function AdminAgentsPage() {
 				/>
 			)}
 
-			{/* Create Agent Dialog */}
-			<Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-				<DialogContent className="sm:max-w-[520px]">
-					<DialogHeader>
-						<DialogTitle>Create agent account</DialogTitle>
-						<DialogDescription>
-							Create a new agent (email must be unique; phone must be in +60 format).
-						</DialogDescription>
-					</DialogHeader>
-					<div className="grid grid-cols-2 gap-3">
-						<div className="col-span-2 space-y-2">
-							<Label>Name</Label>
-							<Input value={newAgentName} onChange={(e) => setNewAgentName(e.target.value)} />
-						</div>
-						<div className="col-span-2 space-y-2">
-							<Label>Email</Label>
-							<Input
-								type="email"
-								value={newAgentEmail}
-								onChange={(e) => setNewAgentEmail(e.target.value)}
-							/>
-						</div>
-						<div className="space-y-2">
-							<Label>Phone (+60…)</Label>
-							<Input value={newAgentPhone} onChange={(e) => setNewAgentPhone(e.target.value)} />
-						</div>
-						<div className="space-y-2">
-							<Label>Branch</Label>
-							<Input value={newAgentBranch} onChange={(e) => setNewAgentBranch(e.target.value)} />
-						</div>
-						<div className="col-span-2 space-y-2">
-							<Label>Temporary password</Label>
-							<Input
-								type="password"
-								value={newAgentPassword}
-								onChange={(e) => setNewAgentPassword(e.target.value)}
-							/>
-						</div>
-						{isSuperAdmin && (
-							<div className="col-span-2 space-y-2">
-								<Label>Account role</Label>
-								<Select
-									value={newAgentRole}
-									onValueChange={(value) =>
-										setNewAgentRole(value as "agent" | "team_lead" | "admin")
-									}
-								>
-									<SelectTrigger>
-										<SelectValue />
-									</SelectTrigger>
-									<SelectContent>
-										<SelectItem value="agent">Agent</SelectItem>
-										<SelectItem value="team_lead">Team Lead</SelectItem>
-										<SelectItem value="admin">Admin</SelectItem>
-									</SelectContent>
-								</Select>
-							</div>
-						)}
-					</div>
-					<DialogFooter>
-						<Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
-							Cancel
-						</Button>
-						<Button
-							disabled={
-								createAgentMutation.isPending ||
-								!newAgentName.trim() ||
-								!newAgentEmail.trim() ||
-								newAgentPassword.length < 8
-							}
-							onClick={() => {
-								createAgentMutation.mutate({
-									name: newAgentName.trim(),
-									email: newAgentEmail.trim(),
-									phone: newAgentPhone.trim() || undefined,
-									branch: newAgentBranch.trim() || undefined,
-									password: newAgentPassword,
-									role: isSuperAdmin ? newAgentRole : "agent",
-								});
-							}}
-						>
-							Create
-						</Button>
-					</DialogFooter>
-				</DialogContent>
-			</Dialog>
+			<CreateAgentAccountDialog
+				open={isCreateDialogOpen}
+				onOpenChange={setIsCreateDialogOpen}
+				isSuperAdmin={isSuperAdmin}
+				onSuccess={() => {
+					utils.agents.list.invalidate();
+					utils.agents.getStats.invalidate();
+				}}
+			/>
 
 			{/* Reset Password Dialog */}
 			<Dialog open={isResetPasswordOpen} onOpenChange={setIsResetPasswordOpen}>
