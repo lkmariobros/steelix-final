@@ -2,6 +2,7 @@ import { TRPCError } from "@trpc/server";
 import { hashPassword } from "better-auth/crypto";
 import { and, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import { z } from "zod";
+import { approvalTemplates, approvalWorkflowHistory } from "../models/approvals";
 import { commissionApprovals } from "../models/approvals";
 import {
 	AGENT_TIER_CONFIG,
@@ -11,9 +12,11 @@ import {
 	agentGoals,
 	agentTierHistory,
 	account,
+	commissionAuditLog,
 	teams,
 	user,
 } from "../models/auth";
+import { reports } from "../models/reports";
 import { performanceMetrics } from "../models/reports";
 import { transactions } from "../models/transactions";
 import { getNextAgentCode } from "../services/sequential-codes";
@@ -116,6 +119,10 @@ const setAgentActiveInput = z.object({
 const approveAgentInput = z.object({
 	agentId: z.string(),
 	agentCode: z.string().min(1).max(32).optional(),
+});
+
+const deleteAgentInput = z.object({
+	agentId: z.string(),
 });
 
 const agentPerformanceInput = z.object({
@@ -676,6 +683,66 @@ export const agentsRouter = router({
 
 			if (!updated) throw new Error("Credential account not found");
 			return { ok: true };
+		}),
+
+	// Permanently delete an agent and related auth records (super admin only)
+	delete: superAdminProcedure
+		.input(deleteAgentInput)
+		.mutation(async ({ ctx, input }) => {
+			if (input.agentId === ctx.session.user.id) {
+				throw new TRPCError({
+					code: "FORBIDDEN",
+					message: "You cannot delete your own account",
+				});
+			}
+
+			const [target] = await db
+				.select({ id: user.id, role: user.role, email: user.email })
+				.from(user)
+				.where(eq(user.id, input.agentId))
+				.limit(1);
+
+			if (!target) {
+				throw new TRPCError({ code: "NOT_FOUND", message: "Agent not found" });
+			}
+
+			if (target.role === "super_admin") {
+				throw new TRPCError({
+					code: "FORBIDDEN",
+					message: "Super admin accounts cannot be deleted",
+				});
+			}
+
+			await db.transaction(async (tx) => {
+				// Remove audit / report records that have restrictive FKs to user.id.
+				await tx.delete(reports).where(eq(reports.generatedBy, input.agentId));
+				await tx
+					.delete(approvalWorkflowHistory)
+					.where(eq(approvalWorkflowHistory.actionBy, input.agentId));
+				await tx
+					.delete(approvalTemplates)
+					.where(eq(approvalTemplates.createdBy, input.agentId));
+				await tx
+					.delete(commissionAuditLog)
+					.where(eq(commissionAuditLog.changedBy, input.agentId));
+
+				// Null-out optional references (avoid FK constraint blocks).
+				await tx
+					.update(commissionApprovals)
+					.set({ reviewedBy: null })
+					.where(eq(commissionApprovals.reviewedBy, input.agentId));
+
+				await tx
+					.update(transactions)
+					.set({ teamLeaderAgentId: null })
+					.where(eq(transactions.teamLeaderAgentId, input.agentId));
+
+				// Auth-core tables mostly cascade on user delete, but we delete explicitly for clarity.
+				await tx.delete(user).where(eq(user.id, input.agentId));
+			});
+
+			invalidateUserCache(input.agentId);
+			return { ok: true, deletedId: input.agentId, deletedEmail: target.email };
 		}),
 
 	// Get agent performance metrics

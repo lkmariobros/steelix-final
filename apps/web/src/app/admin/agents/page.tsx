@@ -112,6 +112,10 @@ export default function AdminAgentsPage() {
 	const [approveAgentId, setApproveAgentId] = useState<string | null>(null);
 	const [approveAgentCode, setApproveAgentCode] = useState("");
 	const [resetAgentId, setResetAgentId] = useState<string | null>(null);
+	const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+	const [deleteAgent, setDeleteAgent] = useState<AgentData | null>(null);
+	const [deleteStep, setDeleteStep] = useState<1 | 2>(1);
+	const [deleteConfirmText, setDeleteConfirmText] = useState("");
 
 	const [newAgentName, setNewAgentName] = useState("");
 	const [newAgentEmail, setNewAgentEmail] = useState("");
@@ -194,6 +198,19 @@ export default function AdminAgentsPage() {
 			setResetPassword("");
 		},
 		onError: (e) => toast.error(e.message || "Failed to reset password"),
+	});
+
+	const deleteAgentMutation = trpc.agents.delete.useMutation({
+		onSuccess: () => {
+			toast.success("Agent deleted");
+			setIsDeleteDialogOpen(false);
+			setDeleteAgent(null);
+			setDeleteStep(1);
+			setDeleteConfirmText("");
+			utils.agents.list.invalidate();
+			utils.agents.getStats.invalidate();
+		},
+		onError: (e) => toast.error(e.message || "Failed to delete agent"),
 	});
 
 	const handleManageFromView = () => {
@@ -533,7 +550,7 @@ export default function AdminAgentsPage() {
 														</p>
 													</div>
 												</div>
-												<div className="flex flex-wrap justify-end gap-2">
+												<div className="flex flex-nowrap items-center justify-end gap-2">
 													{isPendingAgentStatus(
 														(agentItem.agent as AgentData).agentStatus,
 													) && (
@@ -611,6 +628,24 @@ export default function AdminAgentsPage() {
 															? "Activate"
 															: "Deactivate"}
 													</Button>
+													{isSuperAdmin &&
+														agentItem.agent.role !== "super_admin" &&
+														agentItem.agent.id !== session?.user?.id && (
+															<Button
+																size="sm"
+																variant="destructive"
+																className="shrink-0"
+																onClick={() => {
+																	setDeleteAgent(agentItem.agent as AgentData);
+																	setDeleteStep(1);
+																	setDeleteConfirmText("");
+																	setIsDeleteDialogOpen(true);
+																}}
+																disabled={deleteAgentMutation.isPending}
+															>
+																Delete
+															</Button>
+														)}
 												</div>
 											</div>
 										))}
@@ -871,6 +906,93 @@ export default function AdminAgentsPage() {
 						>
 							Confirm approval
 						</Button>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
+
+			{/* Delete Agent Double Confirm Dialog */}
+			<Dialog
+				open={isDeleteDialogOpen}
+				onOpenChange={(open) => {
+					setIsDeleteDialogOpen(open);
+					if (!open) {
+						setDeleteAgent(null);
+						setDeleteStep(1);
+						setDeleteConfirmText("");
+					}
+				}}
+			>
+				<DialogContent className="sm:max-w-[520px]">
+					<DialogHeader>
+						<DialogTitle>
+							{deleteStep === 1 ? "Delete agent?" : "Final confirmation"}
+						</DialogTitle>
+						<DialogDescription>
+							{deleteStep === 1 ? (
+								<>
+									This will permanently delete this agent account and associated
+									auth records.
+								</>
+							) : (
+								<>
+									Type <span className="font-mono">DELETE</span> to confirm. This
+									action cannot be undone.
+								</>
+							)}
+						</DialogDescription>
+					</DialogHeader>
+
+					{deleteAgent && (
+						<div className="rounded-lg border bg-muted/30 p-3 text-sm">
+							<div className="font-medium">{deleteAgent.name || "Unknown"}</div>
+							<div className="text-muted-foreground">{deleteAgent.email}</div>
+						</div>
+					)}
+
+					{deleteStep === 2 && (
+						<div className="space-y-2">
+							<Label>Type DELETE to confirm</Label>
+							<Input
+								value={deleteConfirmText}
+								onChange={(e) => setDeleteConfirmText(e.target.value)}
+								placeholder="DELETE"
+								className="font-mono"
+							/>
+						</div>
+					)}
+
+					<DialogFooter>
+						<Button
+							variant="outline"
+							onClick={() => setIsDeleteDialogOpen(false)}
+							disabled={deleteAgentMutation.isPending}
+						>
+							Cancel
+						</Button>
+						{deleteStep === 1 ? (
+							<Button
+								variant="destructive"
+								onClick={() => setDeleteStep(2)}
+								disabled={!deleteAgent || deleteAgentMutation.isPending}
+							>
+								Continue
+							</Button>
+						) : (
+							<Button
+								variant="destructive"
+								onClick={() => {
+									if (!deleteAgent) return;
+									deleteAgentMutation.mutate({ agentId: deleteAgent.id });
+								}}
+								disabled={
+									!deleteAgent ||
+									deleteAgentMutation.isPending ||
+									deleteConfirmText.trim().toUpperCase() !== "DELETE"
+								}
+							>
+								Delete forever
+							</Button>
+						)}
 					</DialogFooter>
 				</DialogContent>
 			</Dialog>
