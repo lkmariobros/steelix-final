@@ -13,6 +13,7 @@ type UserWithTier = Pick<
 	| "teamId"
 	| "role"
 	| "isActive"
+	| "agentStatus"
 >;
 
 export type CreateContextOptions = {
@@ -62,6 +63,7 @@ export async function createContext({ context }: CreateContextOptions) {
 			u.teamId = cached.teamId;
 			u.role = cached.role;
 			u.isActive = cached.isActive;
+			u.agentStatus = cached.agentStatus;
 		} else {
 			// Fetch from DB with a reasonable timeout and retry
 			await fetchAndCacheUser(session);
@@ -87,6 +89,7 @@ async function fetchAndCacheUser(
 					teamId: user.teamId,
 					role: user.role,
 					isActive: user.isActive,
+					agentStatus: user.agentStatus,
 				})
 				.from(user)
 				.where(eq(user.id, session.user.id))
@@ -110,6 +113,7 @@ async function fetchAndCacheUser(
 				u.teamId = userData.teamId;
 				u.role = userData.role;
 				u.isActive = userData.isActive;
+				u.agentStatus = userData.agentStatus;
 
 				// Store in cache so subsequent requests skip the DB
 				setCachedUser(session.user.id, userData);

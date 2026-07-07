@@ -1,9 +1,7 @@
 import { authClient } from "@/lib/auth-client"
-import { redirectAfterFreshAuth } from "@/lib/redirect-after-auth"
 import { useForm } from "@tanstack/react-form"
 import { Eye, EyeOff, Loader2, Mail } from "lucide-react"
-import { useRouter } from "next/navigation"
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import z from "zod/v4"
 import { Button } from "./ui/button"
@@ -15,11 +13,9 @@ interface SignUpFormProps {
 }
 
 export default function SignUpForm({ onSwitchToSignIn }: SignUpFormProps) {
-	const router = useRouter()
 	const [isClient, setIsClient] = useState(false)
 	const [showPassword, setShowPassword] = useState(false)
-	const [isRedirecting, setIsRedirecting] = useState(false)
-	const redirectStarted = useRef(false)
+	const [registrationSubmitted, setRegistrationSubmitted] = useState(false)
 
 	useEffect(() => {
 		setIsClient(true)
@@ -43,15 +39,27 @@ export default function SignUpForm({ onSwitchToSignIn }: SignUpFormProps) {
 					name: displayName,
 				},
 				{
-					onSuccess: (ctx) => {
-						if (redirectStarted.current) return
-						redirectStarted.current = true
-						setIsRedirecting(true)
-						toast.success("Account created successfully!")
-						void redirectAfterFreshAuth(router.replace, ctx.data)
+					onSuccess: () => {
+						setRegistrationSubmitted(true)
+						toast.success(
+							"Registration submitted. An administrator must approve your account before you can sign in.",
+						)
 					},
 					onError: (error) => {
-						toast.error(error.error.message)
+						const message =
+							error.error?.message ||
+							"Registration failed. Please try again."
+						if (
+							message.toLowerCase().includes("pending") ||
+							message.toLowerCase().includes("approval")
+						) {
+							setRegistrationSubmitted(true)
+							toast.success(
+								"Registration submitted. An administrator must approve your account before you can sign in.",
+							)
+							return
+						}
+						toast.error(message)
 					},
 				},
 			)
@@ -69,10 +77,18 @@ export default function SignUpForm({ onSwitchToSignIn }: SignUpFormProps) {
 		return null
 	}
 
-	if (isRedirecting) {
+	if (registrationSubmitted) {
 		return (
-			<div className="flex items-center justify-center py-8">
-				<Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+			<div className="space-y-4 rounded-lg border bg-muted/30 p-5 text-center">
+				<p className="font-medium text-sm">Registration received</p>
+				<p className="text-muted-foreground text-sm leading-relaxed">
+					Your account is pending admin approval for privacy and security. You
+					will be able to sign in after an administrator approves your
+					registration.
+				</p>
+				<Button type="button" variant="outline" onClick={onSwitchToSignIn}>
+					Back to sign in
+				</Button>
 			</div>
 		)
 	}
@@ -210,6 +226,11 @@ export default function SignUpForm({ onSwitchToSignIn }: SignUpFormProps) {
 					)}
 				</form.Subscribe>
 			</form>
+
+			<p className="rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-amber-900 text-xs leading-relaxed dark:text-amber-100">
+				New registrations require administrator approval before you can access
+				the portal.
+			</p>
 
 			<p className="text-center text-muted-foreground text-xs">
 				Already have an account?{" "}

@@ -1,8 +1,13 @@
 // import { expo } from "@better-auth/expo"; // Temporarily disabled for production debugging
+import { APIError } from "better-auth/api";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { count, eq } from "drizzle-orm";
 import * as schema from "../models/auth";
+import {
+	evaluateAccountSignInAccess,
+	isBootstrapOrStaffRole,
+} from "./account-access";
 import { db } from "./db";
 import { getAllowedOrigins } from "./allowed-origins";
 
@@ -42,6 +47,18 @@ try {
 					type: "string",
 					required: false,
 					defaultValue: "agent",
+					input: false,
+				},
+				agentStatus: {
+					type: "string",
+					required: false,
+					defaultValue: "pending_approval",
+					input: false,
+				},
+				isActive: {
+					type: "boolean",
+					required: false,
+					defaultValue: false,
 					input: false,
 				},
 			},
@@ -107,17 +124,21 @@ try {
 
 							const isFirstUser = existingUsersCount.count === 0;
 
-							// Assign role based on whether this is the first user
+							// First bootstrap user is super admin and active; self-registration waits for approval.
 							const role = isFirstUser ? "super_admin" : "agent";
+							const agentStatus = isFirstUser ? "active" : "pending_approval";
+							const isActive = isFirstUser;
 
 							console.log(
-								`🔐 User creation: ${userData.email} - Role: ${role} (First user: ${isFirstUser})`,
+								`🔐 User creation: ${userData.email} - Role: ${role}, Status: ${agentStatus} (First user: ${isFirstUser})`,
 							);
 
 							return {
 								data: {
 									...userData,
-									role: role,
+									role,
+									agentStatus,
+									isActive,
 								},
 							};
 						} catch (error) {
@@ -127,6 +148,8 @@ try {
 								data: {
 									...userData,
 									role: "agent",
+									agentStatus: "pending_approval",
+									isActive: false,
 								},
 							};
 						}
@@ -154,6 +177,37 @@ try {
 								error,
 							);
 						}
+					},
+				},
+			},
+			session: {
+				create: {
+					before: async (session) => {
+						const [record] = await db
+							.select({
+								role: schema.user.role,
+								agentStatus: schema.user.agentStatus,
+								isActive: schema.user.isActive,
+							})
+							.from(schema.user)
+							.where(eq(schema.user.id, session.userId))
+							.limit(1);
+
+						// Legacy staff accounts may predate agentStatus — allow active staff through.
+						if (
+							record &&
+							isBootstrapOrStaffRole(record.role) &&
+							record.isActive !== false
+						) {
+							return { data: session };
+						}
+
+						const access = evaluateAccountSignInAccess(record);
+						if (!access.allowed) {
+							throw new APIError("FORBIDDEN", { message: access.message });
+						}
+
+						return { data: session };
 					},
 				},
 			},

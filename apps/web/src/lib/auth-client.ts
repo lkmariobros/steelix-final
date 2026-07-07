@@ -12,13 +12,6 @@ export const authClient = createAuthClient({
 	basePath: "/api/auth",
 	fetchOptions: {
 		credentials: "include",
-		onError: (context) => {
-			console.error("Better Auth Error:", {
-				request: context.request,
-				response: context.response,
-				error: context.error,
-			});
-		},
 	},
 });
 

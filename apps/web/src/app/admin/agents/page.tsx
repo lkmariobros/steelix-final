@@ -97,6 +97,9 @@ export default function AdminAgentsPage() {
 	const [activeFilter, setActiveFilter] = useState<"all" | "active" | "inactive">(
 		"all",
 	);
+	const [approvalFilter, setApprovalFilter] = useState<
+		"all" | "pending_approval"
+	>("all");
 
 	// State for dialogs
 	const [selectedAgent, setSelectedAgent] = useState<AgentData | null>(null);
@@ -212,6 +215,8 @@ export default function AdminAgentsPage() {
 				activeFilter === "all"
 					? undefined
 					: activeFilter === "active",
+			agentStatus:
+				approvalFilter === "pending_approval" ? "pending_approval" : undefined,
 			sortBy: "agentCode",
 			sortOrder: "desc",
 		},
@@ -296,6 +301,26 @@ export default function AdminAgentsPage() {
 									{isSuperAdmin && (
 										<SelectItem value="super_admin">Super admins</SelectItem>
 									)}
+								</SelectContent>
+							</Select>
+
+							<Select
+								value={approvalFilter}
+								onValueChange={(value) =>
+									setApprovalFilter(value as "all" | "pending_approval")
+								}
+							>
+								<SelectTrigger className="w-44">
+									<SelectValue placeholder="Approval" />
+								</SelectTrigger>
+								<SelectContent>
+									<SelectItem value="all">All approvals</SelectItem>
+									<SelectItem value="pending_approval">
+										Pending approval
+										{agentStats?.pendingApprovals
+											? ` (${agentStats.pendingApprovals})`
+											: ""}
+									</SelectItem>
 								</SelectContent>
 							</Select>
 

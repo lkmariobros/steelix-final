@@ -1,5 +1,6 @@
 import { TRPCError, initTRPC } from "@trpc/server";
 import type { Context } from "./context";
+import { evaluateAccountSignInAccess } from "./account-access";
 import {
 	getEffectiveRoles,
 	getPrimaryRole,
@@ -24,10 +25,24 @@ export const protectedProcedure = t.procedure.use(({ ctx, next }) => {
 		});
 	}
 	const isActive = (ctx.session.user as { isActive?: boolean | null })?.isActive;
-	if (isActive === false) {
+	const agentStatus = (ctx.session.user as { agentStatus?: string | null })
+		?.agentStatus;
+	const access = evaluateAccountSignInAccess({
+		role: (ctx.session.user as { role?: string | null }).role ?? "agent",
+		agentStatus:
+			(agentStatus as
+				| "active"
+				| "inactive"
+				| "suspended"
+				| "pending_approval"
+				| "terminated"
+				| null) ?? "pending_approval",
+		isActive: isActive ?? true,
+	});
+	if (!access.allowed) {
 		throw new TRPCError({
 			code: "FORBIDDEN",
-			message: "Your account has been deactivated. Please contact an admin.",
+			message: access.message,
 		});
 	}
 	return next({ ctx: { ...ctx, session: ctx.session } });

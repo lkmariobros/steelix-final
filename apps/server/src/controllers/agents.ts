@@ -18,6 +18,7 @@ import { performanceMetrics } from "../models/reports";
 import { transactions } from "../models/transactions";
 import { getNextAgentCode } from "../services/sequential-codes";
 import { db } from "../utils/db";
+import { invalidateUserCache } from "../utils/context";
 import { hasSuperAdminAccess } from "../utils/user-roles";
 import { adminProcedure, protectedProcedure, router, superAdminProcedure } from "../utils/trpc";
 
@@ -39,6 +40,15 @@ const listAgentsInput = z.object({
 	agencyId: z.string().uuid().optional(),
 	searchQuery: z.string().optional(),
 	isActive: z.boolean().optional(),
+	agentStatus: z
+		.enum([
+			"active",
+			"inactive",
+			"suspended",
+			"pending_approval",
+			"terminated",
+		])
+		.optional(),
 	sortBy: z
 		.enum(["name", "email", "createdAt", "agentTier", "agentCode"])
 		.default("agentCode"),
@@ -193,6 +203,9 @@ export const agentsRouter = router({
 		}
 		if (input.isActive !== undefined) {
 			conditions.push(eq(user.isActive, input.isActive));
+		}
+		if (input.agentStatus) {
+			conditions.push(eq(user.agentStatus, input.agentStatus));
 		}
 
 		// Build order by clause
@@ -581,6 +594,7 @@ export const agentsRouter = router({
 				.where(eq(user.id, input.agentId))
 				.returning();
 			if (!updated) throw new Error("Agent not found");
+			invalidateUserCache(input.agentId);
 			return updated;
 		}),
 
@@ -640,10 +654,9 @@ export const agentsRouter = router({
 				.where(eq(user.id, input.agentId))
 				.returning();
 			if (!updated) throw new Error("Agent not found");
+			invalidateUserCache(input.agentId);
 			return updated;
 		}),
-
-	// Reset agent password (admin only)
 	resetPassword: adminProcedure
 		.input(resetAgentPasswordInput)
 		.mutation(async ({ input }) => {
@@ -826,6 +839,7 @@ export const agentsRouter = router({
 				superAdmins: sql<number>`count(*) filter (where role = 'super_admin')`,
 				monthlyAgents: sql<number>`count(*) filter (where role in ('agent', 'team_lead') and created_at >= ${startOfMonth})`,
 				yearlyAgents: sql<number>`count(*) filter (where role in ('agent', 'team_lead') and created_at >= ${startOfYear})`,
+				pendingApprovals: sql<number>`count(*) filter (where agent_status = 'pending_approval')`,
 			})
 			.from(user);
 

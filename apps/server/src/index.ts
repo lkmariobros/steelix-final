@@ -9,6 +9,7 @@ import { webhookRoutes } from "./routes/webhooks";
 import { eq } from "drizzle-orm";
 import { user } from "./models/auth";
 import { auth } from "./utils/auth";
+import { evaluateAccountSignInAccess } from "./utils/account-access";
 import { createContext } from "./utils/context";
 import { db } from "./utils/db";
 import { isAppRole } from "./utils/rbac";
@@ -91,6 +92,54 @@ app.get("/api/auth/me-role", async (c) => {
 	} catch (error) {
 		console.error("❌ me-role error:", error);
 		return c.json({ hasAdminAccess: false, role: null }, 500);
+	}
+});
+
+/**
+ * Hard gate: prevent pending/suspended users from creating sessions.
+ * This is intentionally duplicated from auth databaseHooks as a defense-in-depth
+ * check in case the auth adapter bypasses session.create hooks.
+ */
+app.post("/api/auth/sign-in/email", async (c) => {
+	try {
+		const req = c.req.raw;
+		const body = await req.clone().json().catch(() => null);
+		const email =
+			body && typeof body === "object" && "email" in body
+				? String((body as { email?: unknown }).email ?? "").toLowerCase().trim()
+				: "";
+
+		if (email) {
+			const [record] = await db
+				.select({
+					role: user.role,
+					agentStatus: user.agentStatus,
+					isActive: user.isActive,
+				})
+				.from(user)
+				.where(eq(user.email, email))
+				.limit(1);
+
+			const access = evaluateAccountSignInAccess(record);
+			if (!access.allowed) {
+				return c.json(
+					{
+						code: "FORBIDDEN",
+						message: access.message,
+					},
+					403,
+				);
+			}
+		}
+
+		const result = await auth.handler(req);
+		return (
+			result ??
+			c.json({ error: "Auth endpoint not found", path: c.req.path }, 404)
+		);
+	} catch (error) {
+		console.error("❌ Auth sign-in gate error:", error);
+		return c.json({ error: "Auth handler failed" }, 500);
 	}
 });
 

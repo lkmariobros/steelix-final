@@ -22,7 +22,8 @@ export default function LoginPage() {
 			case "sign-up":
 				return {
 					title: "Create an account",
-					subtitle: "Use your work email and a secure password.",
+					subtitle:
+						"Register with your work email. An admin must approve your account before you can sign in.",
 				};
 			case "forgot-password":
 				return {

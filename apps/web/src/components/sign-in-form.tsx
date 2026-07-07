@@ -1,4 +1,5 @@
 import { authClient } from "@/lib/auth-client"
+import { getSignInErrorMessage } from "@/lib/auth-errors"
 import { redirectAfterFreshAuth } from "@/lib/redirect-after-auth"
 import { useForm } from "@tanstack/react-form"
 import { Eye, EyeOff, Loader2, Mail } from "lucide-react"
@@ -16,42 +17,33 @@ interface SignInFormProps {
 	onForgotPassword: () => void
 }
 
-function getSignInErrorMessage(error: unknown): string {
-	if (!error || typeof error !== "object") {
-		return "Sign in failed. Please check your email and password."
-	}
+function formatFieldError(error: unknown): string {
+	if (typeof error === "string") return error
+	if (typeof error === "number") return String(error)
+	if (!error || typeof error !== "object") return "Invalid value"
 
 	const record = error as Record<string, unknown>
-	const nested =
-		record.error && typeof record.error === "object"
-			? (record.error as Record<string, unknown>)
-			: null
-
-	if (typeof nested?.message === "string" && nested.message.trim()) {
-		return nested.message
-	}
 	if (typeof record.message === "string" && record.message.trim()) {
 		return record.message
 	}
 
-	const status =
-		typeof record.status === "number"
-			? record.status
-			: typeof record.statusCode === "number"
-				? record.statusCode
-				: undefined
-
-	if (status === 401 || status === 403) {
-		return "Invalid email or password."
-	}
-	if (status === 500) {
-		return "Authentication server error. Please try again or contact support."
-	}
-	if (status === 502) {
-		return "Could not reach the authentication server. Please try again later."
+	// Some libraries store the text under "issues[0].message" or similar.
+	const issues = record.issues
+	if (Array.isArray(issues) && issues.length > 0) {
+		const first = issues[0] as unknown
+		if (first && typeof first === "object") {
+			const firstRecord = first as Record<string, unknown>
+			if (typeof firstRecord.message === "string" && firstRecord.message.trim()) {
+				return firstRecord.message
+			}
+		}
 	}
 
-	return "Sign in failed. Please try again."
+	try {
+		return JSON.stringify(error)
+	} catch {
+		return "Invalid value"
+	}
 }
 
 export default function SignInForm({
@@ -92,9 +84,8 @@ export default function SignInForm({
 							toast.success("Sign in successful! Redirecting...")
 							redirectAfterFreshAuth(router.replace, ctx.data)
 						},
-						onError: (error) => {
-							console.error("Sign in error:", error)
-							const errorMessage = getSignInErrorMessage(error)
+						onError: (ctx) => {
+							const errorMessage = getSignInErrorMessage(ctx)
 							if (
 								errorMessage.toLowerCase().includes("431") ||
 								errorMessage.toLowerCase().includes("request header fields too large")
@@ -162,9 +153,12 @@ export default function SignInForm({
 									className="h-10 pl-9"
 								/>
 							</div>
-							{field.state.meta.errors.map((error) => (
-								<p key={String(error)} className="text-sm text-red-500">
-									{String(error)}
+							{field.state.meta.errors.map((error, idx) => (
+								<p
+									key={`${field.name}-err-${idx}`}
+									className="text-sm font-medium text-red-400"
+								>
+									{formatFieldError(error)}
 								</p>
 							))}
 						</div>
@@ -205,9 +199,12 @@ export default function SignInForm({
 									{showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
 								</button>
 							</div>
-							{field.state.meta.errors.map((error) => (
-								<p key={String(error)} className="text-sm text-red-500">
-									{String(error)}
+							{field.state.meta.errors.map((error, idx) => (
+								<p
+									key={`${field.name}-err-${idx}`}
+									className="text-sm font-medium text-red-400"
+								>
+									{formatFieldError(error)}
 								</p>
 							))}
 						</div>
