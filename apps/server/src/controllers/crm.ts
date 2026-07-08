@@ -44,7 +44,9 @@ const listProspectsInput = z.object({
 	leadType: leadTypeSchema.optional(), // Filter by lead type
 	includeCompanyLeads: z.boolean().default(false), // Company tab: unclaimed company pool only
 	/** Filter by assigned agent (My Leads / team monitoring). Use __unassigned__ for unassigned. */
-	filterAgentId: z.union([z.literal("__unassigned__"), z.string().uuid()]).optional(),
+	filterAgentId: z
+		.union([z.literal("__unassigned__"), z.string().min(1)])
+		.optional(),
 	page: z.number().min(1).default(1),
 	/** Max 5000 when forExport; otherwise capped to 1000 in the handler. */
 	limit: z.number().min(1).max(5000).default(10),

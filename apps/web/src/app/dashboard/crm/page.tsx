@@ -91,7 +91,6 @@ import {
 	PIPELINE_STAGE_VALUES,
 	PIPELINE_STAGES,
 } from "@/app/admin/leads/_components/lead-constants";
-import { formatLeadId } from "@/app/admin/leads/_components/lead-models";
 import { StageBadge, StatusBadge } from "@/app/admin/leads/_components/lead-ui";
 import {
 	exportProspectsToCsv,
@@ -1065,21 +1064,6 @@ export default function CRMPage() {
 
 							{activeProspect && (
 								<div className="space-y-6 py-4">
-									{/* Lead ID */}
-									<div className="space-y-2" style={{ marginBottom: "15px" }}>
-										<div className="font-medium text-muted-foreground text-sm">
-											Lead ID
-										</div>
-										<button
-											type="button"
-											className="font-mono font-semibold text-primary text-sm hover:underline"
-											onClick={() => handleView(activeProspect)}
-											title="Open lead detail"
-										>
-											{formatLeadId(activeProspect.id)}
-										</button>
-									</div>
-
 									{/* Name Section */}
 									<div className="space-y-2" style={{ marginBottom: "15px" }}>
 										<div className="flex items-center gap-2 font-medium text-muted-foreground text-sm">
@@ -1769,13 +1753,6 @@ export default function CRMPage() {
 														<RiUserLine className="size-4 text-muted-foreground" />
 														<span className="font-medium">{prospect.name}</span>
 													</div>
-													<button
-														type="button"
-														className="font-mono text-primary text-xs hover:underline"
-														onClick={() => handleView(prospect)}
-													>
-														Lead ID: {formatLeadId(prospect.id)}
-													</button>
 
 													{/* Contact Info */}
 													<div className="flex flex-wrap items-center gap-4 text-muted-foreground text-sm">
