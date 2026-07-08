@@ -20,6 +20,8 @@ import {
 	CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { formatDateDMY, parseDateInputValue, toDateInputValue } from "@/lib/date-format";
+import { formatAgentPickerLabel } from "@/lib/agent-display";
 import { trpc } from "@/utils/trpc";
 import {
 	AGENT_TIER_CONFIG,
@@ -32,7 +34,7 @@ import type {
 	RecruitmentDocKey,
 	RecruitmentUploadedDoc,
 } from "@/features/erecruitment/types";
-import { RiEditLine, RiExternalLinkLine, RiSaveLine } from "@remixicon/react";
+import { RiEditLine, RiExternalLinkLine, RiSaveLine, RiSearchLine } from "@remixicon/react";
 
 type OnboardingDocuments = Partial<
 	Record<RecruitmentDocKey, RecruitmentUploadedDoc>
@@ -61,6 +63,7 @@ type AgentProfile = {
 	agentTier?: string | null;
 	companyCommissionSplit?: number | null;
 	createdAt?: string | Date | null;
+	recruitedBy?: string | null;
 	onboardingDocuments?: OnboardingDocuments | null;
 };
 
@@ -92,28 +95,54 @@ function openDocument(doc?: RecruitmentUploadedDoc) {
 
 type AgentProfilePanelProps = {
 	agent: AgentProfile;
-	recruiterName?: string | null;
+	recruiter?: { id: string; name: string } | null;
 	onManage?: () => void;
 	onUpdated?: () => void;
 };
 
 export function AgentProfilePanel({
 	agent,
-	recruiterName,
+	recruiter,
 	onManage,
 	onUpdated,
 }: AgentProfilePanelProps) {
 	const utils = trpc.useUtils();
 	const [isEditing, setIsEditing] = useState(false);
-	const [form, setForm] = useState(buildFormState(agent));
+	const [form, setForm] = useState(() => buildFormState(agent, recruiter));
 	const [documents, setDocuments] = useState<OnboardingDocuments>(
 		agent.onboardingDocuments ?? {},
 	);
+	const [recruiterSearch, setRecruiterSearch] = useState("");
+	const [recruiterPickerOpen, setRecruiterPickerOpen] = useState(false);
+	const [selectedRecruiterLabel, setSelectedRecruiterLabel] = useState<
+		string | null
+	>(recruiter?.name ?? null);
 
 	useEffect(() => {
-		setForm(buildFormState(agent));
+		setForm(buildFormState(agent, recruiter));
 		setDocuments(agent.onboardingDocuments ?? {});
-	}, [agent]);
+		setSelectedRecruiterLabel(recruiter?.name ?? null);
+	}, [agent, recruiter]);
+
+	const { data: recruiterAgentsData, isLoading: recruitersLoading } =
+		trpc.agents.list.useQuery(
+			{
+				limit: 50,
+				role: "agent",
+				isActive: true,
+				searchQuery: recruiterSearch.trim() || undefined,
+			},
+			{
+				enabled:
+					isEditing &&
+					recruiterPickerOpen &&
+					!form.recruitedById,
+			},
+		);
+
+	const recruiterCandidates =
+		recruiterAgentsData?.agents.filter((row) => row.agent.id !== agent.id) ??
+		[];
 
 	const updateMutation = trpc.agents.update.useMutation({
 		onSuccess: () => {
@@ -185,6 +214,8 @@ export function AgentProfilePanel({
 			branch: form.branch.trim() || undefined,
 			agentCode: form.agentCode.trim() || undefined,
 			agentTier: form.agentTier as AgentTier,
+			recruitedBy: form.recruitedById.trim() ? form.recruitedById.trim() : null,
+			joinedDate: parseDateInputValue(form.joinedDate),
 			documents:
 				Object.keys(changedDocs).length > 0
 					? changedDocs
@@ -227,8 +258,11 @@ export function AgentProfilePanel({
 										size="sm"
 										onClick={() => {
 											setIsEditing(false);
-											setForm(buildFormState(agent));
+											setForm(buildFormState(agent, recruiter));
 											setDocuments(agent.onboardingDocuments ?? {});
+											setSelectedRecruiterLabel(recruiter?.name ?? null);
+											setRecruiterSearch("");
+											setRecruiterPickerOpen(false);
 										}}
 									>
 										Cancel
@@ -263,15 +297,123 @@ export function AgentProfilePanel({
 							isEditing={isEditing}
 							onChange={(v) => setField("agentCode", v)}
 						/>
-						<InfoField label="Recruit by" value={displayValue(recruiterName)} />
-						<InfoField
-							label="Joined date"
-							value={
-								agent.createdAt
-									? new Date(agent.createdAt).toLocaleDateString()
-									: "—"
-							}
-						/>
+						{isEditing ? (
+							<div className="space-y-2 sm:col-span-2">
+								<Label>Recruit by</Label>
+								{form.recruitedById && selectedRecruiterLabel ? (
+									<div className="flex items-center justify-between gap-2 rounded-md border bg-muted/40 px-3 py-2 text-sm">
+										<span>{selectedRecruiterLabel}</span>
+										<Button
+											type="button"
+											variant="ghost"
+											size="sm"
+											onClick={() => {
+												setField("recruitedById", "");
+												setSelectedRecruiterLabel(null);
+												setRecruiterSearch("");
+												setRecruiterPickerOpen(true);
+											}}
+										>
+											Change
+										</Button>
+									</div>
+								) : (
+									<div className="relative">
+										<RiSearchLine className="absolute top-2.5 left-2.5 size-4 text-muted-foreground" />
+										<Input
+											className="pl-8"
+											placeholder="Search recruiter by name, email, or code…"
+											value={recruiterSearch}
+											onChange={(e) => {
+												setRecruiterSearch(e.target.value);
+												setRecruiterPickerOpen(true);
+											}}
+											onFocus={() => setRecruiterPickerOpen(true)}
+										/>
+									</div>
+								)}
+								{recruiterPickerOpen && !form.recruitedById ? (
+									<ul className="max-h-40 space-y-1 overflow-y-auto rounded border p-2">
+										{recruitersLoading ? (
+											<li className="px-2 py-1.5 text-muted-foreground text-sm">
+												Loading agents…
+											</li>
+										) : recruiterCandidates.length === 0 ? (
+											<li className="px-2 py-1.5 text-muted-foreground text-sm">
+												No agents found
+											</li>
+										) : (
+											recruiterCandidates.map((row) => (
+												<li key={row.agent.id}>
+													<button
+														type="button"
+														className="w-full rounded px-2 py-1.5 text-left text-sm hover:bg-muted"
+														onMouseDown={(e) => e.preventDefault()}
+														onClick={() => {
+															setField("recruitedById", row.agent.id);
+															setSelectedRecruiterLabel(
+																formatAgentPickerLabel({
+																	name: row.agent.name,
+																	nickName: row.agent.nickName,
+																	agentCode: row.agent.agentCode,
+																	email: row.agent.email,
+																}),
+															);
+															setRecruiterSearch("");
+															setRecruiterPickerOpen(false);
+														}}
+													>
+														{formatAgentPickerLabel({
+															name: row.agent.name,
+															nickName: row.agent.nickName,
+															agentCode: row.agent.agentCode,
+															email: row.agent.email,
+														})}
+													</button>
+												</li>
+											))
+										)}
+									</ul>
+								) : null}
+								<Button
+									type="button"
+									variant="link"
+									size="sm"
+									className="h-auto px-0 text-muted-foreground"
+									onClick={() => {
+										setField("recruitedById", "");
+										setSelectedRecruiterLabel(null);
+									}}
+								>
+									Clear recruiter
+								</Button>
+							</div>
+						) : (
+							<InfoField
+								label="Recruit by"
+								value={displayValue(recruiter?.name)}
+							/>
+						)}
+						{isEditing ? (
+							<div className="space-y-2">
+								<Label>Joined date</Label>
+								<Input
+									type="date"
+									value={form.joinedDate}
+									onChange={(e) => setField("joinedDate", e.target.value)}
+								/>
+								<p className="text-muted-foreground text-xs">
+									Defaults to account create date (DD/MM/YYYY display).
+								</p>
+							</div>
+						) : (
+							<InfoField
+								label="Joined date"
+								value={
+									agent.createdAt ? formatDateDMY(agent.createdAt) : "—"
+								}
+							/>
+						)}
 						{isEditing ? (
 							<div className="space-y-2">
 								<Label>Commission tier</Label>
@@ -297,6 +439,13 @@ export function AgentProfilePanel({
 								value={`${AGENT_TIER_CONFIG[currentTier].displayName} (${AGENT_TIER_CONFIG[currentTier].commissionSplit}%)`}
 							/>
 						)}
+						<InfoField
+							label="Branch"
+							value={displayValue(agent.branch)}
+							editValue={form.branch}
+							isEditing={isEditing}
+							onChange={(v) => setField("branch", v)}
+						/>
 					</InfoGrid>
 				</Section>
 
@@ -410,13 +559,6 @@ export function AgentProfilePanel({
 								}
 							/>
 						)}
-						<InfoField
-							label="Branch"
-							value={displayValue(agent.branch)}
-							editValue={form.branch}
-							isEditing={isEditing}
-							onChange={(v) => setField("branch", v)}
-						/>
 					</InfoGrid>
 				</Section>
 
@@ -508,7 +650,10 @@ export function AgentProfilePanel({
 	);
 }
 
-function buildFormState(agent: AgentProfile) {
+function buildFormState(
+	agent: AgentProfile,
+	recruiter?: { id: string; name: string } | null,
+) {
 	return {
 		fullName: agent.name ?? "",
 		nickName: agent.nickName ?? "",
@@ -529,6 +674,8 @@ function buildFormState(agent: AgentProfile) {
 		branch: agent.branch ?? "",
 		agentCode: agent.agentCode ?? "",
 		agentTier: agent.agentTier ?? "advisor",
+		recruitedById: agent.recruitedBy ?? recruiter?.id ?? "",
+		joinedDate: toDateInputValue(agent.createdAt),
 	};
 }
 

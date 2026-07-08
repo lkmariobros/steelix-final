@@ -80,7 +80,7 @@ export function AgentViewModal({
 							<TabsContent value="details" className="mt-4">
 								<AgentProfilePanel
 									agent={agent}
-									recruiterName={agentData?.recruiter?.name}
+									recruiter={agentData?.recruiter}
 									onManage={onManage}
 								/>
 							</TabsContent>

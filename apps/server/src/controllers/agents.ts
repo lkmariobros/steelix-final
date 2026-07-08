@@ -206,6 +206,8 @@ const updateAgentInput = z.object({
 	agencyId: z.string().uuid().optional(),
 	permissions: z.string().optional(),
 	agentCode: z.string().min(1).max(32).optional(),
+	recruitedBy: z.string().nullable().optional(),
+	joinedDate: z.coerce.date().optional(),
 	documents: z
 		.object({
 			icFront: onboardingDocumentFileSchema.optional(),
@@ -595,7 +597,7 @@ export const agentsRouter = router({
 	update: adminProcedure
 		.input(updateAgentInput)
 		.mutation(async ({ ctx, input }) => {
-			const { id, documents, ...updateData } = input;
+			const { id, documents, joinedDate, recruitedBy, ...updateData } = input;
 
 			// Get current agent data for tier change tracking
 			const [currentAgent] = await db
@@ -606,6 +608,26 @@ export const agentsRouter = router({
 
 			if (!currentAgent) {
 				throw new Error("Agent not found");
+			}
+
+			if (recruitedBy !== undefined && recruitedBy !== null) {
+				if (recruitedBy === id) {
+					throw new TRPCError({
+						code: "BAD_REQUEST",
+						message: "An agent cannot recruit themselves",
+					});
+				}
+				const [recruiter] = await db
+					.select({ id: user.id })
+					.from(user)
+					.where(eq(user.id, recruitedBy))
+					.limit(1);
+				if (!recruiter) {
+					throw new TRPCError({
+						code: "BAD_REQUEST",
+						message: "Recruiter not found",
+					});
+				}
 			}
 
 			if (updateData.agentCode) {
@@ -638,6 +660,8 @@ export const agentsRouter = router({
 				.update(user)
 				.set({
 					...updateData,
+					...(recruitedBy !== undefined ? { recruitedBy } : {}),
+					...(joinedDate !== undefined ? { createdAt: joinedDate } : {}),
 					...(documents ? { onboardingDocuments } : {}),
 					updatedAt: new Date(),
 				})

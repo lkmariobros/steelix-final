@@ -46,6 +46,7 @@ import {
 	formatAgentStatus,
 	isPendingAgentStatus,
 } from "@/lib/agent-status";
+import { formatDateDMY } from "@/lib/date-format";
 import { trpc } from "@/utils/trpc";
 import {
 	RiAddLine,
@@ -526,7 +527,7 @@ export default function AdminAgentsPage() {
 														<p className="text-muted-foreground text-sm">
 															{agentItem.agent.email}
 															{agentItem.agent.createdAt &&
-																` • Joined ${new Date(agentItem.agent.createdAt).toLocaleDateString()}`}
+																` • Joined ${formatDateDMY(agentItem.agent.createdAt)}`}
 														</p>
 													</div>
 												</div>
