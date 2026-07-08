@@ -386,6 +386,7 @@ export const whatsappRouter = router({
 							.set({
 								lastContact: new Date(),
 								nextContact: followUpDueAt,
+								status: "active",
 								stage:
 									linkedProspect.stage === "new_lead"
 										? "first_follow_up"

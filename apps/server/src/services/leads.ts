@@ -121,11 +121,34 @@ async function logActivity(opts: {
 
 // ─── Service Functions ────────────────────────────────────────────────────────
 
+const LEAD_INACTIVITY_DAYS = 5;
+
+async function autoMarkInactiveLeads() {
+	// Default status is "active" on import/create.
+	// If there is no update to Notes/Stage for 5 days, mark lead as inactive.
+	// When Notes/Stage are updated again, mutations set status back to active.
+	const cutoff = new Date(Date.now() - LEAD_INACTIVITY_DAYS * 86_400_000);
+	try {
+		await db
+			.update(prospects)
+			.set({ status: "inactive", updatedAt: new Date() })
+			.where(
+				and(
+					eq(prospects.status, "active"),
+					sql`${prospects.updatedAt} <= ${cutoff}`,
+				),
+			);
+	} catch {
+		// never block UX
+	}
+}
+
 /**
  * Get all leads (admin — no agent restriction) with filters and pagination.
  */
 export async function getAllLeadsAdmin(filter: AdminLeadsFilter = {}) {
 	try {
+		await autoMarkInactiveLeads();
 	const {
 		search,
 		type,
@@ -631,6 +654,16 @@ export async function updateLeadAdmin(
 		await assertAssignableLeadAgent(updateFields.agentId);
 	}
 
+	// Reactivate on Notes/Stage updates (unless admin explicitly sets status).
+	const touchedByAgent =
+		updateFields.stage !== undefined ||
+		updateFields.notes !== undefined ||
+		updateFields.lastContact !== undefined ||
+		updateFields.nextContact !== undefined;
+	if (updateFields.status === undefined && touchedByAgent) {
+		updateFields.status = "active";
+	}
+
 	// Fetch old record for diff-logging
 	const [before] = await db
 		.select()
@@ -851,7 +884,7 @@ export async function bulkUpdateLeadsStageAdmin(
 
 	await db
 		.update(prospects)
-		.set({ stage: parsed.data, updatedAt: new Date() })
+		.set({ stage: parsed.data, status: "active", updatedAt: new Date() })
 		.where(
 			sql`${prospects.id} = ANY(ARRAY[${sql.join(
 				leadIds.map((id) => sql`${id}::uuid`),
@@ -992,6 +1025,12 @@ export async function addNoteToLeadAdmin(
 		.values({ prospectId: leadId, content, agentId: adminId })
 		.returning();
 
+	// Note is activity -> reactivate
+	await db
+		.update(prospects)
+		.set({ status: "active", updatedAt: new Date() })
+		.where(eq(prospects.id, leadId));
+
 	await logActivity({
 		prospectId: leadId,
 		eventType: "note_added",
@@ -1019,7 +1058,7 @@ export async function logCallForLeadAdmin(
 	// Also update lastContact timestamp
 	await db
 		.update(prospects)
-		.set({ lastContact: new Date(), updatedAt: new Date() })
+		.set({ lastContact: new Date(), status: "active", updatedAt: new Date() })
 		.where(eq(prospects.id, leadId));
 }
 
@@ -1037,6 +1076,12 @@ export async function logEmailForLeadAdmin(
 		actorId,
 		content,
 	});
+
+	// Email counts as activity touchpoint -> reactivate
+	await db
+		.update(prospects)
+		.set({ lastContact: new Date(), status: "active", updatedAt: new Date() })
+		.where(eq(prospects.id, leadId));
 }
 
 /**
@@ -1205,6 +1250,7 @@ export async function findProspectByNormalizedPhone(normPhone: string) {
  * Get aggregated stats for the admin leads dashboard.
  */
 export async function getLeadsStatsAdmin(): Promise<LeadsStatsAdmin> {
+	await autoMarkInactiveLeads();
 	// Total count
 	const [totalRow] = await db
 		.select({ count: sql<number>`count(*)` })
@@ -1297,6 +1343,62 @@ const assignableLeadAgentWhere = and(
 	or(eq(user.isActive, true), isNull(user.isActive)),
 	sql`lower(trim(coalesce(${user.role}, 'agent'))) = 'agent'`,
 );
+
+/** Match CSV follower tokens to active agent accounts (name, nickname, code, or email). */
+async function resolveFollowerIdsFromCsv(raw: string): Promise<{
+	followerIds: string[];
+	unknownNames: string[];
+}> {
+	const tokens = parseCsvTagNames(raw);
+	if (tokens.length === 0) return { followerIds: [], unknownNames: [] };
+
+	const followerIds: string[] = [];
+	const unknownNames: string[] = [];
+
+	for (const token of tokens) {
+		const t = token.trim();
+		if (!t) continue;
+
+		let row: { id: string } | undefined;
+
+		if (t.includes("@")) {
+			[row] = await db
+				.select({ id: user.id })
+				.from(user)
+				.where(
+					and(
+						sql`lower(${user.email}) = ${t.toLowerCase()}`,
+						assignableLeadAgentWhere,
+					),
+				)
+				.limit(1);
+		} else {
+			const want = t.toLowerCase();
+			[row] = await db
+				.select({ id: user.id })
+				.from(user)
+				.where(
+					and(
+						or(
+							sql`lower(trim(${user.name})) = ${want}`,
+							sql`lower(trim(coalesce(${user.nickName}, ''))) = ${want}`,
+							sql`lower(trim(coalesce(${user.agentCode}, ''))) = ${want}`,
+						),
+						assignableLeadAgentWhere,
+					),
+				)
+				.limit(1);
+		}
+
+		if (row) {
+			if (!followerIds.includes(row.id)) followerIds.push(row.id);
+		} else {
+			unknownNames.push(t);
+		}
+	}
+
+	return { followerIds, unknownNames };
+}
 
 /**
  * Active sales agents available for lead assignment (not limited to leads already held).
@@ -1576,6 +1678,13 @@ export async function importLeadsBulkAdmin(
 			"agent",
 			"Agent",
 		);
+		const followersRaw = pickCsvField(
+			row,
+			"follower",
+			"Follower",
+			"followers",
+			"Followers",
+		);
 		const lastContactRaw = pickCsvField(
 			row,
 			"lastcontact",
@@ -1712,6 +1821,9 @@ export async function importLeadsBulkAdmin(
 
 		const resolvedTags =
 			tagNames.length > 0 ? await resolveTagIdsFromCsv(tags) : null;
+		const resolvedFollowers = followersRaw.trim()
+			? await resolveFollowerIdsFromCsv(followersRaw)
+			: null;
 
 		try {
 			let leadId: string;
@@ -1766,6 +1878,23 @@ export async function importLeadsBulkAdmin(
 					object: "Lead",
 					kind: "warning",
 					message: `Unknown categories skipped (create them in Lead Categories first): ${resolvedTags.unknownNames.join(", ")}`,
+				});
+			}
+			if (resolvedFollowers) {
+				await setProspectFollowers(
+					leadId,
+					resolvedFollowers.followerIds,
+					actorId,
+				);
+			}
+			if (resolvedFollowers && resolvedFollowers.unknownNames.length > 0) {
+				warning++;
+				lines.push({
+					lineNo: rowNum,
+					identifier: name.trim(),
+					object: "Lead",
+					kind: "warning",
+					message: `Unknown followers skipped: ${resolvedFollowers.unknownNames.join(", ")}`,
 				});
 			}
 			if (notesVal) {
@@ -1882,6 +2011,13 @@ export async function importProspectsBulkForAgent(
 			"next contact",
 			"Next Contact",
 		);
+		const followersRaw = pickCsvField(
+			row,
+			"follower",
+			"Follower",
+			"followers",
+			"Followers",
+		);
 
 		if (!name?.trim() || !phoneRaw?.trim()) {
 			result.skippedInvalid++;
@@ -1923,6 +2059,9 @@ export async function importProspectsBulkForAgent(
 		const tagNames = parseCsvTagNames(tagsRaw);
 		const resolvedTags =
 			tagNames.length > 0 ? await resolveTagIdsFromCsv(tagsRaw) : null;
+		const resolvedFollowers = followersRaw.trim()
+			? await resolveFollowerIdsFromCsv(followersRaw)
+			: null;
 
 		const baseUpsert = {
 			name: name.trim(),
@@ -2012,6 +2151,19 @@ export async function importProspectsBulkForAgent(
 				result.warnings.push({
 					rowIndex: rowNum,
 					message: `Unknown categories skipped (create them in Lead Categories first): ${resolvedTags.unknownNames.join(", ")}`,
+				});
+			}
+			if (resolvedFollowers) {
+				await setProspectFollowers(
+					leadId,
+					resolvedFollowers.followerIds,
+					agentId,
+				);
+			}
+			if (resolvedFollowers && resolvedFollowers.unknownNames.length > 0) {
+				result.warnings.push({
+					rowIndex: rowNum,
+					message: `Unknown followers skipped: ${resolvedFollowers.unknownNames.join(", ")}`,
 				});
 			}
 		} catch (e) {

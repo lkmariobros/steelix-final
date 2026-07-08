@@ -41,6 +41,7 @@ type LeadFieldKey =
 	| "categories"
 	| "leadType"
 	| "agent"
+	| "follower"
 	| "skip";
 
 const FIELD_OPTIONS: Array<{ key: LeadFieldKey; label: string }> = [
@@ -52,6 +53,7 @@ const FIELD_OPTIONS: Array<{ key: LeadFieldKey; label: string }> = [
 	{ key: "categories", label: "Categories" },
 	{ key: "leadType", label: "Lead Type" },
 	{ key: "agent", label: "Assigned Agent" },
+	{ key: "follower", label: "Follower" },
 	{ key: "skip", label: "Skip column" },
 ];
 
@@ -127,6 +129,7 @@ export function ImportLeadsDialog({
 		categories: true,
 		leadType: true,
 		agent: true,
+		follower: true,
 	});
 	const [importResult, setImportResult] = useState<
 		| null
@@ -222,6 +225,7 @@ export function ImportLeadsDialog({
 					n === "lead_type"
 				)
 					seed[h] = "leadType";
+				else if (n.includes("follower")) seed[h] = "follower";
 				else if (n.includes("agent")) seed[h] = "agent";
 				else seed[h] = "skip";
 			}
@@ -281,6 +285,7 @@ export function ImportLeadsDialog({
 				if (field === "agent") next["Assigned Agent"] = v;
 				else if (field === "leadType") next["Lead Type"] = v;
 				else if (field === "categories") next["Categories"] = v;
+				else if (field === "follower") next["Follower"] = v;
 				else next[field] = v;
 			}
 			out.push(next);
@@ -452,6 +457,12 @@ export function ImportLeadsDialog({
 										<code className="text-foreground">Personal Lead</code> or{" "}
 										<code className="text-foreground">Company Lead</code> (defaults
 										to Personal Lead if empty).
+									</li>
+									<li>
+										<strong>Follower:</strong> agent name, nickname, code, or
+										email. Separate multiple with{" "}
+										<code className="text-foreground">;</code> or{" "}
+										<code className="text-foreground">,</code>.
 									</li>
 								</ul>
 							</div>

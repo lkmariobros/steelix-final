@@ -46,6 +46,7 @@ type LeadFieldKey =
 	| "project"
 	| "lastContact"
 	| "nextContact"
+	| "follower"
 	| "skip";
 
 const FIELD_OPTIONS: Array<{ key: LeadFieldKey; label: string }> = [
@@ -62,6 +63,7 @@ const FIELD_OPTIONS: Array<{ key: LeadFieldKey; label: string }> = [
 	{ key: "project", label: "Project" },
 	{ key: "lastContact", label: "Last Contact" },
 	{ key: "nextContact", label: "Next Contact" },
+	{ key: "follower", label: "Follower" },
 	{ key: "skip", label: "Skip column" },
 ];
 
@@ -144,6 +146,7 @@ export function ImportLeadsDialog({
 		project: true,
 		lastContact: true,
 		nextContact: true,
+		follower: true,
 	});
 	const [importResult, setImportResult] = useState<
 		| null
@@ -279,6 +282,7 @@ export function ImportLeadsDialog({
 				else if (n === "project" || n.includes("project name")) seed[h] = "project";
 				else if (n.includes("last contact")) seed[h] = "lastContact";
 				else if (n.includes("next contact")) seed[h] = "nextContact";
+				else if (n.includes("follower")) seed[h] = "follower";
 				else seed[h] = "skip";
 			}
 			setColumnMap(seed);
@@ -345,6 +349,7 @@ export function ImportLeadsDialog({
 				else if (field === "project") next["Project"] = v;
 				else if (field === "lastContact") next["Last Contact"] = v;
 				else if (field === "nextContact") next["Next Contact"] = v;
+				else if (field === "follower") next["Follower"] = v;
 			}
 			out.push(next);
 		}

@@ -110,6 +110,23 @@ export const crmRouter = router({
 		.input(listProspectsInput)
 		.query(async ({ input, ctx }) => {
 			try {
+				// Auto status: active -> inactive after 5 days no updates.
+				// (reactivation is handled in note/stage mutations)
+				try {
+					const cutoff = new Date(Date.now() - 5 * 86_400_000);
+					await db
+						.update(prospects)
+						.set({ status: "inactive", updatedAt: new Date() })
+						.where(
+							and(
+								eq(prospects.status, "active"),
+								sql`${prospects.updatedAt} <= ${cutoff}`,
+							),
+						);
+				} catch {
+					// never block list query
+				}
+
 				const {
 					search,
 					type,
@@ -793,6 +810,7 @@ export const crmRouter = router({
 				.update(prospects)
 				.set({
 					stage,
+					status: "active",
 					updatedAt: new Date(),
 				})
 				.where(eq(prospects.id, id))
@@ -891,6 +909,7 @@ export const crmRouter = router({
 				.update(prospects)
 				.set({
 					lastContact: new Date(),
+					status: "active",
 					stage:
 						prospect.stage === "new_lead"
 							? "first_follow_up"
