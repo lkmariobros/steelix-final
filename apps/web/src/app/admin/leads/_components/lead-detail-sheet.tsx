@@ -222,8 +222,7 @@ export function LeadDetailSheet({
 						{activeLead.name}
 					</SheetTitle>
 					<SheetDescription>
-						Lead ID: {formatLeadId(activeLead.id)} · Lead details, activity
-						timeline, and management actions
+						Lead details, activity timeline, and management actions
 					</SheetDescription>
 				</SheetHeader>
 
@@ -239,10 +238,6 @@ export function LeadDetailSheet({
 								<CardTitle className="text-sm">Contact Info</CardTitle>
 							</CardHeader>
 							<CardContent className="grid grid-cols-2 gap-3 text-sm">
-								<div>
-									<span className="text-muted-foreground">Lead ID</span>
-									<p className="font-mono font-medium">{formatLeadId(activeLead.id)}</p>
-								</div>
 								<div>
 									<span className="text-muted-foreground">Status</span>
 									<div className="mt-0.5">

@@ -17,6 +17,16 @@ body {
 	}
 }
 
+/* Hide scrollbars globally (keep scrolling functional). */
+* {
+	-ms-overflow-style: none; /* IE/Edge legacy */
+	scrollbar-width: none; /* Firefox */
+}
+*::-webkit-scrollbar {
+	width: 0;
+	height: 0;
+}
+
 :root {
 	--radius: 0.625rem;
 	--card: oklch(1 0 0);
