@@ -11,3 +11,15 @@ export const COMPANY_POLICY = `${BRAND_NAME} Company Policies
 export const NDA_TEXT = `Non-Disclosure Agreement (NDA)
 
 By joining ${BRAND_NAME}, you agree not to disclose confidential business information, client data, commission structures, internal systems, or proprietary sales materials to any third party without written approval from management. This obligation continues after your association with the agency ends.`;
+
+/** Devots branch offices — used on agent onboarding & profile. */
+export const BRANCH_OPTIONS = [
+	{ value: "GENTING", label: "GENTING" },
+	{ value: "PUCHONG", label: "PUCHONG" },
+] as const;
+
+export type BranchValue = (typeof BRANCH_OPTIONS)[number]["value"];
+
+export function isBranchValue(value: string): value is BranchValue {
+	return BRANCH_OPTIONS.some((o) => o.value === value);
+}

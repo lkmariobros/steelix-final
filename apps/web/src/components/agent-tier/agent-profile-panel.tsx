@@ -22,6 +22,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { formatDateDMY, parseDateInputValue, toDateInputValue } from "@/lib/date-format";
 import { formatAgentPickerLabel } from "@/lib/agent-display";
+import { BRANCH_OPTIONS } from "@/features/erecruitment/constants";
 import { trpc } from "@/utils/trpc";
 import {
 	AGENT_TIER_CONFIG,
@@ -439,13 +440,35 @@ export function AgentProfilePanel({
 								value={`${AGENT_TIER_CONFIG[currentTier].displayName} (${AGENT_TIER_CONFIG[currentTier].commissionSplit}%)`}
 							/>
 						)}
-						<InfoField
-							label="Branch"
-							value={displayValue(agent.branch)}
-							editValue={form.branch}
-							isEditing={isEditing}
-							onChange={(v) => setField("branch", v)}
-						/>
+						{isEditing ? (
+							<div className="space-y-2">
+								<Label>Branch</Label>
+								<Select
+									value={form.branch || undefined}
+									onValueChange={(v) => setField("branch", v)}
+								>
+									<SelectTrigger>
+										<SelectValue placeholder="Select branch" />
+									</SelectTrigger>
+									<SelectContent>
+										{BRANCH_OPTIONS.map((option) => (
+											<SelectItem key={option.value} value={option.value}>
+												{option.label}
+											</SelectItem>
+										))}
+										{form.branch &&
+										!BRANCH_OPTIONS.some((o) => o.value === form.branch) ? (
+											<SelectItem value={form.branch}>{form.branch}</SelectItem>
+										) : null}
+									</SelectContent>
+								</Select>
+							</div>
+						) : (
+							<InfoField
+								label="Branch"
+								value={displayValue(agent.branch)}
+							/>
+						)}
 					</InfoGrid>
 				</Section>
 

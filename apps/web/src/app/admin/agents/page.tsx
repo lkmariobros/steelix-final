@@ -356,89 +356,144 @@ export default function AdminAgentsPage() {
 
 					{/* Agent Summary Cards */}
 					{isLoadingStats ? (
-						<div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-							{["sk-a1", "sk-a2", "sk-a3", "sk-a4"].map((id) => (
-								<Card key={id} className="overflow-hidden">
-									<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-										<Skeleton className="h-3.5 w-24" />
-										<Skeleton className="h-4 w-4 rounded" />
-									</CardHeader>
-									<CardContent className="space-y-2">
-										<Skeleton className="h-8 w-16" />
-										<Skeleton className="h-3 w-28" />
-									</CardContent>
-								</Card>
-							))}
+						<div className="space-y-4">
+							<div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+								{["sk-a1", "sk-a2", "sk-a3", "sk-a4"].map((id) => (
+									<Card key={id} className="overflow-hidden">
+										<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+											<Skeleton className="h-3.5 w-24" />
+											<Skeleton className="h-4 w-4 rounded" />
+										</CardHeader>
+										<CardContent className="space-y-2">
+											<Skeleton className="h-8 w-16" />
+											<Skeleton className="h-3 w-28" />
+										</CardContent>
+									</Card>
+								))}
+							</div>
+							<div className="grid gap-4 md:grid-cols-2 lg:grid-cols-2">
+								{["sk-branch-1", "sk-branch-2"].map((id) => (
+									<Card key={id} className="overflow-hidden">
+										<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+											<Skeleton className="h-3.5 w-32" />
+											<Skeleton className="h-4 w-4 rounded" />
+										</CardHeader>
+										<CardContent className="space-y-2">
+											<Skeleton className="h-8 w-16" />
+											<Skeleton className="h-3 w-32" />
+										</CardContent>
+									</Card>
+								))}
+							</div>
 						</div>
 					) : (
-						<div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-							<Card>
-								<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-									<CardTitle className="font-medium text-sm">
-										Total Agents
-									</CardTitle>
-									<RiUserLine className="h-4 w-4 text-muted-foreground" />
-								</CardHeader>
-								<CardContent>
-									<div className="font-bold text-2xl">
-										{agentStats?.totalAgents || 0}
-									</div>
-									<p className="text-muted-foreground text-xs">
-										Total registered
-									</p>
-								</CardContent>
-							</Card>
-							<Card>
-								<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-									<CardTitle className="font-medium text-sm">
-										Active Agents
-									</CardTitle>
-									<RiTeamLine className="h-4 w-4 text-muted-foreground" />
-								</CardHeader>
-								<CardContent>
-									<div className="font-bold text-2xl">
-										{agentStats?.activeAgents || 0}
-									</div>
-									<p className="text-muted-foreground text-xs">
-										{agentStats?.totalAgents
-											? `${Math.round((agentStats.activeAgents / agentStats.totalAgents) * 100)}% active rate`
-											: "Active agents"}
-									</p>
-								</CardContent>
-							</Card>
-							<Card>
-								<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-									<CardTitle className="font-medium text-sm">
-										Team Leads
-									</CardTitle>
-									<RiUserLine className="h-4 w-4 text-muted-foreground" />
-								</CardHeader>
-								<CardContent>
-									<div className="font-bold text-2xl">
-										{agentStats?.teamLeads || 0}
-									</div>
-									<p className="text-muted-foreground text-xs">
-										Leadership roles
-									</p>
-								</CardContent>
-							</Card>
-							<Card>
-								<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-									<CardTitle className="font-medium text-sm">Admins</CardTitle>
-									<RiTeamLine className="h-4 w-4 text-muted-foreground" />
-								</CardHeader>
-								<CardContent>
-									<div className="font-bold text-2xl">
-										{(agentStats?.admins || 0) +
-											(agentStats?.superAdmins || 0)}
-									</div>
-									<p className="text-muted-foreground text-xs">
-										{agentStats?.superAdmins
-											? `${agentStats.admins} admin · ${agentStats.superAdmins} super`
-											: "Admin users"}
-									</p>
-								</CardContent>
-							</Card>
+						<div className="space-y-4">
+							<div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+								<Card>
+									<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+										<CardTitle className="font-medium text-sm">
+											Total Agents
+										</CardTitle>
+										<RiUserLine className="h-4 w-4 text-muted-foreground" />
+									</CardHeader>
+									<CardContent>
+										<div className="font-bold text-2xl">
+											{agentStats?.totalAgents || 0}
+										</div>
+										<p className="text-muted-foreground text-xs">
+											Total registered
+										</p>
+									</CardContent>
+								</Card>
+								<Card>
+									<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+										<CardTitle className="font-medium text-sm">
+											Active Agents
+										</CardTitle>
+										<RiTeamLine className="h-4 w-4 text-muted-foreground" />
+									</CardHeader>
+									<CardContent>
+										<div className="font-bold text-2xl">
+											{agentStats?.activeAgents || 0}
+										</div>
+										<p className="text-muted-foreground text-xs">
+											{agentStats?.totalAgents
+												? `${Math.round((agentStats.activeAgents / agentStats.totalAgents) * 100)}% active rate`
+												: "Active agents"}
+										</p>
+									</CardContent>
+								</Card>
+								<Card>
+									<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+										<CardTitle className="font-medium text-sm">
+											Team Leads
+										</CardTitle>
+										<RiUserLine className="h-4 w-4 text-muted-foreground" />
+									</CardHeader>
+									<CardContent>
+										<div className="font-bold text-2xl">
+											{agentStats?.teamLeads || 0}
+										</div>
+										<p className="text-muted-foreground text-xs">
+											Leadership roles
+										</p>
+									</CardContent>
+								</Card>
+								<Card>
+									<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+										<CardTitle className="font-medium text-sm">Admins</CardTitle>
+										<RiTeamLine className="h-4 w-4 text-muted-foreground" />
+									</CardHeader>
+									<CardContent>
+										<div className="font-bold text-2xl">
+											{(agentStats?.admins || 0) +
+												(agentStats?.superAdmins || 0)}
+										</div>
+										<p className="text-muted-foreground text-xs">
+											{agentStats?.superAdmins
+												? `${agentStats.admins} admin · ${agentStats.superAdmins} super`
+												: "Admin users"}
+										</p>
+									</CardContent>
+								</Card>
+							</div>
+
+							<div className="grid gap-4 md:grid-cols-2 lg:grid-cols-2">
+								<Card>
+									<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+										<CardTitle className="font-medium text-sm">
+											Branch GENTING
+										</CardTitle>
+										<RiTeamLine className="h-4 w-4 text-muted-foreground" />
+									</CardHeader>
+									<CardContent>
+										<div className="font-bold text-2xl">
+											{(agentStats as unknown as { gentingAgents?: number })
+												?.gentingAgents || 0}
+										</div>
+										<p className="text-muted-foreground text-xs">
+											Agents in GENTING
+										</p>
+									</CardContent>
+								</Card>
+								<Card>
+									<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+										<CardTitle className="font-medium text-sm">
+											Branch PUCHONG
+										</CardTitle>
+										<RiTeamLine className="h-4 w-4 text-muted-foreground" />
+									</CardHeader>
+									<CardContent>
+										<div className="font-bold text-2xl">
+											{(agentStats as unknown as { puchongAgents?: number })
+												?.puchongAgents || 0}
+										</div>
+										<p className="text-muted-foreground text-xs">
+											Agents in PUCHONG
+										</p>
+									</CardContent>
+								</Card>
+							</div>
 						</div>
 					)}
 
@@ -517,17 +572,20 @@ export default function AdminAgentsPage() {
 																	(agentItem.agent as AgentData).agentStatus,
 																)}
 															</span>
-															{(agentItem.agent as AgentData).agentCode ? (
-																<span className="rounded-full bg-muted px-2 py-1 font-mono text-xs">
-																	Code{" "}
-																	{(agentItem.agent as AgentData).agentCode}
-																</span>
-															) : null}
 														</div>
 														<p className="text-muted-foreground text-sm">
+															{(agentItem.agent as AgentData).agentCode ? (
+																<>
+																	<span className="font-mono">
+																		Code {(agentItem.agent as AgentData).agentCode}
+																	</span>
+																	<span>{" • "}</span>
+																</>
+															) : null}
 															{agentItem.agent.email}
-															{agentItem.agent.createdAt &&
-																` • Joined ${formatDateDMY(agentItem.agent.createdAt)}`}
+															{agentItem.agent.createdAt
+																? ` • Joined ${formatDateDMY(agentItem.agent.createdAt)}`
+																: ""}
 														</p>
 													</div>
 												</div>

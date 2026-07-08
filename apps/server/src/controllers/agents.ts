@@ -1131,6 +1131,8 @@ export const agentsRouter = router({
 				monthlyAgents: sql<number>`count(*) filter (where role in ('agent', 'team_lead') and created_at >= ${startOfMonth})`,
 				yearlyAgents: sql<number>`count(*) filter (where role in ('agent', 'team_lead') and created_at >= ${startOfYear})`,
 				pendingApprovals: sql<number>`count(*) filter (where agent_status = 'pending_approval')`,
+				gentingAgents: sql<number>`count(*) filter (where role = 'agent' and branch = 'GENTING')`,
+				puchongAgents: sql<number>`count(*) filter (where role = 'agent' and branch = 'PUCHONG')`,
 			})
 			.from(user);
 

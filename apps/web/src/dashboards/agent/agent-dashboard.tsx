@@ -2,6 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
+import { Badge } from "@/components/ui/badge";
 import {
 	Card,
 	CardContent,
@@ -26,6 +27,7 @@ import {
 	useAgentDashboard,
 } from "@/contexts/agent-dashboard-context";
 import { useTransactionModalActions } from "@/contexts/transaction-modal-context";
+import { trpc } from "@/utils/trpc";
 import {
 	RiCheckboxCircleLine,
 	RiCalendarLine,
@@ -49,6 +51,7 @@ import { TransactionOverview } from "./components/transaction-overview";
 function DashboardContent() {
 	const router = useRouter();
 	const { openCreateModal } = useTransactionModalActions();
+	const { data: profileData } = trpc.agents.getMyProfile.useQuery();
 	const {
 		dateRange,
 		setDateRange,
@@ -96,7 +99,12 @@ function DashboardContent() {
 			{/* Header */}
 			<div className="mb-6 flex items-center justify-between gap-4">
 				<div className="space-y-1">
-					<h1 className="font-semibold text-2xl">Agent Dashboard</h1>
+					<div className="flex flex-wrap items-center gap-2">
+						<h1 className="font-semibold text-2xl">Agent Dashboard</h1>
+						<Badge variant="secondary" className="mt-0.5">
+							Branch: {profileData?.agent?.branch || "—"}
+						</Badge>
+					</div>
 					<p className="text-muted-foreground text-sm">
 						Track your performance, manage your pipeline, and stay connected
 						with your team.
@@ -157,7 +165,11 @@ function DashboardContent() {
 						/>
 					</Button>
 
-					<Button variant="outline" size="sm">
+					<Button
+						variant="outline"
+						size="sm"
+						onClick={() => router.push("/dashboard/settings")}
+					>
 						<RiSettings3Line className="size-4" />
 					</Button>
 				</div>

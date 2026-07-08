@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/card";
 import { trpc } from "@/utils/trpc";
 import { RecruitmentFormFields } from "./recruitment-form-fields";
+import { BRANCH_OPTIONS } from "./constants";
 import {
 	EMPTY_RECRUITMENT_FORM,
 	type RecruitmentDocKey,
@@ -204,10 +205,21 @@ export function CreateAgentAccountDialog({
 								</div>
 								<div className="space-y-2">
 									<Label>Branch</Label>
-									<Input
-										value={branch}
-										onChange={(e) => setBranch(e.target.value)}
-									/>
+									<Select
+										value={branch || undefined}
+										onValueChange={setBranch}
+									>
+										<SelectTrigger>
+											<SelectValue placeholder="Select branch" />
+										</SelectTrigger>
+										<SelectContent>
+											{BRANCH_OPTIONS.map((option) => (
+												<SelectItem key={option.value} value={option.value}>
+													{option.label}
+												</SelectItem>
+											))}
+										</SelectContent>
+									</Select>
 								</div>
 								{isSuperAdmin ? (
 									<div className="space-y-2">

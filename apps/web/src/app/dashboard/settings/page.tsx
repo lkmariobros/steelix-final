@@ -430,6 +430,12 @@ export default function AgentSettingsPage() {
 													"Advisor"}
 											</Badge>
 										</div>
+										<div>
+											<p className="text-muted-foreground">Branch</p>
+											<Badge variant="secondary" className="mt-1">
+												{profileData?.agent?.branch || "—"}
+											</Badge>
+										</div>
 										{profileData?.team && (
 											<div>
 												<p className="text-muted-foreground">Team</p>
