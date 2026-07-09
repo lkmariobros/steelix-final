@@ -149,7 +149,6 @@ export const LEAD_SOURCE_OPTIONS = [
 export const STATUS_OPTIONS = [
 	{ value: "active", label: "Active" },
 	{ value: "inactive", label: "Inactive" },
-	{ value: "pending", label: "Pending" },
 ] as const;
 
 export const TYPE_OPTIONS = [

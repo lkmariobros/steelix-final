@@ -25,7 +25,7 @@ import {
 	updateCrmProjectSchema,
 	updateProspectSchema,
 } from "../models/crm";
-import { getLeadActivityAdmin, importProspectsBulkForAgent, buildAgentPersonalLeadsCondition, canAgentAccessProspect, fetchFollowersByProspectIds, getAgentsWithLeads, getProspectFollowers, setProspectFollowers, setProspectTagIds } from "../services/leads";
+import { getLeadActivityAdmin, importProspectsBulkForAgent, buildAgentPersonalLeadsCondition, canAgentAccessProspect, fetchFollowersByProspectIds, getAgentsWithLeads, getProspectFollowers, setProspectFollowers, setProspectTagIds, agentLeadDisplayNameSql } from "../services/leads";
 import { withPipelineStageSchemaRetry } from "../utils/pipeline-stage-schema";
 import { db } from "../utils/db";
 import { adminProcedure, protectedProcedure, router } from "../utils/trpc";
@@ -307,7 +307,7 @@ export const crmRouter = router({
 						db
 							.select({
 								prospect: prospects,
-								agentName: user.name,
+								agentName: agentLeadDisplayNameSql,
 								agentEmail: user.email,
 								projectName: crmProjects.name,
 							})
@@ -504,15 +504,21 @@ export const crmRouter = router({
 				});
 			}
 
-			const [prospect] = await db
-				.select()
+			const [prospectRow] = await db
+				.select({
+					prospect: prospects,
+					agentName: agentLeadDisplayNameSql,
+				})
 				.from(prospects)
+				.leftJoin(user, eq(prospects.agentId, user.id))
 				.where(eq(prospects.id, id))
 				.limit(1);
 
-			if (!prospect) {
+			if (!prospectRow) {
 				throw new Error("Prospect not found");
 			}
+
+			const prospect = prospectRow.prospect;
 
 			const followers = await getProspectFollowers(id);
 
@@ -520,7 +526,7 @@ export const crmRouter = router({
 			const notes = await db
 				.select({
 					note: prospectNotes,
-					agentName: user.name,
+					agentName: agentLeadDisplayNameSql,
 				})
 				.from(prospectNotes)
 				.leftJoin(user, eq(prospectNotes.agentId, user.id))
@@ -561,6 +567,7 @@ export const crmRouter = router({
 			return {
 				prospect: {
 					...selectProspectSchema.parse(prospectForParse),
+					agentName: prospectRow.agentName ?? null,
 					tagIds: prospectTagsData.map((t) => t.tag.id),
 					tagNames: prospectTagsData.map((t) => t.tag.name),
 					followerIds: followers.ids,
@@ -948,7 +955,7 @@ export const crmRouter = router({
 			const notes = await db
 				.select({
 					note: prospectNotes,
-					agentName: user.name,
+					agentName: agentLeadDisplayNameSql,
 				})
 				.from(prospectNotes)
 				.leftJoin(user, eq(prospectNotes.agentId, user.id))

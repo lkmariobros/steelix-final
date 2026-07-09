@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import type React from "react";
 import type { Lead } from "./lead-models";
 import { PIPELINE_STAGES, type PipelineStageValue } from "./lead-constants";
-import { StageBadge } from "./lead-ui";
+import { StageBadge, StatusBadge } from "./lead-ui";
 import { Card } from "@/components/ui/card";
 import { trpc } from "@/utils/trpc";
 
@@ -33,11 +33,15 @@ export function KanbanPipelineBoard({
 		return Number.isNaN(ms) ? null : ms;
 	};
 
-	const formatDate = (d: Date | string | null | undefined) => {
-		const ms = parseDateToMs(d);
-		if (!ms) return "—";
-		return new Date(ms).toLocaleDateString();
-	};
+	const renderCardMeta = (lead: Lead) => (
+		<div className="mt-0.5 flex min-w-0 items-center gap-1 text-[11px]">
+			<StatusBadge status={lead.status} />
+			<span className="text-muted-foreground">·</span>
+			<span className="truncate text-muted-foreground">
+				{lead.agentName ?? "Unassigned"}
+			</span>
+		</div>
+	);
 
 	const effectiveLeads = useMemo(() => {
 		if (Object.keys(optimisticStages).length === 0) return leads;
@@ -254,13 +258,7 @@ export function KanbanPipelineBoard({
 												<div className="line-clamp-2 font-medium text-sm leading-tight">
 													{lead.name}
 												</div>
-												<p className="mt-0.5 truncate text-muted-foreground text-[11px]">
-													{lead.nextContact
-														? `Next ${formatDate(lead.nextContact)}`
-														: "No next contact"}
-													{" · "}
-													{lead.agentName ?? "Unassigned"}
-												</p>
+												{renderCardMeta(lead)}
 											</div>
 										</Card>
 									))
@@ -318,13 +316,7 @@ export function KanbanPipelineBoard({
 											<div className="line-clamp-2 font-medium text-sm leading-tight">
 												{lead.name}
 											</div>
-											<p className="mt-0.5 truncate text-muted-foreground text-[11px]">
-												{lead.nextContact
-													? `Next ${formatDate(lead.nextContact)}`
-													: "No next contact"}
-												{" · "}
-												{lead.agentName ?? "Unassigned"}
-											</p>
+											{renderCardMeta(lead)}
 										</div>
 									</Card>
 								))}

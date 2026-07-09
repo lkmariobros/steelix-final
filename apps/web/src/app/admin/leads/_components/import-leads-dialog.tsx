@@ -465,8 +465,9 @@ export function ImportLeadsDialog({
 										to Personal Lead if empty).
 									</li>
 									<li>
-										<strong>Follower:</strong> agent name, nickname, code, or
-										email (e.g. map <strong>Contact Owner</strong> here).
+										<strong>Assigned Agent / Follower:</strong> use agent{" "}
+										<strong>nickname</strong> (fallback: full name, code, or
+										email). Map <strong>Contact Owner</strong> to Follower.
 										Separate multiple with{" "}
 										<code className="text-foreground">;</code> or{" "}
 										<code className="text-foreground">,</code>.

@@ -15,8 +15,9 @@ export function StatsCards({
 	const stats = useMemo(() => {
 		const total = leads.length;
 		const active = leads.filter((l) => l.status === "active").length;
-		const pending = leads.filter((l) => l.status === "pending").length;
-		const inactive = leads.filter((l) => l.status === "inactive").length;
+		const inactive = leads.filter(
+			(l) => l.status === "inactive" || l.status === "pending",
+		).length;
 		const unclaimedCompany = leads.filter(
 			(l) => l.leadType === "company" && !l.agentId,
 		).length;
@@ -28,7 +29,6 @@ export function StatsCards({
 		return {
 			total,
 			active,
-			pending,
 			inactive,
 			unclaimedCompany,
 			bookingsMade,
@@ -96,7 +96,7 @@ export function StatsCards({
 						/>
 					</div>
 					<p className="text-muted-foreground text-xs">
-						{activeRate}% active · {stats.pending} pending · {stats.inactive} inactive
+						{activeRate}% active · {stats.inactive} inactive
 					</p>
 				</CardContent>
 			</Card>

@@ -215,7 +215,7 @@ export async function getAllLeadsAdmin(filter: AdminLeadsFilter = {}) {
 	const rows = await db
 		.select({
 			prospect: prospects,
-			agentName: user.name,
+			agentName: agentLeadDisplayNameSql,
 			agentEmail: user.email,
 			projectName: crmProjects.name,
 		})
@@ -327,7 +327,7 @@ export async function fetchFollowersByProspectIds(
 			.select({
 				prospectId: prospectFollowers.prospectId,
 				userId: user.id,
-				userName: user.name,
+				userName: agentLeadDisplayNameSql,
 				userEmail: user.email,
 			})
 			.from(prospectFollowers)
@@ -575,7 +575,7 @@ export async function getLeadByIdAdmin(leadId: string) {
 	const [row] = await db
 		.select({
 			prospect: prospects,
-			agentName: user.name,
+			agentName: agentLeadDisplayNameSql,
 			agentEmail: user.email,
 			projectName: crmProjects.name,
 		})
@@ -591,7 +591,7 @@ export async function getLeadByIdAdmin(leadId: string) {
 	const noteRows = await db
 		.select({
 			note: prospectNotes,
-			agentName: user.name,
+			agentName: agentLeadDisplayNameSql,
 		})
 		.from(prospectNotes)
 		.leftJoin(user, eq(prospectNotes.agentId, user.id))
@@ -787,21 +787,33 @@ export async function assignLeadAdmin(
 		let newAgentName = "Unassigned";
 		if (agentId) {
 			const [agentRow] = await db
-				.select({ name: user.name, email: user.email })
+				.select({
+					name: user.name,
+					nickName: user.nickName,
+					email: user.email,
+				})
 				.from(user)
 				.where(eq(user.id, agentId))
 				.limit(1);
-			newAgentName = agentRow?.name ?? agentRow?.email ?? agentId;
+			newAgentName = agentRow
+				? pickAgentLeadDisplayName(agentRow)
+				: agentId;
 		}
 
 		let oldAgentName = "Unassigned";
 		if (before?.agentId) {
 			const [oldAgentRow] = await db
-				.select({ name: user.name, email: user.email })
+				.select({
+					name: user.name,
+					nickName: user.nickName,
+					email: user.email,
+				})
 				.from(user)
 				.where(eq(user.id, before.agentId))
 				.limit(1);
-			oldAgentName = oldAgentRow?.name ?? oldAgentRow?.email ?? before.agentId;
+			oldAgentName = oldAgentRow
+				? pickAgentLeadDisplayName(oldAgentRow)
+				: before.agentId;
 		}
 
 		await logActivity({
@@ -1112,7 +1124,7 @@ export async function getLeadActivityAdmin(
 		const rows = await db
 			.select({
 				activity: prospectActivityLog,
-				actorName: user.name,
+				actorName: agentLeadDisplayNameSql,
 				actorEmail: user.email,
 			})
 			.from(prospectActivityLog)
@@ -1156,7 +1168,7 @@ export async function getLeadActivityAdmin(
 		const noteRows = await db
 			.select({
 				note: prospectNotes,
-				agentName: user.name,
+				agentName: agentLeadDisplayNameSql,
 				agentEmail: user.email,
 			})
 			.from(prospectNotes)
@@ -1349,6 +1361,85 @@ const assignableLeadAgentWhere = and(
 	sql`lower(trim(coalesce(${user.role}, 'agent'))) = 'agent'`,
 );
 
+/** Lead section only — prefer agent nickname over legal name in UI and exports. */
+export const agentLeadDisplayNameSql = sql<string>`coalesce(nullif(trim(${user.nickName}), ''), ${user.name})`;
+
+function pickAgentLeadDisplayName(row: {
+	name?: string | null;
+	nickName?: string | null;
+	email?: string | null;
+}): string {
+	const nick = row.nickName?.trim();
+	if (nick) return nick;
+	const name = row.name?.trim();
+	if (name) return name;
+	return row.email?.trim() ?? "Unknown";
+}
+
+function normalizePersonKey(raw: string): string {
+	return raw.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+/** Resolve assignable agent from CSV token — nickname first (lead section convention). */
+async function resolveAssignableAgentIdFromCsv(
+	raw: string,
+): Promise<string | null> {
+	const t = raw.trim();
+	if (!t) return null;
+
+	if (t.includes("@")) {
+		const [row] = await db
+			.select({ id: user.id })
+			.from(user)
+			.where(
+				and(
+					sql`lower(${user.email}) = ${t.toLowerCase()}`,
+					assignableLeadAgentWhere,
+				),
+			)
+			.limit(1);
+		return row?.id ?? null;
+	}
+
+	const want = normalizePersonKey(t);
+
+	const [byNick] = await db
+		.select({ id: user.id })
+		.from(user)
+		.where(
+			and(
+				sql`lower(regexp_replace(trim(coalesce(${user.nickName}, '')), '\\s+', ' ', 'g')) = ${want}`,
+				assignableLeadAgentWhere,
+			),
+		)
+		.limit(1);
+	if (byNick) return byNick.id;
+
+	const [byName] = await db
+		.select({ id: user.id })
+		.from(user)
+		.where(
+			and(
+				sql`lower(regexp_replace(trim(${user.name}), '\\s+', ' ', 'g')) = ${want}`,
+				assignableLeadAgentWhere,
+			),
+		)
+		.limit(1);
+	if (byName) return byName.id;
+
+	const [byCode] = await db
+		.select({ id: user.id })
+		.from(user)
+		.where(
+			and(
+				sql`lower(trim(coalesce(${user.agentCode}, ''))) = ${want}`,
+				assignableLeadAgentWhere,
+			),
+		)
+		.limit(1);
+	return byCode?.id ?? null;
+}
+
 /** Match CSV follower tokens to active agent accounts (name, nickname, code, or email). */
 async function resolveFollowerIdsFromCsv(raw: string): Promise<{
 	followerIds: string[];
@@ -1364,39 +1455,9 @@ async function resolveFollowerIdsFromCsv(raw: string): Promise<{
 		const t = token.trim();
 		if (!t) continue;
 
-		let row: { id: string } | undefined;
-
-		if (t.includes("@")) {
-			[row] = await db
-				.select({ id: user.id })
-				.from(user)
-				.where(
-					and(
-						sql`lower(${user.email}) = ${t.toLowerCase()}`,
-						assignableLeadAgentWhere,
-					),
-				)
-				.limit(1);
-		} else {
-			const want = normalizePersonKey(t);
-			[row] = await db
-				.select({ id: user.id })
-				.from(user)
-				.where(
-					and(
-						or(
-							sql`lower(regexp_replace(trim(${user.name}), '\\s+', ' ', 'g')) = ${want}`,
-							sql`lower(regexp_replace(trim(coalesce(${user.nickName}, '')), '\\s+', ' ', 'g')) = ${want}`,
-							sql`lower(trim(coalesce(${user.agentCode}, ''))) = ${want}`,
-						),
-						assignableLeadAgentWhere,
-					),
-				)
-				.limit(1);
-		}
-
-		if (row) {
-			if (!followerIds.includes(row.id)) followerIds.push(row.id);
+		const agentId = await resolveAssignableAgentIdFromCsv(t);
+		if (agentId) {
+			if (!followerIds.includes(agentId)) followerIds.push(agentId);
 		} else {
 			unknownNames.push(t);
 		}
@@ -1412,12 +1473,12 @@ export async function getAgentsWithLeads() {
 	const rows = await db
 		.select({
 			agentId: user.id,
-			agentName: user.name,
+			agentName: agentLeadDisplayNameSql,
 			agentEmail: user.email,
 		})
 		.from(user)
 		.where(assignableLeadAgentWhere)
-		.orderBy(asc(user.name));
+		.orderBy(asc(agentLeadDisplayNameSql));
 
 	return rows;
 }
@@ -1538,10 +1599,6 @@ function parseCsvTagNames(raw: string): string[] {
 		.split(/[;,]/)
 		.map((s) => s.trim())
 		.filter(Boolean);
-}
-
-function normalizePersonKey(raw: string): string {
-	return raw.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
 /** Match CSV category names to admin-managed lead categories only (no auto-create). */
@@ -1772,18 +1829,7 @@ export async function importLeadsBulkAdmin(
 				.limit(1);
 			agentId = uRow?.id ?? null;
 		} else if (agentNameRaw.trim()) {
-			const want = agentNameRaw.toLowerCase().trim();
-			const [uRow] = await db
-				.select({ id: user.id })
-				.from(user)
-				.where(
-					and(
-						sql`lower(trim(${user.name})) = ${want}`,
-						assignableLeadAgentWhere,
-					),
-				)
-				.limit(1);
-			agentId = uRow?.id ?? null;
+			agentId = await resolveAssignableAgentIdFromCsv(agentNameRaw);
 		}
 
 		const parsedStage = parseStageFromCsv(stageRaw);

@@ -16,11 +16,9 @@ import {
 } from "./lead-models";
 import {
 	ACTIVITY_CONFIG,
-	formatLeadTypeLabel,
 	PIPELINE_STAGES,
 	type PipelineStageValue,
 } from "./lead-constants";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
 	Sheet,
@@ -53,6 +51,7 @@ import {
 } from "@remixicon/react";
 import { StageBadge, ActivityEventIcon, StatusBadge } from "./lead-ui";
 import { LeadTasksCard } from "./lead-tasks-card";
+import { LeadContactInfoCard } from "./lead-contact-info-card";
 
 export function LeadDetailSheet({
 	lead,
@@ -158,15 +157,6 @@ export function LeadDetailSheet({
 		detail?.notes?.[0]?.content?.trim() ||
 		null;
 
-	const formatDate = (d: Date | string | null) => {
-		if (!d) return "—";
-		try {
-			return new Date(d).toLocaleDateString();
-		} catch {
-			return "—";
-		}
-	};
-
 	const formatDateTime = (d: Date | string) => {
 		try {
 			const dt = new Date(d);
@@ -232,80 +222,21 @@ export function LeadDetailSheet({
 					</div>
 				) : (
 					<div className="space-y-6">
-						{/* Contact Info */}
-						<Card>
-							<CardHeader className="pb-3">
-								<CardTitle className="text-sm">Contact Info</CardTitle>
-							</CardHeader>
-							<CardContent className="grid grid-cols-2 gap-3 text-sm">
-								<div>
-									<span className="text-muted-foreground">Status</span>
-									<div className="mt-0.5">
-										<StatusBadge status={activeLead.status} />
-									</div>
-								</div>
-								<div>
-									<span className="text-muted-foreground">Email</span>
-									<p className="truncate font-medium">
-										{activeLead.email || "—"}
-									</p>
-								</div>
-								<div>
-									<span className="text-muted-foreground">Phone</span>
-									<p className="font-medium">{activeLead.phone}</p>
-								</div>
-								<div>
-									<span className="text-muted-foreground">Source</span>
-									<p className="font-medium">
-										{activeLead.source?.trim() || "—"}
-									</p>
-								</div>
-								<div>
-									<span className="text-muted-foreground">Lead Type</span>
-									<p className="font-medium">
-										{formatLeadTypeLabel(activeLead.leadType)}
-									</p>
-								</div>
-								<div className="col-span-2">
-									<span className="text-muted-foreground">Categories</span>
-									{displayTags.length > 0 ? (
-										<div className="mt-1 flex flex-wrap gap-1.5">
-											{displayTags.map((tag) => (
-												<Badge key={tag} variant="secondary">
-													{tag}
-												</Badge>
-											))}
-										</div>
-									) : (
-										<p className="font-medium">—</p>
-									)}
-								</div>
-								<div className="col-span-2">
-									<span className="text-muted-foreground">Description</span>
-									<p className="mt-0.5 break-words whitespace-pre-line font-medium leading-relaxed">
-										{activeLead.property?.trim() || "—"}
-									</p>
-								</div>
-								<div className="col-span-2">
-									<span className="text-muted-foreground">Notes</span>
-									<p className="mt-0.5 break-words whitespace-pre-line font-medium leading-relaxed">
-										{displayNotes || "—"}
-									</p>
-								</div>
-								<div>
-									<span className="text-muted-foreground">Created</span>
-									<p className="font-medium">
-										{formatDate(activeLead.createdAt)}
-									</p>
-								</div>
-								<div>
-									<span className="text-muted-foreground">Assigned Agent</span>
-									<p className="font-medium">
-										{activeLead.agentName ?? "Unassigned"}
-									</p>
-								</div>
-							</CardContent>
-						</Card>
+						<LeadContactInfoCard
+							lead={{
+								status: activeLead.status,
+								email: activeLead.email,
+								phone: activeLead.phone,
+								source: activeLead.source,
+								leadType: activeLead.leadType,
+								tagNames: activeLead.tagNames,
+								tags: activeLead.tags,
+								property: activeLead.property,
+								notesSummary: displayNotes,
+								createdAt: activeLead.createdAt,
+								agentName: activeLead.agentName,
+							}}
+						/>
 
 						{/* Pipeline Stage */}
 						<Card>

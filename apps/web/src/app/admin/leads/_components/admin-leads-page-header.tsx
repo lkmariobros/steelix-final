@@ -65,7 +65,7 @@ export function AdminLeadsPageHeader({
 								: "h-9 rounded-md px-3 text-muted-foreground hover:bg-muted hover:text-foreground"
 						}
 					>
-						Table
+						List View
 					</Button>
 					<Button
 						variant="ghost"
@@ -78,7 +78,7 @@ export function AdminLeadsPageHeader({
 								: "h-9 rounded-md px-3 text-muted-foreground hover:bg-muted hover:text-foreground"
 						}
 					>
-						Kanban
+						Kanban View
 					</Button>
 				</div>
 

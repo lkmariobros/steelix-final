@@ -91,7 +91,8 @@ import {
 	PIPELINE_STAGE_VALUES,
 	PIPELINE_STAGES,
 } from "@/app/admin/leads/_components/lead-constants";
-import { StageBadge, StatusBadge } from "@/app/admin/leads/_components/lead-ui";
+import { StageBadge } from "@/app/admin/leads/_components/lead-ui";
+import { LeadContactInfoCard } from "@/app/admin/leads/_components/lead-contact-info-card";
 import {
 	exportProspectsToCsv,
 	exportProspectsToExcelHtml,
@@ -160,7 +161,7 @@ const prospectFormSchema = z.object({
 	}),
 	property: z.string().min(1, "Property name is required"),
 	projectId: z.string().uuid().optional(),
-	status: z.enum(["active", "inactive", "pending"], {
+	status: z.enum(["active", "inactive"], {
 		required_error: "Please select a status",
 	}),
 	stage: z.enum(PIPELINE_STAGE_VALUES).default("new_lead").optional(),
@@ -1035,7 +1036,6 @@ export default function CRMPage() {
 													<SelectContent>
 														<SelectItem value="active">Active</SelectItem>
 														<SelectItem value="inactive">Inactive</SelectItem>
-														<SelectItem value="pending">Pending</SelectItem>
 													</SelectContent>
 												</Select>
 												<FormMessage />
@@ -1090,47 +1090,21 @@ export default function CRMPage() {
 
 							{activeProspect && (
 								<div className="space-y-6 py-4">
-									{/* Name Section */}
-									<div className="space-y-2" style={{ marginBottom: "15px" }}>
-										<div className="flex items-center gap-2 font-medium text-muted-foreground text-sm">
-											<RiUserLine className="size-4" />
-											Full Name
-										</div>
-										<div className="font-semibold text-base">
-											{activeProspect.name}
-										</div>
-									</div>
-
-									{/* Contact Information */}
-									<div className="space-y-3" style={{ marginBottom: "15px" }}>
-										<div className="font-medium text-muted-foreground text-sm">
-											Contact Information
-										</div>
-										<div className="space-y-3 rounded-lg border bg-muted/30 p-4">
-											<div className="flex items-center gap-3">
-												<RiMailLine className="size-4 text-muted-foreground" />
-												<div className="flex-1">
-													<div className="text-muted-foreground text-xs">
-														Email
-													</div>
-													<div className="font-medium text-sm">
-														{activeProspect.email}
-													</div>
-												</div>
-											</div>
-											<div className="flex items-center gap-3">
-												<RiPhoneLine className="size-4 text-muted-foreground" />
-												<div className="flex-1">
-													<div className="text-muted-foreground text-xs">
-														Phone
-													</div>
-													<div className="font-medium text-sm">
-														{activeProspect.phone}
-													</div>
-												</div>
-											</div>
-										</div>
-									</div>
+									<LeadContactInfoCard
+										lead={{
+											status: activeProspect.status,
+											email: activeProspect.email,
+											phone: activeProspect.phone,
+											source: activeProspect.source,
+											leadType: activeProspect.leadType,
+											tagNames: activeProspect.tagNames,
+											tags: activeProspect.tags,
+											createdAt: activeProspect.createdAt,
+											agentName: activeProspect.agentName,
+										}}
+										showDescription={false}
+										showNotes={false}
+									/>
 
 									{/* Lead Detail */}
 									<div className="space-y-3" style={{ marginBottom: "15px" }}>
@@ -1138,32 +1112,6 @@ export default function CRMPage() {
 											Lead Detail
 										</div>
 										<div className="space-y-3 rounded-lg border bg-muted/30 p-4">
-											<div className="flex items-center justify-between">
-												<div className="flex items-center gap-2 text-muted-foreground text-sm">
-													<RiMapPinLine className="size-4" />
-													Source
-												</div>
-												<div className="font-medium text-sm">
-													{activeProspect.source}
-												</div>
-											</div>
-											<div className="flex items-center justify-between">
-												<div className="flex items-center gap-2 text-muted-foreground text-sm">
-													<RiPriceTagLine className="size-4" />
-													Lead Type
-												</div>
-												<Badge variant="outline" className="capitalize">
-													{activeProspect.leadType === "company"
-														? "Company Lead"
-														: "Personal Lead"}
-												</Badge>
-											</div>
-											<div className="flex items-center justify-between">
-												<div className="flex items-center gap-2 text-muted-foreground text-sm">
-													Status
-												</div>
-												<StatusBadge status={activeProspect.status} />
-											</div>
 											<div className="space-y-2">
 												<div className="flex items-center gap-2 text-muted-foreground text-sm">
 													<RiLinksLine className="size-4" />
@@ -1209,16 +1157,6 @@ export default function CRMPage() {
 													<StageBadge stage={activeProspect.stage} />
 												)}
 											</div>
-											{activeProspect.property?.trim() && (
-												<div className="space-y-1">
-													<div className="text-muted-foreground text-sm">
-														Description
-													</div>
-													<p className="break-words font-medium text-sm leading-relaxed">
-														{activeProspect.property}
-													</p>
-												</div>
-											)}
 											<div className="space-y-2">
 												<div className="flex items-center gap-2 text-muted-foreground text-sm">
 													<RiPriceTagLine className="size-4 shrink-0" />

@@ -56,7 +56,7 @@ export function CreateLeadDialog({
 		source: "",
 		type: "buyer" as "tenant" | "buyer",
 		property: "",
-		status: "active" as "active" | "inactive" | "pending",
+		status: "active" as "active" | "inactive",
 		stage: "new_lead",
 		leadType: "personal" as "personal" | "company",
 		agentId: "",
@@ -233,7 +233,7 @@ export function CreateLeadDialog({
 							onValueChange={(v) =>
 								setForm((p) => ({
 									...p,
-									status: v as "active" | "inactive" | "pending",
+									status: v as "active" | "inactive",
 								}))
 							}
 						>
