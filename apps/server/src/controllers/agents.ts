@@ -909,8 +909,8 @@ export const agentsRouter = router({
 			return { ok: true };
 		}),
 
-	// Permanently delete an agent and related auth records (super admin only)
-	delete: superAdminProcedure
+	// Permanently delete an agent and related auth records (admin + super admin)
+	delete: adminProcedure
 		.input(deleteAgentInput)
 		.mutation(async ({ ctx, input }) => {
 			if (input.agentId === ctx.session.user.id) {
@@ -931,9 +931,33 @@ export const agentsRouter = router({
 			}
 
 			if (target.role === "super_admin") {
+				// Super admin delete is allowed only if at least one super admin remains.
+				// (Self-delete is already blocked above.)
+				if (ctx.userRole !== "super_admin") {
+					throw new TRPCError({
+						code: "FORBIDDEN",
+						message: "Only super admins can delete super admin accounts",
+					});
+				}
+
+				const [{ count: superAdminCount }] = await db
+					.select({ count: sql<number>`count(*)` })
+					.from(user)
+					.where(eq(user.role, "super_admin"));
+
+				if (Number(superAdminCount ?? 0) <= 1) {
+					throw new TRPCError({
+						code: "FORBIDDEN",
+						message: "Cannot delete the last super admin account",
+					});
+				}
+			}
+
+			// Admins can delete agent/team_lead only. Only super_admin can delete admin accounts.
+			if (ctx.userRole !== "super_admin" && target.role === "admin") {
 				throw new TRPCError({
 					code: "FORBIDDEN",
-					message: "Super admin accounts cannot be deleted",
+					message: "Only super admins can delete admin accounts",
 				});
 			}
 

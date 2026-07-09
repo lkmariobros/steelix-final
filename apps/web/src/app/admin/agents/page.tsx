@@ -94,7 +94,7 @@ type AccountRoleFilter =
 	| "super_admin";
 
 export default function AdminAgentsPage() {
-	const { session, isSuperAdmin } = useUserRole();
+	const { session, isSuperAdmin, isAdmin } = useUserRole();
 	const [roleFilter, setRoleFilter] = useState<AccountRoleFilter>("all");
 	const [activeFilter, setActiveFilter] = useState<"all" | "active" | "inactive">(
 		"all",
@@ -667,8 +667,9 @@ export default function AdminAgentsPage() {
 															? "Activate"
 															: "Deactivate"}
 													</Button>
-													{isSuperAdmin &&
-														agentItem.agent.role !== "super_admin" &&
+													{((isAdmin && agentItem.agent.role !== "super_admin") ||
+														(isSuperAdmin &&
+															agentItem.agent.role === "super_admin")) &&
 														agentItem.agent.id !== session?.user?.id && (
 															<Button
 																size="sm"
