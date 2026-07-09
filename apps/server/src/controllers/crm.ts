@@ -26,6 +26,7 @@ import {
 	updateProspectSchema,
 } from "../models/crm";
 import { getLeadActivityAdmin, importProspectsBulkForAgent, buildAgentPersonalLeadsCondition, canAgentAccessProspect, fetchFollowersByProspectIds, getAgentsWithLeads, getProspectFollowers, setProspectFollowers, setProspectTagIds } from "../services/leads";
+import { withPipelineStageSchemaRetry } from "../utils/pipeline-stage-schema";
 import { db } from "../utils/db";
 import { adminProcedure, protectedProcedure, router } from "../utils/trpc";
 
@@ -735,14 +736,16 @@ export const crmRouter = router({
 				effectiveUpdateData.stage = "first_follow_up";
 			}
 
-			const [updated] = await db
-				.update(prospects)
-				.set({
-					...effectiveUpdateData,
-					updatedAt: new Date(),
-				})
-				.where(eq(prospects.id, id))
-				.returning();
+			const [updated] = await withPipelineStageSchemaRetry(() =>
+				db
+					.update(prospects)
+					.set({
+						...effectiveUpdateData,
+						updatedAt: new Date(),
+					})
+					.where(eq(prospects.id, id))
+					.returning(),
+			);
 
 			// Fetch categories for response (agents cannot change them)
 			let prospectTagsData: Array<{
@@ -808,15 +811,17 @@ export const crmRouter = router({
 				throw new Error("Prospect not found");
 			}
 
-			const [updated] = await db
-				.update(prospects)
-				.set({
-					stage,
-					status: "active",
-					updatedAt: new Date(),
-				})
-				.where(eq(prospects.id, id))
-				.returning();
+			const [updated] = await withPipelineStageSchemaRetry(() =>
+				db
+					.update(prospects)
+					.set({
+						stage,
+						status: "active",
+						updatedAt: new Date(),
+					})
+					.where(eq(prospects.id, id))
+					.returning(),
+			);
 
 			// Handle legacy "owner" type - convert to "buyer"
 			const updatedType =
@@ -907,18 +912,20 @@ export const crmRouter = router({
 				.returning();
 
 			// Treat note creation as lead activity contact touchpoint.
-			await db
-				.update(prospects)
-				.set({
-					lastContact: new Date(),
-					status: "active",
-					stage:
-						prospect.stage === "new_lead"
-							? "first_follow_up"
-							: prospect.stage,
-					updatedAt: new Date(),
-				})
-				.where(eq(prospects.id, prospectId));
+			await withPipelineStageSchemaRetry(() =>
+				db
+					.update(prospects)
+					.set({
+						lastContact: new Date(),
+						status: "active",
+						stage:
+							prospect.stage === "new_lead"
+								? "first_follow_up"
+								: prospect.stage,
+						updatedAt: new Date(),
+					})
+					.where(eq(prospects.id, prospectId)),
+			);
 
 			return selectProspectNoteSchema.parse(note);
 		}),

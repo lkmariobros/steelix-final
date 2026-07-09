@@ -16,6 +16,7 @@ import { isAppRole } from "./utils/rbac";
 import { hasAdminAccess, hasSuperAdminAccess } from "./utils/user-roles";
 import { startServer } from "./utils/server";
 import { getAllowedOrigins } from "./utils/allowed-origins";
+import { ensurePipelineStageEnumValues } from "./utils/pipeline-stage-schema";
 
 const app = new Hono();
 
@@ -214,6 +215,15 @@ console.log(
 console.log(
 	`   DB: ${process.env.DATABASE_URL ? "✓" : "✗ NOT SET"}  |  AUTH_URL: ${process.env.BETTER_AUTH_URL}`,
 );
+
+void ensurePipelineStageEnumValues()
+	.then(() => console.log("✅ Pipeline stage enum values ready"))
+	.catch((e) =>
+		console.warn(
+			"⚠️ Pipeline stage enum bootstrap failed (stage updates may fail until SQL patch is applied):",
+			e instanceof Error ? e.message : e,
+		),
+	);
 
 startServer(app);
 

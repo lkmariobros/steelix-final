@@ -29,6 +29,7 @@ import {
 	selectProspectSchema,
 } from "../models/crm";
 import { db } from "../utils/db";
+import { withPipelineStageSchemaRetry } from "../utils/pipeline-stage-schema";
 
 /**
  * Admin Leads Management Service
@@ -671,11 +672,13 @@ export async function updateLeadAdmin(
 		.where(eq(prospects.id, leadId))
 		.limit(1);
 
-	const [updated] = await db
-		.update(prospects)
-		.set({ ...updateFields, updatedAt: new Date() })
-		.where(eq(prospects.id, leadId))
-		.returning();
+	const [updated] = await withPipelineStageSchemaRetry(() =>
+		db
+			.update(prospects)
+			.set({ ...updateFields, updatedAt: new Date() })
+			.where(eq(prospects.id, leadId))
+			.returning(),
+	);
 
 	if (!updated) throw new Error("Lead not found");
 
@@ -882,15 +885,17 @@ export async function bulkUpdateLeadsStageAdmin(
 	const parsed = pipelineStageSchema.safeParse(stage);
 	if (!parsed.success) throw new Error("Invalid stage value");
 
-	await db
-		.update(prospects)
-		.set({ stage: parsed.data, status: "active", updatedAt: new Date() })
-		.where(
-			sql`${prospects.id} = ANY(ARRAY[${sql.join(
-				leadIds.map((id) => sql`${id}::uuid`),
-				sql`, `,
-			)}])`,
-		);
+	await withPipelineStageSchemaRetry(() =>
+		db
+			.update(prospects)
+			.set({ stage: parsed.data, status: "active", updatedAt: new Date() })
+			.where(
+				sql`${prospects.id} = ANY(ARRAY[${sql.join(
+					leadIds.map((id) => sql`${id}::uuid`),
+					sql`, `,
+				)}])`,
+			),
+	);
 
 	return { success: true, updated: leadIds.length };
 }
