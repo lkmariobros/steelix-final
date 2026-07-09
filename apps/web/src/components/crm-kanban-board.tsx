@@ -12,6 +12,7 @@ import {
 	PIPELINE_STAGES as SHARED_PIPELINE_STAGES,
 	type PipelineStageValue,
 } from "@/app/admin/leads/_components/lead-constants";
+import { StatusBadge } from "@/app/admin/leads/_components/lead-ui";
 
 export type PipelineStage = PipelineStageValue;
 
@@ -149,9 +150,7 @@ export function KanbanBoard({
 				: prospect.tags
 					? prospect.tags.split(",").map((t) => t.trim()).filter(Boolean)
 					: [];
-		if (names.length === 0) return null;
-		if (names.length <= 2) return names;
-		return [...names.slice(0, 2), `+${names.length - 2}`];
+		return names.length > 0 ? names : null;
 	};
 
 	return (
@@ -223,13 +222,17 @@ export function KanbanBoard({
 											</span>
 										</p>
 
+										<div className="mt-1 flex min-w-0 items-center gap-1">
+											<StatusBadge status={prospect.status} />
+										</div>
+
 										{tags && (
-											<div className="mt-1.5 flex flex-wrap gap-0.5">
+											<div className="mt-1.5 flex flex-wrap gap-1">
 												{tags.map((tag, idx) => (
 													<Badge
 														key={`${tag}-${idx}`}
 														variant="secondary"
-														className="max-w-[5.5rem] truncate px-1 py-0 text-[10px] font-normal"
+														className="h-auto whitespace-normal break-words px-1.5 py-0.5 text-[10px] font-normal leading-tight"
 													>
 														{tag}
 													</Badge>
