@@ -225,7 +225,13 @@ export function ImportLeadsDialog({
 					n === "lead_type"
 				)
 					seed[h] = "leadType";
-				else if (n.includes("follower")) seed[h] = "follower";
+				else if (
+					n.includes("follower") ||
+					n === "contact owner" ||
+					n === "contactowner" ||
+					n.includes("contact owner")
+				)
+					seed[h] = "follower";
 				else if (n.includes("agent")) seed[h] = "agent";
 				else seed[h] = "skip";
 			}
@@ -460,7 +466,8 @@ export function ImportLeadsDialog({
 									</li>
 									<li>
 										<strong>Follower:</strong> agent name, nickname, code, or
-										email. Separate multiple with{" "}
+										email (e.g. map <strong>Contact Owner</strong> here).
+										Separate multiple with{" "}
 										<code className="text-foreground">;</code> or{" "}
 										<code className="text-foreground">,</code>.
 									</li>

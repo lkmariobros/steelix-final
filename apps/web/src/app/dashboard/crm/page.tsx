@@ -433,6 +433,7 @@ export default function CRMPage() {
 
 	const [followerIds, setFollowerIds] = useState<string[]>([]);
 	const [categoryTagIds, setCategoryTagIds] = useState<string[]>([]);
+	const [detailStage, setDetailStage] = useState<PipelineStage | "">("");
 	const [newNoteContent, setNewNoteContent] = useState("");
 	const [notesPage, setNotesPage] = useState(1);
 	const NOTES_PER_PAGE = 5;
@@ -464,6 +465,8 @@ export default function CRMPage() {
 
 	const canEditCategoriesForSelected = canEditFollowersForSelected;
 
+	const canEditStageForSelected = canManageTasksForSelected;
+
 	useEffect(() => {
 		const current = prospectDetailData?.prospect ?? selectedProspect;
 		setFollowerIds(current?.followerIds ?? []);
@@ -473,6 +476,11 @@ export default function CRMPage() {
 		const current = prospectDetailData?.prospect ?? selectedProspect;
 		setCategoryTagIds(current?.tagIds ?? []);
 	}, [prospectDetailData?.prospect, selectedProspect?.id, selectedProspect?.tagIds]);
+
+	useEffect(() => {
+		const current = prospectDetailData?.prospect ?? selectedProspect;
+		setDetailStage((current?.stage as PipelineStage | undefined) ?? "");
+	}, [prospectDetailData?.prospect, selectedProspect?.id, selectedProspect?.stage]);
 
 	const setFollowersMutation = trpc.crm.setFollowers.useMutation({
 		onSuccess: () => {
@@ -571,6 +579,24 @@ export default function CRMPage() {
 
 	const handleStageChange = (prospectId: string, newStage: PipelineStage) => {
 		updateStageMutation.mutate({ id: prospectId, stage: newStage });
+	};
+
+	const handleDetailStageSave = () => {
+		if (!activeProspect || !detailStage || detailStage === activeProspect.stage) {
+			return;
+		}
+		updateStageMutation.mutate(
+			{ id: activeProspect.id, stage: detailStage },
+			{
+				onSuccess: () => {
+					toast.success("Lead stage updated");
+					void trpcUtils.crm.get.invalidate({ id: activeProspect.id });
+					setSelectedProspect((prev) =>
+						prev ? { ...prev, stage: detailStage } : prev,
+					);
+				},
+			},
+		);
 	};
 
 	const handleStagePromptConfirm = () => {
@@ -1138,12 +1164,50 @@ export default function CRMPage() {
 												</div>
 												<StatusBadge status={activeProspect.status} />
 											</div>
-											<div className="flex items-center justify-between">
+											<div className="space-y-2">
 												<div className="flex items-center gap-2 text-muted-foreground text-sm">
 													<RiLinksLine className="size-4" />
 													Lead Stage
 												</div>
-												<StageBadge stage={activeProspect.stage} />
+												{canEditStageForSelected ? (
+													<div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+														<Select
+															value={detailStage || activeProspect.stage}
+															onValueChange={(v) =>
+																setDetailStage(v as PipelineStage)
+															}
+														>
+															<SelectTrigger className="sm:flex-1">
+																<SelectValue placeholder="Select stage…" />
+															</SelectTrigger>
+															<SelectContent>
+																{PIPELINE_STAGES.map((s) => (
+																	<SelectItem key={s.value} value={s.value}>
+																		{s.label}
+																	</SelectItem>
+																))}
+															</SelectContent>
+														</Select>
+														<Button
+															size="sm"
+															className="shrink-0"
+															disabled={
+																!detailStage ||
+																detailStage === activeProspect.stage ||
+																updateStageMutation.isPending
+															}
+															onClick={handleDetailStageSave}
+														>
+															{updateStageMutation.isPending ? (
+																<RiLoader4Line className="size-4 animate-spin" />
+															) : (
+																"Update"
+															)}
+														</Button>
+													</div>
+												) : (
+													<StageBadge stage={activeProspect.stage} />
+												)}
 											</div>
 											{activeProspect.property?.trim() && (
 												<div className="space-y-1">

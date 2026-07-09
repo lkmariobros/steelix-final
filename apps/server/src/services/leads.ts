@@ -1378,15 +1378,15 @@ async function resolveFollowerIdsFromCsv(raw: string): Promise<{
 				)
 				.limit(1);
 		} else {
-			const want = t.toLowerCase();
+			const want = normalizePersonKey(t);
 			[row] = await db
 				.select({ id: user.id })
 				.from(user)
 				.where(
 					and(
 						or(
-							sql`lower(trim(${user.name})) = ${want}`,
-							sql`lower(trim(coalesce(${user.nickName}, ''))) = ${want}`,
+							sql`lower(regexp_replace(trim(${user.name}), '\\s+', ' ', 'g')) = ${want}`,
+							sql`lower(regexp_replace(trim(coalesce(${user.nickName}, '')), '\\s+', ' ', 'g')) = ${want}`,
 							sql`lower(trim(coalesce(${user.agentCode}, ''))) = ${want}`,
 						),
 						assignableLeadAgentWhere,
@@ -1540,6 +1540,10 @@ function parseCsvTagNames(raw: string): string[] {
 		.filter(Boolean);
 }
 
+function normalizePersonKey(raw: string): string {
+	return raw.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
 /** Match CSV category names to admin-managed lead categories only (no auto-create). */
 async function resolveTagIdsFromCsv(raw: string): Promise<{
 	tagIds: string[];
@@ -1689,6 +1693,9 @@ export async function importLeadsBulkAdmin(
 			"Follower",
 			"followers",
 			"Followers",
+			"contact owner",
+			"Contact Owner",
+			"contactowner",
 		);
 		const lastContactRaw = pickCsvField(
 			row,
@@ -2022,6 +2029,9 @@ export async function importProspectsBulkForAgent(
 			"Follower",
 			"followers",
 			"Followers",
+			"contact owner",
+			"Contact Owner",
+			"contactowner",
 		);
 
 		if (!name?.trim() || !phoneRaw?.trim()) {

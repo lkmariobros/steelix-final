@@ -282,7 +282,13 @@ export function ImportLeadsDialog({
 				else if (n === "project" || n.includes("project name")) seed[h] = "project";
 				else if (n.includes("last contact")) seed[h] = "lastContact";
 				else if (n.includes("next contact")) seed[h] = "nextContact";
-				else if (n.includes("follower")) seed[h] = "follower";
+				else if (
+					n.includes("follower") ||
+					n === "contact owner" ||
+					n === "contactowner" ||
+					n.includes("contact owner")
+				)
+					seed[h] = "follower";
 				else seed[h] = "skip";
 			}
 			setColumnMap(seed);
