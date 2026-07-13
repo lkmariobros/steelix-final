@@ -258,17 +258,6 @@ export default function SignInForm({
 					Create one
 				</button>
 			</p>
-
-			<p className="text-center text-muted-foreground text-xs leading-relaxed">
-				Stuck after a profile change or seeing HTTP 431?{" "}
-				<a
-					href="/api/clear-auth-session"
-					className="font-medium text-foreground underline-offset-4 hover:underline"
-				>
-					Reset session cookies
-				</a>{" "}
-				then sign in again (oversized cookies, not CORS).
-			</p>
 		</div>
 	)
 }

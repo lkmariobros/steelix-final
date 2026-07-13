@@ -34,7 +34,6 @@ import {
 	RiFileList3Line,
 	RiLoader4Line,
 	RiRefreshLine,
-	RiSettings3Line,
 	RiArrowRightLine,
 } from "@remixicon/react";
 import { useRouter } from "next/navigation";
@@ -163,14 +162,7 @@ function DashboardContent() {
 						<RiRefreshLine
 							className={`size-4 ${isRefetching ? "animate-spin" : ""}`}
 						/>
-					</Button>
-
-					<Button
-						variant="outline"
-						size="sm"
-						onClick={() => router.push("/dashboard/settings")}
-					>
-						<RiSettings3Line className="size-4" />
+						{isRefetching ? "Refreshing" : "Refresh"}
 					</Button>
 				</div>
 			</div>
