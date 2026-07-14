@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
-import type { ComponentType, SVGProps } from "react";
 import type * as React from "react";
 
 import { SearchForm } from "@/components/search-form";
@@ -70,12 +69,7 @@ const data = {
 	teams: [],
 };
 
-type NavIcon = ComponentType<
-	SVGProps<SVGSVGElement> & {
-		size?: number | string;
-		"aria-hidden"?: boolean | "true" | "false";
-	}
->;
+type NavIcon = typeof RiDashboardLine;
 
 const TRANSACTION_ICONS: Record<
 	(typeof TRANSACTIONS_SIDEBAR_ITEMS)[number]["title"],
