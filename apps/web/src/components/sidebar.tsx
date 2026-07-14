@@ -17,13 +17,13 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
-import { RiLayoutLeftLine } from "@remixicon/react";
+import { RiArrowLeftSLine, RiLayoutLeftLine } from "@remixicon/react";
 
 const SIDEBAR_COOKIE_NAME = "sidebar:state";
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7;
-const SIDEBAR_WIDTH = "16rem";
-const SIDEBAR_WIDTH_MOBILE = "18rem";
-const SIDEBAR_WIDTH_ICON = "3rem";
+const SIDEBAR_WIDTH = "18rem";
+const SIDEBAR_WIDTH_MOBILE = "20rem";
+const SIDEBAR_WIDTH_ICON = "4.5rem";
 const SIDEBAR_KEYBOARD_SHORTCUT = "b";
 
 type SidebarContext = {
@@ -63,6 +63,20 @@ function SidebarProvider({
 	const [openMobile, setOpenMobile] = React.useState(false);
 
 	const [_open, _setOpen] = React.useState(defaultOpen);
+
+	// Restore collapsed/expanded preference from cookie after mount
+	React.useEffect(() => {
+		if (openProp !== undefined) return;
+		const match = document.cookie
+			.split("; ")
+			.find((row) => row.startsWith(`${SIDEBAR_COOKIE_NAME}=`));
+		if (!match) return;
+		const value = match.split("=")[1];
+		if (value === "true" || value === "false") {
+			_setOpen(value === "true");
+		}
+	}, [openProp]);
+
 	const open = openProp ?? _open;
 	const setOpen = React.useCallback(
 		(value: boolean | ((value: boolean) => boolean)) => {
@@ -205,7 +219,7 @@ function Sidebar({
 			/>
 			<div
 				className={cn(
-					"fixed inset-y-0 z-10 hidden h-svh w-(--sidebar-width) transition-[left,right,width] duration-200 ease-linear md:flex",
+					"fixed inset-y-0 z-10 hidden h-svh w-(--sidebar-width) overflow-visible transition-[left,right,width] duration-200 ease-linear md:flex",
 					side === "left"
 						? "left-0 group-data-[collapsible=offcanvas]:left-[calc(var(--sidebar-width)*-1)]"
 						: "right-0 group-data-[collapsible=offcanvas]:right-[calc(var(--sidebar-width)*-1)]",
@@ -218,7 +232,7 @@ function Sidebar({
 			>
 				<div
 					data-sidebar="sidebar"
-					className="flex h-full w-full flex-col bg-sidebar group-data-[variant=floating]:rounded-md group-data-[variant=floating]:border group-data-[variant=floating]:border-sidebar-border group-data-[variant=floating]:shadow-sm"
+					className="relative flex h-full w-full flex-col bg-sidebar group-data-[variant=floating]:rounded-md group-data-[variant=floating]:border group-data-[variant=floating]:border-sidebar-border group-data-[variant=floating]:shadow-sm"
 				>
 					{children}
 				</div>
@@ -240,7 +254,8 @@ function SidebarTrigger({
 			variant="ghost"
 			size="icon"
 			className={cn(
-				"text-muted-foreground/60 hover:text-foreground",
+				// Desktop uses the mid-edge rail button; keep this for mobile headers
+				"text-muted-foreground/60 hover:text-foreground md:hidden",
 				className,
 			)}
 			onClick={(event) => {
@@ -256,26 +271,31 @@ function SidebarTrigger({
 }
 
 function SidebarRail({ className, ...props }: React.ComponentProps<"button">) {
-	const { toggleSidebar } = useSidebar();
+	const { toggleSidebar, state } = useSidebar();
+	const isCollapsed = state === "collapsed";
 
 	return (
 		<button
 			data-sidebar="rail"
-			aria-label="Toggle Sidebar"
-			tabIndex={-1}
+			type="button"
+			aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+			title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
 			onClick={toggleSidebar}
-			title="Toggle Sidebar"
 			className={cn(
-				"-translate-x-1/2 group-data-[side=left]:-right-4 absolute inset-y-0 z-20 hidden w-4 transition-all ease-linear after:absolute after:inset-y-0 after:left-1/2 after:w-[2px] hover:after:bg-sidebar-border group-data-[side=right]:left-0 sm:flex",
-				"in-data-[side=left]:cursor-w-resize in-data-[side=right]:cursor-e-resize",
-				"[[data-side=left][data-state=collapsed]_&]:cursor-e-resize [[data-side=right][data-state=collapsed]_&]:cursor-w-resize",
-				"group-data-[collapsible=offcanvas]:translate-x-0 hover:group-data-[collapsible=offcanvas]:bg-sidebar group-data-[collapsible=offcanvas]:after:left-full",
-				"[[data-side=left][data-collapsible=offcanvas]_&]:-right-2",
-				"[[data-side=right][data-collapsible=offcanvas]_&]:-left-2",
+				"absolute top-1/2 z-30 hidden size-7 -translate-y-1/2 items-center justify-center rounded-full border border-sidebar-border bg-background text-muted-foreground shadow-md transition-colors hover:bg-accent hover:text-foreground md:flex",
+				"group-data-[side=left]:-right-3.5 group-data-[side=right]:-left-3.5",
 				className,
 			)}
 			{...props}
-		/>
+		>
+			<RiArrowLeftSLine
+				className={cn(
+					"size-4 transition-transform duration-200",
+					isCollapsed && "rotate-180",
+				)}
+				aria-hidden="true"
+			/>
+		</button>
 	);
 }
 
@@ -312,7 +332,10 @@ function SidebarHeader({ className, ...props }: React.ComponentProps<"div">) {
 	return (
 		<div
 			data-sidebar="header"
-			className={cn("flex flex-col gap-2 p-2", className)}
+			className={cn(
+				"flex flex-col gap-2 p-2 group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:px-1",
+				className,
+			)}
 			{...props}
 		/>
 	);
@@ -322,7 +345,10 @@ function SidebarFooter({ className, ...props }: React.ComponentProps<"div">) {
 	return (
 		<div
 			data-sidebar="footer"
-			className={cn("flex flex-col gap-2 p-2", className)}
+			className={cn(
+				"flex flex-col gap-2 p-2 group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:px-1",
+				className,
+			)}
 			{...props}
 		/>
 	);
@@ -346,7 +372,7 @@ function SidebarContent({ className, ...props }: React.ComponentProps<"div">) {
 		<div
 			data-sidebar="content"
 			className={cn(
-				"flex min-h-0 flex-1 flex-col gap-2 overflow-auto group-data-[collapsible=icon]:overflow-hidden",
+				"flex min-h-0 flex-1 flex-col gap-2 overflow-auto group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:overflow-hidden",
 				"[scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden",
 				className,
 			)}
@@ -359,7 +385,10 @@ function SidebarGroup({ className, ...props }: React.ComponentProps<"div">) {
 	return (
 		<div
 			data-sidebar="group"
-			className={cn("relative flex w-full min-w-0 flex-col p-2", className)}
+			className={cn(
+				"relative flex w-full min-w-0 flex-col p-2 group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:p-1",
+				className,
+			)}
 			{...props}
 		/>
 	);
@@ -377,7 +406,7 @@ function SidebarGroupLabel({
 			data-sidebar="group-label"
 			className={cn(
 				"flex h-8 shrink-0 items-center rounded-md px-2 font-medium text-sidebar-foreground/70 text-xs outline-hidden ring-sidebar-ring transition-[margin,opacity] duration-200 ease-linear focus-visible:ring-2 [&>svg]:size-4 [&>svg]:shrink-0",
-				"group-data-[collapsible=icon]:-mt-8 group-data-[collapsible=icon]:opacity-0",
+				"group-data-[collapsible=icon]:hidden",
 				className,
 			)}
 			{...props}
@@ -413,7 +442,10 @@ function SidebarGroupContent({
 	return (
 		<div
 			data-sidebar="group-content"
-			className={cn("w-full text-sm", className)}
+			className={cn(
+				"w-full text-sm group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:w-auto group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:items-center",
+				className,
+			)}
 			{...props}
 		/>
 	);
@@ -423,7 +455,10 @@ function SidebarMenu({ className, ...props }: React.ComponentProps<"ul">) {
 	return (
 		<ul
 			data-sidebar="menu"
-			className={cn("flex w-full min-w-0 flex-col gap-1", className)}
+			className={cn(
+				"flex w-full min-w-0 flex-col gap-1 group-data-[collapsible=icon]:w-auto group-data-[collapsible=icon]:items-center",
+				className,
+			)}
 			{...props}
 		/>
 	);
@@ -433,14 +468,17 @@ function SidebarMenuItem({ className, ...props }: React.ComponentProps<"li">) {
 	return (
 		<li
 			data-sidebar="menu-item"
-			className={cn("group/menu-item relative", className)}
+			className={cn(
+				"group/menu-item relative group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:w-full group-data-[collapsible=icon]:justify-center",
+				className,
+			)}
 			{...props}
 		/>
 	);
 }
 
 const sidebarMenuButtonVariants = cva(
-	"peer/menu-button flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm outline-hidden ring-sidebar-ring transition-[width,height,padding] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 group-has-data-[sidebar=menu-action]/menu-item:pr-8 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:bg-sidebar-accent data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0",
+	"peer/menu-button flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm outline-hidden ring-sidebar-ring transition-[width,height,padding] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 group-has-data-[sidebar=menu-action]/menu-item:pr-8 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:bg-sidebar-accent data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground group-data-[collapsible=icon]:size-10! group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:gap-0 group-data-[collapsible=icon]:p-0! group-data-[collapsible=icon]:[&>span]:hidden [&>span:last-child]:truncate [&>svg]:size-[18px] [&>svg]:shrink-0",
 	{
 		variants: {
 			variant: {
@@ -449,9 +487,9 @@ const sidebarMenuButtonVariants = cva(
 					"bg-background shadow-[0_0_0_1px_hsl(var(--sidebar-border))] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground hover:shadow-[0_0_0_1px_hsl(var(--sidebar-accent))]",
 			},
 			size: {
-				default: "h-8 text-sm",
-				sm: "h-7 text-xs",
-				lg: "h-12 text-sm group-data-[collapsible=icon]:p-0!",
+				default: "h-9 text-sm",
+				sm: "h-8 text-xs",
+				lg: "h-12 text-sm group-data-[collapsible=icon]:size-10! group-data-[collapsible=icon]:p-0!",
 			},
 		},
 		defaultVariants: {

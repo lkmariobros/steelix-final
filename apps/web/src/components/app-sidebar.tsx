@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
+import type { ComponentType, SVGProps } from "react";
 import type * as React from "react";
 
 import { SearchForm } from "@/components/search-form";
@@ -28,59 +29,113 @@ import {
 } from "@/components/ui/popover";
 import type { AuthSessionData } from "@/lib/auth-client";
 import { useUserRole } from "@/hooks/use-user-role";
-import { PORTAL_PATHS } from "@/lib/user-role";
-import { TRANSACTIONS_SIDEBAR_ITEMS, FINANCE_SIDEBAR_ITEMS } from "@/features/admin-transactions/segment-config";
+import {
+	FINANCE_SIDEBAR_ITEMS,
+	TRANSACTIONS_SIDEBAR_ITEMS,
+} from "@/features/admin-transactions/segment-config";
 import { trpc } from "@/utils/trpc";
 import { TeamSwitcher } from "@/components/team-switcher";
 import { formatDistanceToNow } from "date-fns";
 import {
-	RiBarChartLine,
-	RiCheckboxCircleLine,
-	RiCalendarLine,
-	RiDashboardLine,
-	RiFileList3Line,
-	RiFileTextLine,
-	RiSettings3Line,
-	RiTeamLine,
-	RiUserLine,
-	RiMessageLine,
-	RiRobotLine,
-	RiPriceTagLine,
-	RiNotificationLine,
-	RiMoneyDollarCircleLine,
-	RiPushpinLine,
 	RiArrowRightLine,
-	RiUserAddLine,
+	RiBarChartBoxLine,
+	RiBuilding2Line,
+	RiCalendarLine,
+	RiContactsBookLine,
+	RiDashboardLine,
+	RiExchangeDollarLine,
+	RiFileChartLine,
+	RiFileList3Line,
 	RiFolderCloudLine,
+	RiGiftLine,
+	RiHandCoinLine,
 	RiHistoryLine,
+	RiKey2Line,
+	RiMessage2Line,
+	RiMoneyDollarCircleLine,
+	RiNotificationLine,
+	RiPercentLine,
+	RiPriceTag3Line,
+	RiPushpinLine,
+	RiRobotLine,
+	RiSettings3Line,
+	RiShieldCheckLine,
+	RiTeamLine,
+	RiUserFollowLine,
+	RiWallet3Line,
+	RiWhatsappLine,
 } from "@remixicon/react";
 
-// Clean data structure - no mock teams
 const data = {
 	teams: [],
 };
 
-// Component for notification bell with announcements popover
-function AnnouncementNotification({ 
-	open, 
+type NavIcon = ComponentType<
+	SVGProps<SVGSVGElement> & {
+		size?: number | string;
+		"aria-hidden"?: boolean | "true" | "false";
+	}
+>;
+
+const TRANSACTION_ICONS: Record<
+	(typeof TRANSACTIONS_SIDEBAR_ITEMS)[number]["title"],
+	NavIcon
+> = {
+	"New Project": RiBuilding2Line,
+	Subsale: RiExchangeDollarLine,
+	Rental: RiKey2Line,
+	Approvals: RiShieldCheckLine,
+	Requests: RiMessage2Line,
+};
+
+const FINANCE_ICONS: Record<
+	(typeof FINANCE_SIDEBAR_ITEMS)[number]["title"],
+	NavIcon
+> = {
+	"Commission approvals": RiHandCoinLine,
+	Incentive: RiGiftLine,
+	"Commission payout": RiWallet3Line,
+};
+
+type NavItem = {
+	title: string;
+	url: string;
+	icon: NavIcon;
+};
+
+type NavGroup =
+	| {
+			title: string;
+			items: NavItem[];
+	  }
+	| {
+			title: string;
+			isTransactionsGroup: true;
+	  }
+	| {
+			title: string;
+			isFinanceGroup: true;
+	  };
+
+function AnnouncementNotification({
+	open,
 	onOpenChange,
 	session,
-}: { 
-	open?: boolean; 
+}: {
+	open?: boolean;
 	onOpenChange?: (open: boolean) => void;
 	session: AuthSessionData | null;
 }) {
 	const pathname = usePathname();
 	const router = useRouter();
 	const isCurrentlyInAdminPortal = pathname.startsWith("/admin");
-	
-	// Only show for agent portal, not admin portal
+
 	const { data: announcementsData } = trpc.calendar.listAnnouncements.useQuery(
 		{ includeExpired: false, includeInactive: false },
-		{ 
+		{
 			enabled: !!session && !isCurrentlyInAdminPortal,
-			refetchInterval: 30000, // Refetch every 30 seconds
-		}
+			refetchInterval: 30000,
+		},
 	);
 
 	const announcements = announcementsData?.announcements || [];
@@ -110,7 +165,6 @@ function AnnouncementNotification({
 		}
 	};
 
-	// Don't show if in admin portal
 	if (isCurrentlyInAdminPortal) {
 		return null;
 	}
@@ -121,16 +175,16 @@ function AnnouncementNotification({
 				<Button
 					variant="ghost"
 					size="sm"
-					className="relative h-9 w-9 rounded-md p-0 hover:bg-sidebar-accent"
+					className="relative h-8 w-8 shrink-0 rounded-md p-0 hover:bg-sidebar-accent"
 				>
 					<RiNotificationLine
-						className="text-muted-foreground/60 size-5"
+						className="size-4 text-muted-foreground/70"
 						aria-hidden="true"
 					/>
 					{announcementCount > 0 && (
 						<Badge
 							variant="destructive"
-							className="absolute -right-1 -top-1 h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs"
+							className="absolute -top-1 -right-1 h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px]"
 						>
 							{announcementCount}
 						</Badge>
@@ -141,7 +195,7 @@ function AnnouncementNotification({
 			<PopoverContent
 				align="start"
 				side="right"
-				className="w-80 max-h-[400px] overflow-y-auto p-0 -translate-y-[5px]"
+				className="-translate-y-[5px] max-h-[400px] w-80 overflow-y-auto p-0"
 			>
 				<div className="border-b p-4">
 					<div className="flex items-center justify-between">
@@ -164,15 +218,15 @@ function AnnouncementNotification({
 							{announcements.map((announcement) => (
 								<div
 									key={announcement.id}
-									className="rounded-md border bg-muted/30 p-3 hover:bg-muted/50 transition-colors cursor-pointer"
+									className="cursor-pointer rounded-md border bg-muted/30 p-3 transition-colors hover:bg-muted/50"
 									onClick={() => router.push("/dashboard/calendar")}
 								>
-									<div className="flex items-start justify-between gap-2 mb-1.5">
-										<div className="flex items-center gap-1.5 flex-1 min-w-0">
+									<div className="mb-1.5 flex items-start justify-between gap-2">
+										<div className="flex min-w-0 flex-1 items-center gap-1.5">
 											{announcement.isPinned && (
-												<RiPushpinLine className="size-3.5 text-yellow-500 shrink-0" />
+												<RiPushpinLine className="size-3.5 shrink-0 text-yellow-500" />
 											)}
-											<h4 className="font-medium text-sm truncate">
+											<h4 className="truncate font-medium text-sm">
 												{announcement.title}
 											</h4>
 										</div>
@@ -182,7 +236,7 @@ function AnnouncementNotification({
 											{announcement.priority || "normal"}
 										</Badge>
 									</div>
-									<p className="text-muted-foreground text-xs line-clamp-2 mb-1.5">
+									<p className="mb-1.5 line-clamp-2 text-muted-foreground text-xs">
 										{announcement.content}
 									</p>
 									<div className="text-muted-foreground text-xs">
@@ -226,7 +280,10 @@ function isNavItemActive(
 	if (url === "/dashboard") {
 		return pathname === "/dashboard" || pathname === "/dashboard/";
 	}
-	if (url === "/admin/approvals/requests" || url.startsWith("/admin/approvals/requests?")) {
+	if (
+		url === "/admin/approvals/requests" ||
+		url.startsWith("/admin/approvals/requests?")
+	) {
 		if (!searchParams || !url.includes("?")) {
 			return pathname === "/admin/approvals/requests";
 		}
@@ -283,198 +340,193 @@ function isNavItemActive(
 	return true;
 }
 
+function NavLink({
+	title,
+	url,
+	icon: Icon,
+	isActive,
+}: {
+	title: string;
+	url: string;
+	icon: NavIcon;
+	isActive: boolean;
+}) {
+	return (
+		<SidebarMenuItem>
+			<SidebarMenuButton
+				asChild
+				tooltip={title}
+				isActive={isActive}
+				className="h-9 justify-start gap-3 font-medium data-[active=true]:bg-primary/15 data-[active=true]:text-primary"
+			>
+				<Link href={url}>
+					<Icon
+						className="size-[18px] shrink-0 text-muted-foreground/70 group-data-[active=true]/menu-button:text-primary"
+						aria-hidden="true"
+					/>
+					<span className="group-data-[collapsible=icon]:hidden">{title}</span>
+				</Link>
+			</SidebarMenuButton>
+		</SidebarMenuItem>
+	);
+}
+
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 	const pathname = usePathname();
 	const searchParams = useSearchParams();
 	const router = useRouter();
-	const [isAnnouncementPopoverOpen, setIsAnnouncementPopoverOpen] = useState(false);
+	const [isAnnouncementPopoverOpen, setIsAnnouncementPopoverOpen] =
+		useState(false);
 	const { session, hasAdminAccess } = useUserRole();
 	const isCurrentlyInAdminPortal = pathname.startsWith("/admin");
 
-	const portalSwitch =
-		hasAdminAccess ? (
-			<div className="px-2 pt-2">
-				<Button
-					variant="outline"
-					size="sm"
-					className="w-full justify-between"
-					onClick={() =>
-						router.replace(
-							isCurrentlyInAdminPortal
-								? PORTAL_PATHS.agent
-								: PORTAL_PATHS.admin,
-						)
-					}
-				>
-					<span>
-						{isCurrentlyInAdminPortal
-							? "Switch to Agent Portal"
-							: "Switch to Admin Portal"}
-					</span>
-					<RiArrowRightLine className="size-4" />
-				</Button>
-			</div>
-		) : null;
-
-	// Navigation follows the active portal (URL), not role alone
-	const navigationItems = isCurrentlyInAdminPortal && hasAdminAccess
-		? [
-				{
-					title: "Overview",
-					url: "#",
-					items: [
-						{
-							title: "Dashboard",
-							url: "/admin",
-							icon: RiDashboardLine,
-						},
-						{
-							title: "Leads",
-							url: "/admin/leads",
-							icon: RiFileList3Line,
-						},
-					],
-				},
-				{
-					title: "Transactions",
-					url: "#",
-					isTransactionsGroup: true as const,
-				},
-				{
-					title: "Finance",
-					url: "#",
-					isFinanceGroup: true as const,
-				},
-				{
-					title: "Management",
-					url: "#",
-					items: [
-						{
-							title: "Agent management",
-							url: "/admin/agents",
-							icon: RiTeamLine,
-						},
-						{
-							title: "eRecruitment Approval",
-							url: "/admin/erecruitment",
-							icon: RiUserAddLine,
-						},
-						{
-							title: "Lead Categories",
-							url: "/admin/tags",
-							icon: RiPriceTagLine,
-						},
-						{
-							title: "Office calendar",
-							url: "/admin/calendar",
-							icon: RiCalendarLine,
-						},
-						{
-							title: "Files",
-							url: "/admin/files",
-							icon: RiFolderCloudLine,
-						},
-					],
-				},
-				{
-					title: "Configuration",
-					url: "#",
-					items: [
-						{
-							title: "Settings",
-							url: "/admin/settings",
-							icon: RiSettings3Line,
-						},
-						{
-							title: "Commission settings",
-							url: "/admin/commission-settings",
-							icon: RiMoneyDollarCircleLine,
-						},
-						{
-							title: "Primary schemes",
-							url: "/admin/commission-schemes",
-							icon: RiFileList3Line,
-						},
-						{
-							title: "Reports & analytics",
-							url: "/admin/reports",
-							icon: RiBarChartLine,
-						},
-						{
-							title: "Record Log",
-							url: "/admin/record-log",
-							icon: RiHistoryLine,
-						},
-					],
-				},
-			]
-		: [
-				// Agent Portal Navigation
-				{
-					title: "Agent",
-					url: "#",
-					items: [
-						{
-							title: "Dashboard",
-							url: "/dashboard",
-							icon: RiDashboardLine,
-						},
-						{
-							title: "My leads",
-							url: "/dashboard/leads",
-							icon: RiFileList3Line,
-						},
-						{
-							title: "My transactions",
-							url: "/dashboard/transactions",
-							icon: RiFileTextLine,
-						},
-						{
-							title: "My commissions",
-							url: "/dashboard/commissions",
-							icon: RiMoneyDollarCircleLine,
-						},
-					],
-				},
-				{
-					title: "Tools",
-					url: "#",
-					items: [
-						{
-							title: "WhatsApp",
-							url: "/dashboard/whatsapp",
-							icon: RiMessageLine,
-						},
-						{
-							title: "Auto-reply",
-							url: "/dashboard/auto-reply",
-							icon: RiRobotLine,
-						},
-						{
-							title: "Calendar",
-							url: "/dashboard/calendar",
-							icon: RiCalendarLine,
-						},
-						{
-							title: "Files",
-							url: "/dashboard/files",
-							icon: RiFolderCloudLine,
-						},
-						{
-							title: "Settings",
-							url: "/dashboard/settings",
-							icon: RiSettings3Line,
-						},
-					],
-				},
-			];
+	const navigationItems: NavGroup[] =
+		isCurrentlyInAdminPortal && hasAdminAccess
+			? [
+					{
+						title: "Overview",
+						items: [
+							{ title: "Dashboard", url: "/admin", icon: RiDashboardLine },
+							{
+								title: "Leads",
+								url: "/admin/leads",
+								icon: RiContactsBookLine,
+							},
+						],
+					},
+					{
+						title: "Transactions",
+						isTransactionsGroup: true,
+					},
+					{
+						title: "Finance",
+						isFinanceGroup: true,
+					},
+					{
+						title: "Management",
+						items: [
+							{
+								title: "Agent management",
+								url: "/admin/agents",
+								icon: RiTeamLine,
+							},
+							{
+								title: "eRecruitment Approval",
+								url: "/admin/erecruitment",
+								icon: RiUserFollowLine,
+							},
+							{
+								title: "Lead Categories",
+								url: "/admin/tags",
+								icon: RiPriceTag3Line,
+							},
+							{
+								title: "Office calendar",
+								url: "/admin/calendar",
+								icon: RiCalendarLine,
+							},
+							{
+								title: "Files",
+								url: "/admin/files",
+								icon: RiFolderCloudLine,
+							},
+						],
+					},
+					{
+						title: "Configuration",
+						items: [
+							{
+								title: "Settings",
+								url: "/admin/settings",
+								icon: RiSettings3Line,
+							},
+							{
+								title: "Commission settings",
+								url: "/admin/commission-settings",
+								icon: RiPercentLine,
+							},
+							{
+								title: "Primary schemes",
+								url: "/admin/commission-schemes",
+								icon: RiFileChartLine,
+							},
+							{
+								title: "Reports & analytics",
+								url: "/admin/reports",
+								icon: RiBarChartBoxLine,
+							},
+							{
+								title: "Record Log",
+								url: "/admin/record-log",
+								icon: RiHistoryLine,
+							},
+						],
+					},
+				]
+			: [
+					{
+						title: "Agent",
+						items: [
+							{
+								title: "Dashboard",
+								url: "/dashboard",
+								icon: RiDashboardLine,
+							},
+							{
+								title: "My leads",
+								url: "/dashboard/leads",
+								icon: RiContactsBookLine,
+							},
+							{
+								title: "My transactions",
+								url: "/dashboard/transactions",
+								icon: RiFileList3Line,
+							},
+							{
+								title: "My commissions",
+								url: "/dashboard/commissions",
+								icon: RiMoneyDollarCircleLine,
+							},
+						],
+					},
+					{
+						title: "Tools",
+						items: [
+							{
+								title: "WhatsApp",
+								url: "/dashboard/whatsapp",
+								icon: RiWhatsappLine,
+							},
+							{
+								title: "Auto-reply",
+								url: "/dashboard/auto-reply",
+								icon: RiRobotLine,
+							},
+							{
+								title: "Calendar",
+								url: "/dashboard/calendar",
+								icon: RiCalendarLine,
+							},
+							{
+								title: "Files",
+								url: "/dashboard/files",
+								icon: RiFolderCloudLine,
+							},
+							{
+								title: "Settings",
+								url: "/dashboard/settings",
+								icon: RiSettings3Line,
+							},
+						],
+					},
+				];
 
 	return (
-		<Sidebar {...props}>
+		<Sidebar collapsible="icon" {...props}>
 			<SidebarHeader>
 				<TeamSwitcher teams={data.teams} />
-				<hr className="-mt-px mx-2 border-border border-t" />
-				<SearchForm className="mt-3" />
+				<hr className="-mt-px mx-2 border-border border-t group-data-[collapsible=icon]:hidden" />
+				<SearchForm className="mt-3 group-data-[collapsible=icon]:hidden" />
 			</SidebarHeader>
 			<SidebarContent>
 				{navigationItems.map((item) => (
@@ -482,117 +534,76 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 						<SidebarGroupLabel className="text-muted-foreground/60 uppercase">
 							{item.title}
 						</SidebarGroupLabel>
-						<SidebarGroupContent className="px-2">
+						<SidebarGroupContent className="px-2 group-data-[collapsible=icon]:px-0">
 							{"isTransactionsGroup" in item && item.isTransactionsGroup ? (
 								<SidebarMenu>
 									{TRANSACTIONS_SIDEBAR_ITEMS.map((menuItem) => (
-										<SidebarMenuItem key={menuItem.url}>
-											<SidebarMenuButton
-												asChild
-												className="group/menu-button h-9 gap-3 rounded-md bg-gradient-to-r font-medium hover:bg-transparent hover:from-sidebar-accent hover:to-sidebar-accent/40 data-[active=true]:from-primary/20 data-[active=true]:to-primary/5"
-												isActive={isNavItemActive(
-													pathname,
-													menuItem.url,
-													searchParams,
-												)}
-											>
-												<Link
-													href={menuItem.url}
-													className="flex items-center gap-3"
-												>
-													{menuItem.title === "Approvals" ? (
-														<RiCheckboxCircleLine
-															className="text-muted-foreground/60 group-data-[active=true]/menu-button:text-primary"
-															size={22}
-														/>
-													) : menuItem.title === "Requests" ? (
-														<RiFileList3Line
-															className="text-muted-foreground/60 group-data-[active=true]/menu-button:text-primary"
-															size={22}
-														/>
-													) : (
-														<RiFileTextLine
-															className="text-muted-foreground/60 group-data-[active=true]/menu-button:text-primary"
-															size={22}
-														/>
-													)}
-													<span>{menuItem.title}</span>
-												</Link>
-											</SidebarMenuButton>
-										</SidebarMenuItem>
+										<NavLink
+											key={menuItem.url}
+											title={menuItem.title}
+											url={menuItem.url}
+											icon={TRANSACTION_ICONS[menuItem.title]}
+											isActive={isNavItemActive(
+												pathname,
+												menuItem.url,
+												searchParams,
+											)}
+										/>
 									))}
 								</SidebarMenu>
 							) : "isFinanceGroup" in item && item.isFinanceGroup ? (
 								<SidebarMenu>
 									{FINANCE_SIDEBAR_ITEMS.map((menuItem) => (
-										<SidebarMenuItem key={menuItem.url}>
-											<SidebarMenuButton
-												asChild
-												className="group/menu-button h-9 gap-3 rounded-md bg-gradient-to-r font-medium hover:bg-transparent hover:from-sidebar-accent hover:to-sidebar-accent/40 data-[active=true]:from-primary/20 data-[active=true]:to-primary/5"
-												isActive={isNavItemActive(pathname, menuItem.url, searchParams)}
-											>
-												<Link
-													href={menuItem.url}
-													className="flex items-center gap-3"
-												>
-													<RiMoneyDollarCircleLine
-														className="text-muted-foreground/60 group-data-[active=true]/menu-button:text-primary"
-														size={22}
-													/>
-													<span>{menuItem.title}</span>
-												</Link>
-											</SidebarMenuButton>
-										</SidebarMenuItem>
+										<NavLink
+											key={menuItem.url}
+											title={menuItem.title}
+											url={menuItem.url}
+											icon={FINANCE_ICONS[menuItem.title]}
+											isActive={isNavItemActive(
+												pathname,
+												menuItem.url,
+												searchParams,
+											)}
+										/>
 									))}
 								</SidebarMenu>
 							) : (
 								<SidebarMenu>
-									{item.items?.map((menuItem) => (
-										<SidebarMenuItem key={menuItem.title}>
-											<SidebarMenuButton
-												asChild
-												className="group/menu-button h-9 gap-3 rounded-md bg-gradient-to-r font-medium hover:bg-transparent hover:from-sidebar-accent hover:to-sidebar-accent/40 data-[active=true]:from-primary/20 data-[active=true]:to-primary/5 [&>svg]:size-auto"
-												isActive={isNavItemActive(pathname, menuItem.url, searchParams)}
-											>
-												<Link
-													href={menuItem.url}
-													className="relative flex w-full items-center justify-between"
-												>
-													<div className="flex items-center gap-3">
-														{menuItem.icon && (
-															<menuItem.icon
-																className="text-muted-foreground/60 group-data-[active=true]/menu-button:text-primary"
-																size={22}
-																aria-hidden="true"
-															/>
-														)}
-														<span>{menuItem.title}</span>
-													</div>
-												</Link>
-											</SidebarMenuButton>
-										</SidebarMenuItem>
-									))}
+									{"items" in item &&
+										item.items.map((menuItem) => (
+											<NavLink
+												key={menuItem.title}
+												title={menuItem.title}
+												url={menuItem.url}
+												icon={menuItem.icon}
+												isActive={isNavItemActive(
+													pathname,
+													menuItem.url,
+													searchParams,
+												)}
+											/>
+										))}
 								</SidebarMenu>
 							)}
 						</SidebarGroupContent>
 					</SidebarGroup>
 				))}
 			</SidebarContent>
-			{/* Announcement: agent portal only. Sign out lives in the account menu. */}
 			{!isCurrentlyInAdminPortal ? (
 				<SidebarFooter>
-					<div className="flex flex-col gap-2 px-2 py-2">
-						<div
-							className="flex cursor-pointer items-center justify-start gap-2 rounded-md p-1 transition-colors hover:bg-sidebar-accent"
+					<div className="flex items-center gap-2 px-2 py-1 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0">
+						<AnnouncementNotification
+							open={isAnnouncementPopoverOpen}
+							onOpenChange={setIsAnnouncementPopoverOpen}
+							session={session}
+						/>
+						<button
+							type="button"
+							className="truncate text-left text-sm group-data-[collapsible=icon]:hidden"
 							onClick={() => router.push("/dashboard/calendar")}
 						>
-							<AnnouncementNotification
-								open={isAnnouncementPopoverOpen}
-								onOpenChange={setIsAnnouncementPopoverOpen}
-								session={session}
-							/>
-							<span>Announcement</span>
-						</div>
+							Announcement
+						</button>
 					</div>
 				</SidebarFooter>
 			) : null}

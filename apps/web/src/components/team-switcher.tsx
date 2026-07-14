@@ -7,6 +7,7 @@ import {
 	SidebarMenu,
 	SidebarMenuButton,
 	SidebarMenuItem,
+	useSidebar,
 } from "@/components/sidebar";
 import {
 	DropdownMenu,
@@ -43,6 +44,8 @@ export function TeamSwitcher({ teams = [] }: TeamSwitcherProps) {
 	const router = useRouter();
 	const [isOpen, setIsOpen] = React.useState(false);
 	const { session, hasAdminAccess, isChecking } = useUserRole();
+	const { state } = useSidebar();
+	const isCollapsed = state === "collapsed";
 
 	const isInAdminPortal = isAdminPortalPath(pathname);
 	const isInAgentPortal = isAgentPortalPath(pathname);
@@ -77,7 +80,7 @@ export function TeamSwitcher({ teams = [] }: TeamSwitcherProps) {
 				<SidebarMenuItem>
 					<SidebarMenuButton
 						size="lg"
-						className="gap-3 pointer-events-none cursor-default [&>svg]:size-auto"
+						className="pointer-events-none cursor-default gap-3 [&>svg]:size-auto"
 						aria-label={`${displayTeam.name} — ${currentPortal}`}
 					>
 						<div className="flex aspect-square size-8 items-center justify-center overflow-hidden rounded-md bg-sidebar-primary text-sidebar-primary-foreground">
@@ -89,7 +92,7 @@ export function TeamSwitcher({ teams = [] }: TeamSwitcherProps) {
 								className="object-cover"
 							/>
 						</div>
-						<div className="grid flex-1 text-left text-base leading-tight">
+						<div className="grid flex-1 text-left text-base leading-tight group-data-[collapsible=icon]:hidden">
 							<span className="truncate font-medium">{displayTeam.name}</span>
 							<span className="truncate text-muted-foreground text-xs">
 								{currentPortal}
@@ -125,7 +128,7 @@ export function TeamSwitcher({ teams = [] }: TeamSwitcherProps) {
 									className="object-cover"
 								/>
 							</div>
-							<div className="grid flex-1 text-left text-base leading-tight">
+							<div className="grid flex-1 text-left text-base leading-tight group-data-[collapsible=icon]:hidden">
 								<span className="truncate font-medium">
 									{displayTeam.name}
 								</span>
@@ -135,13 +138,13 @@ export function TeamSwitcher({ teams = [] }: TeamSwitcherProps) {
 							</div>
 							{isChecking ? (
 								<RiLoader4Line
-									className="ms-auto animate-spin text-muted-foreground/60"
+									className="ms-auto animate-spin text-muted-foreground/60 group-data-[collapsible=icon]:hidden"
 									size={20}
 									aria-hidden="true"
 								/>
 							) : (
 								<RiExpandUpDownLine
-									className="ms-auto text-muted-foreground/60"
+									className="ms-auto text-muted-foreground/60 group-data-[collapsible=icon]:hidden"
 									size={20}
 									aria-hidden="true"
 								/>
@@ -149,9 +152,9 @@ export function TeamSwitcher({ teams = [] }: TeamSwitcherProps) {
 						</SidebarMenuButton>
 					</DropdownMenuTrigger>
 					<DropdownMenuContent
-						className="w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-md"
+						className="min-w-56 rounded-md"
 						align="start"
-						side="bottom"
+						side={isCollapsed ? "right" : "bottom"}
 						sideOffset={4}
 					>
 						{isChecking && (
