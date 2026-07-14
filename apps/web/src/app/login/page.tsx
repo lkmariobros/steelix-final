@@ -17,7 +17,7 @@ export default function LoginPage() {
 			case "sign-in":
 				return {
 					title: "Welcome back",
-					subtitle: "Sign in to continue.",
+					subtitle: "Sign in to your account to continue.",
 				};
 			case "sign-up":
 				return {

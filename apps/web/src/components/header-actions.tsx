@@ -2,6 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import { FeedbackButton } from "@/components/feedback-button";
+import { ModeToggle } from "@/components/mode-toggle";
 import UserDropdown from "@/components/user-dropdown";
 
 export function HeaderActions() {
@@ -11,6 +12,7 @@ export function HeaderActions() {
 	return (
 		<div className="ml-auto flex items-center gap-2">
 			{!isAdminPage && <FeedbackButton />}
+			<ModeToggle />
 			<UserDropdown />
 		</div>
 	);

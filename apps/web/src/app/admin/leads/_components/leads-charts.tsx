@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import { useTheme } from "next-themes";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { Lead } from "./lead-models";
@@ -32,9 +33,6 @@ const CHART_COLORS = [
 	"#34d399", // emerald-400
 	"#f472b6", // pink-400
 ];
-
-// Axis tick color — a fixed light-gray that looks sharp in both light and dark
-const TICK_COLOR = "#94a3b8";
 
 function AreaTooltip({
 	active,
@@ -85,6 +83,12 @@ export function LeadsCharts({
 	leads: Lead[];
 	isLoading: boolean;
 }) {
+	const { resolvedTheme } = useTheme();
+	const isDark = resolvedTheme === "dark";
+	const tickColor = isDark ? "#94a3b8" : "#64748b";
+	const axisStroke = isDark ? "#334155" : "#e2e8f0";
+	const dotStroke = isDark ? "#1e3a5f" : "#ffffff";
+
 	const { stageData, monthlyData, categoryData, totalLeads } = useMemo(() => {
 		// Stage distribution — attach color to each datum for the custom tooltip
 		const stageCounts: Record<string, number> = {};
@@ -219,13 +223,13 @@ export function LeadsCharts({
 							</defs>
 							<XAxis
 								dataKey="month"
-								tick={{ fontSize: 12, fill: TICK_COLOR, fontWeight: 500 }}
-								axisLine={{ stroke: "#334155" }}
+								tick={{ fontSize: 12, fill: tickColor, fontWeight: 500 }}
+								axisLine={{ stroke: axisStroke }}
 								tickLine={false}
 								dy={6}
 							/>
 							<YAxis
-								tick={{ fontSize: 12, fill: TICK_COLOR, fontWeight: 500 }}
+								tick={{ fontSize: 12, fill: tickColor, fontWeight: 500 }}
 								axisLine={false}
 								tickLine={false}
 								allowDecimals={false}
@@ -249,13 +253,13 @@ export function LeadsCharts({
 								dot={{
 									r: 4,
 									fill: "#60a5fa",
-									stroke: "#1e3a5f",
+									stroke: dotStroke,
 									strokeWidth: 2,
 								}}
 								activeDot={{
 									r: 6,
 									fill: "#60a5fa",
-									stroke: "#fff",
+									stroke: isDark ? "#fff" : "#1e3a5f",
 									strokeWidth: 2,
 								}}
 							/>

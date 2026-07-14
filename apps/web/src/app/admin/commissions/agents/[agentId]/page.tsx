@@ -35,6 +35,8 @@ import {
 	XAxis,
 	YAxis,
 } from "recharts";
+import { useTheme } from "next-themes";
+import { useMemo } from "react";
 
 function formatRm(n: number) {
 	return new Intl.NumberFormat("en-MY", {
@@ -53,13 +55,33 @@ function toNumber(v: unknown) {
 	return 0;
 }
 
-const GRID_STROKE = "#334155"; // slate-700
-const TICK_COLOR = "#94a3b8"; // slate-400
 const BAR_FILL = "#60a5fa"; // blue-400
 
 export default function AdminAgentCommissionReportPage() {
 	const { agentId } = useParams<{ agentId: string }>();
 	const { data: session } = authClient.useSession();
+	const { resolvedTheme } = useTheme();
+	const isDark = resolvedTheme === "dark";
+
+	const chartTheme = useMemo(
+		() => ({
+			gridStroke: isDark ? "#334155" : "#e2e8f0",
+			tickColor: isDark ? "#94a3b8" : "#64748b",
+			cursorFill: isDark ? "#0b1220" : "#f1f5f9",
+			tooltip: {
+				background: isDark ? "#0b1220" : "#ffffff",
+				border: isDark ? "1px solid #1f2937" : "1px solid #e2e8f0",
+				borderRadius: 8,
+				color: isDark ? "#e5e7eb" : "#0f172a",
+				boxShadow: isDark
+					? "0 10px 30px -15px rgba(0,0,0,0.5)"
+					: "0 10px 30px -15px rgba(15,23,42,0.15)",
+			},
+			tooltipLabel: isDark ? "#94a3b8" : "#64748b",
+			tooltipItem: isDark ? "#e5e7eb" : "#0f172a",
+		}),
+		[isDark],
+	);
 
 	const report = trpc.commissionPayouts.adminAgentReport.useQuery(
 		{ agentId },
@@ -144,37 +166,38 @@ export default function AdminAgentCommissionReportPage() {
 									<BarChart data={chartData} margin={{ left: 8, right: 8 }}>
 										<CartesianGrid
 											strokeDasharray="3 3"
-											stroke={GRID_STROKE}
+											stroke={chartTheme.gridStroke}
 											opacity={0.6}
 										/>
 										<XAxis
 											dataKey="month"
-											tick={{ fontSize: 11, fill: TICK_COLOR, fontWeight: 500 }}
-											axisLine={{ stroke: GRID_STROKE }}
+											tick={{
+												fontSize: 11,
+												fill: chartTheme.tickColor,
+												fontWeight: 500,
+											}}
+											axisLine={{ stroke: chartTheme.gridStroke }}
 											tickLine={false}
 											dy={6}
 										/>
 										<YAxis
-											tick={{ fontSize: 11, fill: TICK_COLOR, fontWeight: 500 }}
+											tick={{
+												fontSize: 11,
+												fill: chartTheme.tickColor,
+												fontWeight: 500,
+											}}
 											axisLine={false}
 											tickLine={false}
 											width={44}
 										/>
 										<Tooltip
-											cursor={{ fill: "#0b1220", opacity: 0.35 }}
-											contentStyle={{
-												background: "#0b1220",
-												border: "1px solid #1f2937",
-												borderRadius: 8,
-												color: "#e5e7eb",
-												boxShadow:
-													"0 10px 30px -15px rgba(0,0,0,0.5)",
-											}}
+											cursor={{ fill: chartTheme.cursorFill, opacity: 0.35 }}
+											contentStyle={chartTheme.tooltip}
 											labelStyle={{
-												color: "#94a3b8",
+												color: chartTheme.tooltipLabel,
 												fontSize: 12,
 											}}
-											itemStyle={{ color: "#e5e7eb" }}
+											itemStyle={{ color: chartTheme.tooltipItem }}
 											formatter={(v) => formatRm(toNumber(v))}
 											labelFormatter={(l) => `Month ${String(l)}`}
 										/>

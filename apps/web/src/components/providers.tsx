@@ -35,9 +35,9 @@ export default function Providers({
 	return (
 		<ThemeProvider
 			attribute="class"
-			defaultTheme="dark"
-			forcedTheme="dark"
-			enableSystem={false}
+			defaultTheme="system"
+			enableSystem
+			storageKey="devots-theme"
 			disableTransitionOnChange
 		>
 			<trpc.Provider client={trpcClient} queryClient={queryClient}>

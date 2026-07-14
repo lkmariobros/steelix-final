@@ -1,5 +1,6 @@
 "use client";
 
+import { ModeToggle } from "@/components/mode-toggle";
 import { BRAND_LOGO_SRC, BRAND_NAME } from "@/lib/brand";
 
 interface AuthLayoutProps {
@@ -13,29 +14,35 @@ interface AuthLayoutProps {
  */
 export function AuthLayout({ children, title, subtitle }: AuthLayoutProps) {
 	return (
-		<div className="flex min-h-screen flex-col items-center justify-center bg-zinc-50 px-4 py-10 dark:bg-zinc-950">
-			<div className="mb-8 flex flex-col items-center gap-2">
+		<div className="relative flex min-h-screen flex-col items-center justify-center bg-background px-4 py-10">
+			<div className="absolute top-4 right-4">
+				<ModeToggle />
+			</div>
+
+			<div className="mb-10 flex flex-col items-center gap-2.5">
 				<img
 					src={BRAND_LOGO_SRC}
-					width={44}
-					height={44}
+					width={48}
+					height={48}
 					alt={`${BRAND_NAME} logo`}
-					className="h-11 w-11 rounded-xl object-cover shadow-sm"
+					className="h-12 w-12 rounded-xl object-cover shadow-sm"
 				/>
-				<span className="font-semibold text-lg tracking-tight text-zinc-900 dark:text-zinc-50">
+				<span className="font-semibold text-xl tracking-tight text-foreground">
 					{BRAND_NAME}
 				</span>
 			</div>
 
 			<div className="w-full max-w-sm">
-				<div className="mb-6 text-center">
-					<h1 className="font-semibold text-xl text-zinc-900 dark:text-zinc-50">
+				<div className="mb-7 text-center">
+					<h1 className="font-semibold text-2xl tracking-tight text-foreground">
 						{title}
 					</h1>
-					<p className="mt-1.5 text-muted-foreground text-sm">{subtitle}</p>
+					<p className="mt-2 text-[15px] leading-relaxed text-muted-foreground">
+						{subtitle}
+					</p>
 				</div>
 
-				<div className="rounded-xl border border-zinc-200/80 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+				<div className="rounded-2xl border border-border bg-card p-7 text-card-foreground shadow-sm">
 					{children}
 				</div>
 			</div>

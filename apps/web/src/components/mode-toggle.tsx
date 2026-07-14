@@ -7,32 +7,77 @@ import {
 	DropdownMenuItem,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Moon, Sun } from "lucide-react";
+import { cn } from "@/lib/utils";
+import {
+	RiCheckLine,
+	RiComputerLine,
+	RiMoonLine,
+	RiSunLine,
+} from "@remixicon/react";
 import { useTheme } from "next-themes";
-import * as React from "react";
+import { useEffect, useState } from "react";
 
-export function ModeToggle() {
-	const { setTheme } = useTheme();
+const THEME_OPTIONS = [
+	{ value: "light", label: "Light", icon: RiSunLine },
+	{ value: "dark", label: "Dark", icon: RiMoonLine },
+	{ value: "system", label: "System", icon: RiComputerLine },
+] as const;
+
+interface ModeToggleProps {
+	className?: string;
+	align?: "start" | "center" | "end";
+}
+
+export function ModeToggle({ className, align = "end" }: ModeToggleProps) {
+	const { theme, setTheme, resolvedTheme } = useTheme();
+	const [mounted, setMounted] = useState(false);
+
+	useEffect(() => {
+		setMounted(true);
+	}, []);
+
+	const activeTheme = theme ?? "system";
+	const isDark = mounted && resolvedTheme === "dark";
 
 	return (
 		<DropdownMenu>
 			<DropdownMenuTrigger asChild>
-				<Button variant="outline" size="icon">
-					<Sun className="dark:-rotate-90 h-[1.2rem] w-[1.2rem] rotate-0 scale-100 transition-all dark:scale-0" />
-					<Moon className="absolute h-[1.2rem] w-[1.2rem] rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
-					<span className="sr-only">Toggle theme</span>
+				<Button
+					variant="outline"
+					size="icon"
+					className={cn("relative size-9 shrink-0", className)}
+					aria-label="Toggle color theme"
+				>
+					{mounted ? (
+						isDark ? (
+							<RiMoonLine className="size-4" aria-hidden="true" />
+						) : (
+							<RiSunLine className="size-4" aria-hidden="true" />
+						)
+					) : (
+						<span className="size-4" aria-hidden="true" />
+					)}
 				</Button>
 			</DropdownMenuTrigger>
-			<DropdownMenuContent align="end">
-				<DropdownMenuItem onClick={() => setTheme("light")}>
-					Light
-				</DropdownMenuItem>
-				<DropdownMenuItem onClick={() => setTheme("dark")}>
-					Dark
-				</DropdownMenuItem>
-				<DropdownMenuItem onClick={() => setTheme("system")}>
-					System
-				</DropdownMenuItem>
+			<DropdownMenuContent align={align} className="min-w-40">
+				{THEME_OPTIONS.map(({ value, label, icon: Icon }) => {
+					const selected = mounted && activeTheme === value;
+					return (
+						<DropdownMenuItem
+							key={value}
+							onClick={() => setTheme(value)}
+							className="cursor-pointer gap-2"
+						>
+							<Icon className="size-4" aria-hidden="true" />
+							<span className="flex-1">{label}</span>
+							{selected ? (
+								<RiCheckLine className="size-4 text-primary" aria-hidden="true" />
+							) : (
+								<span className="size-4" aria-hidden="true" />
+							)}
+						</DropdownMenuItem>
+					);
+				})}
 			</DropdownMenuContent>
 		</DropdownMenu>
 	);

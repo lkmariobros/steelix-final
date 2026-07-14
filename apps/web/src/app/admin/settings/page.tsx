@@ -20,6 +20,7 @@ import {
 	CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { ModeToggle } from "@/components/mode-toggle";
 import { Separator } from "@/components/ui/separator";
 import { authClient } from "@/lib/auth-client";
 import {
@@ -117,6 +118,24 @@ export default function AdminSettingsPage() {
 									policies, etc.), please contact your system administrator or
 									modify environment variables directly.
 								</p>
+							</CardContent>
+						</Card>
+
+						<Card className="mt-6">
+							<CardHeader>
+								<CardTitle>Appearance</CardTitle>
+								<CardDescription>
+									Choose light, dark, or match your system preference
+								</CardDescription>
+							</CardHeader>
+							<CardContent className="flex items-center justify-between gap-4">
+								<div>
+									<p className="font-medium text-sm">Color theme</p>
+									<p className="text-muted-foreground text-xs">
+										Applies across the portal and login screens
+									</p>
+								</div>
+								<ModeToggle />
 							</CardContent>
 						</Card>
 

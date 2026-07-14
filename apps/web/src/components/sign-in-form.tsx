@@ -156,7 +156,7 @@ export default function SignInForm({
 							{field.state.meta.errors.map((error, idx) => (
 								<p
 									key={`${field.name}-err-${idx}`}
-									className="text-sm font-medium text-red-400"
+									className="text-sm font-medium text-destructive"
 								>
 									{formatFieldError(error)}
 								</p>
@@ -202,7 +202,7 @@ export default function SignInForm({
 							{field.state.meta.errors.map((error, idx) => (
 								<p
 									key={`${field.name}-err-${idx}`}
-									className="text-sm font-medium text-red-400"
+									className="text-sm font-medium text-destructive"
 								>
 									{formatFieldError(error)}
 								</p>

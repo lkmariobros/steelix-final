@@ -28,6 +28,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LoadingScreen } from "@/components/ui/loading-spinner";
+import { ModeToggle } from "@/components/mode-toggle";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useRedirectUnauthenticated } from "@/hooks/use-redirect-unauthenticated";
@@ -454,6 +455,24 @@ export default function AgentSettingsPage() {
 										)}
 									</div>
 								</div>
+							</CardContent>
+						</Card>
+
+						<Card className="mt-6">
+							<CardHeader>
+								<CardTitle>Appearance</CardTitle>
+								<CardDescription>
+									Choose light, dark, or match your system preference
+								</CardDescription>
+							</CardHeader>
+							<CardContent className="flex items-center justify-between gap-4">
+								<div>
+									<p className="font-medium text-sm">Color theme</p>
+									<p className="text-muted-foreground text-xs">
+										Applies across the portal and login screens
+									</p>
+								</div>
+								<ModeToggle />
 							</CardContent>
 						</Card>
 
