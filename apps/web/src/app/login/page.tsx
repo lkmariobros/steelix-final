@@ -3,11 +3,10 @@
 import { AuthLayout } from "@/components/auth/auth-layout";
 import { ForgotPasswordForm } from "@/components/auth/forgot-password-form";
 import SignInForm from "@/components/sign-in-form";
-import SignUpForm from "@/components/sign-up-form";
 import { LoginSessionToast } from "@/app/login/login-session-toast";
 import { Suspense, useState } from "react";
 
-type AuthView = "sign-in" | "sign-up" | "forgot-password";
+type AuthView = "sign-in" | "forgot-password";
 
 export default function LoginPage() {
 	const [view, setView] = useState<AuthView>("sign-in");
@@ -18,12 +17,6 @@ export default function LoginPage() {
 				return {
 					title: "Welcome back",
 					subtitle: "Sign in to your account to continue.",
-				};
-			case "sign-up":
-				return {
-					title: "Create an account",
-					subtitle:
-						"Register with your work email. An admin must approve your account before you can sign in.",
 				};
 			case "forgot-password":
 				return {
@@ -39,13 +32,7 @@ export default function LoginPage() {
 				<LoginSessionToast />
 			</Suspense>
 			{view === "sign-in" && (
-				<SignInForm
-					onSwitchToSignUp={() => setView("sign-up")}
-					onForgotPassword={() => setView("forgot-password")}
-				/>
-			)}
-			{view === "sign-up" && (
-				<SignUpForm onSwitchToSignIn={() => setView("sign-in")} />
+				<SignInForm onForgotPassword={() => setView("forgot-password")} />
 			)}
 			{view === "forgot-password" && (
 				<ForgotPasswordForm onBackToSignIn={() => setView("sign-in")} />

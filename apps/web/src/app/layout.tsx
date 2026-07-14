@@ -14,10 +14,10 @@ export const metadata: Metadata = {
 	description: `${BRAND_NAME} real estate agent portal`,
 	icons: {
 		icon: [
-			{ url: BRAND_LOGO_SRC, type: "image/png" },
 			{ url: "/favicon.ico", type: "image/x-icon" },
+			{ url: BRAND_LOGO_SRC, type: "image/png", sizes: "any" },
 		],
-		shortcut: BRAND_LOGO_SRC,
+		shortcut: "/favicon.ico",
 		apple: BRAND_LOGO_SRC,
 	},
 };

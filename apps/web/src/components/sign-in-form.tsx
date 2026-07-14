@@ -13,7 +13,6 @@ import { Input } from "./ui/input"
 import { Label } from "./ui/label"
 
 interface SignInFormProps {
-	onSwitchToSignUp: () => void
 	onForgotPassword: () => void
 }
 
@@ -46,10 +45,7 @@ function formatFieldError(error: unknown): string {
 	}
 }
 
-export default function SignInForm({
-	onSwitchToSignUp,
-	onForgotPassword,
-}: SignInFormProps) {
+export default function SignInForm({ onForgotPassword }: SignInFormProps) {
 	const router = useRouter()
 	const [isClient, setIsClient] = useState(false)
 	const [showPassword, setShowPassword] = useState(false)
@@ -247,17 +243,6 @@ export default function SignInForm({
 					)}
 				</form.Subscribe>
 			</form>
-
-			<p className="text-center text-muted-foreground text-xs">
-				No account yet?{" "}
-				<button
-					type="button"
-					onClick={onSwitchToSignUp}
-					className="font-medium text-foreground underline-offset-4 hover:underline"
-				>
-					Create one
-				</button>
-			</p>
 		</div>
 	)
 }
