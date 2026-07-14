@@ -211,7 +211,7 @@ export default function CRMPage() {
 	const { data: session, isPending } = authClient.useSession();
 	useRedirectUnauthenticated(session?.user?.id, isPending);
 	const [activeTab, setActiveTab] = useState<LeadsTab>("my"); // My Leads | Company Leads
-	const [viewMode, setViewMode] = useState<ViewMode>("list"); // New: View mode toggle
+	const [viewMode, setViewMode] = useState<ViewMode>("kanban");
 	const [searchQuery, setSearchQuery] = useState("");
 	const [stageFilter, setStageFilter] = useState<PipelineStage | "all">("all");
 	const [categoryFilter, setCategoryFilter] = useState<string>("all"); // tagId
@@ -797,7 +797,7 @@ export default function CRMPage() {
 									onClick={() => setViewMode("kanban")}
 									className="h-8"
 								>
-									Kanban View
+									Board View
 								</Button>
 							</div>
 							<Button

@@ -109,7 +109,7 @@ export default function AdminLeadsPage() {
 	const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
 	const [page, setPage] = useState(1);
 	const [pageSize, setPageSize] = useState(100);
-	const [viewMode, setViewMode] = useState<"table" | "kanban">("table");
+	const [viewMode, setViewMode] = useState<"table" | "kanban">("kanban");
 
 	// ── Dialogs ────────────────────────────────────────────────────────────
 	const [viewLead, setViewLead] = useState<Lead | null>(null);
