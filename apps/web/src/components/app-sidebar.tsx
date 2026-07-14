@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useState } from "react";
+import { useState } from "react";
 import type * as React from "react";
 
 import { SearchForm } from "@/components/search-form";
@@ -26,7 +26,6 @@ import {
 	PopoverContent,
 	PopoverTrigger,
 } from "@/components/ui/popover";
-import { authClient } from "@/lib/auth-client";
 import type { AuthSessionData } from "@/lib/auth-client";
 import { useUserRole } from "@/hooks/use-user-role";
 import { PORTAL_PATHS } from "@/lib/user-role";
@@ -41,7 +40,6 @@ import {
 	RiDashboardLine,
 	RiFileList3Line,
 	RiFileTextLine,
-	RiLogoutBoxLine,
 	RiSettings3Line,
 	RiTeamLine,
 	RiUserLine,
@@ -292,16 +290,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 	const [isAnnouncementPopoverOpen, setIsAnnouncementPopoverOpen] = useState(false);
 	const { session, hasAdminAccess } = useUserRole();
 	const isCurrentlyInAdminPortal = pathname.startsWith("/admin");
-
-	const handleSignOut = useCallback(async () => {
-		await authClient.signOut({
-			fetchOptions: {
-				onSuccess: () => {
-					window.location.href = "/login";
-				},
-			},
-		});
-	}, []);
 
 	const portalSwitch =
 		hasAdminAccess ? (
@@ -590,46 +578,24 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 					</SidebarGroup>
 				))}
 			</SidebarContent>
-			<SidebarFooter>
-				{/* Announcement button: only on agent dashboard, not admin */}
-				{!isCurrentlyInAdminPortal && (
-					<>
-						<div className="flex flex-col gap-2 px-2 py-2">
-							<div
-								className="flex justify-start items-center gap-2 cursor-pointer hover:bg-sidebar-accent rounded-md p-1 transition-colors"
-								onClick={() => router.push("/dashboard/calendar")}
-							>
-								<AnnouncementNotification
-									open={isAnnouncementPopoverOpen}
-									onOpenChange={setIsAnnouncementPopoverOpen}
-									session={session}
-								/>
-								<span>Announcement</span>
-							</div>
+			{/* Announcement: agent portal only. Sign out lives in the account menu. */}
+			{!isCurrentlyInAdminPortal ? (
+				<SidebarFooter>
+					<div className="flex flex-col gap-2 px-2 py-2">
+						<div
+							className="flex cursor-pointer items-center justify-start gap-2 rounded-md p-1 transition-colors hover:bg-sidebar-accent"
+							onClick={() => router.push("/dashboard/calendar")}
+						>
+							<AnnouncementNotification
+								open={isAnnouncementPopoverOpen}
+								onOpenChange={setIsAnnouncementPopoverOpen}
+								session={session}
+							/>
+							<span>Announcement</span>
 						</div>
-						<hr className="-mt-px mx-2 border-border border-t" />
-					</>
-				)}
-				<div className="flex flex-col gap-2 px-2 py-2">
-					{/* Sign Out Button */}
-					<SidebarMenu>
-						<SidebarMenuItem>
-							<SidebarMenuButton
-								type="button"
-								className="h-9 gap-4 rounded-md bg-gradient-to-r font-medium hover:bg-transparent hover:from-sidebar-accent hover:to-sidebar-accent/40 data-[active=true]:from-primary/20 data-[active=true]:to-primary/5 [&>svg]:size-auto"
-								onClick={() => void handleSignOut()}
-							>
-								<RiLogoutBoxLine
-									className="text-muted-foreground/60 group-data-[active=true]/menu-button:text-primary"
-									size={22}
-									aria-hidden="true"
-								/>
-								<span>Sign Out</span>
-							</SidebarMenuButton>
-						</SidebarMenuItem>
-					</SidebarMenu>
-				</div>
-			</SidebarFooter>
+					</div>
+				</SidebarFooter>
+			) : null}
 			<SidebarRail />
 		</Sidebar>
 	);
