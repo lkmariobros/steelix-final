@@ -151,10 +151,7 @@ interface ProspectNote {
 const prospectFormSchema = z.object({
 	name: z.string().min(2, "Name must be at least 2 characters"),
 	email: z.string().email("Please enter a valid email address"),
-	phone: z
-		.string()
-		.min(8, "Phone number must be at least 8 characters")
-		.regex(/^[\d\s\+\-\(\)]+$/, "Please enter a valid phone number"),
+	phone: z.string().trim().min(1, "Phone number is required"),
 	source: z.string().min(1, "Please select a source"),
 	type: z.enum(["tenant", "buyer"], {
 		required_error: "Please select a type",
@@ -1250,7 +1247,6 @@ export default function CRMPage() {
 															value={followerIds}
 															onChange={setFollowerIds}
 															agents={followerAgents}
-															excludeUserId={activeProspect.agentId}
 															className="flex-1"
 														/>
 														<Button

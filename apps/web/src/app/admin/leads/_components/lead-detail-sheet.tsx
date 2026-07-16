@@ -354,7 +354,6 @@ export function LeadDetailSheet({
 									value={followerIds}
 									onChange={setFollowerIds}
 									agents={agents}
-									excludeUserId={activeLead.agentId}
 									className="flex-1"
 								/>
 								<Button

@@ -261,11 +261,8 @@ export const insertProspectSchema = z.object({
 		}),
 	phone: z
 		.string()
-		.min(8, "Phone number must be at least 8 digits")
-		.regex(
-			/^\+60\d{8,11}$/,
-			"Phone must be in Malaysian format (e.g. +60123456789)",
-		),
+		.trim()
+		.min(1, "Phone number is required"),
 	source: z.string().min(1, "Please select a source"),
 	type: prospectTypeSchema,
 	property: propertyTypeSchema,

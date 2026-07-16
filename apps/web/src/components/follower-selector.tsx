@@ -33,7 +33,6 @@ interface FollowerSelectorProps {
 	placeholder?: string;
 	disabled?: boolean;
 	className?: string;
-	excludeUserId?: string | null;
 }
 
 export function FollowerSelector({
@@ -43,11 +42,10 @@ export function FollowerSelector({
 	placeholder = "Add followers…",
 	disabled = false,
 	className,
-	excludeUserId,
 }: FollowerSelectorProps) {
 	const [open, setOpen] = useState(false);
 
-	const options = agents.filter((a) => a.agentId !== excludeUserId);
+	const options = agents;
 	const selectedAgents = options.filter((a) => value.includes(a.agentId));
 
 	const handleToggle = (agentId: string) => {

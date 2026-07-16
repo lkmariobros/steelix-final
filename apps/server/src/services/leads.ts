@@ -444,16 +444,15 @@ export async function setProspectFollowers(
 		await assertAssignableLeadAgent(followerId);
 	}
 
-	const filtered = uniqueIds.filter((id) => id !== prospect.agentId);
 	const before = await getProspectFollowers(prospectId);
 
 	try {
 		await db
 			.delete(prospectFollowers)
 			.where(eq(prospectFollowers.prospectId, prospectId));
-		if (filtered.length > 0) {
+		if (uniqueIds.length > 0) {
 			await db.insert(prospectFollowers).values(
-				filtered.map((userId) => ({ prospectId, userId })),
+				uniqueIds.map((userId) => ({ prospectId, userId })),
 			);
 		}
 	} catch (e) {
@@ -1503,15 +1502,20 @@ function normalizePhoneForImport(raw: string): string {
 	return raw.replace(/[^\d\s+\-()]/g, "").trim();
 }
 
-/** Prefer Malaysian +60 format for storage and matching. */
+/**
+ * Normalise a phone number for storage/matching. Defaults bare local numbers
+ * (no country code) to Malaysian +60, but leaves any number that already
+ * carries a country code (a leading +) untouched aside from stripping
+ * formatting characters — it must NOT be reinterpreted as a Malaysian number.
+ */
 function normalizeMalaysianPhoneKey(raw: string): string {
-	let d = normalizePhoneForImport(raw).replace(/\s+/g, "");
-	if (d.startsWith("+60")) return d;
-	if (d.startsWith("60") && d.length >= 10) return `+${d}`;
-	if (d.startsWith("0")) return `+60${d.slice(1)}`;
+	const d = normalizePhoneForImport(raw).replace(/\s+/g, "");
+	if (d.startsWith("+60")) return `+${d.slice(1).replace(/\D/g, "")}`;
+	if (d.startsWith("60") && d.length >= 10) return `+${d.replace(/\D/g, "")}`;
+	if (d.startsWith("0")) return `+60${d.slice(1).replace(/\D/g, "")}`;
+	if (d.startsWith("+")) return `+${d.slice(1).replace(/\D/g, "")}`;
 	const digitsOnly = d.replace(/\D/g, "");
 	if (/^\d{8,11}$/.test(digitsOnly)) return `+60${digitsOnly}`;
-	if (d.startsWith("+")) return d;
 	return digitsOnly ? `+${digitsOnly}` : d;
 }
 
