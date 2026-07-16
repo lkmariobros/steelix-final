@@ -1031,6 +1031,43 @@ export async function bulkUpdateLeadCategoriesAdmin(
 	return { success: true as const, updated: leadIds.length };
 }
 
+export type BulkLeadFollowerMode = "replace" | "add" | "remove";
+
+/**
+ * Bulk edit followers across many leads (each lead is diffed/logged individually
+ * via setProspectFollowers, so per-lead activity history stays accurate).
+ */
+export async function bulkSetLeadFollowersAdmin(
+	leadIds: string[],
+	followerIds: string[],
+	mode: BulkLeadFollowerMode,
+	actorId?: string,
+) {
+	if (leadIds.length === 0) return { success: true as const, updated: 0 };
+
+	if (followerIds.length === 0 && mode !== "replace") {
+		throw new Error("Select at least one follower");
+	}
+
+	for (const leadId of leadIds) {
+		const current = await getProspectFollowers(leadId);
+
+		let nextIds: string[];
+		if (mode === "replace") {
+			nextIds = followerIds;
+		} else if (mode === "add") {
+			nextIds = [...new Set([...current.ids, ...followerIds])];
+		} else {
+			const toRemove = new Set(followerIds);
+			nextIds = current.ids.filter((id) => !toRemove.has(id));
+		}
+
+		await setProspectFollowers(leadId, nextIds, actorId);
+	}
+
+	return { success: true as const, updated: leadIds.length };
+}
+
 /**
  * Add a note to any lead (admin author).
  */

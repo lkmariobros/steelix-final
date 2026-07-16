@@ -1501,7 +1501,7 @@ export default function CRMPage() {
 																</div>
 															) : (
 																<>
-																	<div className="break-words text-foreground text-sm leading-relaxed">
+																	<div className="break-words whitespace-pre-line text-foreground text-sm leading-relaxed">
 																		{note.content}
 																	</div>
 																	<div className="flex flex-wrap items-center gap-2 text-muted-foreground text-xs">

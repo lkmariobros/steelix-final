@@ -64,6 +64,7 @@ import { AdminLeadsPageHeader } from "./_components/admin-leads-page-header";
 import { BulkStageDialog } from "./_components/bulk-stage-dialog";
 import { BulkAssignDialog } from "./_components/bulk-assign-dialog";
 import { BulkCategoriesDialog } from "./_components/bulk-categories-dialog";
+import { BulkFollowersDialog } from "./_components/bulk-followers-dialog";
 import { BulkDeleteDialog } from "./_components/bulk-delete-dialog";
 import { CreateLeadDialog } from "./_components/create-lead-dialog";
 import { DeleteLeadDialog } from "./_components/delete-lead-dialog";
@@ -118,6 +119,7 @@ export default function AdminLeadsPage() {
 	const [isBulkStageOpen, setIsBulkStageOpen] = useState(false);
 	const [isBulkAssignOpen, setIsBulkAssignOpen] = useState(false);
 	const [isBulkCategoriesOpen, setIsBulkCategoriesOpen] = useState(false);
+	const [isBulkFollowersOpen, setIsBulkFollowersOpen] = useState(false);
 	const [isBulkDeleteOpen, setIsBulkDeleteOpen] = useState(false);
 	const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 	const [isExporting, setIsExporting] = useState(false);
@@ -319,6 +321,7 @@ export default function AdminLeadsPage() {
 			"Stage": stageMap[lead.stage]?.label ?? lead.stage ?? "",
 			"Agent": lead.agentName ?? "Unassigned",
 			"Agent Email": lead.agentEmail ?? "",
+			"Followers": lead.followerNames?.length ? lead.followerNames.join("; ") : "",
 			"Type": capitalizeForExport(lead.type),
 			"Lead Type": formatLeadTypeLabel(lead.leadType),
 			"Source": lead.source ?? "",
@@ -842,6 +845,14 @@ export default function AdminLeadsPage() {
 											</Button>
 											<Button
 												size="sm"
+												variant="outline"
+												className="h-7 text-xs"
+												onClick={() => setIsBulkFollowersOpen(true)}
+											>
+												Edit Followers
+											</Button>
+											<Button
+												size="sm"
 												variant="destructive"
 												className="h-7 text-xs"
 												onClick={() => setIsBulkDeleteOpen(true)}
@@ -1024,6 +1035,9 @@ export default function AdminLeadsPage() {
 														<Skeleton className="h-3.5 w-12" />
 													</TableHead>
 													<TableHead className="hidden xl:table-cell">
+														<Skeleton className="h-3.5 w-16" />
+													</TableHead>
+													<TableHead className="hidden xl:table-cell">
 														<Skeleton className="h-3.5 w-10" />
 													</TableHead>
 													<TableHead>
@@ -1064,7 +1078,10 @@ export default function AdminLeadsPage() {
 														<TableCell>
 															<Skeleton className="h-5 w-16 rounded-full" />
 														</TableCell>
-														<TableCell>
+														<TableCell className="hidden xl:table-cell">
+															<Skeleton className="h-3.5 w-16" />
+														</TableCell>
+														<TableCell className="hidden xl:table-cell">
 															<Skeleton className="h-3.5 w-20" />
 														</TableCell>
 														<TableCell className="hidden xl:table-cell">
@@ -1146,6 +1163,9 @@ export default function AdminLeadsPage() {
 														order={sortOrder}
 														onSort={handleSort}
 													/>
+													<TableHead className="hidden xl:table-cell">
+														Followers
+													</TableHead>
 													<TableHead className="hidden xl:table-cell">
 														Lead Type
 													</TableHead>
@@ -1247,6 +1267,20 @@ export default function AdminLeadsPage() {
 															) : (
 																<span className="text-muted-foreground text-xs italic">
 																	Unassigned
+																</span>
+															)}
+														</TableCell>
+														<TableCell className="hidden xl:table-cell">
+															{lead.followerNames && lead.followerNames.length > 0 ? (
+																<p
+																	className="max-w-[140px] truncate text-xs"
+																	title={lead.followerNames.join(", ")}
+																>
+																	{lead.followerNames.join(", ")}
+																</p>
+															) : (
+																<span className="text-muted-foreground text-xs">
+																	—
 																</span>
 															)}
 														</TableCell>
@@ -1547,6 +1581,16 @@ export default function AdminLeadsPage() {
 				selectedIds={Array.from(selectedIds)}
 				open={isBulkCategoriesOpen}
 				onClose={() => setIsBulkCategoriesOpen(false)}
+				onSuccess={() => {
+					handleRefresh();
+					setSelectedIds(new Set());
+				}}
+			/>
+			<BulkFollowersDialog
+				selectedIds={Array.from(selectedIds)}
+				agents={agents}
+				open={isBulkFollowersOpen}
+				onClose={() => setIsBulkFollowersOpen(false)}
 				onSuccess={() => {
 					handleRefresh();
 					setSelectedIds(new Set());
