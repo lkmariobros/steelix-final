@@ -25,7 +25,7 @@ import {
 	updateCrmProjectSchema,
 	updateProspectSchema,
 } from "../models/crm";
-import { getLeadActivityAdmin, importProspectsBulkForAgent, buildAgentPersonalLeadsCondition, canAgentAccessProspect, fetchFollowersByProspectIds, getAgentsWithLeads, getProspectFollowers, setProspectFollowers, setProspectTagIds, agentLeadDisplayNameSql } from "../services/leads";
+import { getLeadActivityAdmin, importProspectsBulkForAgent, assignLeadAdmin, buildAgentPersonalLeadsCondition, canAgentAccessProspect, fetchFollowersByProspectIds, getAgentsWithLeads, getProspectFollowers, setProspectTagIds, agentLeadDisplayNameSql } from "../services/leads";
 import { withPipelineStageSchemaRetry } from "../utils/pipeline-stage-schema";
 import { db } from "../utils/db";
 import { adminProcedure, protectedProcedure, router } from "../utils/trpc";
@@ -990,15 +990,16 @@ export const crmRouter = router({
 		return await getAgentsWithLeads();
 	}),
 
-	setFollowers: protectedProcedure
+	// Reassign the lead to another agent (owner-only; followers cannot be edited by agents)
+	setOwner: protectedProcedure
 		.input(
 			z.object({
 				id: z.string().uuid(),
-				followerIds: z.array(z.string()).default([]),
+				agentId: z.string(),
 			}),
 		)
 		.mutation(async ({ input, ctx }) => {
-			const agentId = ctx.session.user.id;
+			const currentAgentId = ctx.session.user.id;
 			const [prospect] = await db
 				.select({ agentId: prospects.agentId })
 				.from(prospects)
@@ -1008,18 +1009,26 @@ export const crmRouter = router({
 			if (!prospect) {
 				throw new TRPCError({ code: "NOT_FOUND", message: "Lead not found" });
 			}
-			if (prospect.agentId !== agentId) {
+			if (prospect.agentId !== currentAgentId) {
 				throw new TRPCError({
 					code: "FORBIDDEN",
-					message: "Only the assigned agent can edit followers",
+					message: "Only the assigned agent can change the lead owner",
 				});
 			}
 
-			return await setProspectFollowers(
+			const updated = await assignLeadAdmin(
 				input.id,
-				input.followerIds,
-				agentId,
+				input.agentId,
+				currentAgentId,
 			);
+
+			// Handle legacy "owner" type - convert to "buyer"
+			const updatedType =
+				(updated.type as string) === "owner" ? "buyer" : updated.type;
+			return selectProspectSchema.parse({
+				...updated,
+				type: updatedType as "tenant" | "buyer",
+			});
 		}),
 
 	setCategories: protectedProcedure

@@ -101,7 +101,6 @@ import {
 } from "./_utils/crm-export";
 import { LeadTasksCard } from "@/app/admin/leads/_components/lead-tasks-card";
 import { TodayTasksWidget } from "@/app/admin/leads/_components/today-tasks-widget";
-import { FollowerSelector } from "@/components/follower-selector";
 import { TagSelector } from "@/components/tag-selector";
 
 // Pipeline stages for Kanban board
@@ -429,7 +428,7 @@ export default function CRMPage() {
 		}
 	};
 
-	const [followerIds, setFollowerIds] = useState<string[]>([]);
+	const [ownerAgentId, setOwnerAgentId] = useState<string>("");
 	const [categoryTagIds, setCategoryTagIds] = useState<string[]>([]);
 	const [detailStage, setDetailStage] = useState<PipelineStage | "">("");
 	const [newNoteContent, setNewNoteContent] = useState("");
@@ -457,18 +456,19 @@ export default function CRMPage() {
 		(activeProspect?.agentId === session?.user?.id ||
 			activeProspect?.isFollower === true);
 
-	const canEditFollowersForSelected =
+	const isOwnerOfSelected =
 		Boolean(activeProspect) &&
 		activeProspect?.agentId === session?.user?.id;
 
-	const canEditCategoriesForSelected = canEditFollowersForSelected;
+	const canEditCategoriesForSelected = isOwnerOfSelected;
+	const canEditOwnerForSelected = isOwnerOfSelected;
 
 	const canEditStageForSelected = canManageTasksForSelected;
 
 	useEffect(() => {
 		const current = prospectDetailData?.prospect ?? selectedProspect;
-		setFollowerIds(current?.followerIds ?? []);
-	}, [prospectDetailData?.prospect, selectedProspect?.id, selectedProspect?.followerIds]);
+		setOwnerAgentId(current?.agentId ?? "");
+	}, [prospectDetailData?.prospect, selectedProspect?.id, selectedProspect?.agentId]);
 
 	useEffect(() => {
 		const current = prospectDetailData?.prospect ?? selectedProspect;
@@ -480,9 +480,10 @@ export default function CRMPage() {
 		setDetailStage((current?.stage as PipelineStage | undefined) ?? "");
 	}, [prospectDetailData?.prospect, selectedProspect?.id, selectedProspect?.stage]);
 
-	const setFollowersMutation = trpc.crm.setFollowers.useMutation({
+	const setOwnerMutation = trpc.crm.setOwner.useMutation({
 		onSuccess: () => {
-			toast.success("Followers updated");
+			toast.success("Lead owner updated");
+			void trpcUtils.crm.get.invalidate({ id: activeProspect?.id });
 			refetchProspects();
 		},
 		onError: (error) => toast.error(error.message),
@@ -1226,14 +1227,54 @@ export default function CRMPage() {
 												)}
 											</div>
 											{activeProspect.agentName && (
-												<div className="flex items-center justify-between">
+												<div className="space-y-2">
 													<div className="flex items-center gap-2 text-muted-foreground text-sm">
 														<RiUserLine className="size-4" />
 														Owner
 													</div>
-													<div className="font-medium text-sm">
-														{activeProspect.agentName}
-													</div>
+													{canEditOwnerForSelected ? (
+														<div className="flex gap-2">
+															<Select
+																value={ownerAgentId}
+																onValueChange={setOwnerAgentId}
+															>
+																<SelectTrigger className="flex-1">
+																	<SelectValue placeholder="Select owner" />
+																</SelectTrigger>
+																<SelectContent>
+																	{followerAgents.map((a) => (
+																		<SelectItem key={a.agentId} value={a.agentId}>
+																			{a.agentName ?? a.agentEmail}
+																		</SelectItem>
+																	))}
+																</SelectContent>
+															</Select>
+															<Button
+																size="sm"
+																disabled={
+																	setOwnerMutation.isPending ||
+																	!ownerAgentId ||
+																	ownerAgentId === activeProspect.agentId
+																}
+																onClick={() =>
+																	setOwnerMutation.mutate({
+																		id: activeProspect.id,
+																		agentId: ownerAgentId,
+																	})
+																}
+															>
+																{setOwnerMutation.isPending ? (
+																	<RiLoader4Line className="size-4 animate-spin" />
+																) : (
+																	"Save"
+																)}
+															</Button>
+														</div>
+													) : (
+														<div className="font-medium text-sm">
+															{activeProspect.agentName}
+														</div>
+													)}
 												</div>
 											)}
 											<div className="space-y-2">
@@ -1241,38 +1282,7 @@ export default function CRMPage() {
 													<RiUserLine className="size-4" />
 													Followers
 												</div>
-												{canEditFollowersForSelected ? (
-													<div className="flex gap-2">
-														<FollowerSelector
-															value={followerIds}
-															onChange={setFollowerIds}
-															agents={followerAgents}
-															className="flex-1"
-														/>
-														<Button
-															size="sm"
-															disabled={
-																setFollowersMutation.isPending ||
-																JSON.stringify(followerIds) ===
-																	JSON.stringify(
-																		activeProspect.followerIds ?? [],
-																	)
-															}
-															onClick={() =>
-																setFollowersMutation.mutate({
-																	id: activeProspect.id,
-																	followerIds,
-																})
-															}
-														>
-															{setFollowersMutation.isPending ? (
-																<RiLoader4Line className="size-4 animate-spin" />
-															) : (
-																"Save"
-															)}
-														</Button>
-													</div>
-												) : activeProspect.followerNames &&
+												{activeProspect.followerNames &&
 												  activeProspect.followerNames.length > 0 ? (
 													<div className="flex flex-wrap gap-1">
 														{activeProspect.followerNames.map((name) => (
