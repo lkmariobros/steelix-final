@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import { toast } from "sonner";
 
-const DEFAULT_IDLE_MINUTES = 60;
+const DEFAULT_IDLE_MINUTES = 60 * 24; // 24 hours
 
 /** Pass stable user id string — not session object references. */
 export function useInactivityLogout(userId: string | null) {
