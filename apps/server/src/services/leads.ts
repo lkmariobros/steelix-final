@@ -1519,8 +1519,13 @@ function normalizeMalaysianPhoneKey(raw: string): string {
 	if (d.startsWith("60") && d.length >= 10) return `+${d.replace(/\D/g, "")}`;
 	if (d.startsWith("0")) return `+60${d.slice(1).replace(/\D/g, "")}`;
 	if (d.startsWith("+")) return `+${d.slice(1).replace(/\D/g, "")}`;
+	// A bare Malaysian number (no leading 0, no country code) never exceeds 10
+	// digits (the longest case is the "011" mobile series without its leading
+	// zero). An 11+ digit bare string is a foreign number that lost its "+"
+	// somewhere upstream (e.g. a CSV/Excel export treating the column as a
+	// plain number) — do not misassign it to Malaysia.
 	const digitsOnly = d.replace(/\D/g, "");
-	if (/^\d{8,11}$/.test(digitsOnly)) return `+60${digitsOnly}`;
+	if (/^\d{8,10}$/.test(digitsOnly)) return `+60${digitsOnly}`;
 	return digitsOnly ? `+${digitsOnly}` : d;
 }
 
