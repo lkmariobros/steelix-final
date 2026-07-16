@@ -3,9 +3,10 @@ export function normaliseUserRole(role: string | null | undefined): string {
 	return (role ?? "agent").trim().toLowerCase();
 }
 
-/** Whether a user account can receive lead assignments. */
+/** Whether a user account can receive lead assignments (agents and team leads). */
 export function isAssignableLeadAgentRole(role: string | null | undefined): boolean {
-	return normaliseUserRole(role) === "agent";
+	const normalised = normaliseUserRole(role);
+	return normalised === "agent" || normalised === "team_lead";
 }
 
 /** Merge legacy `role` with `roles[]` for permission checks. */

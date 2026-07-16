@@ -21,20 +21,21 @@ export function StatsCards({
 		const unclaimedCompany = leads.filter(
 			(l) => l.leadType === "company" && !l.agentId,
 		).length;
+		const appointmentsMade = leads.filter(
+			(l) => l.stage === "appointment_made",
+		).length;
 		const bookingsMade = leads.filter((l) => l.stage === "booking_made").length;
 		const buyers = leads.filter((l) => l.type === "buyer").length;
 		const tenants = leads.filter((l) => l.type === "tenant").length;
-		const uniqueAgents = new Set(leads.map((l) => l.agentId).filter(Boolean))
-			.size;
 		return {
 			total,
 			active,
 			inactive,
 			unclaimedCompany,
+			appointmentsMade,
 			bookingsMade,
 			buyers,
 			tenants,
-			uniqueAgents,
 		};
 	}, [leads]);
 
@@ -59,6 +60,9 @@ export function StatsCards({
 
 	const activeRate = stats.total
 		? Math.round((stats.active / stats.total) * 100)
+		: 0;
+	const appointmentRate = stats.total
+		? Math.round((stats.appointmentsMade / stats.total) * 100)
 		: 0;
 	const bookingRate = stats.total
 		? Math.round((stats.bookingsMade / stats.total) * 100)
@@ -102,35 +106,35 @@ export function StatsCards({
 			</Card>
 			<Card className="overflow-hidden">
 				<CardHeader className="pb-2">
-					<CardDescription>Bookings Made</CardDescription>
-					<CardTitle className="text-3xl">{stats.bookingsMade}</CardTitle>
+					<CardDescription>Appointment Made</CardDescription>
+					<CardTitle className="text-3xl">{stats.appointmentsMade}</CardTitle>
 				</CardHeader>
 				<CardContent className="space-y-2">
 					<div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
 						<div
 							className="h-full rounded-full bg-emerald-500 transition-all duration-500"
-							style={{ width: `${bookingRate}%` }}
+							style={{ width: `${appointmentRate}%` }}
 						/>
 					</div>
 					<p className="text-muted-foreground text-xs">
-						{bookingRate}% conversion · {stats.unclaimedCompany} unclaimed co.
+						{appointmentRate}% of total leads
 					</p>
 				</CardContent>
 			</Card>
 			<Card className="overflow-hidden">
 				<CardHeader className="pb-2">
-					<CardDescription>Agents With Leads</CardDescription>
-					<CardTitle className="text-3xl">{stats.uniqueAgents}</CardTitle>
+					<CardDescription>Booking Made</CardDescription>
+					<CardTitle className="text-3xl">{stats.bookingsMade}</CardTitle>
 				</CardHeader>
 				<CardContent className="space-y-2">
 					<div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
 						<div
 							className="h-full rounded-full bg-blue-500 transition-all duration-500"
-							style={{ width: stats.uniqueAgents ? "75%" : "0%" }}
+							style={{ width: `${bookingRate}%` }}
 						/>
 					</div>
 					<p className="text-muted-foreground text-xs">
-						{stats.total} total leads tracked
+						{bookingRate}% conversion · {stats.unclaimedCompany} unclaimed co.
 					</p>
 				</CardContent>
 			</Card>

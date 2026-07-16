@@ -1354,10 +1354,10 @@ export async function getLeadsStatsAdmin(): Promise<LeadsStatsAdmin> {
 	};
 }
 
-/** Active agent-portal accounts eligible for lead assignment. */
+/** Active agent-portal accounts eligible for lead assignment (agents and team leads). */
 const assignableLeadAgentWhere = and(
 	or(eq(user.isActive, true), isNull(user.isActive)),
-	sql`lower(trim(coalesce(${user.role}, 'agent'))) = 'agent'`,
+	sql`lower(trim(coalesce(${user.role}, 'agent'))) in ('agent', 'team_lead')`,
 );
 
 /** Lead section only — prefer agent nickname over legal name in UI and exports. */
