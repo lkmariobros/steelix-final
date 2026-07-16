@@ -644,6 +644,21 @@ export const agentsRouter = router({
 				}
 			}
 
+			if (updateData.email) {
+				updateData.email = updateData.email.trim().toLowerCase();
+				const [duplicate] = await db
+					.select({ id: user.id })
+					.from(user)
+					.where(sql`lower(${user.email}) = ${updateData.email}`)
+					.limit(1);
+				if (duplicate && duplicate.id !== id) {
+					throw new TRPCError({
+						code: "BAD_REQUEST",
+						message: "Email is already in use by another account",
+					});
+				}
+			}
+
 			let onboardingDocuments = currentAgent.onboardingDocuments;
 			if (documents) {
 				const uploaded = await persistOnboardingDocuments(id, documents);
@@ -656,17 +671,29 @@ export const agentsRouter = router({
 			}
 
 			// Update agent
-			const [updatedAgent] = await db
-				.update(user)
-				.set({
-					...updateData,
-					...(recruitedBy !== undefined ? { recruitedBy } : {}),
-					...(joinedDate !== undefined ? { createdAt: joinedDate } : {}),
-					...(documents ? { onboardingDocuments } : {}),
-					updatedAt: new Date(),
-				})
-				.where(eq(user.id, id))
-				.returning();
+			let updatedAgent: typeof user.$inferSelect | undefined;
+			try {
+				[updatedAgent] = await db
+					.update(user)
+					.set({
+						...updateData,
+						...(recruitedBy !== undefined ? { recruitedBy } : {}),
+						...(joinedDate !== undefined ? { createdAt: joinedDate } : {}),
+						...(documents ? { onboardingDocuments } : {}),
+						updatedAt: new Date(),
+					})
+					.where(eq(user.id, id))
+					.returning();
+			} catch (e) {
+				const msg = e instanceof Error ? e.message : String(e);
+				if (/duplicate key/i.test(msg) && /email/i.test(msg)) {
+					throw new TRPCError({
+						code: "BAD_REQUEST",
+						message: "Email is already in use by another account",
+					});
+				}
+				throw e;
+			}
 
 			// If agent tier changed, log it
 			if (
