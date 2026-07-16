@@ -12,7 +12,7 @@ import {
 	PIPELINE_STAGES as SHARED_PIPELINE_STAGES,
 	type PipelineStageValue,
 } from "@/app/admin/leads/_components/lead-constants";
-import { StatusBadge } from "@/app/admin/leads/_components/lead-ui";
+import { StageBadge, StatusBadge } from "@/app/admin/leads/_components/lead-ui";
 
 export type PipelineStage = PipelineStageValue;
 
@@ -47,15 +47,9 @@ interface KanbanBoardProps {
 	leadsTab?: "my" | "company";
 }
 
-const PIPELINE_STAGES: Array<{
-	id: PipelineStage;
-	label: string;
-	color: string;
-}> = SHARED_PIPELINE_STAGES.map((s) => ({
-	id: s.value,
-	label: s.label,
-	color: `${s.color.split(" ").find((c) => c.startsWith("bg-")) ?? "bg-muted"} dark:bg-opacity-30`,
-}));
+const PIPELINE_STAGES: Array<{ id: PipelineStage }> = SHARED_PIPELINE_STAGES.map(
+	(s) => ({ id: s.value }),
+);
 
 export function KanbanBoard({
 	prospects,
@@ -167,18 +161,12 @@ export function KanbanBoard({
 						{/* Column Header */}
 						<div className="mb-2 rounded-md border border-border bg-muted/20 px-2 py-2">
 							<div className="flex items-center justify-between gap-2">
-								<div className="flex min-w-0 items-center gap-2">
-									<span
-										aria-hidden="true"
-										className={`${stage.color} size-2.5 shrink-0 rounded-sm`}
-									/>
-									<h3 className="min-w-0 truncate font-semibold text-foreground text-xs leading-tight">
-										{stage.label}
-									</h3>
+								<div className="flex min-w-0 flex-1 items-center gap-1.5">
+									<StageBadge stage={stage.id} />
+									<span className="text-muted-foreground text-[11px] tabular-nums">
+										{stageProspects.length}
+									</span>
 								</div>
-								<Badge variant="secondary" className="h-5 min-w-5 px-1.5 text-[10px] tabular-nums">
-									{stageProspects.length}
-								</Badge>
 							</div>
 						</div>
 
@@ -222,8 +210,12 @@ export function KanbanBoard({
 											</span>
 										</p>
 
-										<div className="mt-1 flex min-w-0 items-center gap-1">
+										<div className="mt-1 flex min-w-0 items-center gap-1 text-[11px]">
 											<StatusBadge status={prospect.status} />
+											<span className="text-muted-foreground">·</span>
+											<span className="truncate text-muted-foreground">
+												{prospect.agentName ?? "Unassigned"}
+											</span>
 										</div>
 
 										{tags && (

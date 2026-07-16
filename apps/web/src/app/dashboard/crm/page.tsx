@@ -212,6 +212,7 @@ export default function CRMPage() {
 	const [stageFilter, setStageFilter] = useState<PipelineStage | "all">("all");
 	const [categoryFilter, setCategoryFilter] = useState<string>("all"); // tagId
 	const [agentFilter, setAgentFilter] = useState<string>("all");
+	const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
 	const [currentPage, setCurrentPage] = useState(1);
 	const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
 	const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
@@ -253,6 +254,7 @@ export default function CRMPage() {
 			search: searchQuery || undefined,
 			stage: stageFilter === "all" ? undefined : stageFilter,
 			tagId: categoryFilter === "all" ? undefined : categoryFilter,
+			status: statusFilter === "all" ? undefined : statusFilter,
 			filterAgentId:
 				agentFilter === "all"
 					? undefined
@@ -282,6 +284,7 @@ export default function CRMPage() {
 			search: searchQuery || undefined,
 			stage: stageFilter === "all" ? undefined : stageFilter,
 			tagId: categoryFilter === "all" ? undefined : categoryFilter,
+			status: statusFilter === "all" ? undefined : statusFilter,
 			filterAgentId:
 				agentFilter === "all"
 					? undefined
@@ -298,6 +301,7 @@ export default function CRMPage() {
 			searchQuery,
 			stageFilter,
 			categoryFilter,
+			statusFilter,
 			agentFilter,
 			activeTab,
 		],
@@ -1625,6 +1629,23 @@ export default function CRMPage() {
 										{s.label}
 									</SelectItem>
 								))}
+							</SelectContent>
+						</Select>
+
+						<Select
+							value={statusFilter}
+							onValueChange={(v) => {
+								setStatusFilter(v as "all" | "active" | "inactive");
+								setCurrentPage(1);
+							}}
+						>
+							<SelectTrigger className="w-44">
+								<SelectValue placeholder="Status" />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectItem value="all">All Status</SelectItem>
+								<SelectItem value="active">Active</SelectItem>
+								<SelectItem value="inactive">Inactive</SelectItem>
 							</SelectContent>
 						</Select>
 
