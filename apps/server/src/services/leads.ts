@@ -30,6 +30,7 @@ import {
 } from "../models/crm";
 import { db } from "../utils/db";
 import { withPipelineStageSchemaRetry } from "../utils/pipeline-stage-schema";
+import { withProspectNotesSchemaRetry } from "../utils/prospect-notes-schema";
 
 /**
  * Admin Leads Management Service
@@ -587,15 +588,17 @@ export async function getLeadByIdAdmin(leadId: string) {
 	if (!row) return null;
 
 	// Notes
-	const noteRows = await db
-		.select({
-			note: prospectNotes,
-			agentName: agentLeadDisplayNameSql,
-		})
-		.from(prospectNotes)
-		.leftJoin(user, eq(prospectNotes.agentId, user.id))
-		.where(eq(prospectNotes.prospectId, leadId))
-		.orderBy(desc(prospectNotes.createdAt));
+	const noteRows = await withProspectNotesSchemaRetry(() =>
+		db
+			.select({
+				note: prospectNotes,
+				agentName: agentLeadDisplayNameSql,
+			})
+			.from(prospectNotes)
+			.leftJoin(user, eq(prospectNotes.agentId, user.id))
+			.where(eq(prospectNotes.prospectId, leadId))
+			.orderBy(desc(prospectNotes.createdAt)),
+	);
 
 	// Tags
 	let tagRows: Array<{ tagId: string; tagName: string }> = [];
@@ -1036,10 +1039,12 @@ export async function addNoteToLeadAdmin(
 	content: string,
 	adminId: string,
 ) {
-	const [note] = await db
-		.insert(prospectNotes)
-		.values({ prospectId: leadId, content, agentId: adminId })
-		.returning();
+	const [note] = await withProspectNotesSchemaRetry(() =>
+		db
+			.insert(prospectNotes)
+			.values({ prospectId: leadId, content, agentId: adminId })
+			.returning(),
+	);
 
 	// Note is activity -> reactivate
 	await db

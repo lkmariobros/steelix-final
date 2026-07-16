@@ -129,6 +129,7 @@ export const prospectNotes = pgTable(
 			.notNull()
 			.references(() => user.id, { onDelete: "cascade" }),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
+		updatedAt: timestamp("updated_at").defaultNow().notNull(),
 	},
 	(table) => ({
 		prospectIdIdx: index("idx_prospect_notes_prospect_id").on(table.prospectId),
@@ -328,6 +329,12 @@ export const selectProspectNoteSchema = insertProspectNoteSchema.extend({
 	id: z.string().uuid(),
 	agentId: z.string(),
 	createdAt: z.date(),
+	updatedAt: z.date(),
+});
+
+export const updateProspectNoteSchema = z.object({
+	id: z.string().uuid(),
+	content: z.string().min(1, "Note content is required"),
 });
 
 // Master tags schemas

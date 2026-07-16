@@ -23,10 +23,12 @@ import {
 	selectProspectNoteSchema,
 	selectProspectSchema,
 	updateCrmProjectSchema,
+	updateProspectNoteSchema,
 	updateProspectSchema,
 } from "../models/crm";
 import { getLeadActivityAdmin, importProspectsBulkForAgent, assignLeadAdmin, buildAgentPersonalLeadsCondition, canAgentAccessProspect, fetchFollowersByProspectIds, getAgentsWithLeads, getProspectFollowers, setProspectTagIds, agentLeadDisplayNameSql } from "../services/leads";
 import { withPipelineStageSchemaRetry } from "../utils/pipeline-stage-schema";
+import { withProspectNotesSchemaRetry } from "../utils/prospect-notes-schema";
 import { db } from "../utils/db";
 import { adminProcedure, protectedProcedure, router } from "../utils/trpc";
 
@@ -523,15 +525,17 @@ export const crmRouter = router({
 			const followers = await getProspectFollowers(id);
 
 			// Get notes for this prospect with agent names
-			const notes = await db
-				.select({
-					note: prospectNotes,
-					agentName: agentLeadDisplayNameSql,
-				})
-				.from(prospectNotes)
-				.leftJoin(user, eq(prospectNotes.agentId, user.id))
-				.where(eq(prospectNotes.prospectId, id))
-				.orderBy(desc(prospectNotes.createdAt));
+			const notes = await withProspectNotesSchemaRetry(() =>
+				db
+					.select({
+						note: prospectNotes,
+						agentName: agentLeadDisplayNameSql,
+					})
+					.from(prospectNotes)
+					.leftJoin(user, eq(prospectNotes.agentId, user.id))
+					.where(eq(prospectNotes.prospectId, id))
+					.orderBy(desc(prospectNotes.createdAt)),
+			);
 
 			// Get tags for this prospect
 			let prospectTagsData: Array<{
@@ -909,14 +913,16 @@ export const crmRouter = router({
 				throw new Error("Prospect not found");
 			}
 
-			const [note] = await db
-				.insert(prospectNotes)
-				.values({
-					prospectId,
-					content,
-					agentId,
-				})
-				.returning();
+			const [note] = await withProspectNotesSchemaRetry(() =>
+				db
+					.insert(prospectNotes)
+					.values({
+						prospectId,
+						content,
+						agentId,
+					})
+					.returning(),
+			);
 
 			// Treat note creation as lead activity contact touchpoint.
 			await withPipelineStageSchemaRetry(() =>
@@ -952,20 +958,82 @@ export const crmRouter = router({
 			}
 
 			// Get notes with agent names
-			const notes = await db
-				.select({
-					note: prospectNotes,
-					agentName: agentLeadDisplayNameSql,
-				})
-				.from(prospectNotes)
-				.leftJoin(user, eq(prospectNotes.agentId, user.id))
-				.where(eq(prospectNotes.prospectId, id))
-				.orderBy(desc(prospectNotes.createdAt));
+			const notes = await withProspectNotesSchemaRetry(() =>
+				db
+					.select({
+						note: prospectNotes,
+						agentName: agentLeadDisplayNameSql,
+					})
+					.from(prospectNotes)
+					.leftJoin(user, eq(prospectNotes.agentId, user.id))
+					.where(eq(prospectNotes.prospectId, id))
+					.orderBy(desc(prospectNotes.createdAt)),
+			);
 
 			return notes.map((n) => ({
 				...selectProspectNoteSchema.parse(n.note),
 				agentName: n.agentName || "Unknown",
 			}));
+		}),
+
+	// Edit your own note (author-only). Bumps updatedAt to the edit time.
+	updateNote: protectedProcedure
+		.input(updateProspectNoteSchema)
+		.mutation(async ({ input, ctx }) => {
+			const agentId = ctx.session.user.id;
+
+			const [existing] = await db
+				.select({ agentId: prospectNotes.agentId })
+				.from(prospectNotes)
+				.where(eq(prospectNotes.id, input.id))
+				.limit(1);
+
+			if (!existing) {
+				throw new TRPCError({ code: "NOT_FOUND", message: "Note not found" });
+			}
+			if (existing.agentId !== agentId) {
+				throw new TRPCError({
+					code: "FORBIDDEN",
+					message: "You can only edit your own notes",
+				});
+			}
+
+			const [updated] = await withProspectNotesSchemaRetry(() =>
+				db
+					.update(prospectNotes)
+					.set({ content: input.content, updatedAt: new Date() })
+					.where(eq(prospectNotes.id, input.id))
+					.returning(),
+			);
+
+			return selectProspectNoteSchema.parse(updated);
+		}),
+
+	// Delete your own note (author-only).
+	deleteNote: protectedProcedure
+		.input(z.object({ id: z.string().uuid() }))
+		.mutation(async ({ input, ctx }) => {
+			const agentId = ctx.session.user.id;
+
+			const [existing] = await db
+				.select({ agentId: prospectNotes.agentId })
+				.from(prospectNotes)
+				.where(eq(prospectNotes.id, input.id))
+				.limit(1);
+
+			if (!existing) {
+				throw new TRPCError({ code: "NOT_FOUND", message: "Note not found" });
+			}
+			if (existing.agentId !== agentId) {
+				throw new TRPCError({
+					code: "FORBIDDEN",
+					message: "You can only delete your own notes",
+				});
+			}
+
+			await db.delete(prospectNotes).where(eq(prospectNotes.id, input.id));
+
+			return { success: true as const, id: input.id };
 		}),
 
 	getActivity: protectedProcedure

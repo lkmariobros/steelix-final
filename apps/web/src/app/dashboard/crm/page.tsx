@@ -43,6 +43,7 @@ import {
 	FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { LoadingScreen } from "@/components/ui/loading-spinner";
 import {
 	Select,
@@ -64,12 +65,14 @@ import {
 	RiFileUploadLine,
 	RiCalendarLine,
 	RiDashboardLine,
+	RiDeleteBinLine,
 	RiEyeLine,
 	RiHomeLine,
 	RiLinksLine,
 	RiLoader4Line,
 	RiMailLine,
 	RiMapPinLine,
+	RiPencilLine,
 	RiPhoneLine,
 	RiPriceTagLine,
 	RiSearchLine,
@@ -144,6 +147,7 @@ interface ProspectNote {
 	agentId: string;
 	agentName?: string; // Agent name (from backend join)
 	createdAt: Date | string;
+	updatedAt: Date | string;
 }
 
 // Form validation schema
@@ -436,6 +440,11 @@ export default function CRMPage() {
 	const [categoryTagIds, setCategoryTagIds] = useState<string[]>([]);
 	const [detailStage, setDetailStage] = useState<PipelineStage | "">("");
 	const [newNoteContent, setNewNoteContent] = useState("");
+	const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+	const [editingNoteContent, setEditingNoteContent] = useState("");
+	const [confirmDeleteNoteId, setConfirmDeleteNoteId] = useState<string | null>(
+		null,
+	);
 	const [notesPage, setNotesPage] = useState(1);
 	const NOTES_PER_PAGE = 5;
 
@@ -528,6 +537,45 @@ export default function CRMPage() {
 			content: newNoteContent.trim(),
 		});
 	};
+
+	// Edit note mutation
+	const updateNoteMutation = trpc.crm.updateNote.useMutation({
+		onSuccess: () => {
+			toast.success("Note updated");
+			refetchNotes();
+			setEditingNoteId(null);
+			setEditingNoteContent("");
+		},
+		onError: (error) => toast.error(error.message || "Failed to update note"),
+	});
+
+	const handleStartEditNote = (note: ProspectNote) => {
+		setEditingNoteId(note.id);
+		setEditingNoteContent(note.content);
+	};
+
+	const handleCancelEditNote = () => {
+		setEditingNoteId(null);
+		setEditingNoteContent("");
+	};
+
+	const handleSaveEditNote = () => {
+		if (!editingNoteId || !editingNoteContent.trim()) return;
+		updateNoteMutation.mutate({
+			id: editingNoteId,
+			content: editingNoteContent.trim(),
+		});
+	};
+
+	// Delete note mutation
+	const deleteNoteMutation = trpc.crm.deleteNote.useMutation({
+		onSuccess: () => {
+			toast.success("Note deleted");
+			refetchNotes();
+			setConfirmDeleteNoteId(null);
+		},
+		onError: (error) => toast.error(error.message || "Failed to delete note"),
+	});
 
 	const handleLink = (prospect: Prospect) => {
 		// TODO: Link to transaction
@@ -1381,7 +1429,9 @@ export default function CRMPage() {
 														notesPage * NOTES_PER_PAGE,
 													)
 													.map((note) => {
-													const noteDate = new Date(note.createdAt);
+													const noteDate = new Date(
+														note.updatedAt ?? note.createdAt,
+													);
 													const formattedDate = noteDate.toLocaleString(
 														"en-US",
 														{
@@ -1396,26 +1446,138 @@ export default function CRMPage() {
 													const gmtOffset = -noteDate.getTimezoneOffset() / 60;
 													const gmtSign = gmtOffset >= 0 ? "+" : "";
 													const gmtString = `(GMT ${gmtSign}${gmtOffset.toString().padStart(2, "0")})`;
+													const wasEdited =
+														note.updatedAt &&
+														new Date(note.updatedAt).getTime() -
+															new Date(note.createdAt).getTime() >
+															1000;
+													const isOwnNote =
+														note.agentId === session?.user?.id;
+													const isEditing = editingNoteId === note.id;
+													const isConfirmingDelete =
+														confirmDeleteNoteId === note.id;
 
 													return (
 														<div
 															key={note.id}
 															className="space-y-1 border-b pb-3 last:border-0 last:pb-0"
 														>
-															<div className="break-words text-foreground text-sm leading-relaxed">
-																{note.content}
-															</div>
-															<div className="flex items-center gap-2 text-muted-foreground text-xs">
-																<span>
-																	{formattedDate} {gmtString}
-																</span>
-																{note.agentName && (
-																	<>
-																		<span>•</span>
-																		<span>Created by: {note.agentName}</span>
-																	</>
-																)}
-															</div>
+															{isEditing ? (
+																<div className="space-y-2">
+																	<Textarea
+																		value={editingNoteContent}
+																		onChange={(e) =>
+																			setEditingNoteContent(e.target.value)
+																		}
+																		rows={3}
+																		className="resize-none bg-background text-sm"
+																		autoFocus
+																	/>
+																	<div className="flex gap-2">
+																		<Button
+																			size="sm"
+																			className="h-7 px-2 text-xs"
+																			onClick={handleSaveEditNote}
+																			disabled={
+																				!editingNoteContent.trim() ||
+																				updateNoteMutation.isPending
+																			}
+																		>
+																			{updateNoteMutation.isPending ? (
+																				<RiLoader4Line className="size-3.5 animate-spin" />
+																			) : (
+																				"Save"
+																			)}
+																		</Button>
+																		<Button
+																			size="sm"
+																			variant="outline"
+																			className="h-7 px-2 text-xs"
+																			onClick={handleCancelEditNote}
+																		>
+																			Cancel
+																		</Button>
+																	</div>
+																</div>
+															) : (
+																<>
+																	<div className="break-words text-foreground text-sm leading-relaxed">
+																		{note.content}
+																	</div>
+																	<div className="flex flex-wrap items-center gap-2 text-muted-foreground text-xs">
+																		<span>
+																			{formattedDate} {gmtString}
+																		</span>
+																		{note.agentName && (
+																			<>
+																				<span>•</span>
+																				<span>Created by: {note.agentName}</span>
+																			</>
+																		)}
+																		{wasEdited && (
+																			<span className="italic">(edited)</span>
+																		)}
+																		{isOwnNote && !isConfirmingDelete && (
+																			<div className="ml-auto flex items-center gap-2">
+																				<button
+																					type="button"
+																					className="text-muted-foreground hover:text-foreground"
+																					title="Edit note"
+																					onClick={() =>
+																						handleStartEditNote(note)
+																					}
+																				>
+																					<RiPencilLine className="size-3.5" />
+																				</button>
+																				<button
+																					type="button"
+																					className="text-muted-foreground hover:text-destructive"
+																					title="Delete note"
+																					onClick={() =>
+																						setConfirmDeleteNoteId(note.id)
+																					}
+																				>
+																					<RiDeleteBinLine className="size-3.5" />
+																				</button>
+																			</div>
+																		)}
+																	</div>
+																	{isConfirmingDelete && (
+																		<div className="flex items-center gap-2 pt-1">
+																			<span className="text-muted-foreground text-xs">
+																				Delete this note?
+																			</span>
+																			<Button
+																				size="sm"
+																				variant="destructive"
+																				className="h-6 px-2 text-xs"
+																				onClick={() =>
+																					deleteNoteMutation.mutate({
+																						id: note.id,
+																					})
+																				}
+																				disabled={deleteNoteMutation.isPending}
+																			>
+																				{deleteNoteMutation.isPending ? (
+																					<RiLoader4Line className="size-3.5 animate-spin" />
+																				) : (
+																					"Delete"
+																				)}
+																			</Button>
+																			<Button
+																				size="sm"
+																				variant="outline"
+																				className="h-6 px-2 text-xs"
+																				onClick={() =>
+																					setConfirmDeleteNoteId(null)
+																				}
+																			>
+																				Cancel
+																			</Button>
+																		</div>
+																	)}
+																</>
+															)}
 														</div>
 													);
 												})
@@ -1458,17 +1620,13 @@ export default function CRMPage() {
 											</div>
 										)}
 										{/* Add Note Form */}
-										<div className="flex gap-2">
-											<Input
+										<div className="flex items-end gap-2">
+											<Textarea
 												placeholder="Add a note..."
 												value={newNoteContent}
 												onChange={(e) => setNewNoteContent(e.target.value)}
-												onKeyDown={(e) => {
-													if (e.key === "Enter" && !e.shiftKey) {
-														e.preventDefault();
-														handleAddNote();
-													}
-												}}
+												rows={2}
+												className="resize-none"
 											/>
 											<Button
 												size="sm"
