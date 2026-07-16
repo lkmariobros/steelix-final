@@ -73,7 +73,6 @@ import {
 	formatLeadTypeLabel,
 	PAGE_SIZE_OPTIONS,
 	PIPELINE_STAGES,
-	TYPE_OPTIONS,
 	stageMap,
 } from "./_components/lead-constants";
 import { LeadDetailSheet } from "./_components/lead-detail-sheet";
@@ -100,7 +99,7 @@ export default function AdminLeadsPage() {
 
 	// ── Filters (all client-side, no backend re-fetch) ──────────────────────
 	const [search, setSearch] = useState("");
-	const [typeFilter, setTypeFilter] = useState("__all__");
+	const [statusFilter, setStatusFilter] = useState("__all__");
 	const [stageFilter, setStageFilter] = useState("__all__");
 	const [leadTypeFilter, setLeadTypeFilter] = useState("__all__");
 	const [agentFilter, setAgentFilter] = useState("__all__");
@@ -188,7 +187,13 @@ export default function AdminLeadsPage() {
 			)
 				return false;
 
-			if (typeFilter !== "__all__" && lead.type !== typeFilter) return false;
+			if (statusFilter !== "__all__") {
+				if (statusFilter === "active") {
+					if (lead.status !== "active") return false;
+				} else if (lead.status === "active") {
+					return false;
+				}
+			}
 			if (stageFilter !== "__all__" && lead.stage !== stageFilter) return false;
 			if (leadTypeFilter !== "__all__" && lead.leadType !== leadTypeFilter)
 				return false;
@@ -246,7 +251,7 @@ export default function AdminLeadsPage() {
 	}, [
 		allLeads,
 		search,
-		typeFilter,
+		statusFilter,
 		stageFilter,
 		leadTypeFilter,
 		agentFilter,
@@ -270,7 +275,7 @@ export default function AdminLeadsPage() {
 
 	const resetFilters = () => {
 		setSearch("");
-		setTypeFilter("__all__");
+		setStatusFilter("__all__");
 		setStageFilter("__all__");
 		setLeadTypeFilter("__all__");
 		setAgentFilter("__all__");
@@ -280,7 +285,7 @@ export default function AdminLeadsPage() {
 
 	const hasFilters =
 		search ||
-		typeFilter !== "__all__" ||
+		statusFilter !== "__all__" ||
 		stageFilter !== "__all__" ||
 		leadTypeFilter !== "__all__" ||
 		agentFilter !== "__all__" ||
@@ -612,19 +617,16 @@ export default function AdminLeadsPage() {
 									</Select>
 
 									<Select
-										value={typeFilter}
-										onValueChange={setFilter(setTypeFilter)}
+										value={statusFilter}
+										onValueChange={setFilter(setStatusFilter)}
 									>
 										<SelectTrigger className="h-9 w-[110px] text-xs">
-											<SelectValue placeholder="Type" />
+											<SelectValue placeholder="Status" />
 										</SelectTrigger>
 										<SelectContent>
-											<SelectItem value="__all__">All Types</SelectItem>
-											{TYPE_OPTIONS.map((o) => (
-												<SelectItem key={o.value} value={o.value}>
-													{o.label}
-												</SelectItem>
-											))}
+											<SelectItem value="__all__">All Status</SelectItem>
+											<SelectItem value="active">Active</SelectItem>
+											<SelectItem value="inactive">Inactive</SelectItem>
 										</SelectContent>
 									</Select>
 
@@ -723,16 +725,16 @@ export default function AdminLeadsPage() {
 											</button>
 										</span>
 									)}
-									{typeFilter !== "__all__" && (
+									{statusFilter !== "__all__" && (
 										<span className="inline-flex items-center gap-1 rounded-md border bg-muted/60 px-2 py-0.5 text-xs">
-											Type:{" "}
+											Status:{" "}
 											<span className="font-medium capitalize">
-												{typeFilter}
+												{statusFilter}
 											</span>
 											<button
 												type="button"
 												onClick={() => {
-													setTypeFilter("__all__");
+													setStatusFilter("__all__");
 													setPage(1);
 												}}
 												className="ml-0.5 rounded-sm opacity-60 hover:opacity-100"

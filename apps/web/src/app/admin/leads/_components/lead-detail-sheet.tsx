@@ -236,6 +236,8 @@ export function LeadDetailSheet({
 								createdAt: activeLead.createdAt,
 								agentName: activeLead.agentName,
 							}}
+							showDescription={false}
+							showNotes={false}
 						/>
 
 						{/* Pipeline Stage */}
