@@ -1094,9 +1094,125 @@ export async function addNoteToLeadAdmin(
 		eventType: "note_added",
 		actorId: adminId,
 		content,
+		metadata: { noteId: note.id },
 	});
 
 	return note;
+}
+
+/**
+ * Admin can edit any lead note (not author-restricted).
+ * Keeps matching activity-log note_added rows in sync.
+ */
+export async function updateNoteAdmin(noteId: string, content: string) {
+	const [existing] = await db
+		.select()
+		.from(prospectNotes)
+		.where(eq(prospectNotes.id, noteId))
+		.limit(1);
+
+	if (!existing) throw new Error("Note not found");
+
+	const [updated] = await withProspectNotesSchemaRetry(() =>
+		db
+			.update(prospectNotes)
+			.set({ content, updatedAt: new Date() })
+			.where(eq(prospectNotes.id, noteId))
+			.returning(),
+	);
+
+	try {
+		const activities = await db
+			.select()
+			.from(prospectActivityLog)
+			.where(
+				and(
+					eq(prospectActivityLog.prospectId, existing.prospectId),
+					eq(prospectActivityLog.eventType, "note_added"),
+				),
+			);
+
+		for (const activity of activities) {
+			let meta: Record<string, string> | null = null;
+			if (activity.metadata) {
+				try {
+					meta = JSON.parse(activity.metadata) as Record<string, string>;
+				} catch {
+					meta = null;
+				}
+			}
+			const matchesNoteId = meta?.noteId === noteId;
+			const matchesOldContent = activity.content === existing.content;
+			if (!matchesNoteId && !matchesOldContent) continue;
+
+			await db
+				.update(prospectActivityLog)
+				.set({
+					content,
+					metadata: JSON.stringify({ ...(meta ?? {}), noteId }),
+				})
+				.where(eq(prospectActivityLog.id, activity.id));
+		}
+	} catch {
+		// Activity sync is best-effort
+	}
+
+	await db
+		.update(prospects)
+		.set({ status: "active", updatedAt: new Date() })
+		.where(eq(prospects.id, existing.prospectId));
+
+	return selectProspectNoteSchema.parse(updated);
+}
+
+/**
+ * Admin can delete any lead note (not author-restricted).
+ * Also removes matching activity-log note_added rows.
+ */
+export async function deleteNoteAdmin(noteId: string) {
+	const [existing] = await db
+		.select()
+		.from(prospectNotes)
+		.where(eq(prospectNotes.id, noteId))
+		.limit(1);
+
+	if (!existing) throw new Error("Note not found");
+
+	await db.delete(prospectNotes).where(eq(prospectNotes.id, noteId));
+
+	try {
+		const activities = await db
+			.select()
+			.from(prospectActivityLog)
+			.where(
+				and(
+					eq(prospectActivityLog.prospectId, existing.prospectId),
+					eq(prospectActivityLog.eventType, "note_added"),
+				),
+			);
+
+		for (const activity of activities) {
+			let meta: Record<string, string> | null = null;
+			if (activity.metadata) {
+				try {
+					meta = JSON.parse(activity.metadata) as Record<string, string>;
+				} catch {
+					meta = null;
+				}
+			}
+			const matchesNoteId = meta?.noteId === noteId;
+			const matchesContent = activity.content === existing.content;
+			if (!matchesNoteId && !matchesContent) continue;
+
+			await db
+				.delete(prospectActivityLog)
+				.where(eq(prospectActivityLog.id, activity.id));
+		}
+	} catch {
+		// Activity sync is best-effort
+	}
+
+	return { success: true as const, id: noteId };
 }
 
 /**
@@ -1146,19 +1262,16 @@ export async function logEmailForLeadAdmin(
  * Get the full unified activity timeline for a lead, newest first.
  *
  * Merges two sources:
- *  1. prospect_activity_log  — new structured events (stage changes, assignments, calls, emails, notes)
- *  2. prospect_notes         — legacy notes created before activity logging existed
+ *  1. prospect_activity_log — non-note events (stage, assignment, call, email, lead_updated)
+ *  2. prospect_notes — all notes (source of truth so edit/delete has a real note UUID)
  *
- * Legacy notes are deduplicated: if a note was already logged to prospect_activity_log
- * (i.e. added via addNoteToLeadAdmin after the new system was deployed), it won't
- * appear twice because the note_added log entry carries the same content.
- * To keep it simple we show all legacy notes whose created_at is BEFORE the earliest
- * activity_log entry for that lead, so there is no visual duplication.
+ * note_added rows in the activity log are skipped to avoid duplicates with prospect_notes
+ * (admin add writes both). Each note entry exposes metadata.noteId for admin edit/delete.
  */
 export async function getLeadActivityAdmin(
 	leadId: string,
 ): Promise<ActivityEntry[]> {
-	// ── 1. Fetch new activity log entries ────────────────────────────────────
+	// ── 1. Fetch non-note activity log entries ────────────────────────────────
 	let activityEntries: ActivityEntry[] = [];
 
 	try {
@@ -1173,38 +1286,31 @@ export async function getLeadActivityAdmin(
 			.where(eq(prospectActivityLog.prospectId, leadId))
 			.orderBy(desc(prospectActivityLog.createdAt));
 
-		activityEntries = rows.map((r) => ({
-			id: r.activity.id,
-			prospectId: r.activity.prospectId,
-			eventType: r.activity.eventType,
-			actorId: r.activity.actorId,
-			actorName: r.actorName ?? r.actorEmail ?? "Unknown",
-			content: r.activity.content ?? null,
-			metadata: r.activity.metadata
-				? (() => {
-						try {
-							return JSON.parse(r.activity.metadata) as Record<string, string>;
-						} catch {
-							return null;
-						}
-					})()
-				: null,
-			createdAt: r.activity.createdAt,
-		}));
-
+		activityEntries = rows
+			.filter((r) => r.activity.eventType !== "note_added")
+			.map((r) => ({
+				id: r.activity.id,
+				prospectId: r.activity.prospectId,
+				eventType: r.activity.eventType,
+				actorId: r.activity.actorId,
+				actorName: r.actorName ?? r.actorEmail ?? "Unknown",
+				content: r.activity.content ?? null,
+				metadata: r.activity.metadata
+					? (() => {
+							try {
+								return JSON.parse(r.activity.metadata) as Record<string, string>;
+							} catch {
+								return null;
+							}
+						})()
+					: null,
+				createdAt: r.activity.createdAt,
+			}));
 	} catch {
-		// prospect_activity_log table not created yet — continue with legacy notes only
+		// prospect_activity_log table not created yet — continue with notes only
 	}
 
-	// ── 2. Fetch notes from prospect_notes ────────────────────────────────────
-	// addNoteToLeadAdmin writes to both tables; skip prospect_notes rows that
-	// already appear as note_added in the activity log (same content).
-	const activityNoteContents = new Set(
-		activityEntries
-			.filter((e) => e.eventType === "note_added" && e.content)
-			.map((e) => e.content as string),
-	);
-
+	// ── 2. Notes from prospect_notes (editable ids) ───────────────────────────
 	try {
 		const noteRows = await db
 			.select({
@@ -1217,20 +1323,27 @@ export async function getLeadActivityAdmin(
 			.where(eq(prospectNotes.prospectId, leadId))
 			.orderBy(desc(prospectNotes.createdAt));
 
-		const legacyNoteEntries: ActivityEntry[] = noteRows
-			.filter((r) => !activityNoteContents.has(r.note.content))
-			.map((r) => ({
-			id: `note-${r.note.id}`, // prefix to avoid UUID collision with activity_log ids
-			prospectId: r.note.prospectId,
-			eventType: "note_added" as const,
-			actorId: r.note.agentId,
-			actorName: r.agentName ?? r.agentEmail ?? "Unknown",
-			content: r.note.content,
-			metadata: null,
-			createdAt: r.note.createdAt,
-		}));
+		const noteEntries: ActivityEntry[] = noteRows.map((r) => {
+			const wasEdited =
+				r.note.updatedAt &&
+				r.note.createdAt &&
+				r.note.updatedAt.getTime() - r.note.createdAt.getTime() > 1000;
+			return {
+				id: r.note.id,
+				prospectId: r.note.prospectId,
+				eventType: "note_added" as const,
+				actorId: r.note.agentId,
+				actorName: r.agentName ?? r.agentEmail ?? "Unknown",
+				content: r.note.content,
+				metadata: {
+					noteId: r.note.id,
+					...(wasEdited ? { edited: "1" } : {}),
+				},
+				createdAt: r.note.createdAt,
+			};
+		});
 
-		activityEntries = [...activityEntries, ...legacyNoteEntries];
+		activityEntries = [...activityEntries, ...noteEntries];
 	} catch {
 		// prospect_notes table issue — skip
 	}

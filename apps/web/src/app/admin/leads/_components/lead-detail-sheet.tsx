@@ -44,8 +44,10 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import {
+	RiDeleteBinLine,
 	RiHistoryLine,
 	RiLoader4Line,
+	RiPencilLine,
 	RiStickyNoteLine,
 	RiUserLine,
 } from "@remixicon/react";
@@ -78,6 +80,11 @@ export function LeadDetailSheet({
 	const [newStage, setNewStage] = useState<string>("");
 	const [assignAgentId, setAssignAgentId] = useState<string>("");
 	const [followerIds, setFollowerIds] = useState<string[]>([]);
+	const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+	const [editingNoteContent, setEditingNoteContent] = useState("");
+	const [confirmDeleteNoteId, setConfirmDeleteNoteId] = useState<string | null>(
+		null,
+	);
 
 	const invalidate = () => {
 		queryClient.invalidateQueries({ queryKey: [["adminLeads", "get"]] });
@@ -102,6 +109,25 @@ export function LeadDetailSheet({
 			toast.success("Note added");
 			setInputContent("");
 			setShowNoteInput(false);
+			invalidate();
+		},
+		onError: (e) => toast.error(e.message),
+	});
+
+	const updateNoteMutation = trpc.adminLeads.updateNote.useMutation({
+		onSuccess: () => {
+			toast.success("Note updated");
+			setEditingNoteId(null);
+			setEditingNoteContent("");
+			invalidate();
+		},
+		onError: (e) => toast.error(e.message),
+	});
+
+	const deleteNoteMutation = trpc.adminLeads.deleteNote.useMutation({
+		onSuccess: () => {
+			toast.success("Note deleted");
+			setConfirmDeleteNoteId(null);
 			invalidate();
 		},
 		onError: (e) => toast.error(e.message),
@@ -148,6 +174,14 @@ export function LeadDetailSheet({
 		setFollowerIds(current?.followerIds ?? []);
 	}, [detail?.lead, lead]);
 
+	useEffect(() => {
+		setEditingNoteId(null);
+		setEditingNoteContent("");
+		setConfirmDeleteNoteId(null);
+		setShowNoteInput(false);
+		setInputContent("");
+	}, [lead?.id, open]);
+
 	if (!lead) return null;
 
 	const activeLead = (detail?.lead ?? lead) as Lead;
@@ -175,6 +209,34 @@ export function LeadDetailSheet({
 	const handleSubmitNote = () => {
 		if (!inputContent.trim() || !lead) return;
 		addNoteMutation.mutate({ leadId: lead.id, content: inputContent.trim() });
+	};
+
+	const resolveNoteId = (event: {
+		id: string;
+		eventType: string;
+		metadata: Record<string, string> | null;
+	}) => {
+		if (event.eventType !== "note_added") return null;
+		return event.metadata?.noteId ?? event.id;
+	};
+
+	const handleStartEditNote = (noteId: string, content: string | null) => {
+		setConfirmDeleteNoteId(null);
+		setEditingNoteId(noteId);
+		setEditingNoteContent(content ?? "");
+	};
+
+	const handleSaveEditNote = () => {
+		if (!editingNoteId || !editingNoteContent.trim()) return;
+		updateNoteMutation.mutate({
+			id: editingNoteId,
+			content: editingNoteContent.trim(),
+		});
+	};
+
+	const handleCancelEditNote = () => {
+		setEditingNoteId(null);
+		setEditingNoteContent("");
 	};
 
 	const handleConvertToTransaction = () => {
@@ -475,6 +537,14 @@ export function LeadDetailSheet({
 														event.eventType as ActivityEventType
 													] ?? ACTIVITY_CONFIG.lead_updated;
 												const isLast = idx === timeline.length - 1;
+												const noteId = resolveNoteId(event);
+												const isNote = Boolean(noteId);
+												const isEditing =
+													isNote && editingNoteId === noteId;
+												const isConfirmingDelete =
+													isNote && confirmDeleteNoteId === noteId;
+												const wasEdited = event.metadata?.edited === "1";
+
 												return (
 													<div
 														key={event.id}
@@ -502,14 +572,122 @@ export function LeadDetailSheet({
 																		{event.actorName}
 																	</span>
 																</span>
+																{wasEdited && (
+																	<span className="text-muted-foreground text-xs italic">
+																		(edited)
+																	</span>
+																)}
 																<span className="ml-auto shrink-0 text-muted-foreground text-xs">
 																	{formatDateTime(event.createdAt)}
 																</span>
 															</div>
-															{event.content && (
-																<p className="mt-1.5 break-words whitespace-pre-line text-foreground/90 text-sm leading-relaxed">
-																	{event.content}
-																</p>
+
+															{isEditing ? (
+																<div className="mt-2 space-y-2">
+																	<Textarea
+																		value={editingNoteContent}
+																		onChange={(e) =>
+																			setEditingNoteContent(e.target.value)
+																		}
+																		rows={3}
+																		className="resize-none bg-background text-sm"
+																		autoFocus
+																	/>
+																	<div className="flex gap-2">
+																		<Button
+																			size="sm"
+																			className="h-7 px-2 text-xs"
+																			onClick={handleSaveEditNote}
+																			disabled={
+																				!editingNoteContent.trim() ||
+																				updateNoteMutation.isPending
+																			}
+																		>
+																			{updateNoteMutation.isPending ? (
+																				<RiLoader4Line className="size-3.5 animate-spin" />
+																			) : (
+																				"Save"
+																			)}
+																		</Button>
+																		<Button
+																			size="sm"
+																			variant="outline"
+																			className="h-7 px-2 text-xs"
+																			onClick={handleCancelEditNote}
+																		>
+																			Cancel
+																		</Button>
+																	</div>
+																</div>
+															) : (
+																<>
+																	{event.content && (
+																		<p className="mt-1.5 break-words whitespace-pre-line text-foreground/90 text-sm leading-relaxed">
+																			{event.content}
+																		</p>
+																	)}
+																	{isNote && noteId && !isConfirmingDelete && (
+																		<div className="mt-2 flex items-center gap-2">
+																			<button
+																				type="button"
+																				className="text-muted-foreground hover:text-foreground"
+																				title="Edit note"
+																				onClick={() =>
+																					handleStartEditNote(
+																						noteId,
+																						event.content,
+																					)
+																				}
+																			>
+																				<RiPencilLine className="size-3.5" />
+																			</button>
+																			<button
+																				type="button"
+																				className="text-muted-foreground hover:text-destructive"
+																				title="Delete note"
+																				onClick={() =>
+																					setConfirmDeleteNoteId(noteId)
+																				}
+																			>
+																				<RiDeleteBinLine className="size-3.5" />
+																			</button>
+																		</div>
+																	)}
+																	{isConfirmingDelete && noteId && (
+																		<div className="mt-2 flex items-center gap-2">
+																			<span className="text-muted-foreground text-xs">
+																				Delete this note?
+																			</span>
+																			<Button
+																				size="sm"
+																				variant="destructive"
+																				className="h-6 px-2 text-xs"
+																				onClick={() =>
+																					deleteNoteMutation.mutate({
+																						id: noteId,
+																					})
+																				}
+																				disabled={deleteNoteMutation.isPending}
+																			>
+																				{deleteNoteMutation.isPending ? (
+																					<RiLoader4Line className="size-3.5 animate-spin" />
+																				) : (
+																					"Delete"
+																				)}
+																			</Button>
+																			<Button
+																				size="sm"
+																				variant="outline"
+																				className="h-6 px-2 text-xs"
+																				onClick={() =>
+																					setConfirmDeleteNoteId(null)
+																				}
+																			>
+																				Cancel
+																			</Button>
+																		</div>
+																	)}
+																</>
 															)}
 														</div>
 													</div>

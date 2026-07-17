@@ -15,6 +15,7 @@ import {
 	createLeadAdmin,
 	importLeadsBulkAdmin,
 	deleteLeadAdmin,
+	deleteNoteAdmin,
 	getAgentsWithLeads,
 	getAllLeadsAdmin,
 	getLeadActivityAdmin,
@@ -24,6 +25,7 @@ import {
 	logEmailForLeadAdmin,
 	setProspectFollowers,
 	updateLeadAdmin,
+	updateNoteAdmin,
 } from "../services/leads";
 import { adminProcedure, router } from "../utils/trpc";
 
@@ -93,6 +95,15 @@ const adminBulkSetFollowersInput = z.object({
 const adminAddNoteInput = z.object({
 	leadId: z.string().uuid(),
 	content: z.string().min(1, "Note content is required"),
+});
+
+const adminUpdateNoteInput = z.object({
+	id: z.string().uuid(),
+	content: z.string().min(1, "Note content is required"),
+});
+
+const adminDeleteNoteInput = z.object({
+	id: z.string().uuid(),
 });
 
 const adminLogCallInput = z.object({
@@ -308,6 +319,24 @@ export const adminLeadsRouter = router({
 				input.content,
 				ctx.session.user.id,
 			);
+		}),
+
+	/**
+	 * Edit any lead note (admin — not limited to own notes)
+	 */
+	updateNote: adminProcedure
+		.input(adminUpdateNoteInput)
+		.mutation(async ({ input }) => {
+			return await updateNoteAdmin(input.id, input.content);
+		}),
+
+	/**
+	 * Delete any lead note (admin — not limited to own notes)
+	 */
+	deleteNote: adminProcedure
+		.input(adminDeleteNoteInput)
+		.mutation(async ({ input }) => {
+			return await deleteNoteAdmin(input.id);
 		}),
 
 	/**
