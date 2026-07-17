@@ -18,9 +18,6 @@ export function StatsCards({
 		const inactive = leads.filter(
 			(l) => l.status === "inactive" || l.status === "pending",
 		).length;
-		const unclaimedCompany = leads.filter(
-			(l) => l.leadType === "company" && !l.agentId,
-		).length;
 		const appointmentsMade = leads.filter(
 			(l) => l.stage === "appointment_made",
 		).length;
@@ -31,7 +28,6 @@ export function StatsCards({
 			total,
 			active,
 			inactive,
-			unclaimedCompany,
 			appointmentsMade,
 			bookingsMade,
 			buyers,
@@ -134,7 +130,7 @@ export function StatsCards({
 						/>
 					</div>
 					<p className="text-muted-foreground text-xs">
-						{bookingRate}% conversion · {stats.unclaimedCompany} unclaimed co.
+						{bookingRate}% conversion
 					</p>
 				</CardContent>
 			</Card>

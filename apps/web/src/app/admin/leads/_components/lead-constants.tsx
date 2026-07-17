@@ -40,7 +40,7 @@ export const PIPELINE_STAGES = [
 	},
 	{
 		value: "fourth_follow_up",
-		label: "4 Fourth Follow Up",
+		label: "Last Follow Up (Can Recycle)",
 		color:
 			"bg-violet-100 text-violet-800 dark:bg-violet-900/20 dark:text-violet-400",
 	},
@@ -114,7 +114,7 @@ export function formatFollowUpStagePrompt(
 export const RETIRED_PIPELINE_STAGE_LABELS: Record<string, string> = {
 	follow_up_in_progress: "1 First Follow Up",
 	no_pick_reply: "2 Second Follow Up",
-	can_recycle: "4 Fourth Follow Up",
+	can_recycle: "Last Follow Up (Can Recycle)",
 	follow_up_for_appointment: "3 Third Follow Up",
 	consider_seen: "Need Consider",
 	contacted: "1 First Follow Up",
