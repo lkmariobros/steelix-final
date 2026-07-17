@@ -163,8 +163,9 @@ const prospectFormSchema = z.object({
 	status: z.enum(["active", "inactive"], {
 		required_error: "Please select a status",
 	}),
-	stage: z.enum(PIPELINE_STAGE_VALUES).default("new_lead"),
-	leadType: z.enum(["personal", "company"]).default("personal"),
+	// Defaults live in useForm defaultValues (avoid .default() — breaks zodResolver input/output types)
+	stage: z.enum(PIPELINE_STAGE_VALUES),
+	leadType: z.enum(["personal", "company"]),
 	agentId: z.string().min(1, "Assign to Agent is required"),
 });
 
