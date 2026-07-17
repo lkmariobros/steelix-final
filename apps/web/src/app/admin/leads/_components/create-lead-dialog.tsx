@@ -4,12 +4,11 @@ import { useEffect, useState } from "react";
 import type React from "react";
 import { toast } from "sonner";
 import { trpc } from "@/utils/trpc";
-import type { Lead } from "./lead-models";
 import {
+	LEAD_SOURCE_OPTIONS,
 	LEAD_TYPE_OPTIONS,
 	PIPELINE_STAGES,
 	STATUS_OPTIONS,
-	TYPE_OPTIONS,
 	type PipelineStageValue,
 } from "./lead-constants";
 import { DupeError } from "./dupe-error";
@@ -34,6 +33,10 @@ import {
 import { TagSelector } from "@/components/tag-selector";
 import { RiAddLine, RiErrorWarningLine, RiLoader4Line } from "@remixicon/react";
 
+/** Hidden DB defaults — Type / Property Interest removed from create UI. */
+const DEFAULT_TYPE = "buyer" as const;
+const DEFAULT_PROPERTY = "—";
+
 export function CreateLeadDialog({
 	open,
 	onClose,
@@ -54,8 +57,6 @@ export function CreateLeadDialog({
 		email: "",
 		phone: "",
 		source: "",
-		type: "buyer" as "tenant" | "buyer",
-		property: "",
 		status: "active" as "active" | "inactive",
 		stage: "new_lead",
 		leadType: "personal" as "personal" | "company",
@@ -64,7 +65,6 @@ export function CreateLeadDialog({
 
 	const [form, setForm] = useState(emptyForm);
 	const [tagIds, setTagIds] = useState<string[]>([]);
-	// Debounced values used for the duplicate query (500 ms delay)
 	const [debouncedEmail, setDebouncedEmail] = useState("");
 	const [debouncedPhone, setDebouncedPhone] = useState("");
 
@@ -94,10 +94,13 @@ export function CreateLeadDialog({
 	const createMutation = trpc.adminLeads.create.useMutation({
 		onSuccess: () => {
 			if (dupeCheck?.phoneTaken) {
-				toast.warning("Phone number already exists. Lead was still saved as requested.");
+				toast.warning(
+					"Phone number already exists. Lead was still saved as requested.",
+				);
 			}
 			toast.success("Lead created successfully");
 			setForm(emptyForm);
+			setTagIds([]);
 			setDebouncedEmail("");
 			setDebouncedPhone("");
 			onSuccess();
@@ -118,6 +121,15 @@ export function CreateLeadDialog({
 		setDebouncedPhone("");
 	};
 
+	const canSubmit =
+		!!form.name.trim() &&
+		!!form.phone.trim() &&
+		!!form.source &&
+		!!form.agentId &&
+		!hasBlockingDuplicate &&
+		!dupeChecking &&
+		!createMutation.isPending;
+
 	return (
 		<Dialog
 			open={open}
@@ -129,7 +141,7 @@ export function CreateLeadDialog({
 				<DialogHeader>
 					<DialogTitle>Create New Lead</DialogTitle>
 					<DialogDescription>
-						Add a new lead to the system and optionally assign it to an agent.
+						Add a new lead and assign it to an agent.
 					</DialogDescription>
 				</DialogHeader>
 				<div className="grid grid-cols-2 gap-4 py-2">
@@ -142,30 +154,6 @@ export function CreateLeadDialog({
 							placeholder="Full name"
 						/>
 					</div>
-					{/* Email with duplicate check */}
-					<div className="space-y-1.5">
-						<Label htmlFor="create-email">Email</Label>
-						<div className="relative">
-							<Input
-								id="create-email"
-								value={form.email}
-								onChange={f("email")}
-								placeholder="email@example.com"
-								className={
-									dupeCheck?.emailTaken
-										? "border-destructive pr-8 focus-visible:ring-destructive"
-										: ""
-								}
-							/>
-							{dupeChecking && isValidEmail && (
-								<RiLoader4Line className="absolute top-2.5 right-2.5 size-4 animate-spin text-muted-foreground" />
-							)}
-						</div>
-						{dupeCheck?.emailTaken && (
-							<DupeError name={dupeCheck.emailConflictName} />
-						)}
-					</div>
-					{/* Phone with duplicate check */}
 					<div className="space-y-1.5">
 						<Label htmlFor="create-phone">Phone *</Label>
 						<div className="relative">
@@ -189,36 +177,61 @@ export function CreateLeadDialog({
 						)}
 					</div>
 					<div className="space-y-1.5">
-						<Label htmlFor="create-source">Source *</Label>
-						<Input
-							id="create-source"
-							value={form.source}
-							onChange={f("source")}
-							placeholder="e.g. Website, Social Media"
-						/>
-					</div>
-					<div className="col-span-2 space-y-1.5">
-						<Label htmlFor="create-property">Property Interest *</Label>
-						<Input
-							id="create-property"
-							value={form.property}
-							onChange={f("property")}
-							placeholder="Property name or description"
-						/>
+						<Label htmlFor="create-email">Email</Label>
+						<div className="relative">
+							<Input
+								id="create-email"
+								value={form.email}
+								onChange={f("email")}
+								placeholder="email@example.com"
+								className={
+									dupeCheck?.emailTaken
+										? "border-destructive pr-8 focus-visible:ring-destructive"
+										: ""
+								}
+							/>
+							{dupeChecking && isValidEmail && debouncedEmail.length > 0 && (
+								<RiLoader4Line className="absolute top-2.5 right-2.5 size-4 animate-spin text-muted-foreground" />
+							)}
+						</div>
+						{dupeCheck?.emailTaken && (
+							<DupeError name={dupeCheck.emailConflictName} />
+						)}
 					</div>
 					<div className="space-y-1.5">
-						<Label>Type</Label>
+						<Label>Source *</Label>
 						<Select
-							value={form.type}
+							value={form.source || undefined}
+							onValueChange={(v) => setForm((p) => ({ ...p, source: v }))}
+						>
+							<SelectTrigger>
+								<SelectValue placeholder="Select source" />
+							</SelectTrigger>
+							<SelectContent>
+								{LEAD_SOURCE_OPTIONS.map((o) => (
+									<SelectItem key={o.value} value={o.value}>
+										{o.label}
+									</SelectItem>
+								))}
+							</SelectContent>
+						</Select>
+					</div>
+					<div className="space-y-1.5">
+						<Label>Lead Type</Label>
+						<Select
+							value={form.leadType}
 							onValueChange={(v) =>
-								setForm((p) => ({ ...p, type: v as "tenant" | "buyer" }))
+								setForm((p) => ({
+									...p,
+									leadType: v as "personal" | "company",
+								}))
 							}
 						>
 							<SelectTrigger>
 								<SelectValue />
 							</SelectTrigger>
 							<SelectContent>
-								{TYPE_OPTIONS.map((o) => (
+								{LEAD_TYPE_OPTIONS.map((o) => (
 									<SelectItem key={o.value} value={o.value}>
 										{o.label}
 									</SelectItem>
@@ -268,46 +281,15 @@ export function CreateLeadDialog({
 						</Select>
 					</div>
 					<div className="space-y-1.5">
-						<Label>Lead Type</Label>
+						<Label>Assign to Agent *</Label>
 						<Select
-							value={form.leadType}
-							onValueChange={(v) =>
-								setForm((p) => ({
-									...p,
-									leadType: v as "personal" | "company",
-								}))
-							}
-						>
-							<SelectTrigger>
-								<SelectValue />
-							</SelectTrigger>
-							<SelectContent>
-								{LEAD_TYPE_OPTIONS.map((o) => (
-									<SelectItem key={o.value} value={o.value}>
-										{o.label}
-									</SelectItem>
-								))}
-							</SelectContent>
-						</Select>
-					</div>
-					<div className="col-span-2 space-y-1.5">
-						<Label>Categories</Label>
-						<p className="text-muted-foreground text-xs">
-							Admin only — group this lead with others under the same category.
-						</p>
-						<TagSelector value={tagIds} onChange={setTagIds} />
-					</div>
-					<div className="space-y-1.5">
-						<Label>Assign to Agent</Label>
-						<Select
-							value={form.agentId || "__unassigned__"}
+							value={form.agentId || undefined}
 							onValueChange={(v) => setForm((p) => ({ ...p, agentId: v }))}
 						>
 							<SelectTrigger>
-								<SelectValue />
+								<SelectValue placeholder="Select agent" />
 							</SelectTrigger>
 							<SelectContent>
-								<SelectItem value="__unassigned__">— Unassigned —</SelectItem>
 								{agents.map((a) => (
 									<SelectItem key={a.agentId} value={a.agentId}>
 										{a.agentName ?? a.agentEmail}
@@ -316,22 +298,22 @@ export function CreateLeadDialog({
 							</SelectContent>
 						</Select>
 					</div>
+					<div className="col-span-2 space-y-1.5">
+						<Label>Categories</Label>
+						<p className="text-muted-foreground text-xs">
+							Optional — group this lead with others under the same category.
+						</p>
+						<TagSelector value={tagIds} onChange={setTagIds} />
+					</div>
 				</div>
 
-				{/* Summary banner when duplicates detected */}
 				{(dupeCheck?.emailTaken || dupeCheck?.phoneTaken) && (
 					<div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2.5 text-destructive text-sm">
 						<RiErrorWarningLine className="mt-0.5 size-4 shrink-0" />
 						<span>
 							{dupeCheck?.emailTaken
 								? "This lead cannot be saved because the email already exists."
-								: "This phone number already exists. Saving is still allowed."}{" "}
-							{[
-								dupeCheck?.emailTaken && "email",
-								!dupeCheck?.emailTaken && dupeCheck?.phoneTaken && "phone number",
-							]
-								.filter(Boolean)
-								.join(" and ")}
+								: "This phone number already exists. Saving is still allowed."}
 						</span>
 					</div>
 				)}
@@ -341,23 +323,19 @@ export function CreateLeadDialog({
 						Cancel
 					</Button>
 					<Button
-						disabled={
-							createMutation.isPending ||
-							hasBlockingDuplicate ||
-							dupeChecking ||
-							!form.name ||
-							!form.phone ||
-							!form.source ||
-							!form.property
-						}
+						disabled={!canSubmit}
 						onClick={() =>
 							createMutation.mutate({
-								...form,
-								agentId:
-									form.agentId === "__unassigned__"
-										? undefined
-										: form.agentId || undefined,
+								name: form.name.trim(),
+								email: form.email.trim(),
+								phone: form.phone.trim(),
+								source: form.source,
+								type: DEFAULT_TYPE,
+								property: DEFAULT_PROPERTY,
+								status: form.status,
 								stage: form.stage as PipelineStageValue,
+								leadType: form.leadType,
+								agentId: form.agentId,
 								tagIds: tagIds.length > 0 ? tagIds : undefined,
 							})
 						}
@@ -374,4 +352,3 @@ export function CreateLeadDialog({
 		</Dialog>
 	);
 }
-

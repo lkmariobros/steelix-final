@@ -36,7 +36,6 @@ import {
 import {
 	Form,
 	FormControl,
-	FormDescription,
 	FormField,
 	FormItem,
 	FormLabel,
@@ -91,8 +90,11 @@ import type { AgentCrmImportMode } from "./_components/import-leads-dialog";
 import {
 	formatFollowUpStagePrompt,
 	getNextFollowUpStage,
+	LEAD_SOURCE_OPTIONS,
+	LEAD_TYPE_OPTIONS,
 	PIPELINE_STAGE_VALUES,
 	PIPELINE_STAGES,
+	STATUS_OPTIONS,
 } from "@/app/admin/leads/_components/lead-constants";
 import { StageBadge } from "@/app/admin/leads/_components/lead-ui";
 import { LeadContactInfoCard } from "@/app/admin/leads/_components/lead-contact-info-card";
@@ -150,25 +152,26 @@ interface ProspectNote {
 	updatedAt: Date | string;
 }
 
-// Form validation schema
+// Form validation schema — Type / Property Interest removed from create UI
 const prospectFormSchema = z.object({
 	name: z.string().min(2, "Name must be at least 2 characters"),
-	email: z.string().email("Please enter a valid email address"),
+	email: z
+		.union([z.string().email("Please enter a valid email address"), z.literal("")])
+		.optional(),
 	phone: z.string().trim().min(1, "Phone number is required"),
 	source: z.string().min(1, "Please select a source"),
-	type: z.enum(["tenant", "buyer"], {
-		required_error: "Please select a type",
-	}),
-	property: z.string().min(1, "Property name is required"),
-	projectId: z.string().uuid().optional(),
 	status: z.enum(["active", "inactive"], {
 		required_error: "Please select a status",
 	}),
-	stage: z.enum(PIPELINE_STAGE_VALUES).default("new_lead").optional(),
-	leadType: z.enum(["personal", "company"]).default("personal").optional(),
+	stage: z.enum(PIPELINE_STAGE_VALUES).default("new_lead"),
+	leadType: z.enum(["personal", "company"]).default("personal"),
+	agentId: z.string().min(1, "Assign to Agent is required"),
 });
 
 type ProspectFormValues = z.infer<typeof prospectFormSchema>;
+
+const DEFAULT_CREATE_TYPE = "buyer" as const;
+const DEFAULT_CREATE_PROPERTY = "—";
 
 // Helper function to format date for display
 // Handle both Date objects and date strings from API
@@ -219,6 +222,7 @@ export default function CRMPage() {
 	const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
 	const [currentPage, setCurrentPage] = useState(1);
 	const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+	const [createTagIds, setCreateTagIds] = useState<string[]>([]);
 	const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
 	const [isStagePromptOpen, setIsStagePromptOpen] = useState(false);
 	const [stagePromptProspect, setStagePromptProspect] =
@@ -233,11 +237,7 @@ export default function CRMPage() {
 	const [isExporting, setIsExporting] = useState(false);
 	const itemsPerPage = 10;
 
-	// Projects (admin-managed developer projects) for dropdown selection
-	const { data: projectsData } = trpc.crm.projectsList.useQuery(undefined, {
-		enabled: !!session,
-		staleTime: 60_000,
-	});
+	// Projects not needed on create form anymore; keep tags + agents for create/detail
 	const { data: tagsData } = trpc.tags.list.useQuery(
 		{ page: 1, limit: 100 },
 		{ enabled: !!session, staleTime: 30_000 },
@@ -353,26 +353,26 @@ export default function CRMPage() {
 			email: "",
 			phone: "",
 			source: "",
-			type: "buyer",
-			property: "",
 			status: "active",
+			stage: "new_lead",
 			leadType: "personal",
+			agentId: "",
 		},
 	});
 
 	// Create prospect mutation
 	const createProspectMutation = trpc.crm.create.useMutation({
 		onSuccess: () => {
-			toast.success("Prospect added successfully!");
+			toast.success("Lead created successfully!");
 			setIsAddDialogOpen(false);
+			setCreateTagIds([]);
 			form.reset();
-			// Invalidate and refetch prospects list
 			queryClient.invalidateQueries({ queryKey: [["crm", "list"]] });
 			refetchProspects();
 		},
 		onError: (error) => {
 			console.error("Error adding prospect:", error);
-			toast.error("Failed to add prospect. Please try again.");
+			toast.error(error.message || "Failed to add lead. Please try again.");
 		},
 	});
 
@@ -382,16 +382,29 @@ export default function CRMPage() {
 			email: "",
 			phone: "",
 			source: "",
-			type: "buyer",
-			property: "",
 			status: "active",
+			stage: "new_lead",
 			leadType: activeTab === "company" ? "company" : "personal",
+			agentId: session?.user?.id ?? "",
 		});
+		setCreateTagIds([]);
 		setIsAddDialogOpen(true);
 	};
 
 	const onSubmit = async (data: ProspectFormValues) => {
-		createProspectMutation.mutate(data);
+		createProspectMutation.mutate({
+			name: data.name.trim(),
+			email: data.email?.trim() ?? "",
+			phone: data.phone.trim(),
+			source: data.source,
+			type: DEFAULT_CREATE_TYPE,
+			property: DEFAULT_CREATE_PROPERTY,
+			status: data.status,
+			stage: data.stage,
+			leadType: data.leadType,
+			agentId: data.agentId,
+			tagIds: createTagIds.length > 0 ? createTagIds : undefined,
+		});
 	};
 
 	const handleCall = (prospect: Prospect) => {
@@ -857,7 +870,7 @@ export default function CRMPage() {
 								className="bg-green-600 hover:bg-green-700"
 							>
 								<RiAddLine className="mr-2 h-4 w-4" />
-								Add
+								New Lead
 							</Button>
 						</div>
 						</div>
@@ -865,16 +878,22 @@ export default function CRMPage() {
 
 					<TodayTasksWidget scope="agent" onViewLead={handleViewLeadById} />
 
-					{/* Add Prospect Dialog */}
-					<Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-						<DialogContent className="sm:max-w-[600px]">
+					{/* Add Lead Dialog */}
+					<Dialog
+						open={isAddDialogOpen}
+						onOpenChange={(open) => {
+							setIsAddDialogOpen(open);
+							if (!open) setCreateTagIds([]);
+						}}
+					>
+						<DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[600px]">
 							<DialogHeader>
 								<DialogTitle className="flex items-center gap-2">
 									<RiUserLine className="size-5" />
-									Add New Prospect
+									Create New Lead
 								</DialogTitle>
 								<DialogDescription>
-									Enter the prospect's information to add them to your CRM.
+									Add a new lead and assign it to an agent.
 								</DialogDescription>
 							</DialogHeader>
 
@@ -883,118 +902,80 @@ export default function CRMPage() {
 									onSubmit={form.handleSubmit(onSubmit)}
 									className="space-y-4"
 								>
-									{/* Name */}
-									<FormField
-										control={form.control}
-										name="name"
-										render={({ field }) => (
-											<FormItem>
-												<FormLabel>
-													Full Name <span className="text-destructive">*</span>
-												</FormLabel>
-												<FormControl>
-													<Input placeholder="John Smith" {...field} />
-												</FormControl>
-												<FormMessage />
-											</FormItem>
-										)}
-									/>
-
-									{/* Email */}
-									<FormField
-										control={form.control}
-										name="email"
-										render={({ field }) => (
-											<FormItem>
-												<FormLabel>
-													Email Address{" "}
-													<span className="text-destructive">*</span>
-												</FormLabel>
-												<FormControl>
-													<Input
-														type="email"
-														placeholder="john@email.com"
-														{...field}
-													/>
-												</FormControl>
-												<FormMessage />
-											</FormItem>
-										)}
-									/>
-
-									{/* Phone */}
-									<FormField
-										control={form.control}
-										name="phone"
-										render={({ field }) => (
-											<FormItem>
-												<FormLabel>
-													Phone Number{" "}
-													<span className="text-destructive">*</span>
-												</FormLabel>
-												<FormControl>
-													<Input placeholder="+65 9123 4567" {...field} />
-												</FormControl>
-												<FormMessage />
-											</FormItem>
-										)}
-									/>
-
-									{/* Source */}
-									<FormField
-										control={form.control}
-										name="source"
-										render={({ field }) => (
-											<FormItem>
-												<FormLabel>
-													Source <span className="text-destructive">*</span>
-												</FormLabel>
-												<Select
-													onValueChange={field.onChange}
-													defaultValue={field.value}
-												>
-													<FormControl>
-														<SelectTrigger>
-															<SelectValue placeholder="Select source" />
-														</SelectTrigger>
-													</FormControl>
-													<SelectContent>
-														<SelectItem value="Website">Website</SelectItem>
-														<SelectItem value="Social Media">
-															Social Media
-														</SelectItem>
-														<SelectItem value="Referral">Referral</SelectItem>
-														<SelectItem value="Walk-in">Walk-in</SelectItem>
-														<SelectItem value="Other">Other</SelectItem>
-													</SelectContent>
-												</Select>
-												<FormMessage />
-											</FormItem>
-										)}
-									/>
-
-									{/* Type and Property - Side by Side */}
 									<div className="grid grid-cols-2 gap-4">
 										<FormField
 											control={form.control}
-											name="type"
+											name="name"
 											render={({ field }) => (
 												<FormItem>
 													<FormLabel>
-														Type <span className="text-destructive">*</span>
+														Name <span className="text-destructive">*</span>
+													</FormLabel>
+													<FormControl>
+														<Input placeholder="Full name" {...field} />
+													</FormControl>
+													<FormMessage />
+												</FormItem>
+											)}
+										/>
+
+										<FormField
+											control={form.control}
+											name="phone"
+											render={({ field }) => (
+												<FormItem>
+													<FormLabel>
+														Phone <span className="text-destructive">*</span>
+													</FormLabel>
+													<FormControl>
+														<Input placeholder="+60 12-345 6789" {...field} />
+													</FormControl>
+													<FormMessage />
+												</FormItem>
+											)}
+										/>
+
+										<FormField
+											control={form.control}
+											name="email"
+											render={({ field }) => (
+												<FormItem>
+													<FormLabel>Email</FormLabel>
+													<FormControl>
+														<Input
+															type="email"
+															placeholder="email@example.com"
+															{...field}
+														/>
+													</FormControl>
+													<FormMessage />
+												</FormItem>
+											)}
+										/>
+
+										<FormField
+											control={form.control}
+											name="source"
+											render={({ field }) => (
+												<FormItem>
+													<FormLabel>
+														Source <span className="text-destructive">*</span>
 													</FormLabel>
 													<Select
 														onValueChange={field.onChange}
-														defaultValue={field.value}
+														value={field.value || undefined}
 													>
 														<FormControl>
 															<SelectTrigger>
-																<SelectValue placeholder="Select type" />
+																<SelectValue placeholder="Select source" />
 															</SelectTrigger>
 														</FormControl>
 														<SelectContent>
-															<SelectItem value="tenant">Tenant</SelectItem>
-															<SelectItem value="buyer">Buyer</SelectItem>
+															{LEAD_SOURCE_OPTIONS.map((o) => (
+																<SelectItem key={o.value} value={o.value}>
+																	{o.label}
+																</SelectItem>
+															))}
 														</SelectContent>
 													</Select>
 													<FormMessage />
@@ -1004,94 +985,131 @@ export default function CRMPage() {
 
 										<FormField
 											control={form.control}
-											name="property"
+											name="leadType"
+											render={({ field }) => (
+												<FormItem>
+													<FormLabel>Lead Type</FormLabel>
+													<Select
+														onValueChange={field.onChange}
+														value={field.value}
+													>
+														<FormControl>
+															<SelectTrigger>
+																<SelectValue />
+															</SelectTrigger>
+														</FormControl>
+														<SelectContent>
+															{LEAD_TYPE_OPTIONS.map((o) => (
+																<SelectItem key={o.value} value={o.value}>
+																	{o.label}
+																</SelectItem>
+															))}
+														</SelectContent>
+													</Select>
+													<FormMessage />
+												</FormItem>
+											)}
+										/>
+
+										<FormField
+											control={form.control}
+											name="status"
+											render={({ field }) => (
+												<FormItem>
+													<FormLabel>Status</FormLabel>
+													<Select
+														onValueChange={field.onChange}
+														value={field.value}
+													>
+														<FormControl>
+															<SelectTrigger>
+																<SelectValue />
+															</SelectTrigger>
+														</FormControl>
+														<SelectContent>
+															{STATUS_OPTIONS.map((o) => (
+																<SelectItem key={o.value} value={o.value}>
+																	{o.label}
+																</SelectItem>
+															))}
+														</SelectContent>
+													</Select>
+													<FormMessage />
+												</FormItem>
+											)}
+										/>
+
+										<FormField
+											control={form.control}
+											name="stage"
+											render={({ field }) => (
+												<FormItem>
+													<FormLabel>Pipeline Stage</FormLabel>
+													<Select
+														onValueChange={field.onChange}
+														value={field.value}
+													>
+														<FormControl>
+															<SelectTrigger>
+																<SelectValue />
+															</SelectTrigger>
+														</FormControl>
+														<SelectContent>
+															{PIPELINE_STAGES.map((s) => (
+																<SelectItem key={s.value} value={s.value}>
+																	{s.label}
+																</SelectItem>
+															))}
+														</SelectContent>
+													</Select>
+													<FormMessage />
+												</FormItem>
+											)}
+										/>
+
+										<FormField
+											control={form.control}
+											name="agentId"
 											render={({ field }) => (
 												<FormItem>
 													<FormLabel>
-														Property <span className="text-destructive">*</span>
+														Assign to Agent{" "}
+														<span className="text-destructive">*</span>
 													</FormLabel>
-													<FormControl>
-														<Input
-															{...field}
-															placeholder="Enter property name (e.g., Breeze Hill, Marina Bay Residences)"
-														/>
-													</FormControl>
-													<FormDescription>
-														Enter the property or project name the lead is
-														interested in.
-													</FormDescription>
+													<Select
+														onValueChange={field.onChange}
+														value={field.value || undefined}
+													>
+														<FormControl>
+															<SelectTrigger>
+																<SelectValue placeholder="Select agent" />
+															</SelectTrigger>
+														</FormControl>
+														<SelectContent>
+															{followerAgents.map((a) => (
+																<SelectItem key={a.agentId} value={a.agentId}>
+																	{a.agentName ?? a.agentEmail}
+																</SelectItem>
+															))}
+														</SelectContent>
+													</Select>
 													<FormMessage />
 												</FormItem>
 											)}
 										/>
 									</div>
 
-									{/* Developer Project (admin-managed) */}
-									<FormField
-										control={form.control}
-										name="projectId"
-										render={({ field }) => (
-											<FormItem>
-												<FormLabel>Developer Project</FormLabel>
-												<Select
-													onValueChange={(value) =>
-														field.onChange(
-															value === "__none__" ? undefined : value,
-														)
-													}
-													value={field.value ?? "__none__"}
-												>
-													<FormControl>
-														<SelectTrigger>
-															<SelectValue placeholder="Select developer project (optional)" />
-														</SelectTrigger>
-													</FormControl>
-													<SelectContent>
-														<SelectItem value="__none__">None</SelectItem>
-														{(projectsData || []).map(
-															(p: { id: string; name: string }) => (
-																<SelectItem key={p.id} value={p.id}>
-																	{p.name}
-																</SelectItem>
-															),
-														)}
-													</SelectContent>
-												</Select>
-												<FormDescription>
-													Optional: choose a developer project defined by admin.
-												</FormDescription>
-												<FormMessage />
-											</FormItem>
-										)}
-									/>
-
-									{/* Status */}
-									<FormField
-										control={form.control}
-										name="status"
-										render={({ field }) => (
-											<FormItem>
-												<FormLabel>
-													Status <span className="text-destructive">*</span>
-												</FormLabel>
-												<Select
-													onValueChange={field.onChange}
-													defaultValue={field.value}
-												>
-													<FormControl>
-														<SelectTrigger>
-															<SelectValue placeholder="Select status" />
-														</SelectTrigger>
-													</FormControl>
-													<SelectContent>
-														<SelectItem value="active">Active</SelectItem>
-														<SelectItem value="inactive">Inactive</SelectItem>
-													</SelectContent>
-												</Select>
-												<FormMessage />
-											</FormItem>
-										)}
-									/>
+									<div className="space-y-1.5">
+										<FormLabel>Categories</FormLabel>
+										<p className="text-muted-foreground text-xs">
+											Optional — group this lead with others under the same
+											category.
+										</p>
+										<TagSelector
+											value={createTagIds}
+											onChange={setCreateTagIds}
+										/>
+									</div>
 
 									<DialogFooter>
 										<Button
@@ -1110,12 +1128,12 @@ export default function CRMPage() {
 											{createProspectMutation.isPending ? (
 												<>
 													<RiLoader4Line className="mr-2 h-4 w-4 animate-spin" />
-													Adding...
+													Creating...
 												</>
 											) : (
 												<>
 													<RiAddLine className="mr-2 h-4 w-4" />
-													Add Prospect
+													Create Lead
 												</>
 											)}
 										</Button>
@@ -1735,7 +1753,7 @@ export default function CRMPage() {
 								setCurrentPage(1);
 							}}
 						>
-							<SelectTrigger className="w-44">
+							<SelectTrigger className="w-52 min-w-52">
 								<SelectValue placeholder="Category" />
 							</SelectTrigger>
 							<SelectContent>
@@ -1755,7 +1773,7 @@ export default function CRMPage() {
 								setCurrentPage(1);
 							}}
 						>
-							<SelectTrigger className="w-44">
+							<SelectTrigger className="w-52 min-w-52">
 								<RiUserLine className="mr-1.5 size-4 shrink-0 text-muted-foreground" />
 								<SelectValue placeholder="Agent" />
 							</SelectTrigger>
@@ -1777,7 +1795,7 @@ export default function CRMPage() {
 								setCurrentPage(1);
 							}}
 						>
-							<SelectTrigger className="w-44">
+							<SelectTrigger className="w-52 min-w-52">
 								<SelectValue placeholder="Lead Stage" />
 							</SelectTrigger>
 							<SelectContent>
@@ -1797,7 +1815,7 @@ export default function CRMPage() {
 								setCurrentPage(1);
 							}}
 						>
-							<SelectTrigger className="w-44">
+							<SelectTrigger className="w-52 min-w-52">
 								<SelectValue placeholder="Status" />
 							</SelectTrigger>
 							<SelectContent>

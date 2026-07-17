@@ -51,7 +51,7 @@ const adminGetLeadInput = z.object({
 });
 
 const adminCreateLeadInput = insertProspectSchema.extend({
-	agentId: z.string().optional(), // admin can assign to any agent
+	agentId: z.string().min(1, "Assign to Agent is required"),
 	tagIds: z.array(z.string().uuid()).optional(),
 });
 

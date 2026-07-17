@@ -743,7 +743,7 @@ export async function deleteLeadAdmin(leadId: string) {
 	return { success: true, id: deleted.id };
 }
 
-async function assertAssignableLeadAgent(agentId: string) {
+export async function assertAssignableLeadAgent(agentId: string) {
 	const [agentRow] = await db
 		.select({ role: user.role, isActive: user.isActive })
 		.from(user)

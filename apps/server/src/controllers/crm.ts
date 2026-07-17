@@ -26,7 +26,7 @@ import {
 	updateProspectNoteSchema,
 	updateProspectSchema,
 } from "../models/crm";
-import { getLeadActivityAdmin, importProspectsBulkForAgent, assignLeadAdmin, buildAgentPersonalLeadsCondition, canAgentAccessProspect, fetchFollowersByProspectIds, getAgentsWithLeads, getProspectFollowers, setProspectTagIds, agentLeadDisplayNameSql } from "../services/leads";
+import { getLeadActivityAdmin, importProspectsBulkForAgent, assignLeadAdmin, assertAssignableLeadAgent, buildAgentPersonalLeadsCondition, canAgentAccessProspect, fetchFollowersByProspectIds, getAgentsWithLeads, getProspectFollowers, setProspectTagIds, agentLeadDisplayNameSql } from "../services/leads";
 import { withPipelineStageSchemaRetry } from "../utils/pipeline-stage-schema";
 import { withProspectNotesSchemaRetry } from "../utils/prospect-notes-schema";
 import { db } from "../utils/db";
@@ -68,7 +68,10 @@ const getProspectInput = z.object({
 });
 
 // Agents cannot set lead categories — admin only (admin-leads router).
-const createProspectInput = insertProspectSchema;
+const createProspectInput = insertProspectSchema.extend({
+	agentId: z.string().min(1, "Assign to Agent is required"),
+	tagIds: z.array(z.string().uuid()).optional(),
+});
 const updateProspectInput = updateProspectSchema;
 
 export const crmRouter = router({
@@ -591,13 +594,13 @@ export const crmRouter = router({
 		.input(createProspectInput)
 		.mutation(async ({ input, ctx }) => {
 			try {
-				const agentId = ctx.session.user.id;
+				const { agentId: assignedAgentId, tagIds, ...prospectFields } = input;
 
-				// If it's a company lead, agentId can be null (unclaimed)
-				// Otherwise, set agentId for personal leads
+				await assertAssignableLeadAgent(assignedAgentId);
+
 				const newProspect: InsertProspect & { agentId?: string | null } = {
-					...input,
-					agentId: input.leadType === "company" ? null : agentId,
+					...prospectFields,
+					agentId: assignedAgentId,
 				};
 
 				const [created] = await db
@@ -605,7 +608,11 @@ export const crmRouter = router({
 					.values(newProspect)
 					.returning();
 
-				// Fetch categories for response (read-only for agents)
+				if (tagIds && tagIds.length > 0) {
+					await setProspectTagIds(created.id, tagIds, ctx.session.user.id);
+				}
+
+				// Fetch categories for response
 				let prospectTagsData: Array<{
 					tag: {
 						id: string;
