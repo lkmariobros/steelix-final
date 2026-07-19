@@ -488,7 +488,8 @@ export default function CRMPage() {
 		activeProspect?.agentId === session?.user?.id;
 
 	const canEditCategoriesForSelected = isOwnerOfSelected;
-	const canEditOwnerForSelected = isOwnerOfSelected;
+	// Owner or follower (team leader) can reassign the lead
+	const canEditOwnerForSelected = canManageTasksForSelected;
 
 	const canEditStageForSelected = canManageTasksForSelected;
 
@@ -1297,7 +1298,9 @@ export default function CRMPage() {
 													</span>
 												)}
 											</div>
-											{activeProspect.agentName && (
+											{(activeProspect.agentId ||
+												activeProspect.agentName ||
+												canEditOwnerForSelected) && (
 												<div className="space-y-2">
 													<div className="flex items-center gap-2 text-muted-foreground text-sm">
 														<RiUserLine className="size-4" />
@@ -1306,10 +1309,10 @@ export default function CRMPage() {
 													{canEditOwnerForSelected ? (
 														<div className="flex gap-2">
 															<Select
-																value={ownerAgentId}
+																value={ownerAgentId || undefined}
 																onValueChange={setOwnerAgentId}
 															>
-																<SelectTrigger className="flex-1">
+																<SelectTrigger className="min-w-0 flex-1">
 																	<SelectValue placeholder="Select owner" />
 																</SelectTrigger>
 																<SelectContent>
@@ -1343,7 +1346,7 @@ export default function CRMPage() {
 														</div>
 													) : (
 														<div className="font-medium text-sm">
-															{activeProspect.agentName}
+															{activeProspect.agentName ?? "—"}
 														</div>
 													)}
 												</div>

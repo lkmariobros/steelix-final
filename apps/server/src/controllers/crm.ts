@@ -26,7 +26,7 @@ import {
 	updateProspectNoteSchema,
 	updateProspectSchema,
 } from "../models/crm";
-import { getLeadActivityAdmin, importProspectsBulkForAgent, assignLeadAdmin, assertAssignableLeadAgent, buildAgentPersonalLeadsCondition, canAgentAccessProspect, fetchFollowersByProspectIds, getAgentsWithLeads, getProspectFollowers, setProspectTagIds, agentLeadDisplayNameSql } from "../services/leads";
+import { getLeadActivityAdmin, importProspectsBulkForAgent, assignLeadAdmin, assertAssignableLeadAgent, buildAgentPersonalLeadsCondition, canAgentAccessProspect, fetchFollowersByProspectIds, getAgentsWithLeads, getProspectFollowers, isAgentProspectFollower, setProspectTagIds, agentLeadDisplayNameSql } from "../services/leads";
 import { withPipelineStageSchemaRetry } from "../utils/pipeline-stage-schema";
 import { withProspectNotesSchemaRetry } from "../utils/prospect-notes-schema";
 import { db } from "../utils/db";
@@ -1065,7 +1065,7 @@ export const crmRouter = router({
 		return await getAgentsWithLeads();
 	}),
 
-	// Reassign the lead to another agent (owner-only; followers cannot be edited by agents)
+	// Reassign the lead to another agent (assigned agent or follower / team leader)
 	setOwner: protectedProcedure
 		.input(
 			z.object({
@@ -1084,10 +1084,14 @@ export const crmRouter = router({
 			if (!prospect) {
 				throw new TRPCError({ code: "NOT_FOUND", message: "Lead not found" });
 			}
-			if (prospect.agentId !== currentAgentId) {
+
+			const isOwner = prospect.agentId === currentAgentId;
+			const isFollower = await isAgentProspectFollower(input.id, currentAgentId);
+			if (!isOwner && !isFollower) {
 				throw new TRPCError({
 					code: "FORBIDDEN",
-					message: "Only the assigned agent can change the lead owner",
+					message:
+						"Only the assigned agent or a follower can change the lead owner",
 				});
 			}
 
