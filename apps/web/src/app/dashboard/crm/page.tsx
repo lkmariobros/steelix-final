@@ -107,6 +107,7 @@ import {
 import { LeadTasksCard } from "@/app/admin/leads/_components/lead-tasks-card";
 import { TodayTasksWidget } from "@/app/admin/leads/_components/today-tasks-widget";
 import { TagSelector } from "@/components/tag-selector";
+import { AgentLeadStatsCards } from "./_components/agent-lead-stats-cards";
 
 // Pipeline stages for Kanban board
 type LeadType = "personal" | "company";
@@ -280,6 +281,32 @@ export default function CRMPage() {
 
 	const prospects = prospectsData?.prospects || [];
 	const totalPages = prospectsData?.pagination.totalPages || 0;
+
+	// Summary cards: own assigned leads only (respects current filters)
+	const agentStatsQuery = trpc.crm.list.useQuery(
+		{
+			search: searchQuery || undefined,
+			stage: stageFilter === "all" ? undefined : stageFilter,
+			tagId: categoryFilter === "all" ? undefined : categoryFilter,
+			status: statusFilter === "all" ? undefined : statusFilter,
+			filterAgentId: session?.user?.id,
+			leadType: "personal",
+			page: 1,
+			limit: 5000,
+			forExport: true,
+		},
+		{
+			enabled: Boolean(session?.user?.id),
+			staleTime: 30_000,
+		},
+	);
+
+	const assignedLeadsForStats = useMemo(() => {
+		const rows = agentStatsQuery.data?.prospects ?? [];
+		const me = session?.user?.id;
+		if (!me) return [];
+		return rows.filter((p) => p.agentId === me);
+	}, [agentStatsQuery.data?.prospects, session?.user?.id]);
 
 	const importMode: AgentCrmImportMode =
 		activeTab === "company" ? "company_unclaimed" : "personal_assigned";
@@ -883,6 +910,11 @@ export default function CRMPage() {
 					</div>
 
 					<TodayTasksWidget scope="agent" onViewLead={handleViewLeadById} />
+
+					<AgentLeadStatsCards
+						leads={assignedLeadsForStats}
+						isLoading={agentStatsQuery.isLoading}
+					/>
 
 					{/* Add Lead Dialog */}
 					<Dialog

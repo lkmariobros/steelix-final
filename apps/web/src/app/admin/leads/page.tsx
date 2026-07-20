@@ -61,10 +61,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/tooltip";
 
 import { AdminLeadsPageHeader } from "./_components/admin-leads-page-header";
-import { BulkStageDialog } from "./_components/bulk-stage-dialog";
-import { BulkAssignDialog } from "./_components/bulk-assign-dialog";
-import { BulkCategoriesDialog } from "./_components/bulk-categories-dialog";
-import { BulkFollowersDialog } from "./_components/bulk-followers-dialog";
+import { BulkEditDialog } from "./_components/bulk-edit-dialog";
 import { BulkDeleteDialog } from "./_components/bulk-delete-dialog";
 import { CreateLeadDialog } from "./_components/create-lead-dialog";
 import { DeleteLeadDialog } from "./_components/delete-lead-dialog";
@@ -116,10 +113,7 @@ export default function AdminLeadsPage() {
 	const [editLead, setEditLead] = useState<Lead | null>(null);
 	const [deleteLead, setDeleteLead] = useState<Lead | null>(null);
 	const [isCreateOpen, setIsCreateOpen] = useState(false);
-	const [isBulkStageOpen, setIsBulkStageOpen] = useState(false);
-	const [isBulkAssignOpen, setIsBulkAssignOpen] = useState(false);
-	const [isBulkCategoriesOpen, setIsBulkCategoriesOpen] = useState(false);
-	const [isBulkFollowersOpen, setIsBulkFollowersOpen] = useState(false);
+	const [isBulkEditOpen, setIsBulkEditOpen] = useState(false);
 	const [isBulkDeleteOpen, setIsBulkDeleteOpen] = useState(false);
 	const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 	const [isExporting, setIsExporting] = useState(false);
@@ -823,33 +817,9 @@ export default function AdminLeadsPage() {
 												size="sm"
 												variant="outline"
 												className="h-7 text-xs"
-												onClick={() => setIsBulkStageOpen(true)}
+												onClick={() => setIsBulkEditOpen(true)}
 											>
-												Update Stage
-											</Button>
-											<Button
-												size="sm"
-												variant="outline"
-												className="h-7 text-xs"
-												onClick={() => setIsBulkAssignOpen(true)}
-											>
-												Re-assign Agent
-											</Button>
-											<Button
-												size="sm"
-												variant="outline"
-												className="h-7 text-xs"
-												onClick={() => setIsBulkCategoriesOpen(true)}
-											>
-												Edit Categories
-											</Button>
-											<Button
-												size="sm"
-												variant="outline"
-												className="h-7 text-xs"
-												onClick={() => setIsBulkFollowersOpen(true)}
-											>
-												Edit Followers
+												Bulk Edit
 											</Button>
 											<Button
 												size="sm"
@@ -1558,39 +1528,11 @@ export default function AdminLeadsPage() {
 				agents={agents}
 				onSuccess={handleRefresh}
 			/>
-			<BulkStageDialog
+			<BulkEditDialog
 				selectedIds={Array.from(selectedIds)}
-				open={isBulkStageOpen}
-				onClose={() => setIsBulkStageOpen(false)}
-				onSuccess={() => {
-					handleRefresh();
-					setSelectedIds(new Set());
-				}}
-			/>
-			<BulkAssignDialog
-				selectedIds={Array.from(selectedIds)}
-				open={isBulkAssignOpen}
-				onClose={() => setIsBulkAssignOpen(false)}
+				open={isBulkEditOpen}
+				onClose={() => setIsBulkEditOpen(false)}
 				agents={agents}
-				onSuccess={() => {
-					handleRefresh();
-					setSelectedIds(new Set());
-				}}
-			/>
-			<BulkCategoriesDialog
-				selectedIds={Array.from(selectedIds)}
-				open={isBulkCategoriesOpen}
-				onClose={() => setIsBulkCategoriesOpen(false)}
-				onSuccess={() => {
-					handleRefresh();
-					setSelectedIds(new Set());
-				}}
-			/>
-			<BulkFollowersDialog
-				selectedIds={Array.from(selectedIds)}
-				agents={agents}
-				open={isBulkFollowersOpen}
-				onClose={() => setIsBulkFollowersOpen(false)}
 				onSuccess={() => {
 					handleRefresh();
 					setSelectedIds(new Set());
