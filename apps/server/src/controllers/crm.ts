@@ -67,10 +67,9 @@ const getProspectInput = z.object({
 	id: z.string().uuid(),
 });
 
-// Agents cannot set lead categories — admin only (admin-leads router).
 const createProspectInput = insertProspectSchema.extend({
 	agentId: z.string().min(1, "Assign to Agent is required"),
-	tagIds: z.array(z.string().uuid()).optional(),
+	tagIds: z.array(z.string().uuid()).min(1, "At least one category is required"),
 });
 const updateProspectInput = updateProspectSchema;
 

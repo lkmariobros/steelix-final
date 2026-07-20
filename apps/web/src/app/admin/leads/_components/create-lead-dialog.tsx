@@ -126,6 +126,7 @@ export function CreateLeadDialog({
 		!!form.phone.trim() &&
 		!!form.source &&
 		!!form.agentId &&
+		tagIds.length > 0 &&
 		!hasBlockingDuplicate &&
 		!dupeChecking &&
 		!createMutation.isPending;
@@ -299,11 +300,16 @@ export function CreateLeadDialog({
 						</Select>
 					</div>
 					<div className="col-span-2 space-y-1.5">
-						<Label>Categories</Label>
+						<Label>Categories *</Label>
 						<p className="text-muted-foreground text-xs">
-							Optional — group this lead with others under the same category.
+							Required — group this lead with others under the same category.
 						</p>
 						<TagSelector value={tagIds} onChange={setTagIds} />
+						{tagIds.length === 0 && (
+							<p className="text-destructive text-xs">
+								Select at least one category.
+							</p>
+						)}
 					</div>
 				</div>
 
@@ -336,7 +342,7 @@ export function CreateLeadDialog({
 								stage: form.stage as PipelineStageValue,
 								leadType: form.leadType,
 								agentId: form.agentId,
-								tagIds: tagIds.length > 0 ? tagIds : undefined,
+								tagIds,
 							})
 						}
 					>

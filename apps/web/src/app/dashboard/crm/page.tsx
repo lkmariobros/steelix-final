@@ -393,6 +393,10 @@ export default function CRMPage() {
 	};
 
 	const onSubmit = async (data: ProspectFormValues) => {
+		if (createTagIds.length === 0) {
+			toast.error("Select at least one category.");
+			return;
+		}
 		createProspectMutation.mutate({
 			name: data.name.trim(),
 			email: data.email?.trim() ?? "",
@@ -404,7 +408,7 @@ export default function CRMPage() {
 			stage: data.stage,
 			leadType: data.leadType,
 			agentId: data.agentId,
-			tagIds: createTagIds.length > 0 ? createTagIds : undefined,
+			tagIds: createTagIds,
 		});
 	};
 
@@ -1102,15 +1106,22 @@ export default function CRMPage() {
 									</div>
 
 									<div className="space-y-1.5">
-										<FormLabel>Categories</FormLabel>
+										<FormLabel>
+											Categories <span className="text-destructive">*</span>
+										</FormLabel>
 										<p className="text-muted-foreground text-xs">
-											Optional — group this lead with others under the same
+											Required — group this lead with others under the same
 											category.
 										</p>
 										<TagSelector
 											value={createTagIds}
 											onChange={setCreateTagIds}
 										/>
+										{createTagIds.length === 0 && (
+											<p className="text-destructive text-xs">
+												Select at least one category.
+											</p>
+										)}
 									</div>
 
 									<DialogFooter>
@@ -1124,7 +1135,10 @@ export default function CRMPage() {
 										</Button>
 										<Button
 											type="submit"
-											disabled={createProspectMutation.isPending}
+											disabled={
+												createProspectMutation.isPending ||
+												createTagIds.length === 0
+											}
 											className="bg-green-600 hover:bg-green-700"
 										>
 											{createProspectMutation.isPending ? (

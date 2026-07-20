@@ -31,6 +31,26 @@ body {
 	height: 0;
 }
 
+/* Visible thin scrollbar for Lead Board View (mouse horizontal navigation). */
+.kanban-board-scroll {
+	scrollbar-width: thin; /* Firefox */
+	-ms-overflow-style: auto;
+}
+.kanban-board-scroll::-webkit-scrollbar {
+	width: 8px;
+	height: 8px;
+}
+.kanban-board-scroll::-webkit-scrollbar-track {
+	background: transparent;
+}
+.kanban-board-scroll::-webkit-scrollbar-thumb {
+	background-color: color-mix(in oklab, var(--border) 80%, transparent);
+	border-radius: 9999px;
+}
+.kanban-board-scroll:hover::-webkit-scrollbar-thumb {
+	background-color: color-mix(in oklab, var(--muted-foreground) 45%, transparent);
+}
+
 :root {
 	--radius: 0.625rem;
 	--card: oklch(1 0 0);

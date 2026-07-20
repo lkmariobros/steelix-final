@@ -144,6 +144,7 @@ export const LEAD_SOURCE_OPTIONS = [
 	{ value: "Facebook Ad", label: "Facebook Ad" },
 	{ value: "Google Ad", label: "Google Ad" },
 	{ value: "Referral", label: "Referral" },
+	{ value: "Other", label: "Other" },
 ] as const;
 
 export const STATUS_OPTIONS = [

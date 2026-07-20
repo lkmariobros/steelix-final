@@ -13,6 +13,8 @@ import {
 	type PipelineStageValue,
 } from "@/app/admin/leads/_components/lead-constants";
 import { StageBadge, StatusBadge } from "@/app/admin/leads/_components/lead-ui";
+import { useHorizontalBoardScroll } from "@/hooks/use-horizontal-board-scroll";
+import { cn } from "@/lib/utils";
 
 export type PipelineStage = PipelineStageValue;
 
@@ -59,7 +61,10 @@ export function KanbanBoard({
 	leadsTab = "my",
 }: KanbanBoardProps) {
 	const [draggedProspect, setDraggedProspect] = useState<Prospect | null>(null);
-	const [optimisticUpdates, setOptimisticUpdates] = useState<Map<string, PipelineStage>>(new Map());
+	const [optimisticUpdates, setOptimisticUpdates] = useState<
+		Map<string, PipelineStage>
+	>(new Map());
+	const { ref: boardScrollRef, boardScrollProps } = useHorizontalBoardScroll();
 
 	// Merge optimistic updates with actual prospects data
 	const mergedProspects = prospects.map((p) => {
@@ -148,7 +153,11 @@ export function KanbanBoard({
 	};
 
 	return (
-		<div className="flex gap-3 overflow-x-auto pb-3">
+		<div
+			ref={boardScrollRef}
+			{...boardScrollProps}
+			className={cn(boardScrollProps.className, "flex gap-3 pb-3")}
+		>
 			{PIPELINE_STAGES.map((stage) => {
 				const stageProspects = prospectsByStage[stage.id] || [];
 				return (

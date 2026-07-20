@@ -8,6 +8,8 @@ import { PIPELINE_STAGES, type PipelineStageValue } from "./lead-constants";
 import { StageBadge, StatusBadge } from "./lead-ui";
 import { Card } from "@/components/ui/card";
 import { trpc } from "@/utils/trpc";
+import { useHorizontalBoardScroll } from "@/hooks/use-horizontal-board-scroll";
+import { cn } from "@/lib/utils";
 
 export function KanbanPipelineBoard({
 	leads,
@@ -20,11 +22,11 @@ export function KanbanPipelineBoard({
 }) {
 	const [draggingLeadId, setDraggingLeadId] = useState<string | null>(null);
 	const [dragOverStage, setDragOverStage] = useState<string | null>(null);
-	const dragStartedRef = useRef(false);
-	// Optimistic stage updates so cards move immediately without waiting for refetch.
 	const [optimisticStages, setOptimisticStages] = useState<
 		Record<string, { stage: PipelineStageValue; updatedAt: Date }>
 	>({});
+	const dragStartedRef = useRef(false);
+	const { ref: boardScrollRef, boardScrollProps } = useHorizontalBoardScroll();
 
 	const parseDateToMs = (d: Date | string | null | undefined) => {
 		if (!d) return null;
@@ -186,7 +188,11 @@ export function KanbanPipelineBoard({
 	};
 
 	return (
-		<div className="w-full overflow-x-auto">
+		<div
+			ref={boardScrollRef}
+			{...boardScrollProps}
+			className={cn(boardScrollProps.className, "w-full")}
+		>
 			<div className="flex min-w-max gap-2.5 pb-2">
 				{PIPELINE_STAGES.map((stage) => {
 					const columnLeads = leadsByStage.get(stage.value) ?? [];
