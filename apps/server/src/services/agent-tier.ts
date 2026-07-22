@@ -80,6 +80,7 @@ export async function getAgentTierInfo(agentId: string) {
 			agentCode: user.agentCode,
 			agentTier: user.agentTier,
 			companyCommissionSplit: user.companyCommissionSplit,
+			primaryCommissionSplit: user.primaryCommissionSplit,
 			tierEffectiveDate: user.tierEffectiveDate,
 			tierPromotedBy: user.tierPromotedBy,
 			recruitedBy: user.recruitedBy,
@@ -240,7 +241,8 @@ export function calculateEnhancedCommission(
 }
 
 /**
- * Promote agent to new tier with audit trail
+ * Promote / update agent tier with audit trail.
+ * Admin Manage dialog may also set Primary / Secondary commission overrides.
  */
 export async function promoteAgentTier(
 	agentId: string,
@@ -248,43 +250,33 @@ export async function promoteAgentTier(
 	promotedBy: string,
 	reason: string,
 	performanceMetrics?: Record<string, unknown>,
+	commissionOverrides?: {
+		secondaryCommissionSplit?: number;
+		primaryCommissionSplit?: number;
+	},
 ): Promise<TierPromotionResult> {
 	try {
 		// Get current agent info
 		const currentAgent = await getAgentTierInfo(agentId);
 		const previousTier = currentAgent.agentTier;
 
-		// Validate tier progression (optional business rule)
-		const tierOrder: AgentTier[] = [
-			"advisor",
-			"sales_leader",
-			"team_leader",
-			"group_leader",
-			"supreme_leader",
-		];
-		const currentIndex = previousTier ? tierOrder.indexOf(previousTier) : -1;
-		const newIndex = tierOrder.indexOf(newTier);
-
-		if (currentIndex >= 0 && newIndex < currentIndex) {
-			return {
-				success: false,
-				previousTier,
-				newTier,
-				effectiveDate: new Date(),
-				error: "Cannot demote agent tier. Use separate demotion process.",
-			};
-		}
-
 		const effectiveDate = new Date();
 		const newTierConfig = await resolveTierConfig(newTier);
-		const newCommissionSplit = newTierConfig.commissionSplit;
+		const secondarySplit =
+			commissionOverrides?.secondaryCommissionSplit ??
+			newTierConfig.commissionSplit;
+		const primarySplit =
+			commissionOverrides?.primaryCommissionSplit ??
+			currentAgent.primaryCommissionSplit ??
+			100;
 
-		// Update user tier and commission split
+		// Update user tier and commission splits
 		await db
 			.update(user)
 			.set({
 				agentTier: newTier,
-				companyCommissionSplit: newCommissionSplit,
+				companyCommissionSplit: secondarySplit,
+				primaryCommissionSplit: primarySplit,
 				tierEffectiveDate: effectiveDate,
 				tierPromotedBy: promotedBy,
 				updatedAt: effectiveDate,
@@ -300,8 +292,15 @@ export async function promoteAgentTier(
 			promotedBy,
 			reason,
 			performanceMetrics: performanceMetrics
-				? JSON.stringify(performanceMetrics)
-				: null,
+				? JSON.stringify({
+						...performanceMetrics,
+						secondaryCommissionSplit: secondarySplit,
+						primaryCommissionSplit: primarySplit,
+					})
+				: JSON.stringify({
+						secondaryCommissionSplit: secondarySplit,
+						primaryCommissionSplit: primarySplit,
+					}),
 		});
 
 		return {

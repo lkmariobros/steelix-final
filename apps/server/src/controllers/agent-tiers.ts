@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import {
 	AGENT_TIER_CONFIG,
 	type AgentTier,
@@ -39,6 +40,10 @@ const promoteAgentInput = z.object({
 	agentId: z.string().min(1, "Agent ID is required"),
 	newTier: agentTierSchema,
 	reason: z.string().min(1, "Reason is required"),
+	/** Secondary market agent split % — defaults to tier config when omitted */
+	secondaryCommissionSplit: z.number().min(0).max(100).optional(),
+	/** Primary market agent entitlement % — defaults to current / 100 when omitted */
+	primaryCommissionSplit: z.number().min(0).max(100).optional(),
 	performanceMetrics: z
 		.object({
 			monthlySales: z.number().min(0),
@@ -169,13 +174,24 @@ export const agentTiersRouter = router({
 	promoteAgent: adminProcedure
 		.input(promoteAgentInput)
 		.mutation(async ({ ctx, input }) => {
-			return await promoteAgentTier(
+			const result = await promoteAgentTier(
 				input.agentId,
 				input.newTier,
 				ctx.session.user.id,
 				input.reason,
 				input.performanceMetrics,
+				{
+					secondaryCommissionSplit: input.secondaryCommissionSplit,
+					primaryCommissionSplit: input.primaryCommissionSplit,
+				},
 			);
+			if (!result.success) {
+				throw new TRPCError({
+					code: "BAD_REQUEST",
+					message: result.error || "Failed to update agent tier",
+				});
+			}
+			return result;
 		}),
 
 	// Get agent tier history

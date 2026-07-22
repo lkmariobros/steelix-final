@@ -80,6 +80,7 @@ interface AgentData {
 	role: string | null;
 	agentTier: string | null;
 	companyCommissionSplit: number | null;
+	primaryCommissionSplit?: number | null;
 	createdAt: string | null;
 	isActive?: boolean | null;
 	agentCode?: string | null;
@@ -744,6 +745,7 @@ export default function AdminAgentsPage() {
 						agentTier: (selectedAgent.agentTier as AgentTier) || null,
 						role: selectedAgent.role,
 						companyCommissionSplit: selectedAgent.companyCommissionSplit,
+						primaryCommissionSplit: selectedAgent.primaryCommissionSplit,
 					}}
 					onSuccess={() => {
 						refetchAgents();

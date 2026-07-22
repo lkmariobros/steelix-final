@@ -37,6 +37,9 @@ ALTER TABLE public."user"
   ADD COLUMN IF NOT EXISTS income_tax_no text;
 
 ALTER TABLE public."user"
+  ADD COLUMN IF NOT EXISTS primary_commission_split integer DEFAULT 100;
+
+ALTER TABLE public."user"
   ADD COLUMN IF NOT EXISTS onboarding_documents jsonb;
 
 CREATE INDEX IF NOT EXISTS idx_user_nric

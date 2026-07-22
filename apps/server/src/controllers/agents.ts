@@ -203,6 +203,7 @@ const updateAgentInput = z.object({
 		])
 		.optional(),
 	companyCommissionSplit: z.number().min(0).max(100).optional(),
+	primaryCommissionSplit: z.number().min(0).max(100).optional(),
 	teamId: z.string().uuid().optional(),
 	agencyId: z.string().uuid().optional(),
 	permissions: z.string().optional(),

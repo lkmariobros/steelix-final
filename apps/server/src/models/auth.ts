@@ -115,7 +115,10 @@ export const user = pgTable(
 		permissions: text("permissions"), // JSON string for role permissions
 		// Agent tier system for commission calculations
 		agentTier: agentTierEnum("agent_tier").default("advisor"),
-		companyCommissionSplit: integer("company_commission_split").default(70), // Percentage (70 = 70% for Advisor under New Leadership Plan)
+		/** Secondary market agent commission split % (e.g. 70 = Advisor default) */
+		companyCommissionSplit: integer("company_commission_split").default(70),
+		/** Primary market agent commission entitlement % (default 100 of scheme) */
+		primaryCommissionSplit: integer("primary_commission_split").default(100),
 		tierEffectiveDate: timestamp("tier_effective_date").defaultNow(),
 		tierPromotedBy: text("tier_promoted_by"), // Self-reference for who promoted - will add FK constraint separately
 		// Recruitment/upline tracking for Leadership Bonus (1-level direct upline only)
