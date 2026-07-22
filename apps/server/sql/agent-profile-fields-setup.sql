@@ -7,6 +7,9 @@ ALTER TABLE public."user"
   ADD COLUMN IF NOT EXISTS nric text;
 
 ALTER TABLE public."user"
+  ADD COLUMN IF NOT EXISTS ren_number text;
+
+ALTER TABLE public."user"
   ADD COLUMN IF NOT EXISTS registration_fee text;
 
 ALTER TABLE public."user"

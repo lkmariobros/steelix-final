@@ -127,6 +127,11 @@ export default function TransactionsPage() {
 			enabled: !!session && viewMode === "pipeline",
 		});
 
+	const { data: leadershipBonusSummary, isLoading: isLoadingLeaderBonus } =
+		trpc.agentTiers.getMyLeadershipBonusSummary.useQuery(undefined, {
+			enabled: !!session && viewMode === "all",
+		});
+
 	// Filter transactions for pipeline view (exclude completed/rejected)
 	const displayTransactions =
 		viewMode === "pipeline"
@@ -138,6 +143,36 @@ export default function TransactionsPage() {
 						),
 				) || []
 			: transactionsData?.transactions || [];
+
+	const PENDING_COMMISSION_STATUSES = [
+		"pending",
+		"verified",
+		"submitted",
+		"under_review",
+		"approved",
+	] as const;
+
+	const allTxRows = transactionsData?.transactions ?? [];
+	const totalTransactionValue = allTxRows.reduce((sum, t) => {
+		const price = t.propertyData?.nettPrice ?? t.propertyData?.price ?? 0;
+		return sum + (typeof price === "number" ? price : Number(price) || 0);
+	}, 0);
+	const totalCommission = allTxRows.reduce(
+		(sum, t) => sum + Number.parseFloat(t.commissionAmount || "0"),
+		0,
+	);
+	const pendingCommission = allTxRows.reduce((sum, t) => {
+		if (
+			!t.status ||
+			!PENDING_COMMISSION_STATUSES.includes(
+				t.status as (typeof PENDING_COMMISSION_STATUSES)[number],
+			)
+		) {
+			return sum;
+		}
+		return sum + Number.parseFloat(t.commissionAmount || "0");
+	}, 0);
+	const leaderBonus = leadershipBonusSummary?.totalEarnings ?? 0;
 
 	// Authentication check
 	if (isPending) {
@@ -436,49 +471,20 @@ export default function TransactionsPage() {
 								<Card>
 									<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
 										<CardTitle className="font-medium text-sm">
-											Total Transactions
+											Total Transaction Value
 										</CardTitle>
 										<RiFileTextLine className="h-4 w-4 text-muted-foreground" />
 									</CardHeader>
 									<CardContent>
 										<div className="font-bold text-2xl">
 											{isLoadingTransactions ? (
-												<Skeleton className="mt-1 h-8 w-16" />
+												<Skeleton className="mt-1 h-8 w-24" />
 											) : (
-												transactionsData?.total || 0
+												formatCurrency(totalTransactionValue)
 											)}
 										</div>
 										<p className="text-muted-foreground text-xs">
-											All time transactions
-										</p>
-									</CardContent>
-								</Card>
-								<Card>
-									<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-										<CardTitle className="font-medium text-sm">
-											Pending Approval
-										</CardTitle>
-										<RiTimeLine className="h-4 w-4 text-muted-foreground" />
-									</CardHeader>
-									<CardContent>
-										<div className="font-bold text-2xl">
-											{isLoadingTransactions ? (
-												<Skeleton className="mt-1 h-8 w-16" />
-											) : (
-												transactionsData?.transactions.filter(
-													(t) =>
-														t.status &&
-														[
-															"pending",
-															"verified",
-															"submitted",
-															"under_review",
-														].includes(t.status),
-												).length || 0
-											)}
-										</div>
-										<p className="text-muted-foreground text-xs">
-											Awaiting review
+											Sum of deal values
 										</p>
 									</CardContent>
 								</Card>
@@ -494,14 +500,7 @@ export default function TransactionsPage() {
 											{isLoadingTransactions ? (
 												<Skeleton className="mt-1 h-8 w-24" />
 											) : (
-												formatCurrency(
-													transactionsData?.transactions.reduce(
-														(sum, t) =>
-															sum +
-															Number.parseFloat(t.commissionAmount || "0"),
-														0,
-													) || 0,
-												)
+												formatCurrency(totalCommission)
 											)}
 										</div>
 										<p className="text-muted-foreground text-xs">
@@ -512,29 +511,40 @@ export default function TransactionsPage() {
 								<Card>
 									<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
 										<CardTitle className="font-medium text-sm">
-											Avg Per Transaction
+											Pending Commission
 										</CardTitle>
-										<RiFileTextLine className="h-4 w-4 text-muted-foreground" />
+										<RiTimeLine className="h-4 w-4 text-muted-foreground" />
 									</CardHeader>
 									<CardContent>
 										<div className="font-bold text-2xl">
 											{isLoadingTransactions ? (
 												<Skeleton className="mt-1 h-8 w-24" />
 											) : (
-												formatCurrency(
-													transactionsData?.transactions.length
-														? transactionsData.transactions.reduce(
-																(sum, t) =>
-																	sum +
-																	Number.parseFloat(t.commissionAmount || "0"),
-																0,
-															) / transactionsData.transactions.length
-														: 0,
-												)
+												formatCurrency(pendingCommission)
 											)}
 										</div>
 										<p className="text-muted-foreground text-xs">
-											Per transaction
+											Awaiting release
+										</p>
+									</CardContent>
+								</Card>
+								<Card>
+									<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+										<CardTitle className="font-medium text-sm">
+											Leader Bonus
+										</CardTitle>
+										<RiBarChartLine className="h-4 w-4 text-muted-foreground" />
+									</CardHeader>
+									<CardContent>
+										<div className="font-bold text-2xl">
+											{isLoadingLeaderBonus ? (
+												<Skeleton className="mt-1 h-8 w-24" />
+											) : (
+												formatCurrency(leaderBonus)
+											)}
+										</div>
+										<p className="text-muted-foreground text-xs">
+											Leadership bonus earned
 										</p>
 									</CardContent>
 								</Card>

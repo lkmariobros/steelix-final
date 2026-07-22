@@ -71,6 +71,8 @@ export const user = pgTable(
 		branch: text("branch"),
 		nickName: text("nick_name"),
 		nric: text("nric"),
+		/** Real Estate Negotiator registration number (REN) */
+		renNumber: text("ren_number"),
 		registrationFee: text("registration_fee"),
 		paymentMethod: text("payment_method"),
 		address: text("address"),

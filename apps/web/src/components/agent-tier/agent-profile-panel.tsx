@@ -49,6 +49,7 @@ type AgentProfile = {
 	branch?: string | null;
 	nickName?: string | null;
 	nric?: string | null;
+	renNumber?: string | null;
 	registrationFee?: string | null;
 	paymentMethod?: string | null;
 	address?: string | null;
@@ -199,6 +200,7 @@ export function AgentProfilePanel({
 			name: form.fullName.trim(),
 			nickName: form.nickName.trim() || undefined,
 			nric: form.nric.trim() || undefined,
+			renNumber: form.renNumber.trim() || undefined,
 			email: form.email.trim(),
 			phone: phone || undefined,
 			address: form.address.trim() || undefined,
@@ -469,6 +471,13 @@ export function AgentProfilePanel({
 								value={displayValue(agent.branch)}
 							/>
 						)}
+						<InfoField
+							label="REN Number"
+							value={displayValue(agent.renNumber)}
+							editValue={form.renNumber}
+							isEditing={isEditing}
+							onChange={(v) => setField("renNumber", v)}
+						/>
 					</InfoGrid>
 				</Section>
 
@@ -681,6 +690,7 @@ function buildFormState(
 		fullName: agent.name ?? "",
 		nickName: agent.nickName ?? "",
 		nric: agent.nric ?? "",
+		renNumber: agent.renNumber ?? "",
 		email: agent.email ?? "",
 		address: agent.address ?? "",
 		contactNo: agent.phone ?? "",

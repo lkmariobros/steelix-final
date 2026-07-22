@@ -175,6 +175,7 @@ const updateAgentInput = z.object({
 	name: z.string().min(1).optional(),
 	nickName: z.string().optional(),
 	nric: z.string().optional(),
+	renNumber: z.string().max(64).optional(),
 	email: z.string().email().optional(),
 	phone: z
 		.string()
