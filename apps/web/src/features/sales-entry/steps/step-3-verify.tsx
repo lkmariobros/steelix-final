@@ -79,10 +79,14 @@ export function StepVerify({
 			?.label ?? "Direct";
 
 	const getPurchasingLabel = () => {
-		if (isRentalTransactionType(data.transactionType)) {
+		if (
+			data.marketType === "secondary" ||
+			isRentalTransactionType(data.transactionType)
+		) {
+			const sst = data.propertyData?.sstPayBy;
+			if (sst === "client") return "Client";
 			return (
-				sstPayByOptions.find((o) => o.value === data.propertyData?.sstPayBy)
-					?.label ?? "—"
+				sstPayByOptions.find((o) => o.value === sst)?.label ?? "—"
 			);
 		}
 		return (
@@ -107,6 +111,7 @@ export function StepVerify({
 			coBrokingData: data.coBrokingData,
 			commissionType: data.commissionType,
 			commissionValue: data.commissionValue,
+			commissionAmount: data.commissionAmount,
 			agentId: data.agentId,
 		});
 		if (!result.success) {
@@ -121,15 +126,25 @@ export function StepVerify({
 			}
 		}
 		const docs = resolveTransactionDocuments(data.documents);
-		const hasIc = docs.some(
-			(d) => d.category === "ic_passport" || d.category === "identification",
-		);
-		if (!hasIc) {
+		if (data.marketType === "primary") {
+			const hasIc = docs.some(
+				(d) => d.category === "ic_passport" || d.category === "identification",
+			);
+			if (!hasIc) {
+				errors.push({
+					step: 2,
+					stepTitle: stepConfig[1].title,
+					field: "IC / Passport",
+					message: "Upload purchaser IC or passport before submitting",
+					severity: "error",
+				});
+			}
+		} else if (docs.length === 0) {
 			errors.push({
 				step: 2,
 				stepTitle: stepConfig[1].title,
-				field: "IC / Passport",
-				message: "Upload purchaser IC or passport before submitting",
+				field: "documents",
+				message: "Upload at least one supporting document before submitting",
 				severity: "error",
 			});
 		}
@@ -173,18 +188,7 @@ export function StepVerify({
 								<dt className="text-muted-foreground">Market</dt>
 								<dd className="capitalize">{data.marketType ?? "primary"}</dd>
 							</div>
-							{data.marketType === "secondary" ? (
-								<>
-									<div className="md:col-span-2">
-										<dt className="text-muted-foreground">Address</dt>
-										<dd>{data.propertyData?.address || "—"}</dd>
-									</div>
-									<div>
-										<dt className="text-muted-foreground">Commission Rate</dt>
-										<dd>{data.commissionValue ?? "—"}%</dd>
-									</div>
-								</>
-							) : (
+							{data.marketType === "secondary" ? null : (
 								<>
 									<div>
 										<dt className="text-muted-foreground">Project</dt>
@@ -196,14 +200,138 @@ export function StepVerify({
 									</div>
 								</>
 							)}
-							<div>
-								<dt className="text-muted-foreground">Price</dt>
-								<dd>
-									{data.propertyData?.price
-										? `RM ${data.propertyData.price.toLocaleString()}`
-										: "—"}
-								</dd>
-							</div>
+							{data.marketType === "secondary" ? (
+								<>
+									<div>
+										<dt className="text-muted-foreground">Type</dt>
+										<dd>
+											{isRentalTransactionType(data.transactionType)
+												? "Rental"
+												: "Subsale"}
+										</dd>
+									</div>
+									<div className="md:col-span-2">
+										<dt className="text-muted-foreground">Address</dt>
+										<dd>{data.propertyData?.address || "—"}</dd>
+									</div>
+									<div>
+										<dt className="text-muted-foreground">Property Type</dt>
+										<dd>{data.propertyData?.propertyType || "—"}</dd>
+									</div>
+									{!isRentalTransactionType(data.transactionType) ? (
+										<>
+											<div>
+												<dt className="text-muted-foreground">SPA Price</dt>
+												<dd>
+													{data.propertyData?.spaPrice != null
+														? `RM ${data.propertyData.spaPrice.toLocaleString()}`
+														: "—"}
+												</dd>
+											</div>
+											<div>
+												<dt className="text-muted-foreground">Net Price</dt>
+												<dd>
+													{data.propertyData?.nettPrice != null
+														? `RM ${data.propertyData.nettPrice.toLocaleString()}`
+														: "—"}
+												</dd>
+											</div>
+											<div>
+												<dt className="text-muted-foreground">
+													Earnest Deposit
+												</dt>
+												<dd>
+													{data.propertyData?.earnestDeposit != null
+														? `RM ${data.propertyData.earnestDeposit.toLocaleString()}`
+														: "—"}
+												</dd>
+											</div>
+											<div>
+												<dt className="text-muted-foreground">
+													Commission Percent
+												</dt>
+												<dd>{data.commissionValue ?? "—"}%</dd>
+											</div>
+											<div>
+												<dt className="text-muted-foreground">
+													Commission Amount
+												</dt>
+												<dd>
+													{data.commissionAmount != null
+														? `RM ${data.commissionAmount.toLocaleString()}`
+														: "—"}
+												</dd>
+											</div>
+										</>
+									) : (
+										<>
+											<div>
+												<dt className="text-muted-foreground">Offer Date</dt>
+												<dd>{data.propertyData?.offerDate || "—"}</dd>
+											</div>
+											<div>
+												<dt className="text-muted-foreground">Submit Date</dt>
+												<dd>{data.propertyData?.submitDate || "—"}</dd>
+											</div>
+											<div>
+												<dt className="text-muted-foreground">Rent From</dt>
+												<dd>{data.propertyData?.rentFrom || "—"}</dd>
+											</div>
+											<div>
+												<dt className="text-muted-foreground">Rent To</dt>
+												<dd>{data.propertyData?.rentTo || "—"}</dd>
+											</div>
+											<div>
+												<dt className="text-muted-foreground">Rent Period</dt>
+												<dd>{data.propertyData?.rentPeriod || "—"}</dd>
+											</div>
+											<div>
+												<dt className="text-muted-foreground">
+													Monthly Rental
+												</dt>
+												<dd>
+													{data.propertyData?.price
+														? `RM ${data.propertyData.price.toLocaleString()}`
+														: "—"}
+												</dd>
+											</div>
+											<div>
+												<dt className="text-muted-foreground">
+													Case Commission
+												</dt>
+												<dd>
+													{data.commissionAmount != null
+														? `RM ${data.commissionAmount.toLocaleString()}`
+														: "—"}
+												</dd>
+											</div>
+											<div>
+												<dt className="text-muted-foreground">
+													Earnest Deposit
+												</dt>
+												<dd>
+													{data.propertyData?.earnestDeposit != null
+														? `RM ${data.propertyData.earnestDeposit.toLocaleString()}`
+														: "—"}
+												</dd>
+											</div>
+										</>
+									)}
+									<div>
+										<dt className="text-muted-foreground">SST Percent</dt>
+										<dd>{data.propertyData?.sstPercent ?? "—"}%</dd>
+									</div>
+								</>
+							) : (
+								<div>
+									<dt className="text-muted-foreground">Price</dt>
+									<dd>
+										{data.propertyData?.price
+											? `RM ${data.propertyData.price.toLocaleString()}`
+											: "—"}
+									</dd>
+								</div>
+							)}
 							{data.marketType !== "secondary" ? (
 								<>
 									<div>
@@ -246,7 +374,8 @@ export function StepVerify({
 							</div>
 							<div>
 								<dt className="text-muted-foreground">
-									{isRentalTransactionType(data.transactionType)
+									{data.marketType === "secondary" ||
+									isRentalTransactionType(data.transactionType)
 										? "SST Pay By"
 										: "Purchasing Method"}
 								</dt>
@@ -264,7 +393,11 @@ export function StepVerify({
 					<section>
 						<div className="mb-3 flex items-center gap-2">
 							<User className="h-4 w-4" />
-							<h3 className="font-medium">Purchaser</h3>
+							<h3 className="font-medium">
+								{isRentalTransactionType(data.transactionType)
+									? "Landlord"
+									: "Purchaser"}
+							</h3>
 						</div>
 						<dl className="grid gap-2 text-sm md:grid-cols-2">
 							<div>
@@ -289,6 +422,70 @@ export function StepVerify({
 							</div>
 						</dl>
 					</section>
+
+					{(data.clientData?.additionalPurchasers?.length ?? 0) > 0 ? (
+						<section>
+							<div className="mb-3 flex items-center gap-2">
+								<User className="h-4 w-4" />
+								<h3 className="font-medium">
+									{isRentalTransactionType(data.transactionType)
+										? "Additional Landlords"
+										: "Additional Purchasers"}
+								</h3>
+							</div>
+							{data.clientData?.additionalPurchasers?.map((p, i) => (
+								<dl
+									key={`ap-${i}`}
+									className="mb-3 grid gap-2 text-sm md:grid-cols-2"
+								>
+									<div>
+										<dt className="text-muted-foreground">Name</dt>
+										<dd>{p.name || "—"}</dd>
+									</div>
+									<div>
+										<dt className="text-muted-foreground">IC / Passport</dt>
+										<dd>{p.icNo || "—"}</dd>
+									</div>
+									<div>
+										<dt className="text-muted-foreground">Phone</dt>
+										<dd>{p.phone || "—"}</dd>
+									</div>
+								</dl>
+							))}
+						</section>
+					) : null}
+
+					{(data.clientData?.vendors?.length ?? 0) > 0 ? (
+						<section>
+							<div className="mb-3 flex items-center gap-2">
+								<User className="h-4 w-4" />
+								<h3 className="font-medium">
+									{isRentalTransactionType(data.transactionType)
+										? "Tenant"
+										: "Vendor"}
+								</h3>
+							</div>
+							{data.clientData?.vendors?.map((p, i) => (
+								<dl
+									key={`v-${i}`}
+									className="mb-3 grid gap-2 text-sm md:grid-cols-2"
+								>
+									<div>
+										<dt className="text-muted-foreground">Name</dt>
+										<dd>{p.name || "—"}</dd>
+									</div>
+									<div>
+										<dt className="text-muted-foreground">IC / Passport</dt>
+										<dd>{p.icNo || "—"}</dd>
+									</div>
+									<div>
+										<dt className="text-muted-foreground">Phone</dt>
+										<dd>{p.phone || "—"}</dd>
+									</div>
+								</dl>
+							))}
+						</section>
+					) : null}
 
 					{data.representationType === "co_broking" && data.coBrokingData && (
 						<>

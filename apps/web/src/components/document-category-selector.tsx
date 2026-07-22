@@ -4,7 +4,10 @@ import {
 	CreditCard,
 	File,
 	FileText,
+	Handshake,
+	Home,
 	Receipt,
+	ScrollText,
 	User,
 } from "lucide-react";
 import type { DocumentCategory } from "@/hooks/use-document-upload";
@@ -12,8 +15,8 @@ import type { DocumentCategory } from "@/hooks/use-document-upload";
 interface DocumentCategorySelectorProps {
 	onSelect: (category: DocumentCategory) => void;
 	selectedCategory?: DocumentCategory;
-	/** Client transaction wizard categories (IC, sales form, etc.) */
-	variant?: "legacy" | "transaction";
+	/** Primary uses transaction; secondary market uses secondary; legacy for older flows */
+	variant?: "legacy" | "transaction" | "secondary";
 }
 
 export function DocumentCategorySelector({
@@ -54,6 +57,51 @@ export function DocumentCategorySelector({
 		},
 	];
 
+	const secondaryCategories = [
+		{
+			value: "booking_form" as DocumentCategory,
+			label: "Booking Form",
+			icon: FileText,
+			description: "OTP / OTR form",
+		},
+		{
+			value: "receipt" as DocumentCategory,
+			label: "Receipt",
+			icon: Receipt,
+			description: "Booking Fees / SST / Deposit",
+		},
+		{
+			value: "bank_letter" as DocumentCategory,
+			label: "Bank Letter",
+			icon: Banknote,
+			description: "Bank LO if Loan Buy Case",
+		},
+		{
+			value: "co_broke_letter" as DocumentCategory,
+			label: "Co-Broke Letter",
+			icon: Handshake,
+			description: "Co-broke Letter",
+		},
+		{
+			value: "tenancy_agreement" as DocumentCategory,
+			label: "Tenancy Agreement",
+			icon: Home,
+			description: "Tenancy Agreement If Rental Case",
+		},
+		{
+			value: "spa" as DocumentCategory,
+			label: "SPA",
+			icon: ScrollText,
+			description: "Sales & Purchase Agreement",
+		},
+		{
+			value: "other" as DocumentCategory,
+			label: "Other",
+			icon: File,
+			description: "Additional Document",
+		},
+	];
+
 	const legacyCategories = [
 		{
 			value: "contract" as DocumentCategory,
@@ -82,7 +130,11 @@ export function DocumentCategorySelector({
 	];
 
 	const categories =
-		variant === "transaction" ? transactionCategories : legacyCategories;
+		variant === "secondary"
+			? secondaryCategories
+			: variant === "transaction"
+				? transactionCategories
+				: legacyCategories;
 
 	return (
 		<div className="space-y-3">

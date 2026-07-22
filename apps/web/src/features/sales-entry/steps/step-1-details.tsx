@@ -5,7 +5,7 @@ import { ArrowRight, Search, UserPlus } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { useForm } from "react-hook-form";
+import { useFieldArray, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 
@@ -36,20 +36,20 @@ import {
 	SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { Textarea } from "@/components/ui/textarea";
 import { useUserRole } from "@/contexts/user-role-context";
 import { formatAgentPickerLabel } from "@/lib/agent-display";
 import { trpc } from "@/utils/trpc";
 import { isRentalTransactionType } from "@/features/transactions/payment-method-utils";
 
+import { PartyPersonFields } from "../components/party-person-fields";
+import { SecondaryDealFields } from "../components/secondary-deal-fields";
 import {
 	type CompleteTransactionData,
 	detailsStepSchema,
-	genderOptions,
+	emptyPartyPerson,
 	marketTypeOptions,
 	purchasingMethodOptions,
 	representationTypeOptions,
-	sstPayByOptions,
 } from "../transaction-schema";
 import type { StepNavigationOptions } from "./step-nav";
 
@@ -106,12 +106,22 @@ export function StepDetails({
 			bookingDate: formData.bookingDate ?? formData.transactionDate ?? new Date(),
 			commissionType: formData.commissionType ?? "percentage",
 			commissionValue: formData.commissionValue ?? 0,
+			commissionAmount: formData.commissionAmount ?? 0,
 			propertyData: {
 				price: formData.propertyData?.price ?? 0,
 				address: formData.propertyData?.address ?? "",
+				propertyType: formData.propertyData?.propertyType ?? "",
 				salesPackage: formData.propertyData?.salesPackage ?? "",
 				rebateAmount: formData.propertyData?.rebateAmount,
+				spaPrice: formData.propertyData?.spaPrice,
 				nettPrice: formData.propertyData?.nettPrice,
+				sstPercent: formData.propertyData?.sstPercent ?? 8,
+				earnestDeposit: formData.propertyData?.earnestDeposit,
+				offerDate: formData.propertyData?.offerDate ?? "",
+				submitDate: formData.propertyData?.submitDate ?? "",
+				rentFrom: formData.propertyData?.rentFrom ?? "",
+				rentTo: formData.propertyData?.rentTo ?? "",
+				rentPeriod: formData.propertyData?.rentPeriod ?? "",
 				purchasingMethod: formData.propertyData?.purchasingMethod,
 				sstPayBy: formData.propertyData?.sstPayBy,
 				listingId: formData.propertyData?.listingId,
@@ -129,6 +139,9 @@ export function StepDetails({
 				gender: formData.clientData?.gender ?? "",
 				emergencyName: formData.clientData?.emergencyName ?? "",
 				emergencyContact: formData.clientData?.emergencyContact ?? "",
+				additionalPurchasers:
+					formData.clientData?.additionalPurchasers ?? [],
+				vendors: formData.clientData?.vendors ?? [],
 			},
 			representationType: formData.representationType ?? "direct",
 			coBrokingData: formData.coBrokingData,
@@ -136,6 +149,24 @@ export function StepDetails({
 				formData.agentId ??
 				(!isAdminPortal ? session?.user?.id : undefined),
 		},
+	});
+
+	const {
+		fields: extraPurchaserFields,
+		append: appendPurchaser,
+		remove: removePurchaser,
+	} = useFieldArray({
+		control: form.control,
+		name: "clientData.additionalPurchasers",
+	});
+
+	const {
+		fields: vendorFields,
+		append: appendVendor,
+		remove: removeVendor,
+	} = useFieldArray({
+		control: form.control,
+		name: "clientData.vendors",
 	});
 
 	const projectName = form.watch("projectName");
@@ -320,8 +351,23 @@ export function StepDetails({
 			coBrokingData: isCoBroking ? values.coBrokingData : undefined,
 			commissionType: values.commissionType,
 			commissionValue: values.commissionValue,
+			commissionAmount: values.commissionAmount,
 			agentId: resolvedAgentId,
 		});
+	};
+
+	const recalcSecondaryCommission = (
+		basePrice?: number,
+		percent?: number,
+	) => {
+		const p =
+			basePrice ??
+			(form.getValues("transactionType") === "sale"
+				? (form.getValues("propertyData.nettPrice") ?? 0)
+				: (form.getValues("propertyData.price") ?? 0));
+		const pct = percent ?? form.getValues("commissionValue") ?? 0;
+		const amount = Math.round(((p || 0) * (pct || 0)) / 100 * 100) / 100;
+		form.setValue("commissionAmount", amount);
 	};
 
 	const handleSubmit = (values: DetailsFormValues) => {
@@ -356,6 +402,7 @@ export function StepDetails({
 			coBrokingData: isCoBroking ? values.coBrokingData : undefined,
 			commissionType: values.commissionType,
 			commissionValue: values.commissionValue,
+			commissionAmount: values.commissionAmount,
 			agentId: resolvedAgentId,
 		});
 		onNext();
@@ -439,7 +486,9 @@ export function StepDetails({
 					<CardDescription>
 						{marketType === "primary"
 							? "Primary market: project commission scheme applies (agent receives 100% of scheme)."
-							: "Secondary market: your tier split applies (70% / 80% / 85% / 90%)."}
+							: isRentalDeal
+								? "Secondary market · Rental: enter tenancy details, commission, and parties."
+								: "Secondary market · Subsale: enter property, SPA/net prices, commission, and parties."}
 					</CardDescription>
 				</CardHeader>
 				<CardContent>
@@ -471,6 +520,12 @@ export function StepDetails({
 															field.onChange(opt.value);
 															if (opt.value === "primary") {
 																form.setValue("transactionType", "sale");
+															} else {
+																form.setValue(
+																	"propertyData.sstPercent",
+																	form.getValues("propertyData.sstPercent") ??
+																		8,
+																);
 															}
 															syncToParent();
 														}}
@@ -490,8 +545,16 @@ export function StepDetails({
 								)}
 							/>
 
+							{marketType === "secondary" ? (
+								<SecondaryDealFields
+									form={form}
+									control={form.control}
+									isSubsale={!isRentalDeal}
+									syncToParent={syncToParent}
+									recalcSecondaryCommission={recalcSecondaryCommission}
+								/>
+							) : (
 							<div className="grid gap-4 md:grid-cols-2">
-								{marketType === "primary" ? (
 								<FormField
 									control={form.control}
 									name="projectName"
@@ -528,28 +591,7 @@ export function StepDetails({
 										</FormItem>
 									)}
 								/>
-								) : (
-								<FormField
-									control={form.control}
-									name="propertyData.address"
-									render={({ field }) => (
-										<FormItem className="md:col-span-2">
-											<RequiredLabel>Property Address</RequiredLabel>
-											<FormControl>
-												<Textarea
-													{...field}
-													value={field.value ?? ""}
-													rows={2}
-													onBlur={() => syncToParent()}
-												/>
-											</FormControl>
-											<FormMessage />
-										</FormItem>
-									)}
-								/>
-								)}
 
-								{marketType === "primary" ? (
 								<FormField
 									control={form.control}
 									name="unitNo"
@@ -567,35 +609,6 @@ export function StepDetails({
 										</FormItem>
 									)}
 								/>
-								) : (
-								<FormField
-									control={form.control}
-									name="transactionType"
-									render={({ field }) => (
-										<FormItem>
-											<RequiredLabel>Transaction Type</RequiredLabel>
-											<Select
-												value={field.value}
-												onValueChange={(v) => {
-													field.onChange(v as "sale" | "lease");
-													syncToParent();
-												}}
-											>
-												<FormControl>
-													<SelectTrigger>
-														<SelectValue />
-													</SelectTrigger>
-												</FormControl>
-												<SelectContent>
-													<SelectItem value="sale">Sale</SelectItem>
-													<SelectItem value="lease">Lease</SelectItem>
-												</SelectContent>
-											</Select>
-											<FormMessage />
-										</FormItem>
-									)}
-								/>
-								)}
 
 								<FormField
 									control={form.control}
@@ -608,12 +621,10 @@ export function StepDetails({
 													value={field.value}
 													onChange={(v) => {
 														field.onChange(v);
-														if (marketType === "primary") {
-															setNettPrice(
-																v,
-																form.getValues("propertyData.rebateAmount"),
-															);
-														}
+														setNettPrice(
+															v,
+															form.getValues("propertyData.rebateAmount"),
+														);
 														syncToParent();
 													}}
 												/>
@@ -623,7 +634,7 @@ export function StepDetails({
 									)}
 								/>
 
-								{marketType === "primary" && schemes.length > 1 ? (
+								{schemes.length > 1 ? (
 									<FormField
 										control={form.control}
 										name="propertyData.schemeId"
@@ -662,33 +673,7 @@ export function StepDetails({
 									/>
 								) : null}
 
-								{marketType === "secondary" ? (
-									<FormField
-										control={form.control}
-										name="commissionValue"
-										render={({ field }) => (
-											<FormItem>
-												<RequiredLabel>Commission Rate (%)</RequiredLabel>
-												<FormControl>
-													<Input
-														type="number"
-														min={0}
-														max={100}
-														step={0.01}
-														value={field.value ?? ""}
-														onChange={(e) => {
-															field.onChange(Number(e.target.value));
-															syncToParent();
-														}}
-													/>
-												</FormControl>
-												<FormMessage />
-											</FormItem>
-										)}
-									/>
-								) : null}
-
-								{marketType === "primary" && activeSchemeTier ? (
+								{activeSchemeTier ? (
 									<>
 										<FormItem>
 											<FormLabel>Commission Rate (%)</FormLabel>
@@ -728,7 +713,6 @@ export function StepDetails({
 									</>
 								) : null}
 
-								{marketType === "primary" ? (
 								<FormField
 									control={form.control}
 									name="propertyData.salesPackage"
@@ -742,9 +726,7 @@ export function StepDetails({
 										</FormItem>
 									)}
 								/>
-								) : null}
 
-								{marketType === "primary" ? (
 								<FormField
 									control={form.control}
 									name="propertyData.rebateAmount"
@@ -768,38 +750,22 @@ export function StepDetails({
 										</FormItem>
 									)}
 								/>
-								) : null}
 
-								{marketType === "primary" ? (
-									<FormItem>
-										<FormLabel>Net Price (RM)</FormLabel>
-										<FormControl>
-											<CurrencyInput
-												value={netPrice}
-												onChange={() => {}}
-												disabled
-												className="bg-muted/50"
-												aria-label="Net price"
-											/>
-										</FormControl>
-										<p className="text-muted-foreground text-xs">
-											Auto-calculated: Price − Rebate
-										</p>
-									</FormItem>
-								) : null}
-
-								{marketType === "secondary" && secondaryPreview ? (
-									<div className="md:col-span-2 rounded-lg border bg-muted/30 p-3 text-sm">
-										<p className="font-medium">Your estimated share (tier split)</p>
-										<p className="mt-1 text-muted-foreground">
-											{secondaryPreview.companyCommissionSplit}% of total commission
-											→ RM{" "}
-											{secondaryPreview.agentEarnings.toLocaleString(undefined, {
-												minimumFractionDigits: 2,
-											})}
-										</p>
-									</div>
-								) : null}
+								<FormItem>
+									<FormLabel>Net Price (RM)</FormLabel>
+									<FormControl>
+										<CurrencyInput
+											value={netPrice}
+											onChange={() => {}}
+											disabled
+											className="bg-muted/50"
+											aria-label="Net price"
+										/>
+									</FormControl>
+									<p className="text-muted-foreground text-xs">
+										Auto-calculated: Price − Rebate
+									</p>
+								</FormItem>
 
 								<FormField
 									control={form.control}
@@ -829,219 +795,140 @@ export function StepDetails({
 									)}
 								/>
 
-								{isRentalDeal ? (
-									<FormField
-										control={form.control}
-										name="propertyData.sstPayBy"
-										render={({ field }) => (
-											<FormItem>
-												<FormLabel>SST Pay By</FormLabel>
-												<Select
-													value={field.value ?? ""}
-													onValueChange={(v) => {
-														field.onChange(v as "landlord" | "agent");
-														syncToParent();
-													}}
-												>
-													<FormControl>
-														<SelectTrigger>
-															<SelectValue placeholder="Landlord or Agent" />
-														</SelectTrigger>
-													</FormControl>
-													<SelectContent>
-														{sstPayByOptions.map((o) => (
-															<SelectItem key={o.value} value={o.value}>
-																{o.label}
-															</SelectItem>
-														))}
-													</SelectContent>
-												</Select>
-												<FormMessage />
-											</FormItem>
-										)}
-									/>
-								) : (
-									<FormField
-										control={form.control}
-										name="propertyData.purchasingMethod"
-										render={({ field }) => (
-											<FormItem>
-												<FormLabel>Purchasing Method</FormLabel>
-												<Select
-													value={field.value ?? ""}
-													onValueChange={(v) => {
-														field.onChange(v as "cash" | "loan");
-														syncToParent();
-													}}
-												>
-													<FormControl>
-														<SelectTrigger>
-															<SelectValue placeholder="Cash or Loan" />
-														</SelectTrigger>
-													</FormControl>
-													<SelectContent>
-														{purchasingMethodOptions.map((o) => (
-															<SelectItem key={o.value} value={o.value}>
-																{o.label}
-															</SelectItem>
-														))}
-													</SelectContent>
-												</Select>
-												<FormMessage />
-											</FormItem>
-										)}
-									/>
-								)}
+								<FormField
+									control={form.control}
+									name="propertyData.purchasingMethod"
+									render={({ field }) => (
+										<FormItem>
+											<FormLabel>Purchasing Method</FormLabel>
+											<Select
+												value={field.value ?? ""}
+												onValueChange={(v) => {
+													field.onChange(v as "cash" | "loan");
+													syncToParent();
+												}}
+											>
+												<FormControl>
+													<SelectTrigger>
+														<SelectValue placeholder="Cash or Loan" />
+													</SelectTrigger>
+												</FormControl>
+												<SelectContent>
+													{purchasingMethodOptions.map((o) => (
+														<SelectItem key={o.value} value={o.value}>
+															{o.label}
+														</SelectItem>
+													))}
+												</SelectContent>
+											</Select>
+											<FormMessage />
+										</FormItem>
+									)}
+								/>
+							</div>
+							)}
+							<Separator />
+
+							<div>
+								<div className="mb-4 flex items-center justify-between gap-2">
+									<h3 className="font-medium text-lg">
+										{isRentalDeal ? "Landlord" : "Purchaser"}
+									</h3>
+									<Button
+										type="button"
+										variant="outline"
+										size="sm"
+										onClick={() => {
+											appendPurchaser(emptyPartyPerson());
+											syncToParent();
+										}}
+									>
+										<UserPlus className="mr-1 h-4 w-4" />
+										{isRentalDeal ? "Add Landlord" : "Add Purchaser"}
+									</Button>
+								</div>
+								<PartyPersonFields
+									control={form.control}
+									namePrefix="clientData"
+									onBlurSync={syncToParent}
+								/>
+								{extraPurchaserFields.map((item, index) => (
+									<div
+										key={item.id}
+										className="mt-4 rounded-lg border border-dashed p-4"
+									>
+										<PartyPersonFields
+											control={form.control}
+											namePrefix={`clientData.additionalPurchasers.${index}`}
+											title={
+												isRentalDeal
+													? `Landlord ${index + 2}`
+													: `Purchaser ${index + 2}`
+											}
+											onBlurSync={syncToParent}
+											onRemove={() => {
+												removePurchaser(index);
+												syncToParent();
+											}}
+										/>
+									</div>
+								))}
 							</div>
 
 							<Separator />
 
 							<div>
-								<h3 className="mb-4 font-medium text-lg">Purchaser</h3>
-								<div className="grid gap-4 md:grid-cols-2">
-									<FormField
-										control={form.control}
-										name="clientData.name"
-										render={({ field }) => (
-											<FormItem>
-												<RequiredLabel>Name</RequiredLabel>
-												<FormControl>
-													<Input {...field} onBlur={() => syncToParent()} />
-												</FormControl>
-												<FormMessage />
-											</FormItem>
-										)}
-									/>
-									<FormField
-										control={form.control}
-										name="clientData.icNo"
-										render={({ field }) => (
-											<FormItem>
-												<RequiredLabel>IC / Passport</RequiredLabel>
-												<FormControl>
-													<Input {...field} onBlur={() => syncToParent()} />
-												</FormControl>
-												<FormMessage />
-											</FormItem>
-										)}
-									/>
-									<FormField
-										control={form.control}
-										name="clientData.email"
-										render={({ field }) => (
-											<FormItem>
-												<FormLabel>Email</FormLabel>
-												<FormControl>
-													<Input type="email" {...field} onBlur={() => syncToParent()} />
-												</FormControl>
-												<FormMessage />
-											</FormItem>
-										)}
-									/>
-									<FormField
-										control={form.control}
-										name="clientData.phone"
-										render={({ field }) => (
-											<FormItem>
-												<RequiredLabel>Phone</RequiredLabel>
-												<FormControl>
-													<Input {...field} onBlur={() => syncToParent()} />
-												</FormControl>
-												<FormMessage />
-											</FormItem>
-										)}
-									/>
-									<FormField
-										control={form.control}
-										name="clientData.address"
-										render={({ field }) => (
-											<FormItem className="md:col-span-2">
-												<RequiredLabel>Correspondence Address</RequiredLabel>
-												<FormControl>
-													<Textarea {...field} rows={2} onBlur={() => syncToParent()} />
-												</FormControl>
-												<FormMessage />
-											</FormItem>
-										)}
-									/>
-									<FormField
-										control={form.control}
-										name="clientData.race"
-										render={({ field }) => (
-											<FormItem>
-												<FormLabel>Race</FormLabel>
-												<FormControl>
-													<Input {...field} onBlur={() => syncToParent()} />
-												</FormControl>
-											</FormItem>
-										)}
-									/>
-									<FormField
-										control={form.control}
-										name="clientData.nationality"
-										render={({ field }) => (
-											<FormItem>
-												<FormLabel>Nationality</FormLabel>
-												<FormControl>
-													<Input {...field} onBlur={() => syncToParent()} />
-												</FormControl>
-											</FormItem>
-										)}
-									/>
-									<FormField
-										control={form.control}
-										name="clientData.gender"
-										render={({ field }) => (
-											<FormItem>
-												<FormLabel>Gender</FormLabel>
-												<Select
-													value={field.value ?? ""}
-													onValueChange={(v) => {
-														field.onChange(v);
-														syncToParent();
-													}}
-												>
-													<FormControl>
-														<SelectTrigger>
-															<SelectValue placeholder="Select" />
-														</SelectTrigger>
-													</FormControl>
-													<SelectContent>
-														{genderOptions.map((o) => (
-															<SelectItem key={o.value} value={o.value}>
-																{o.label}
-															</SelectItem>
-														))}
-													</SelectContent>
-												</Select>
-											</FormItem>
-										)}
-									/>
-									<FormField
-										control={form.control}
-										name="clientData.emergencyName"
-										render={({ field }) => (
-											<FormItem>
-												<FormLabel>Emergency Contact Name</FormLabel>
-												<FormControl>
-													<Input {...field} onBlur={() => syncToParent()} />
-												</FormControl>
-											</FormItem>
-										)}
-									/>
-									<FormField
-										control={form.control}
-										name="clientData.emergencyContact"
-										render={({ field }) => (
-											<FormItem>
-												<FormLabel>Emergency Contact Phone</FormLabel>
-												<FormControl>
-													<Input {...field} onBlur={() => syncToParent()} />
-												</FormControl>
-											</FormItem>
-										)}
-									/>
+								<div className="mb-4 flex items-center justify-between gap-2">
+									<h3 className="font-medium text-lg">
+										{isRentalDeal ? "Tenant" : "Vendor"}
+									</h3>
+									<Button
+										type="button"
+										variant="outline"
+										size="sm"
+										onClick={() => {
+											appendVendor(emptyPartyPerson());
+											syncToParent();
+										}}
+									>
+										<UserPlus className="mr-1 h-4 w-4" />
+										{isRentalDeal ? "Add Tenant" : "Add Vendor"}
+									</Button>
 								</div>
+								{vendorFields.length === 0 ? (
+									<p className="mb-3 text-muted-foreground text-sm">
+										{isRentalDeal
+											? "No tenants yet. Click Add Tenant to include tenant details."
+											: "No vendors yet. Click Add Vendor to include seller / vendor details."}
+									</p>
+								) : null}
+								{vendorFields.map((item, index) => (
+									<div
+										key={item.id}
+										className={
+											index > 0
+												? "mt-4 rounded-lg border border-dashed p-4"
+												: "rounded-lg border p-4"
+										}
+									>
+										<PartyPersonFields
+											control={form.control}
+											namePrefix={`clientData.vendors.${index}`}
+											title={
+												vendorFields.length > 1
+													? isRentalDeal
+														? `Tenant ${index + 1}`
+														: `Vendor ${index + 1}`
+													: undefined
+											}
+											onBlurSync={syncToParent}
+											onRemove={() => {
+												removeVendor(index);
+												syncToParent();
+											}}
+										/>
+									</div>
+								))}
 							</div>
 
 							<Separator />

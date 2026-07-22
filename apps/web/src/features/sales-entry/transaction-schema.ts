@@ -41,7 +41,14 @@ export const propertySchema = z.object({
 	salesPackage: z.string().optional(),
 	rebateAmount: z.number().nonnegative().optional(),
 	purchasingMethod: z.enum(["cash", "loan"]).optional(),
-	sstPayBy: z.enum(["landlord", "agent"]).optional(),
+	sstPayBy: z.enum(["client", "landlord", "agent"]).optional(),
+	sstPercent: z.number().nonnegative().optional(),
+	earnestDeposit: z.number().nonnegative().optional(),
+	offerDate: z.string().optional(),
+	submitDate: z.string().optional(),
+	rentFrom: z.string().optional(),
+	rentTo: z.string().optional(),
+	rentPeriod: z.string().optional(),
 	listingReferralShareType: z.enum(["percentage", "fixed"]).optional(),
 	listingReferralShareValue: z.number().nonnegative().optional(),
 	address: z.string().optional(),
@@ -49,15 +56,15 @@ export const propertySchema = z.object({
 	bedrooms: z.number().min(0).optional(),
 	bathrooms: z.number().min(0).optional(),
 	area: z.number().min(0).optional(),
-	price: z.number().min(1, "Property price must be greater than 0"),
-	spaPrice: z.number().positive().optional(),
+	price: z.number().min(0, "Property price must be 0 or greater"),
+	spaPrice: z.number().nonnegative().optional(),
 	nettPrice: z.number().nonnegative().optional(),
 	description: z.string().optional(),
 });
 
-// Step 3: Purchaser Schema
-export const clientSchema = z.object({
-	name: z.string().min(1, "Purchaser name is required"),
+/** Shared person block for purchaser / vendor / additional parties */
+export const partyPersonSchema = z.object({
+	name: z.string().min(1, "Name is required"),
 	icNo: z.string().min(1, "IC / Passport is required"),
 	email: z
 		.string()
@@ -71,9 +78,30 @@ export const clientSchema = z.object({
 	gender: z.string().optional(),
 	emergencyName: z.string().optional(),
 	emergencyContact: z.string().optional(),
+});
+
+export type PartyPerson = z.infer<typeof partyPersonSchema>;
+
+export const emptyPartyPerson = (): PartyPerson => ({
+	name: "",
+	icNo: "",
+	email: "",
+	phone: "",
+	address: "",
+	race: "",
+	nationality: "",
+	gender: "",
+	emergencyName: "",
+	emergencyContact: "",
+});
+
+// Step 3: Purchaser Schema (primary purchaser + optional extras / vendors)
+export const clientSchema = partyPersonSchema.extend({
 	type: z.enum(["buyer", "seller", "tenant", "landlord"]).optional(),
 	source: z.string().optional(),
 	notes: z.string().optional(),
+	additionalPurchasers: z.array(partyPersonSchema).optional(),
+	vendors: z.array(partyPersonSchema).optional(),
 });
 
 // Step 4: Representation & Co-Broking Schema
@@ -195,6 +223,11 @@ export const documentsSchema = z.object({
 						"identification",
 						"financial",
 						"miscellaneous",
+						"booking_form",
+						"receipt",
+						"co_broke_letter",
+						"tenancy_agreement",
+						"spa",
 					])
 					.optional(),
 			}),
@@ -220,6 +253,7 @@ export const detailsStepSchema = z
 		coBrokingData: coBrokingBaseSchema.shape.coBrokingData,
 		commissionType: z.enum(["percentage", "fixed"]).optional(),
 		commissionValue: z.number().optional(),
+		commissionAmount: z.number().optional(),
 		agentId: z.string().min(1).optional(),
 	})
 	.superRefine((data, ctx) => {
@@ -245,6 +279,13 @@ export const detailsStepSchema = z
 					path: ["propertyData", "salesPackage"],
 				});
 			}
+			if (!(data.propertyData?.price > 0)) {
+				ctx.addIssue({
+					code: z.ZodIssueCode.custom,
+					message: "Price must be greater than 0",
+					path: ["propertyData", "price"],
+				});
+			}
 		} else {
 			if (!data.propertyData?.address?.trim()) {
 				ctx.addIssue({
@@ -253,14 +294,147 @@ export const detailsStepSchema = z
 					path: ["propertyData", "address"],
 				});
 			}
-			const cv = data.commissionValue ?? 0;
-			if (cv <= 0) {
+			if (!data.propertyData?.propertyType?.trim()) {
 				ctx.addIssue({
 					code: z.ZodIssueCode.custom,
-					message: "Commission rate is required for secondary market",
+					message: "Property type is required",
+					path: ["propertyData", "propertyType"],
+				});
+			}
+			const cv = data.commissionValue ?? 0;
+			if (data.transactionType === "sale" && cv <= 0) {
+				ctx.addIssue({
+					code: z.ZodIssueCode.custom,
+					message: "Commission percent is required",
 					path: ["commissionValue"],
 				});
 			}
+			if ((data.commissionAmount ?? 0) <= 0) {
+				ctx.addIssue({
+					code: z.ZodIssueCode.custom,
+					message:
+						data.transactionType === "lease"
+							? "Case commission is required"
+							: "Commission amount is required",
+					path: ["commissionAmount"],
+				});
+			}
+			if (!data.propertyData?.sstPayBy) {
+				ctx.addIssue({
+					code: z.ZodIssueCode.custom,
+					message: "SST Pay by is required",
+					path: ["propertyData", "sstPayBy"],
+				});
+			}
+			if (data.propertyData?.sstPercent == null) {
+				ctx.addIssue({
+					code: z.ZodIssueCode.custom,
+					message: "SST percent is required",
+					path: ["propertyData", "sstPercent"],
+				});
+			}
+
+			if (data.transactionType === "sale") {
+				if (!(data.propertyData?.spaPrice && data.propertyData.spaPrice > 0)) {
+					ctx.addIssue({
+						code: z.ZodIssueCode.custom,
+						message: "SPA price is required",
+						path: ["propertyData", "spaPrice"],
+					});
+				}
+				if (
+					data.propertyData?.nettPrice == null ||
+					data.propertyData.nettPrice < 0
+				) {
+					ctx.addIssue({
+						code: z.ZodIssueCode.custom,
+						message: "Net price is required",
+						path: ["propertyData", "nettPrice"],
+					});
+				}
+				if (
+					data.propertyData?.earnestDeposit == null ||
+					data.propertyData.earnestDeposit < 0
+				) {
+					ctx.addIssue({
+						code: z.ZodIssueCode.custom,
+						message: "Earnest deposit is required",
+						path: ["propertyData", "earnestDeposit"],
+					});
+				}
+			} else {
+				const pd = data.propertyData;
+				if (!pd?.offerDate?.trim()) {
+					ctx.addIssue({
+						code: z.ZodIssueCode.custom,
+						message: "Offer date is required",
+						path: ["propertyData", "offerDate"],
+					});
+				}
+				if (!pd?.submitDate?.trim()) {
+					ctx.addIssue({
+						code: z.ZodIssueCode.custom,
+						message: "Submit date is required",
+						path: ["propertyData", "submitDate"],
+					});
+				}
+				if (!pd?.rentFrom?.trim()) {
+					ctx.addIssue({
+						code: z.ZodIssueCode.custom,
+						message: "Rent from date is required",
+						path: ["propertyData", "rentFrom"],
+					});
+				}
+				if (!pd?.rentTo?.trim()) {
+					ctx.addIssue({
+						code: z.ZodIssueCode.custom,
+						message: "Rent to date is required",
+						path: ["propertyData", "rentTo"],
+					});
+				}
+				if (!pd?.rentPeriod?.trim()) {
+					ctx.addIssue({
+						code: z.ZodIssueCode.custom,
+						message: "Rent period is required",
+						path: ["propertyData", "rentPeriod"],
+					});
+				}
+				if (!(pd?.price && pd.price > 0)) {
+					ctx.addIssue({
+						code: z.ZodIssueCode.custom,
+						message: "Monthly rental price must be greater than 0",
+						path: ["propertyData", "price"],
+					});
+				}
+				if (pd?.earnestDeposit == null || pd.earnestDeposit < 0) {
+					ctx.addIssue({
+						code: z.ZodIssueCode.custom,
+						message: "Earnest deposit is required",
+						path: ["propertyData", "earnestDeposit"],
+					});
+				}
+			}
+
+			const extras = data.clientData?.additionalPurchasers ?? [];
+			extras.forEach((p, i) => {
+				if (!p.name?.trim()) {
+					ctx.addIssue({
+						code: z.ZodIssueCode.custom,
+						message: "Purchaser name is required",
+						path: ["clientData", "additionalPurchasers", i, "name"],
+					});
+				}
+			});
+			const vendors = data.clientData?.vendors ?? [];
+			vendors.forEach((p, i) => {
+				if (!p.name?.trim()) {
+					ctx.addIssue({
+						code: z.ZodIssueCode.custom,
+						message: "Vendor name is required",
+						path: ["clientData", "vendors", i, "name"],
+					});
+				}
+			});
 		}
 
 		if (data.representationType === "co_broking") {
@@ -398,8 +572,8 @@ export const marketTypeOptions = [
 ] as const;
 
 export const transactionTypeOptions = [
-	{ value: "sale", label: "Sale" },
-	{ value: "lease", label: "Lease" },
+	{ value: "sale", label: "Subsale" },
+	{ value: "lease", label: "Rental" },
 ] as const;
 
 export const clientTypeOptions = [
@@ -437,6 +611,17 @@ export const representationTypeOptions = [
 	},
 ] as const;
 
+/** Secondary market (Subsale / Rental) property types */
+export const secondaryPropertyTypeOptions = [
+	{ value: "shoplot", label: "Shoplot" },
+	{ value: "factory", label: "Factory" },
+	{ value: "condominium", label: "Condominium" },
+	{ value: "landed_house", label: "Landed House" },
+	{ value: "land", label: "Land" },
+	{ value: "building", label: "Building" },
+	{ value: "other", label: "Other" },
+] as const;
+
 export const propertyTypeOptions = [
 	{ value: "apartment", label: "Apartment" },
 	{ value: "house", label: "House" },
@@ -464,6 +649,12 @@ export const purchasingMethodOptions = [
 
 export const sstPayByOptions = [
 	{ value: "landlord", label: "Landlord" },
+	{ value: "agent", label: "Agent" },
+] as const;
+
+/** Subsale SST pay-by options */
+export const sstPayBySubsaleOptions = [
+	{ value: "client", label: "Client" },
 	{ value: "agent", label: "Agent" },
 ] as const;
 

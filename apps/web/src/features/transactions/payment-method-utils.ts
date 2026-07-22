@@ -22,11 +22,10 @@ export function formatCashLoan(method?: string | null) {
 
 export function formatSstPayBy(value?: string | null) {
 	if (!value) return "—";
-	return value === "landlord"
-		? "Landlord"
-		: value === "agent"
-			? "Agent"
-			: value;
+	if (value === "landlord") return "Landlord";
+	if (value === "agent") return "Agent";
+	if (value === "client") return "Client";
+	return value;
 }
 
 export function formatPaymentMethodField(

@@ -45,6 +45,8 @@ interface StepDocumentsProps extends StepNavigationOptions {
 	onPrevious: () => void;
 	/** Use client-spec document categories (IC, sales form, etc.) */
 	useClientCategories?: boolean;
+	/** Secondary market uses a different category set than primary */
+	marketType?: "primary" | "secondary";
 }
 
 export function StepDocuments({
@@ -58,10 +60,22 @@ export function StepDocuments({
 	previousLabel = "Back to Commission",
 	beforeNext,
 	useClientCategories = false,
+	marketType = "primary",
 }: StepDocumentsProps) {
+	const categoryVariant =
+		useClientCategories && marketType === "secondary"
+			? "secondary"
+			: useClientCategories
+				? "transaction"
+				: "legacy";
+
 	const [selectedCategory, setSelectedCategory] =
 		useState<DocumentCategory>(
-			useClientCategories ? "ic_passport" : "contract",
+			categoryVariant === "secondary"
+				? "booking_form"
+				: useClientCategories
+					? "ic_passport"
+					: "contract",
 		);
 	const [showCategorySelector, setShowCategorySelector] = useState(false);
 	// Store as File[] instead of FileList to avoid the live object issue
@@ -334,9 +348,7 @@ export function StepDocuments({
 								{showCategorySelector && (
 									<div className="space-y-4 rounded-lg border bg-background p-4">
 										<DocumentCategorySelector
-											variant={
-												useClientCategories ? "transaction" : "legacy"
-											}
+											variant={categoryVariant}
 											onSelect={handleCategorySelect}
 											selectedCategory={selectedCategory}
 										/>

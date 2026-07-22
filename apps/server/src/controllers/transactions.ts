@@ -55,11 +55,18 @@ const baseTransactionInput = z.object({
 			salesPackage: z.string().optional(),
 			rebateAmount: z.number().nonnegative().optional(),
 			purchasingMethod: z.enum(["cash", "loan"]).optional(),
-			sstPayBy: z.enum(["landlord", "agent"]).optional(),
+			sstPayBy: z.enum(["client", "landlord", "agent"]).optional(),
+			sstPercent: z.number().nonnegative().optional(),
+			earnestDeposit: z.number().nonnegative().optional(),
+			offerDate: z.string().optional(),
+			submitDate: z.string().optional(),
+			rentFrom: z.string().optional(),
+			rentTo: z.string().optional(),
+			rentPeriod: z.string().optional(),
 			listingReferralShareType: z.enum(["percentage", "fixed"]).optional(),
 			listingReferralShareValue: z.number().nonnegative().optional(),
-			price: z.number().positive("Price must be positive"),
-			spaPrice: z.number().positive().optional(),
+			price: z.number().nonnegative("Price must be non-negative"),
+			spaPrice: z.number().nonnegative().optional(),
 			nettPrice: z.number().nonnegative().optional(),
 			description: z.string().optional(),
 		})
@@ -84,6 +91,38 @@ const baseTransactionInput = z.object({
 			type: z.enum(["buyer", "seller", "tenant", "landlord"]).optional(),
 			source: z.string().optional(),
 			notes: z.string().optional(),
+			additionalPurchasers: z
+				.array(
+					z.object({
+						name: z.string().min(1),
+						icNo: z.string().optional(),
+						email: z.string().email().optional().or(z.literal("")),
+						phone: z.string().min(1),
+						address: z.string().optional(),
+						race: z.string().optional(),
+						nationality: z.string().optional(),
+						gender: z.string().optional(),
+						emergencyName: z.string().optional(),
+						emergencyContact: z.string().optional(),
+					}),
+				)
+				.optional(),
+			vendors: z
+				.array(
+					z.object({
+						name: z.string().min(1),
+						icNo: z.string().optional(),
+						email: z.string().email().optional().or(z.literal("")),
+						phone: z.string().min(1),
+						address: z.string().optional(),
+						race: z.string().optional(),
+						nationality: z.string().optional(),
+						gender: z.string().optional(),
+						emergencyName: z.string().optional(),
+						emergencyContact: z.string().optional(),
+					}),
+				)
+				.optional(),
 		})
 		.optional(),
 	isCoBroking: z.boolean().default(false),

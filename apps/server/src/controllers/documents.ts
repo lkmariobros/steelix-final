@@ -17,6 +17,11 @@ const DOCUMENT_CATEGORIES = [
 	"bank_letter",
 	"payment_proof",
 	"other",
+	"booking_form",
+	"receipt",
+	"co_broke_letter",
+	"tenancy_agreement",
+	"spa",
 ] as const;
 
 const documentUploadSchema = z.object({

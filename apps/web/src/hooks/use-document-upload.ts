@@ -12,7 +12,12 @@ export type DocumentCategory =
 	| "contract"
 	| "identification"
 	| "financial"
-	| "miscellaneous";
+	| "miscellaneous"
+	| "booking_form"
+	| "receipt"
+	| "co_broke_letter"
+	| "tenancy_agreement"
+	| "spa";
 
 export interface DocumentFile {
 	id: string;

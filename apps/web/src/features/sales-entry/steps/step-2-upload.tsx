@@ -32,6 +32,7 @@ export function StepUpload({
 			nextLabel="Continue to Verify"
 			previousLabel="Back to Details"
 			useClientCategories
+			marketType={formData.marketType ?? "primary"}
 		/>
 	);
 }

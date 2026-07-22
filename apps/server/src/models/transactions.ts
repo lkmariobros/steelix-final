@@ -56,6 +56,11 @@ export const documentCategoryEnum = pgEnum("document_category", [
 	"bank_letter",
 	"payment_proof",
 	"other",
+	"booking_form",
+	"receipt",
+	"co_broke_letter",
+	"tenancy_agreement",
+	"spa",
 ]);
 
 // Main transactions table
@@ -89,7 +94,14 @@ export const transactions = pgTable("transactions", {
 		salesPackage?: string;
 		rebateAmount?: number;
 		purchasingMethod?: "cash" | "loan";
-		sstPayBy?: "landlord" | "agent";
+		sstPayBy?: "client" | "landlord" | "agent";
+		sstPercent?: number;
+		earnestDeposit?: number;
+		offerDate?: string;
+		submitDate?: string;
+		rentFrom?: string;
+		rentTo?: string;
+		rentPeriod?: string;
 		listingReferralShareType?: "percentage" | "fixed";
 		listingReferralShareValue?: number;
 		bedrooms?: number;
@@ -115,6 +127,30 @@ export const transactions = pgTable("transactions", {
 		emergencyContact?: string;
 		coBuyerName?: string;
 		coBuyerIc?: string;
+		additionalPurchasers?: Array<{
+			name: string;
+			icNo?: string;
+			email?: string;
+			phone: string;
+			address?: string;
+			race?: string;
+			nationality?: string;
+			gender?: string;
+			emergencyName?: string;
+			emergencyContact?: string;
+		}>;
+		vendors?: Array<{
+			name: string;
+			icNo?: string;
+			email?: string;
+			phone: string;
+			address?: string;
+			race?: string;
+			nationality?: string;
+			gender?: string;
+			emergencyName?: string;
+			emergencyContact?: string;
+		}>;
 		type?: "buyer" | "seller" | "tenant" | "landlord";
 		source?: string;
 		notes?: string;

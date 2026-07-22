@@ -17,6 +17,7 @@ import { hasAdminAccess, hasSuperAdminAccess } from "./utils/user-roles";
 import { startServer } from "./utils/server";
 import { getAllowedOrigins } from "./utils/allowed-origins";
 import { ensurePipelineStageEnumValues } from "./utils/pipeline-stage-schema";
+import { ensureDocumentCategoryEnumValues } from "./utils/document-category-schema";
 
 const app = new Hono();
 
@@ -221,6 +222,15 @@ void ensurePipelineStageEnumValues()
 	.catch((e) =>
 		console.warn(
 			"⚠️ Pipeline stage enum bootstrap failed (stage updates may fail until SQL patch is applied):",
+			e instanceof Error ? e.message : e,
+		),
+	);
+
+void ensureDocumentCategoryEnumValues()
+	.then(() => console.log("✅ Document category enum values ready"))
+	.catch((e) =>
+		console.warn(
+			"⚠️ Document category enum bootstrap failed:",
 			e instanceof Error ? e.message : e,
 		),
 	);
