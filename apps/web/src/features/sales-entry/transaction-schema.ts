@@ -51,7 +51,7 @@ export const propertySchema = z.object({
 	area: z.number().min(0).optional(),
 	price: z.number().min(1, "Property price must be greater than 0"),
 	spaPrice: z.number().positive().optional(),
-	nettPrice: z.number().positive().optional(),
+	nettPrice: z.number().nonnegative().optional(),
 	description: z.string().optional(),
 });
 
@@ -236,6 +236,13 @@ export const detailsStepSchema = z
 					code: z.ZodIssueCode.custom,
 					message: "Unit number is required",
 					path: ["unitNo"],
+				});
+			}
+			if (!data.propertyData?.salesPackage?.trim()) {
+				ctx.addIssue({
+					code: z.ZodIssueCode.custom,
+					message: "Sales package is required",
+					path: ["propertyData", "salesPackage"],
 				});
 			}
 		} else {

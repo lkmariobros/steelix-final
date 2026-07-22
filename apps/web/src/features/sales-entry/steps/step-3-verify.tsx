@@ -38,6 +38,21 @@ import {
 	stepConfig,
 } from "../transaction-schema";
 import { isRentalTransactionType } from "@/features/transactions/payment-method-utils";
+import { loadTempTransactionDocuments } from "@/hooks/use-document-upload";
+
+function resolveTransactionDocuments(
+	formDocs: CompleteTransactionData["documents"] | undefined,
+) {
+	if (formDocs && formDocs.length > 0) return formDocs;
+	return loadTempTransactionDocuments().map((d) => ({
+		id: d.id,
+		name: d.name,
+		type: d.type,
+		url: d.url,
+		uploadedAt: d.uploadedAt,
+		category: d.category,
+	}));
+}
 
 interface StepVerifyProps {
 	data: Partial<CompleteTransactionData>;
@@ -92,6 +107,7 @@ export function StepVerify({
 			coBrokingData: data.coBrokingData,
 			commissionType: data.commissionType,
 			commissionValue: data.commissionValue,
+			agentId: data.agentId,
 		});
 		if (!result.success) {
 			for (const issue of result.error.issues) {
@@ -104,7 +120,7 @@ export function StepVerify({
 				});
 			}
 		}
-		const docs = data.documents ?? [];
+		const docs = resolveTransactionDocuments(data.documents);
 		const hasIc = docs.some(
 			(d) => d.category === "ic_passport" || d.category === "identification",
 		);
@@ -188,18 +204,37 @@ export function StepVerify({
 										: "—"}
 								</dd>
 							</div>
-							<div>
-								<dt className="text-muted-foreground">Sales Package</dt>
-								<dd>{data.propertyData?.salesPackage || "—"}</dd>
-							</div>
-							<div>
-								<dt className="text-muted-foreground">Rebate</dt>
-								<dd>
-									{data.propertyData?.rebateAmount != null
-										? `RM ${data.propertyData.rebateAmount.toLocaleString()}`
-										: "—"}
-								</dd>
-							</div>
+							{data.marketType !== "secondary" ? (
+								<>
+									<div>
+										<dt className="text-muted-foreground">Sales Package</dt>
+										<dd>{data.propertyData?.salesPackage || "—"}</dd>
+									</div>
+									<div>
+										<dt className="text-muted-foreground">Rebate</dt>
+										<dd>
+											{data.propertyData?.rebateAmount != null
+												? `RM ${data.propertyData.rebateAmount.toLocaleString()}`
+												: "—"}
+										</dd>
+									</div>
+									<div>
+										<dt className="text-muted-foreground">Net Price</dt>
+										<dd>
+											{(() => {
+												const price = data.propertyData?.price ?? 0;
+												const rebate = data.propertyData?.rebateAmount ?? 0;
+												const net =
+													data.propertyData?.nettPrice ??
+													Math.max(0, price - rebate);
+												return price
+													? `RM ${net.toLocaleString()}`
+													: "—";
+											})()}
+										</dd>
+									</div>
+								</>
+							) : null}
 							<div>
 								<dt className="text-muted-foreground">Booking Date</dt>
 								<dd className="flex items-center gap-1">
@@ -282,21 +317,31 @@ export function StepVerify({
 								</Button>
 							)}
 						</div>
-						{(data.documents?.length ?? 0) > 0 ? (
-							<ul className="space-y-2">
-								{data.documents!.map((doc) => (
-									<li
-										key={doc.id}
-										className="flex items-center justify-between rounded border px-3 py-2 text-sm"
-									>
-										<span>{doc.name}</span>
-										<Badge variant="secondary">{doc.category ?? "other"}</Badge>
-									</li>
-								))}
-							</ul>
-						) : (
-							<p className="text-muted-foreground text-sm">No documents uploaded</p>
-						)}
+						{(() => {
+							const docs = resolveTransactionDocuments(data.documents);
+							if (docs.length === 0) {
+								return (
+									<p className="text-muted-foreground text-sm">
+										No documents uploaded
+									</p>
+								);
+							}
+							return (
+								<ul className="space-y-2">
+									{docs.map((doc) => (
+										<li
+											key={doc.id}
+											className="flex items-center justify-between rounded border px-3 py-2 text-sm"
+										>
+											<span>{doc.name}</span>
+											<Badge variant="secondary">
+												{doc.category ?? "other"}
+											</Badge>
+										</li>
+									))}
+								</ul>
+							);
+						})()}
 					</section>
 
 					<div className="flex justify-between pt-4">

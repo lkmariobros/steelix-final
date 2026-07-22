@@ -55,7 +55,7 @@ const saveTempDocuments = (docs: DocumentFile[]) => {
 };
 
 // Issue #3 Fix: Load temp documents from localStorage
-const loadTempDocuments = (): DocumentFile[] => {
+export const loadTempTransactionDocuments = (): DocumentFile[] => {
 	try {
 		const saved = localStorage.getItem(TEMP_DOCUMENTS_KEY);
 		return saved ? JSON.parse(saved) : [];
@@ -64,6 +64,9 @@ const loadTempDocuments = (): DocumentFile[] => {
 		return [];
 	}
 };
+
+// Issue #3 Fix: Load temp documents from localStorage
+const loadTempDocuments = (): DocumentFile[] => loadTempTransactionDocuments();
 
 // Issue #3 Fix: Clear temp documents from localStorage
 const clearTempDocuments = () => {

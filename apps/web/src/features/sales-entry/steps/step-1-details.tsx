@@ -111,6 +111,7 @@ export function StepDetails({
 				address: formData.propertyData?.address ?? "",
 				salesPackage: formData.propertyData?.salesPackage ?? "",
 				rebateAmount: formData.propertyData?.rebateAmount,
+				nettPrice: formData.propertyData?.nettPrice,
 				purchasingMethod: formData.propertyData?.purchasingMethod,
 				sstPayBy: formData.propertyData?.sstPayBy,
 				listingId: formData.propertyData?.listingId,
@@ -145,8 +146,17 @@ export function StepDetails({
 	const caseAgentId = form.watch("agentId");
 	const coBrokerSplit = form.watch("coBrokingData.commissionSplit");
 	const propertyPrice = form.watch("propertyData.price");
+	const rebateAmount = form.watch("propertyData.rebateAmount");
 	const commissionValue = form.watch("commissionValue");
 	const schemeId = form.watch("propertyData.schemeId");
+	const netPrice = Math.max(0, (propertyPrice || 0) - (rebateAmount ?? 0));
+
+	const setNettPrice = (price: number, rebate?: number) => {
+		form.setValue(
+			"propertyData.nettPrice",
+			Math.max(0, (price || 0) - (rebate ?? 0)),
+		);
+	};
 
 	const { data: schemesForProject } = trpc.commissionSchemes.listByProject.useQuery(
 		{ projectName: projectName ?? "" },
@@ -319,6 +329,17 @@ export function StepDetails({
 		const resolvedAgentId =
 			values.agentId ??
 			(!isAdminPortal ? session?.user?.id : undefined);
+		const propertyData =
+			values.marketType === "primary"
+				? {
+						...values.propertyData,
+						nettPrice: Math.max(
+							0,
+							(values.propertyData?.price || 0) -
+								(values.propertyData?.rebateAmount ?? 0),
+						),
+					}
+				: values.propertyData;
 		onUpdate({
 			marketType: values.marketType,
 			transactionType:
@@ -328,7 +349,7 @@ export function StepDetails({
 			blockListingId: values.blockListingId,
 			bookingDate: values.bookingDate,
 			transactionDate: values.bookingDate,
-			propertyData: values.propertyData,
+			propertyData,
 			clientData: values.clientData,
 			representationType: values.representationType,
 			isCoBroking,
@@ -587,6 +608,12 @@ export function StepDetails({
 													value={field.value}
 													onChange={(v) => {
 														field.onChange(v);
+														if (marketType === "primary") {
+															setNettPrice(
+																v,
+																form.getValues("propertyData.rebateAmount"),
+															);
+														}
 														syncToParent();
 													}}
 												/>
@@ -707,7 +734,7 @@ export function StepDetails({
 									name="propertyData.salesPackage"
 									render={({ field }) => (
 										<FormItem>
-											<FormLabel>Sales Package</FormLabel>
+											<RequiredLabel>Sales Package</RequiredLabel>
 											<FormControl>
 												<Input {...field} onBlur={() => syncToParent()} />
 											</FormControl>
@@ -729,6 +756,10 @@ export function StepDetails({
 													value={field.value ?? 0}
 													onChange={(v) => {
 														field.onChange(v || undefined);
+														setNettPrice(
+															form.getValues("propertyData.price"),
+															v || 0,
+														);
 														syncToParent();
 													}}
 												/>
@@ -737,6 +768,24 @@ export function StepDetails({
 										</FormItem>
 									)}
 								/>
+								) : null}
+
+								{marketType === "primary" ? (
+									<FormItem>
+										<FormLabel>Net Price (RM)</FormLabel>
+										<FormControl>
+											<CurrencyInput
+												value={netPrice}
+												onChange={() => {}}
+												disabled
+												className="bg-muted/50"
+												aria-label="Net price"
+											/>
+										</FormControl>
+										<p className="text-muted-foreground text-xs">
+											Auto-calculated: Price − Rebate
+										</p>
+									</FormItem>
 								) : null}
 
 								{marketType === "secondary" && secondaryPreview ? (

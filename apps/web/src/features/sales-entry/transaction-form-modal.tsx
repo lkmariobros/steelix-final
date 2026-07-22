@@ -1,10 +1,13 @@
 "use client";
 
+import { Badge } from "@/components/badge";
 import {
 	EnhancedModal,
 	UnsavedChangesDialog,
 } from "@/components/enhanced-modal";
-import { useCallback, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Loader2, Save } from "lucide-react";
+import { useCallback, useRef, useState } from "react";
 import { TransactionForm } from "./transaction-form";
 
 interface TransactionFormModalProps {
@@ -24,36 +27,35 @@ export function TransactionFormModal({
 }: TransactionFormModalProps) {
 	const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
 	const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+	const [isSaving, setIsSaving] = useState(false);
+	const saveDraftRef = useRef<(() => void) | null>(null);
 
-	// Handle close confirmation
 	const handleConfirmClose = useCallback(async (): Promise<boolean> => {
 		if (hasUnsavedChanges) {
 			setShowUnsavedDialog(true);
-			return false; // Don't close yet, wait for user confirmation
+			return false;
 		}
-		return true; // No unsaved changes, safe to close
+		return true;
 	}, [hasUnsavedChanges]);
 
-	// Handle confirmed close (user chose to discard changes)
 	const handleConfirmedClose = useCallback(() => {
 		setShowUnsavedDialog(false);
 		setHasUnsavedChanges(false);
+		setIsSaving(false);
 		onClose();
 	}, [onClose]);
 
-	// Handle cancel close (user wants to keep editing)
 	const handleCancelClose = useCallback(() => {
 		setShowUnsavedDialog(false);
 	}, []);
 
-	// Handle successful form submission
 	const handleFormSubmit = useCallback(() => {
 		setHasUnsavedChanges(false);
+		setIsSaving(false);
 		onSubmit?.();
 		onClose();
 	}, [onSubmit, onClose]);
 
-	// Handle form cancellation
 	const handleFormCancel = useCallback(() => {
 		if (hasUnsavedChanges) {
 			setShowUnsavedDialog(true);
@@ -62,9 +64,16 @@ export function TransactionFormModal({
 		}
 	}, [hasUnsavedChanges, onClose]);
 
-	// Stable callback for unsaved changes
 	const handleUnsavedChanges = useCallback((hasChanges: boolean) => {
 		setHasUnsavedChanges(hasChanges);
+	}, []);
+
+	const handleSavingChange = useCallback((saving: boolean) => {
+		setIsSaving(saving);
+	}, []);
+
+	const handleRegisterSaveDraft = useCallback((fn: (() => void) | null) => {
+		saveDraftRef.current = fn;
 	}, []);
 
 	const getModalTitle = () => {
@@ -75,6 +84,8 @@ export function TransactionFormModal({
 				return "Edit Transaction";
 			case "view":
 				return "View Transaction";
+			case "resume":
+				return "Resume Transaction";
 			default:
 				return "Sales Transaction";
 		}
@@ -88,10 +99,44 @@ export function TransactionFormModal({
 				return "Update transaction details and resubmit for review";
 			case "view":
 				return "Review transaction details";
+			case "resume":
+				return "Continue where you left off";
 			default:
 				return "";
 		}
 	};
+
+	const headerActions = (
+		<>
+			{hasUnsavedChanges ? (
+				<Badge
+					variant="outline"
+					className="hidden text-orange-600 sm:inline-flex"
+				>
+					Unsaved
+				</Badge>
+			) : null}
+			<Button
+				variant="outline"
+				size="sm"
+				disabled={isSaving}
+				className="gap-1.5"
+				onClick={() => saveDraftRef.current?.()}
+			>
+				{isSaving ? (
+					<Loader2 className="h-4 w-4 animate-spin" />
+				) : (
+					<Save className="h-4 w-4" />
+				)}
+				<span className="hidden sm:inline">
+					{isSaving ? "Saving..." : "Save Draft"}
+				</span>
+			</Button>
+			<Button variant="outline" size="sm" onClick={handleFormCancel}>
+				Cancel
+			</Button>
+		</>
+	);
 
 	return (
 		<>
@@ -101,24 +146,25 @@ export function TransactionFormModal({
 				onConfirmClose={handleConfirmClose}
 				title={getModalTitle()}
 				description={getModalDescription()}
-				size="full"
+				size="2xl"
 				hasUnsavedChanges={hasUnsavedChanges}
-				className="mx-4 max-h-[126vh] sm:max-h-[126vh]"
+				headerActions={headerActions}
 			>
-				<div className="p-4 sm:p-6">
-					<TransactionForm
-						key={
-							isOpen
-								? `${transactionId ?? "new"}-${mode === "view" ? "edit" : mode}`
-								: "closed"
-						}
-						transactionId={transactionId}
-						mode={mode === "view" ? "edit" : mode} // Map view to edit for form compatibility
-						onSubmit={handleFormSubmit}
-						onCancel={handleFormCancel}
-						onUnsavedChanges={handleUnsavedChanges}
-					/>
-				</div>
+				<TransactionForm
+					key={
+						isOpen
+							? `${transactionId ?? "new"}-${mode === "view" ? "edit" : mode}`
+							: "closed"
+					}
+					transactionId={transactionId}
+					mode={mode === "view" ? "edit" : mode}
+					embedded
+					onSubmit={handleFormSubmit}
+					onCancel={handleFormCancel}
+					onUnsavedChanges={handleUnsavedChanges}
+					onSavingChange={handleSavingChange}
+					onRegisterSaveDraft={handleRegisterSaveDraft}
+				/>
 			</EnhancedModal>
 
 			<UnsavedChangesDialog

@@ -1,35 +1,24 @@
 "use client";
 
 import { Badge } from "@/components/badge";
-import { Progress } from "@/components/progress";
 import { Button } from "@/components/ui/button";
-import {
-	Card,
-	CardContent,
-	CardDescription,
-	CardHeader,
-	CardTitle,
-} from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useClientSide } from "@/hooks/use-client-side";
 import { useDocumentUpload } from "@/hooks/use-document-upload"; // Issue #3 Fix
 import { invalidateTransactionQueries } from "@/lib/query-invalidation";
+import { cn } from "@/lib/utils";
 import { trpc } from "@/utils/trpc";
 import { useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
-import { CheckCircle, Circle, Loader2, Save } from "lucide-react";
+import { Check, Loader2, Save } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import {
-	FORM_STEP_COUNT,
 	type FormStep,
 	type SectionStep,
 	stepConfig,
 } from "./transaction-schema";
 import {
-	calculateProgress,
 	getCompletedSteps,
 	isFormReadyForSubmission,
 	useTransactionFormState,
@@ -42,17 +31,24 @@ import { StepVerify } from "./steps/step-3-verify";
 interface TransactionFormProps {
 	transactionId?: string;
 	mode?: "create" | "edit" | "resume";
+	/** When true, hide duplicate page title; actions live in the modal header. */
+	embedded?: boolean;
 	onSubmit?: () => void;
 	onCancel?: () => void;
 	onUnsavedChanges?: (hasChanges: boolean) => void;
+	onSavingChange?: (isSaving: boolean) => void;
+	onRegisterSaveDraft?: (fn: (() => void) | null) => void;
 }
 
 export function TransactionForm({
 	transactionId,
 	mode = "create",
+	embedded = false,
 	onSubmit,
 	onCancel,
 	onUnsavedChanges,
+	onSavingChange,
+	onRegisterSaveDraft,
 }: TransactionFormProps) {
 	const queryClient = useQueryClient();
 
@@ -124,7 +120,6 @@ export function TransactionForm({
 	});
 
 	const completedSteps = getCompletedSteps(formData);
-	const progress = calculateProgress(currentStep);
 
 	// Notify parent component about unsaved changes
 	useEffect(() => {
@@ -230,8 +225,20 @@ export function TransactionForm({
 			}
 		}
 
+		// Ensure uploaded temp documents are included even if formData sync lagged
+		if (!cleanedData.documents?.length && tempDocuments.length > 0) {
+			cleanedData.documents = tempDocuments.map((d) => ({
+				id: d.id,
+				name: d.name,
+				type: d.type,
+				url: d.url,
+				uploadedAt: d.uploadedAt,
+				category: d.category,
+			}));
+		}
+
 		return cleanedData;
-	}, []);
+	}, [tempDocuments]);
 
 	// Handle form submission
 	const handleSubmit = useCallback(async () => {
@@ -326,6 +333,10 @@ export function TransactionForm({
 
 	// Handle cancel
 	const handleCancel = useCallback(() => {
+		if (embedded) {
+			onCancel?.();
+			return;
+		}
 		if (hasUnsavedChanges) {
 			if (
 				confirm("You have unsaved changes. Are you sure you want to cancel?")
@@ -336,7 +347,19 @@ export function TransactionForm({
 		} else {
 			onCancel?.();
 		}
-	}, [hasUnsavedChanges, resetForm, onCancel]);
+	}, [embedded, hasUnsavedChanges, resetForm, onCancel]);
+
+	useEffect(() => {
+		onSavingChange?.(isSaving);
+	}, [isSaving, onSavingChange]);
+
+	useEffect(() => {
+		onRegisterSaveDraft?.(handleSaveDraft);
+	}, [onRegisterSaveDraft, handleSaveDraft]);
+
+	useEffect(() => {
+		return () => onRegisterSaveDraft?.(null);
+	}, [onRegisterSaveDraft]);
 
 	// Render step content (3-step wizard)
 	const renderStepContent = () => {
@@ -382,11 +405,17 @@ export function TransactionForm({
 		);
 	}
 
+	const activeStep = stepConfig[currentStep - 1];
+
 	return (
-		<div className="mx-auto max-w-4xl space-y-6 p-6">
-			{/* Header */}
-			<div className="space-y-4">
-				<div className="flex items-center justify-between">
+		<div
+			className={cn(
+				"mx-auto w-full space-y-5",
+				embedded ? "max-w-none px-5 py-5" : "max-w-4xl space-y-6 p-6",
+			)}
+		>
+			{!embedded ? (
+				<div className="flex items-center justify-between gap-3">
 					<div>
 						<h1 className="font-bold text-3xl">Sales Transaction Entry</h1>
 						<p className="text-muted-foreground">
@@ -394,16 +423,17 @@ export function TransactionForm({
 						</p>
 					</div>
 					<div className="flex items-center gap-2">
-						{hasUnsavedChanges && (
+						{hasUnsavedChanges ? (
 							<Badge variant="outline" className="text-orange-600">
-								Unsaved Changes
+								Unsaved
 							</Badge>
-						)}
+						) : null}
 						<Button
 							variant="outline"
+							size="sm"
 							onClick={handleSaveDraft}
 							disabled={isSaving}
-							className="flex items-center gap-2"
+							className="gap-1.5"
 						>
 							{isSaving ? (
 								<Loader2 className="h-4 w-4 animate-spin" />
@@ -412,125 +442,114 @@ export function TransactionForm({
 							)}
 							{isSaving ? "Saving..." : "Save Draft"}
 						</Button>
-						{onCancel && (
-							<Button variant="outline" onClick={handleCancel}>
+						{onCancel ? (
+							<Button variant="outline" size="sm" onClick={handleCancel}>
 								Cancel
 							</Button>
-						)}
+						) : null}
 					</div>
 				</div>
+			) : null}
 
-				{/* Progress */}
-				<div className="space-y-2">
-					<div className="flex items-center justify-between text-sm">
-						<span>Progress</span>
-						<span>{Math.round(progress)}% Complete</span>
-					</div>
-					<Progress value={progress} className="h-2" />
-				</div>
-			</div>
+			{/* Step strip */}
+			<nav aria-label="Transaction steps" className="space-y-3">
+				<ol className="grid grid-cols-3 gap-2 sm:gap-3">
+					{stepConfig.map(({ step, title }) => {
+						const isCompleted = completedSteps.includes(step as FormStep);
+						const isCurrent = step === currentStep;
+						const isAccessible = step <= currentStep || isCompleted;
 
-			{/* Step Navigation */}
-			<Card>
-				<CardHeader>
-					<CardTitle className="flex items-center gap-2">
-						Step {currentStep} of {FORM_STEP_COUNT}:{" "}
-						{stepConfig[currentStep - 1].title}
-					</CardTitle>
-					<CardDescription>
-						{stepConfig[currentStep - 1].description}
-					</CardDescription>
-				</CardHeader>
-				<CardContent>
-					<Tabs value={currentStep.toString()} className="w-full">
-						{/* Issue #5 Fix: Mobile-friendly step navigation */}
-						{/* Desktop: Full tabs */}
-						<TabsList className="hidden w-full md:grid md:grid-cols-4">
-							{stepConfig.map(({ step, title }) => (
-								<TabsTrigger
-									key={step}
-									value={step.toString()}
-									onClick={() => goToStep(step as FormStep)}
-									className="flex items-center gap-1 text-xs"
-									disabled={
-										step > currentStep &&
-										!completedSteps.includes(step as FormStep)
+						return (
+							<li key={step}>
+								<button
+									type="button"
+									onClick={() =>
+										isAccessible && goToStep(step as FormStep)
 									}
-								>
-									{completedSteps.includes(step as FormStep) ? (
-										<CheckCircle className="h-3 w-3" />
-									) : (
-										<Circle className="h-3 w-3" />
+									disabled={!isAccessible}
+									aria-current={isCurrent ? "step" : undefined}
+									className={cn(
+										"flex w-full items-center gap-2 rounded-lg border px-3 py-2.5 text-left transition-colors touch-manipulation",
+										isCurrent &&
+											"border-primary bg-primary/5 shadow-sm ring-1 ring-primary/30",
+										!isCurrent &&
+											isCompleted &&
+											"border-border bg-muted/40 hover:bg-muted/70",
+										!isCurrent &&
+											!isCompleted &&
+											isAccessible &&
+											"border-border hover:bg-muted/50",
+										!isAccessible &&
+											"cursor-not-allowed border-border/60 bg-muted/20 opacity-60",
 									)}
-									<span>{title}</span>
-								</TabsTrigger>
-							))}
-						</TabsList>
-						{/* Mobile: Compact step indicators with touch-friendly targets */}
-						<div className="md:hidden">
-							<div className="mb-4 flex items-center justify-between">
-								{stepConfig.map(({ step }) => {
-									const isCompleted = completedSteps.includes(step as FormStep);
-									const isCurrent = step === currentStep;
-									const isAccessible = step <= currentStep || isCompleted;
-									return (
-										<button
-											key={step}
-											type="button"
-											onClick={() => isAccessible && goToStep(step as FormStep)}
-											disabled={!isAccessible}
-											className={`flex h-10 w-10 items-center justify-center rounded-full font-medium text-sm transition-all duration-200 touch-manipulation${
-												isCurrent
-													? "bg-primary text-primary-foreground ring-2 ring-primary ring-offset-2"
-													: isCompleted
-														? "bg-green-500 text-white"
-														: isAccessible
-															? "bg-muted text-muted-foreground hover:bg-muted/80"
-															: "cursor-not-allowed bg-muted/50 text-muted-foreground/50"
-											}
-											`}
-											aria-label={`Step ${step}: ${stepConfig[step - 1].title}${isCompleted ? " (completed)" : ""}`}
-										>
-											{isCompleted && !isCurrent ? (
-												<CheckCircle className="h-5 w-5" />
-											) : (
-												step
-											)}
-										</button>
-									);
-								})}
-							</div>
-							{/* Mobile step title display */}
-							<div className="text-center text-muted-foreground text-sm">
-								{stepConfig[currentStep - 1].title}
-							</div>
-						</div>
-
-						<Separator className="my-6" />
-
-						<TabsContent value={currentStep.toString()} className="mt-6">
-							{isClient ? (
-								<AnimatePresence mode="wait">
-									<motion.div
-										key={currentStep}
-										initial={{ opacity: 0, x: 20 }}
-										animate={{ opacity: 1, x: 0 }}
-										exit={{ opacity: 0, x: -20 }}
-										transition={{
-											duration: 0.3,
-											ease: [0.16, 1, 0.3, 1],
-										}}
+								>
+									<span
+										className={cn(
+											"flex h-7 w-7 shrink-0 items-center justify-center rounded-full font-medium text-xs",
+											isCurrent &&
+												"bg-primary text-primary-foreground",
+											!isCurrent &&
+												isCompleted &&
+												"bg-emerald-600 text-white",
+											!isCurrent &&
+												!isCompleted &&
+												"bg-muted text-muted-foreground",
+										)}
 									>
-										{renderStepContent()}
-									</motion.div>
-								</AnimatePresence>
-							) : (
-								<div>{renderStepContent()}</div>
-							)}
-						</TabsContent>
-					</Tabs>
-				</CardContent>
-			</Card>
+										{isCompleted && !isCurrent ? (
+											<Check className="h-3.5 w-3.5" strokeWidth={3} />
+										) : (
+											step
+										)}
+									</span>
+									<span className="min-w-0">
+										<span
+											className={cn(
+												"block truncate font-medium text-sm",
+												isCurrent
+													? "text-foreground"
+													: "text-muted-foreground",
+											)}
+										>
+											{title}
+										</span>
+										<span className="hidden text-muted-foreground text-xs sm:block">
+											Step {step}
+										</span>
+									</span>
+								</button>
+							</li>
+						);
+					})}
+				</ol>
+				<p className="text-muted-foreground text-sm">
+					<span className="font-medium text-foreground">
+						{activeStep.title}:
+					</span>{" "}
+					{activeStep.description}
+				</p>
+			</nav>
+
+			<div className="min-w-0">
+				{isClient ? (
+					<AnimatePresence mode="wait">
+						<motion.div
+							key={currentStep}
+							initial={{ opacity: 0, x: 16 }}
+							animate={{ opacity: 1, x: 0 }}
+							exit={{ opacity: 0, x: -16 }}
+							transition={{
+								duration: 0.25,
+								ease: [0.16, 1, 0.3, 1],
+							}}
+						>
+							{renderStepContent()}
+						</motion.div>
+					</AnimatePresence>
+				) : (
+					<div>{renderStepContent()}</div>
+				)}
+			</div>
 		</div>
 	);
 }

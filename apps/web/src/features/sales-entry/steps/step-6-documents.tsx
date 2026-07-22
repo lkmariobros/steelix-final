@@ -2,7 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ArrowLeft, ArrowRight, File, FileText, Upload, X } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 
 import { Badge } from "@/components/badge";
@@ -32,6 +32,7 @@ import { UploadProgress } from "@/components/upload-progress";
 import {
 	type DocumentCategory,
 	type DocumentFile,
+	loadTempTransactionDocuments,
 	useDocumentUpload,
 } from "@/hooks/use-document-upload";
 import { type DocumentsData, documentsSchema } from "../transaction-schema";
@@ -95,24 +96,42 @@ export function StepDocuments({
 		},
 	});
 
+	const syncDocumentsToParent = (docs: DocumentFile[]) => {
+		const values = form.getValues();
+		onUpdate({
+			...values,
+			documents: docs,
+		});
+	};
+
+	// Keep parent formData.documents in sync with uploads (avoids stale empty list on Verify)
+	useEffect(() => {
+		if (documents.length === 0) return;
+		syncDocumentsToParent(documents);
+		// eslint-disable-next-line react-hooks/exhaustive-deps -- only sync when document list changes
+	}, [documents]);
+
 	const handleSubmit = (formData: DocumentsData) => {
 		if (beforeNext && !beforeNext()) return;
+		const latestDocs =
+			documents.length > 0 ? documents : loadTempTransactionDocuments();
 		const updatedData = {
 			...formData,
-			documents: documents,
+			documents: latestDocs,
 		};
 		onUpdate(updatedData);
 		onNext();
 	};
 
-	// Auto-save on form changes
+	// Auto-save notes / documents on form changes
 	const handleFormChange = () => {
 		const values = form.getValues();
-		const updatedData = {
+		const latestDocs =
+			documents.length > 0 ? documents : loadTempTransactionDocuments();
+		onUpdate({
 			...values,
-			documents: documents,
-		};
-		onUpdate(updatedData);
+			documents: latestDocs,
+		});
 	};
 
 	// Handle file selection - show category selector first
@@ -177,10 +196,12 @@ export function StepDocuments({
 
 		try {
 			// Upload files sequentially to avoid overwhelming the server
+			const uploaded: DocumentFile[] = [];
 			for (const file of filesArray) {
 				console.log("[StepDocuments] Uploading file:", file.name);
 				try {
-					await uploadFile(file, category);
+					const doc = await uploadFile(file, category);
+					uploaded.push(doc);
 					successCount++;
 					console.log("[StepDocuments] File uploaded successfully:", file.name);
 				} catch (fileError) {
@@ -197,11 +218,11 @@ export function StepDocuments({
 				toast.error(`${errorCount} file(s) failed to upload`);
 			}
 
-			console.log(
-				"[StepDocuments] All uploads complete. Documents:",
-				documents,
-			);
-			handleFormChange();
+			const latestDocs =
+				loadTempTransactionDocuments().length > 0
+					? loadTempTransactionDocuments()
+					: [...documents, ...uploaded];
+			syncDocumentsToParent(latestDocs);
 		} catch (error) {
 			console.error("Upload error:", error);
 			toast.error("Failed to upload files");

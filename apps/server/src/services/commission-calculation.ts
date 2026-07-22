@@ -36,7 +36,12 @@ export async function buildPrimaryCommissionPatch(
 	if (tx.commissionSchemeSnapshot) return {};
 
 	const property = tx.propertyData as
-		| { listingId?: string; price?: number }
+		| {
+				listingId?: string;
+				price?: number;
+				nettPrice?: number;
+				rebateAmount?: number;
+		  }
 		| null
 		| undefined;
 	const blockId = tx.blockListingId ?? property?.listingId ?? undefined;
@@ -49,7 +54,13 @@ export async function buildPrimaryCommissionPatch(
 	if (!resolved) return {};
 
 	const { scheme, tier } = resolved;
-	const nettPrice = Number(property.price);
+	const nettPrice =
+		typeof property.nettPrice === "number"
+			? Number(property.nettPrice)
+			: Math.max(
+					0,
+					Number(property.price) - Number(property.rebateAmount ?? 0),
+				);
 	const breakdown = calculateSchemeCommission({
 		nettPrice,
 		commissionPercent: tier.commissionPercent,

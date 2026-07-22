@@ -2,7 +2,7 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { X } from "lucide-react";
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, type ReactNode } from "react";
 import { useClientSide } from "@/hooks/use-client-side";
 import { Button } from "./ui/button";
 import {
@@ -21,11 +21,13 @@ interface EnhancedModalProps {
 	description?: string;
 	children: React.ReactNode;
 	className?: string;
-	size?: "sm" | "md" | "lg" | "xl" | "full";
+	size?: "sm" | "md" | "lg" | "xl" | "2xl" | "full";
 	showCloseButton?: boolean;
 	closeOnEscape?: boolean;
 	closeOnBackdropClick?: boolean;
 	hasUnsavedChanges?: boolean;
+	/** Extra controls rendered in the sticky header (before close). */
+	headerActions?: ReactNode;
 }
 
 const sizeClasses = {
@@ -33,8 +35,54 @@ const sizeClasses = {
 	md: "max-w-lg",
 	lg: "max-w-2xl",
 	xl: "max-w-4xl",
-	full: "max-w-[95vw] max-h-[96vh] sm:max-w-[92vw] sm:max-h-[94vh]",
+	"2xl": "max-w-5xl",
+	full: "max-w-[95vw] sm:max-w-[92vw]",
 };
+
+function ModalHeader({
+	title,
+	description,
+	headerActions,
+	showCloseButton,
+	onClose,
+}: {
+	title?: string;
+	description?: string;
+	headerActions?: ReactNode;
+	showCloseButton: boolean;
+	onClose: () => void;
+}) {
+	if (!title && !showCloseButton && !headerActions) return null;
+
+	return (
+		<div className="flex shrink-0 items-start justify-between gap-3 border-b bg-background px-5 py-4">
+			<div className="min-w-0 flex-1">
+				{title ? (
+					<h2 className="font-semibold text-lg leading-tight tracking-tight">
+						{title}
+					</h2>
+				) : null}
+				{description ? (
+					<p className="mt-1 text-muted-foreground text-sm">{description}</p>
+				) : null}
+			</div>
+			<div className="flex shrink-0 items-center gap-2">
+				{headerActions}
+				{showCloseButton ? (
+					<Button
+						variant="ghost"
+						size="sm"
+						onClick={onClose}
+						className="h-8 w-8 p-0 hover:bg-muted"
+					>
+						<X className="h-4 w-4" />
+						<span className="sr-only">Close</span>
+					</Button>
+				) : null}
+			</div>
+		</div>
+	);
+}
 
 export function EnhancedModal({
 	isOpen,
@@ -49,14 +97,11 @@ export function EnhancedModal({
 	closeOnEscape = true,
 	closeOnBackdropClick = true,
 	hasUnsavedChanges = false,
+	headerActions,
 }: EnhancedModalProps) {
 	const modalRef = useRef<HTMLDivElement>(null);
 	const isClient = useClientSide();
 
-	// Debug: Log modal state
-	console.log("[EnhancedModal] isOpen:", isOpen, "isClient:", isClient, "title:", title);
-
-	// Handle close with confirmation if there are unsaved changes
 	const handleClose = useCallback(async () => {
 		if (hasUnsavedChanges && onConfirmClose) {
 			const shouldClose = await onConfirmClose();
@@ -68,7 +113,6 @@ export function EnhancedModal({
 		}
 	}, [hasUnsavedChanges, onConfirmClose, onClose]);
 
-	// Handle ESC key
 	useEffect(() => {
 		if (!closeOnEscape) return;
 
@@ -83,21 +127,18 @@ export function EnhancedModal({
 		return () => document.removeEventListener("keydown", handleEscape);
 	}, [isOpen, closeOnEscape, handleClose]);
 
-	// Handle backdrop click
 	const handleBackdropClick = useCallback(
 		(event: React.MouseEvent) => {
 			if (!closeOnBackdropClick) return;
-			
+
 			if (event.target === event.currentTarget) {
 				handleClose();
 			}
 		},
-		[closeOnBackdropClick, handleClose]
+		[closeOnBackdropClick, handleClose],
 	);
 
-	// Prevent body scroll when modal is open (client-side only)
 	useEffect(() => {
-		// Ensure we're on the client side
 		if (typeof window === "undefined") return;
 
 		if (isOpen) {
@@ -111,29 +152,31 @@ export function EnhancedModal({
 		};
 	}, [isOpen]);
 
-	// Render without animations on server, with animations on client
+	const panelClassName = `
+		relative flex w-full flex-col overflow-hidden
+		${sizeClasses[size]}
+		max-h-[90vh]
+		bg-background rounded-lg border shadow-2xl
+		${className}
+	`;
+
+	const header = (
+		<ModalHeader
+			title={title}
+			description={description}
+			headerActions={headerActions}
+			showCloseButton={showCloseButton}
+			onClose={handleClose}
+		/>
+	);
+
 	if (!isClient) {
 		return isOpen ? (
 			<div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-				<div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
-				<div className={`relative w-full ${sizeClasses[size]} max-h-[90vh] overflow-hidden bg-background rounded-lg border shadow-2xl ${className}`}>
-					{(title || showCloseButton) && (
-						<div className="flex items-center justify-between border-b p-6 pb-4">
-							<div>
-								{title && <h2 className="text-lg font-semibold leading-none tracking-tight">{title}</h2>}
-								{description && <p className="text-sm text-muted-foreground mt-1">{description}</p>}
-							</div>
-							{showCloseButton && (
-								<Button variant="ghost" size="sm" onClick={handleClose} className="h-8 w-8 p-0 hover:bg-muted">
-									<X className="h-4 w-4" />
-									<span className="sr-only">Close</span>
-								</Button>
-							)}
-						</div>
-					)}
-					<div className="overflow-y-auto max-h-[calc(90vh-8rem)] sm:max-h-[calc(85vh-8rem)] [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
-						{children}
-					</div>
+				<div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+				<div className={panelClassName}>
+					{header}
+					<div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
 				</div>
 			</div>
 		) : null;
@@ -150,69 +193,31 @@ export function EnhancedModal({
 					className="fixed inset-0 z-50 flex items-center justify-center p-4"
 					onClick={handleBackdropClick}
 				>
-					{/* Backdrop with blur */}
 					<motion.div
 						initial={{ opacity: 0 }}
 						animate={{ opacity: 1 }}
 						exit={{ opacity: 0 }}
 						transition={{ duration: 0.3, ease: "easeOut" }}
-						className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+						className="absolute inset-0 bg-black/60 backdrop-blur-sm"
 					/>
 
-					{/* Modal Content */}
 					<motion.div
 						ref={modalRef}
 						initial={{ opacity: 0, scale: 0.95, y: 20 }}
 						animate={{ opacity: 1, scale: 1, y: 0 }}
 						exit={{ opacity: 0, scale: 0.95, y: 20 }}
-						transition={{ 
-							duration: 0.3, 
-							ease: [0.16, 1, 0.3, 1], // Custom easing for smooth feel
+						transition={{
+							duration: 0.3,
+							ease: [0.16, 1, 0.3, 1],
 							type: "spring",
 							damping: 25,
-							stiffness: 300
+							stiffness: 300,
 						}}
-						className={`
-							relative w-full ${sizeClasses[size]} 
-							max-h-[90vh] overflow-hidden
-							bg-background rounded-lg border shadow-2xl
-							${className}
-						`}
+						className={panelClassName}
 						onClick={(e) => e.stopPropagation()}
 					>
-						{/* Header */}
-						{(title || showCloseButton) && (
-							<div className="flex items-center justify-between border-b p-6 pb-4">
-								<div>
-									{title && (
-										<h2 className="text-lg font-semibold leading-none tracking-tight">
-											{title}
-										</h2>
-									)}
-									{description && (
-										<p className="text-sm text-muted-foreground mt-1">
-											{description}
-										</p>
-									)}
-								</div>
-								{showCloseButton && (
-									<Button
-										variant="ghost"
-										size="sm"
-										onClick={handleClose}
-										className="h-8 w-8 p-0 hover:bg-muted"
-									>
-										<X className="h-4 w-4" />
-										<span className="sr-only">Close</span>
-									</Button>
-								)}
-							</div>
-						)}
-
-						{/* Content */}
-						<div className="overflow-y-auto max-h-[calc(90vh-8rem)] sm:max-h-[calc(85vh-8rem)] [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
-							{children}
-						</div>
+						{header}
+						<div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
 					</motion.div>
 				</motion.div>
 			)}
@@ -220,7 +225,6 @@ export function EnhancedModal({
 	);
 }
 
-// Confirmation dialog for unsaved changes
 export function UnsavedChangesDialog({
 	isOpen,
 	onConfirm,
@@ -236,10 +240,11 @@ export function UnsavedChangesDialog({
 				<DialogHeader>
 					<DialogTitle>Unsaved Changes</DialogTitle>
 					<DialogDescription>
-						You have unsaved changes. Are you sure you want to close without saving?
+						You have unsaved changes. Are you sure you want to close without
+						saving?
 					</DialogDescription>
 				</DialogHeader>
-				<div className="flex justify-end gap-2 mt-4">
+				<div className="mt-4 flex justify-end gap-2">
 					<Button variant="outline" onClick={onCancel}>
 						Cancel
 					</Button>

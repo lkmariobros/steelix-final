@@ -60,7 +60,7 @@ const baseTransactionInput = z.object({
 			listingReferralShareValue: z.number().nonnegative().optional(),
 			price: z.number().positive("Price must be positive"),
 			spaPrice: z.number().positive().optional(),
-			nettPrice: z.number().positive().optional(),
+			nettPrice: z.number().nonnegative().optional(),
 			description: z.string().optional(),
 		})
 		.optional(),

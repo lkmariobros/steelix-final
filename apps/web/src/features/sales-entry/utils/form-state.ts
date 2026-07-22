@@ -60,6 +60,7 @@ export const initialFormData: Partial<CompleteTransactionData> = {
 		price: 0,
 		salesPackage: "",
 		rebateAmount: undefined,
+		nettPrice: undefined,
 		purchasingMethod: undefined,
 	},
 	clientData: {
@@ -265,6 +266,12 @@ export function useTransactionFormState(
 							| undefined,
 						isCoBroking: data.isCoBroking as boolean | undefined,
 						coBrokingData: data.coBrokingData as CoBrokingData["coBrokingData"],
+						agentId: data.agentId as string | undefined,
+						commissionType: data.commissionType as
+							| "percentage"
+							| "fixed"
+							| undefined,
+						commissionValue: data.commissionValue as number | undefined,
 					});
 					break;
 				case 2:
