@@ -27,7 +27,6 @@ import {
 	RiArrowRightLine,
 	RiBuilding2Line,
 	RiDashboardLine,
-	RiMoneyDollarCircleLine,
 	RiSettings3Line,
 	RiTeamLine,
 } from "@remixicon/react";
@@ -141,24 +140,25 @@ export default function AdminSettingsPage() {
 
 						<Card className="mt-6">
 							<CardHeader>
-								<CardTitle>Commission configuration</CardTitle>
+								<CardTitle>Commission setting</CardTitle>
 								<CardDescription>
-									Primary and secondary markets use separate rules — adjust
-									schemes and tier splits without mixing markets
+									Primary and secondary markets use separate rules — schemes and
+									commission tiers are edited independently
 								</CardDescription>
 							</CardHeader>
 							<CardContent className="grid gap-4 sm:grid-cols-2">
 								<div className="rounded-lg border p-4">
 									<div className="mb-2 flex items-center gap-2">
 										<RiBuilding2Line className="size-5 text-primary" />
-										<p className="font-medium">Primary market schemes</p>
+										<p className="font-medium">Primary Commission Setting</p>
 									</div>
 									<p className="mb-3 text-muted-foreground text-sm">
-										Project commission %, SST rules, and upline override %
+										Primary Market Schemes — project commission %, SST, and
+										upline override %
 									</p>
 									<Button asChild size="sm" variant="outline">
 										<Link href="/admin/commission-schemes">
-											Open schemes
+											Open
 											<RiArrowRightLine className="ml-1 size-4" />
 										</Link>
 									</Button>
@@ -166,23 +166,15 @@ export default function AdminSettingsPage() {
 								<div className="rounded-lg border p-4">
 									<div className="mb-2 flex items-center gap-2">
 										<RiTeamLine className="size-5 text-primary" />
-										<p className="font-medium">Secondary market tiers</p>
+										<p className="font-medium">Secondary Commission Setting</p>
 									</div>
 									<p className="mb-3 text-muted-foreground text-sm">
-										Agent tier splits (70/80/85/90) and leadership bonus rates
+										Commission Tier splits and leadership bonus rates
 									</p>
 									<Button asChild size="sm" variant="outline">
-										<Link href="/admin/settings/tiers">
-											Open tier config
-											<RiArrowRightLine className="ml-1 size-4" />
-										</Link>
-									</Button>
-								</div>
-								<div className="sm:col-span-2">
-									<Button asChild variant="secondary">
 										<Link href="/admin/commission-settings">
-											<RiMoneyDollarCircleLine className="mr-1.5 size-4" />
-											Commission settings overview
+											Open
+											<RiArrowRightLine className="ml-1 size-4" />
 										</Link>
 									</Button>
 								</div>

@@ -427,22 +427,27 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 						],
 					},
 					{
+						title: "Commission setting",
+						items: [
+							{
+								title: "Primary Commission Setting",
+								url: "/admin/commission-schemes",
+								icon: RiFileChartLine,
+							},
+							{
+								title: "Secondary Commission Setting",
+								url: "/admin/commission-settings",
+								icon: RiPercentLine,
+							},
+						],
+					},
+					{
 						title: "Configuration",
 						items: [
 							{
 								title: "Settings",
 								url: "/admin/settings",
 								icon: RiSettings3Line,
-							},
-							{
-								title: "Commission settings",
-								url: "/admin/commission-settings",
-								icon: RiPercentLine,
-							},
-							{
-								title: "Primary schemes",
-								url: "/admin/commission-schemes",
-								icon: RiFileChartLine,
 							},
 							{
 								title: "Reports & analytics",

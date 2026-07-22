@@ -32,7 +32,6 @@ import {
 	RiFileList3Line,
 	RiFileCopyLine,
 	RiSearchLine,
-	RiSettings3Line,
 } from "@remixicon/react";
 import { Fragment, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -120,17 +119,10 @@ export default function CommissionSchemesAdminPage() {
 									</BreadcrumbLink>
 								</BreadcrumbItem>
 								<BreadcrumbSeparator className="hidden md:block" />
-								<BreadcrumbItem className="hidden md:block">
-									<BreadcrumbLink href="/admin/commission-settings" className="flex items-center gap-1">
-										<RiSettings3Line size={16} />
-										Commission Settings
-									</BreadcrumbLink>
-								</BreadcrumbItem>
-								<BreadcrumbSeparator className="hidden md:block" />
 								<BreadcrumbItem>
 									<BreadcrumbPage className="flex items-center gap-2">
 										<RiFileList3Line size={20} aria-hidden="true" />
-										Primary Market Schemes
+										Primary Commission Setting
 									</BreadcrumbPage>
 								</BreadcrumbItem>
 							</BreadcrumbList>
@@ -144,9 +136,12 @@ export default function CommissionSchemesAdminPage() {
 				<div className="flex flex-1 flex-col gap-6 py-6">
 					<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 						<div>
-							<h1 className="font-bold text-2xl tracking-tight">Primary Market Schemes</h1>
+							<h1 className="font-bold text-2xl tracking-tight">
+								Primary Market Schemes
+							</h1>
 							<p className="text-muted-foreground text-sm">
-								Agent receives 100% of announced commission; uplines receive override % from scheme tiers.
+								Agent receives 100% of announced commission; uplines receive
+								override % from scheme tiers.
 							</p>
 						</div>
 						<Button className="h-9" onClick={() => setIsCreateOpen(true)}>

@@ -39,7 +39,7 @@ export default function TierConfigurationPage() {
 								<BreadcrumbSeparator className="hidden md:block" />
 								<BreadcrumbItem className="hidden md:block">
 									<BreadcrumbLink href="/admin/commission-settings">
-										Commission Settings
+										Secondary Commission Setting
 									</BreadcrumbLink>
 								</BreadcrumbItem>
 								<BreadcrumbSeparator className="hidden md:block" />
@@ -65,8 +65,9 @@ export default function TierConfigurationPage() {
 							<div>
 								<h1 className="font-bold text-3xl">Secondary Market Tiers</h1>
 								<p className="text-muted-foreground">
-									Agent tier commission splits (70/80/85/90), leadership bonus from
-									company share, and promotion rules — separate from primary schemes
+									Agent tier commission splits (70/80/85/90), leadership bonus
+									from company share, and promotion rules — separate from
+									primary schemes
 								</p>
 							</div>
 						</div>

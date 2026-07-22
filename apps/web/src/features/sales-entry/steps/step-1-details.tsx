@@ -706,7 +706,7 @@ export function StepDetails({
 													href="/admin/commission-schemes"
 													className="text-primary underline-offset-4 hover:underline"
 												>
-													Edit in Primary schemes
+													Edit in Primary Commission Setting
 												</Link>
 											</p>
 										</FormItem>
