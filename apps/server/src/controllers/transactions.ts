@@ -245,6 +245,8 @@ const listTransactionsInput = z.object({
 	limit: z.number().min(1).max(100).default(10),
 	offset: z.number().min(0).default(0),
 	status: z.enum(TRANSACTION_STATUS_VALUES).optional(),
+	marketType: z.enum(["primary", "secondary"]).optional(),
+	transactionType: z.enum(["sale", "lease", "rental"]).optional(),
 });
 
 const adminListTransactionsInput = z.object({
@@ -496,6 +498,20 @@ export const transactionsRouter = router({
 
 			if (input.status) {
 				conditions.push(eq(transactions.status, input.status));
+			}
+			if (input.marketType) {
+				conditions.push(eq(transactions.marketType, input.marketType));
+			}
+			if (input.transactionType) {
+				if (input.transactionType === "rental") {
+					conditions.push(
+						inArray(transactions.transactionType, ["rental", "lease"]),
+					);
+				} else {
+					conditions.push(
+						eq(transactions.transactionType, input.transactionType),
+					);
+				}
 			}
 
 			try {

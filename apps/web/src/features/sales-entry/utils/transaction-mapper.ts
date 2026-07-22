@@ -1,8 +1,41 @@
 import type { inferRouterOutputs } from "@trpc/server";
 import type { AppRouter } from "../../../../../server/src/routers";
-import type { CompleteTransactionData } from "../transaction-schema";
+import type {
+	ClientData,
+	CompleteTransactionData,
+	PartyPerson,
+} from "../transaction-schema";
 
-export type TransactionRow = inferRouterOutputs<AppRouter>["transactions"]["getById"];
+export type TransactionRow =
+	inferRouterOutputs<AppRouter>["transactions"]["getById"];
+
+type RawParty = {
+	name?: string;
+	icNo?: string;
+	email?: string;
+	phone?: string;
+	address?: string;
+	race?: string;
+	nationality?: string;
+	gender?: string;
+	emergencyName?: string;
+	emergencyContact?: string;
+};
+
+function mapPartyPerson(p: RawParty): PartyPerson {
+	return {
+		name: p.name ?? "",
+		icNo: p.icNo ?? "",
+		email: p.email ?? "",
+		phone: p.phone ?? "",
+		address: p.address ?? "",
+		race: p.race ?? "",
+		nationality: p.nationality ?? "",
+		gender: p.gender ?? "",
+		emergencyName: p.emergencyName ?? "",
+		emergencyContact: p.emergencyContact ?? "",
+	};
+}
 
 /**
  * Maps API transaction row to the sales-entry wizard shape.
@@ -27,6 +60,26 @@ export function mapTransactionRowToFormData(
 	const prop = row.propertyData;
 	const client = row.clientData;
 
+	const clientData: ClientData | undefined = client
+		? {
+				name: client.name ?? "",
+				icNo: client.icNo ?? "",
+				email: client.email ?? "",
+				phone: client.phone ?? "",
+				address: client.address ?? "",
+				race: client.race ?? "",
+				nationality: client.nationality ?? "",
+				gender: client.gender ?? "",
+				emergencyName: client.emergencyName ?? "",
+				emergencyContact: client.emergencyContact ?? "",
+				type: client.type,
+				source: client.source,
+				notes: client.notes,
+				additionalPurchasers: client.additionalPurchasers?.map(mapPartyPerson),
+				vendors: client.vendors?.map(mapPartyPerson),
+			}
+		: undefined;
+
 	return {
 		marketType: row.marketType ?? "primary",
 		transactionType: tt,
@@ -38,17 +91,11 @@ export function mapTransactionRowToFormData(
 		propertyData: prop
 			? {
 					...prop,
-					price: typeof prop.price === "number" ? prop.price : Number(prop.price),
+					price:
+						typeof prop.price === "number" ? prop.price : Number(prop.price),
 				}
 			: undefined,
-		clientData: client
-			? {
-					...client,
-					email: client.email ?? "",
-					icNo: client.icNo ?? "",
-					address: client.address ?? "",
-				}
-			: undefined,
+		clientData,
 		representationType: isCo ? "co_broking" : "direct",
 		isCoBroking: isCo,
 		coBrokingData: row.coBrokingData ?? undefined,

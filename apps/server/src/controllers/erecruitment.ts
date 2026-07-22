@@ -21,6 +21,7 @@ import {
 	publicProcedure,
 	router,
 } from "../utils/trpc";
+import { hasAdminAccess } from "../utils/user-roles";
 
 const uploadDocumentInput = z.object({
 	token: z.string().min(1),
@@ -64,7 +65,7 @@ export const erecruitmentRouter = router({
 			return submitRecruitmentApplication(input);
 		}),
 
-	createLink: adminProcedure
+	createLink: protectedProcedure
 		.input(
 			z.object({
 				inviteeName: z.string().optional(),
@@ -78,7 +79,18 @@ export const erecruitmentRouter = router({
 			let recruiterId = sessionUser.id;
 			let recruiterName = sessionUser.name ?? "Recruiter";
 
-			if (input.recruiterId) {
+			if (input.recruiterId && input.recruiterId !== sessionUser.id) {
+				if (
+					!hasAdminAccess({
+						role: (sessionUser as { role?: string | null }).role,
+						roles: (sessionUser as { roles?: string[] | null }).roles,
+					})
+				) {
+					throw new TRPCError({
+						code: "FORBIDDEN",
+						message: "Only admins can select another recruiter",
+					});
+				}
 				const [recruiter] = await db
 					.select({ id: user.id, name: user.name })
 					.from(user)

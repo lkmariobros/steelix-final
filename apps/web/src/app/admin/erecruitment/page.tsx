@@ -39,18 +39,17 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { GenerateRecruitmentLinkCard } from "@/features/erecruitment/generate-recruitment-link-card";
 import { trpc } from "@/utils/trpc";
 import {
 	RiCheckLine,
-	RiClipboardLine,
 	RiCloseLine,
 	RiDashboardLine,
-	RiLinkM,
 	RiRefreshLine,
 	RiTeamLine,
 	RiUserAddLine,
 } from "@remixicon/react";
-import { useMemo, useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 type ApplicationStatus = "pending_review" | "approved" | "rejected";
@@ -70,10 +69,6 @@ export default function ERecruitmentAdminPage() {
 	const [statusFilter, setStatusFilter] = useState<
 		ApplicationStatus | "all"
 	>("pending_review");
-	const [inviteeName, setInviteeName] = useState("");
-	const [inviteeEmail, setInviteeEmail] = useState("");
-	const [recruiterId, setRecruiterId] = useState("");
-	const [generatedUrl, setGeneratedUrl] = useState("");
 	const [selectedId, setSelectedId] = useState<string | null>(null);
 	const [rejectReason, setRejectReason] = useState("");
 	const [tempPassword, setTempPassword] = useState("");
@@ -104,22 +99,6 @@ export default function ERecruitmentAdminPage() {
 		}
 	}, [isApproveOpen, nextAgentCodeQuery.data?.agentCode]);
 
-	const { data: recruiters } = trpc.agents.list.useQuery({
-		limit: 100,
-		role: "agent",
-		sortBy: "name",
-		sortOrder: "asc",
-	});
-
-	const createLinkMutation = trpc.erecruitment.createLink.useMutation({
-		onSuccess: (link) => {
-			const url = `${window.location.origin}/join/${link.token}`;
-			setGeneratedUrl(url);
-			toast.success("Recruitment link created");
-		},
-		onError: (e) => toast.error(e.message),
-	});
-
 	const approveMutation = trpc.erecruitment.approve.useMutation({
 		onSuccess: (result) => {
 			toast.success(
@@ -148,17 +127,6 @@ export default function ERecruitmentAdminPage() {
 
 	const applications = listQuery.data ?? [];
 	const selected = detailQuery.data;
-
-	const recruiterOptions = useMemo(
-		() => recruiters?.agents?.map((a) => a.agent) ?? [],
-		[recruiters],
-	);
-
-	const copyLink = async () => {
-		if (!generatedUrl) return;
-		await navigator.clipboard.writeText(generatedUrl);
-		toast.success("Link copied to clipboard");
-	};
 
 	const openDocument = (url?: string, dataUrl?: string) => {
 		const target = url || dataUrl;
@@ -202,82 +170,7 @@ export default function ERecruitmentAdminPage() {
 					</p>
 				</div>
 
-				<Card>
-					<CardHeader>
-						<CardTitle className="flex items-center gap-2">
-							<RiLinkM className="size-5" />
-							Generate recruitment link
-						</CardTitle>
-						<CardDescription>
-							Link includes recruiter name. Optionally pre-fill invitee name and email.
-						</CardDescription>
-					</CardHeader>
-					<CardContent className="grid gap-4 md:grid-cols-2">
-						<div className="space-y-2">
-							<Label>Invitee name (optional)</Label>
-							<Input
-								value={inviteeName}
-								onChange={(e) => setInviteeName(e.target.value)}
-								placeholder="New joiner full name"
-							/>
-						</div>
-						<div className="space-y-2">
-							<Label>Invitee email (optional)</Label>
-							<Input
-								type="email"
-								value={inviteeEmail}
-								onChange={(e) => setInviteeEmail(e.target.value)}
-								placeholder="newjoiner@email.com"
-							/>
-						</div>
-						<div className="space-y-2 md:col-span-2">
-							<Label>Recruiter</Label>
-							<Select
-								value={recruiterId || "__self__"}
-								onValueChange={(v) =>
-									setRecruiterId(v === "__self__" ? "" : v)
-								}
-							>
-								<SelectTrigger>
-									<SelectValue placeholder="Select recruiter" />
-								</SelectTrigger>
-								<SelectContent>
-									<SelectItem value="__self__">Use my account as recruiter</SelectItem>
-									{recruiterOptions.map((r) => (
-										<SelectItem key={r.id} value={r.id}>
-											{r.name} ({r.email})
-										</SelectItem>
-									))}
-								</SelectContent>
-							</Select>
-						</div>
-						<div className="flex flex-wrap gap-2 md:col-span-2">
-							<Button
-								onClick={() =>
-									createLinkMutation.mutate({
-										inviteeName: inviteeName.trim() || undefined,
-										inviteeEmail: inviteeEmail.trim() || undefined,
-										recruiterId: recruiterId || undefined,
-									})
-								}
-								disabled={createLinkMutation.isPending}
-							>
-								Generate link
-							</Button>
-							{generatedUrl ? (
-								<Button variant="outline" onClick={() => void copyLink()}>
-									<RiClipboardLine className="mr-1.5 size-4" />
-									Copy link
-								</Button>
-							) : null}
-						</div>
-						{generatedUrl ? (
-							<p className="break-all rounded-md border bg-muted/40 p-3 font-mono text-sm md:col-span-2">
-								{generatedUrl}
-							</p>
-						) : null}
-					</CardContent>
-				</Card>
+				<GenerateRecruitmentLinkCard allowRecruiterSelect />
 
 				<Card>
 					<CardHeader className="flex flex-row items-center justify-between gap-4">

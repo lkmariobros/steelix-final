@@ -507,6 +507,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 								icon: RiFolderCloudLine,
 							},
 							{
+								title: "eRecruitment",
+								url: "/dashboard/erecruitment",
+								icon: RiUserFollowLine,
+							},
+							{
 								title: "Settings",
 								url: "/dashboard/settings",
 								icon: RiSettings3Line,

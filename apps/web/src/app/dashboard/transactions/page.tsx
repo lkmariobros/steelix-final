@@ -84,17 +84,26 @@ export default function TransactionsPage() {
 	const router = useRouter();
 	const { openCreateModal, openEditModal } = useTransactionModalActions();
 	const [viewMode, setViewMode] = useState<ViewMode>("all");
-	const [statusFilter, setStatusFilter] = useState<string>("all");
+	const [segmentFilter, setSegmentFilter] = useState<
+		"all" | "primary" | "subsale" | "rental"
+	>("all");
 	const [currentPage, setCurrentPage] = useState(0);
 	const pageSize = 10;
 
-	// Determine effective status filter based on view mode
-	const effectiveStatusFilter =
-		viewMode === "pipeline" && statusFilter === "all"
-			? undefined // Pipeline view shows all active statuses
-			: statusFilter === "all"
-				? undefined
-				: statusFilter;
+	const segmentQuery =
+		segmentFilter === "primary"
+			? { marketType: "primary" as const }
+			: segmentFilter === "subsale"
+				? {
+						marketType: "secondary" as const,
+						transactionType: "sale" as const,
+					}
+				: segmentFilter === "rental"
+					? {
+							marketType: "secondary" as const,
+							transactionType: "rental" as const,
+						}
+					: {};
 
 	// Fetch transactions with real tRPC
 	const {
@@ -105,20 +114,7 @@ export default function TransactionsPage() {
 		{
 			limit: pageSize,
 			offset: currentPage * pageSize,
-			status:
-				effectiveStatusFilter === "all"
-					? undefined
-					: (effectiveStatusFilter as
-							| "draft"
-							| "pending"
-							| "verified"
-							| "submitted"
-							| "under_review"
-							| "approved"
-							| "commission_released"
-							| "rejected"
-							| "completed"
-							| "cancelled"),
+			...segmentQuery,
 		},
 		{
 			enabled: !!session,
@@ -280,21 +276,25 @@ export default function TransactionsPage() {
 
 							{/* Transaction Controls */}
 							<div className="flex items-center gap-2">
-								{/* Status Filter - only show in All view or specific filter */}
+							{/* Segment filter — Primary / Subsale / Rental */}
 								{viewMode === "all" && (
-									<Select value={statusFilter} onValueChange={setStatusFilter}>
-										<SelectTrigger className="w-40">
-											<SelectValue placeholder="Filter by status" />
+									<Select
+										value={segmentFilter}
+										onValueChange={(v) => {
+											setSegmentFilter(
+												v as "all" | "primary" | "subsale" | "rental",
+											);
+											setCurrentPage(0);
+										}}
+									>
+										<SelectTrigger className="w-44">
+											<SelectValue placeholder="Filter by type" />
 										</SelectTrigger>
 										<SelectContent>
 											<SelectItem value="all">All Transactions</SelectItem>
-											<SelectItem value="draft">Draft</SelectItem>
-											<SelectItem value="pending">Pending</SelectItem>
-											<SelectItem value="submitted">Submitted</SelectItem>
-											<SelectItem value="under_review">Under Review</SelectItem>
-											<SelectItem value="approved">Approved</SelectItem>
-											<SelectItem value="rejected">Rejected</SelectItem>
-											<SelectItem value="completed">Completed</SelectItem>
+											<SelectItem value="primary">Primary</SelectItem>
+											<SelectItem value="subsale">Subsale</SelectItem>
+											<SelectItem value="rental">Rental</SelectItem>
 										</SelectContent>
 									</Select>
 								)}
