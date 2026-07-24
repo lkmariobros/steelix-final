@@ -261,26 +261,55 @@ export function TransactionForm({
 		try {
 			let finalTransactionId = effectiveTxId;
 
+			const goToField = (fieldId: string) => {
+				goToStep(1);
+				window.setTimeout(() => {
+					document
+						.querySelector(`[data-field="${fieldId}"]`)
+						?.scrollIntoView({ behavior: "smooth", block: "center" });
+				}, 320);
+			};
+
 			// Validate form data before submission
 			if (!formData.propertyData?.price) {
-				toast.error("Please complete all required fields");
-				return;
-			}
-			if (
-				formData.marketType === "secondary" &&
-				(!formData.propertyData?.address?.trim() ||
-					(formData.commissionValue ?? 0) <= 0)
-			) {
-				toast.error(
-					"Secondary market requires property address and commission rate",
+				toast.error("Please enter the property / rental price");
+				goToField(
+					formData.transactionType === "lease"
+						? "monthly-rental-price"
+						: formData.marketType === "secondary"
+							? "spa-price"
+							: "property-price",
 				);
 				return;
+			}
+			if (formData.marketType === "secondary") {
+				const isLease = formData.transactionType === "lease";
+				if (!formData.propertyData?.address?.trim()) {
+					toast.error("Property address is required");
+					goToField("property-address");
+					return;
+				}
+				if (!isLease && (formData.commissionValue ?? 0) <= 0) {
+					toast.error("Commission percent is required");
+					goToField("commission-percent");
+					return;
+				}
+				if ((formData.commissionAmount ?? 0) <= 0) {
+					toast.error(
+						isLease
+							? "Case commission is required"
+							: "Commission amount is required",
+					);
+					goToField("commission-amount");
+					return;
+				}
 			}
 			if (
 				formData.marketType !== "secondary" &&
 				(!formData.projectName || !formData.unitNo)
 			) {
-				toast.error("Please complete all required fields");
+				toast.error("Please complete project name and unit number");
+				goToField("project-name");
 				return;
 			}
 
@@ -342,6 +371,7 @@ export function TransactionForm({
 		migrateDocuments,
 		onSubmit,
 		setIsLoading,
+		goToStep,
 		prepareFormDataForSubmission,
 	]);
 

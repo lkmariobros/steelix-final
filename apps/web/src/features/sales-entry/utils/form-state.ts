@@ -411,7 +411,10 @@ export function getCompletedSteps(
 		(formData.bookingDate || formData.transactionDate) &&
 		(formData.marketType === "secondary"
 			? Boolean(formData.propertyData?.address?.trim()) &&
-				(formData.commissionValue ?? 0) > 0
+				(formData.transactionType === "lease"
+					? (formData.commissionAmount ?? 0) > 0
+					: (formData.commissionValue ?? 0) > 0 &&
+						(formData.commissionAmount ?? 0) > 0)
 			: Boolean(formData.projectName?.trim()) &&
 				Boolean(formData.unitNo?.trim()));
 	if (detailsComplete) completed.push(1);

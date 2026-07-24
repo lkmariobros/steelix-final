@@ -155,7 +155,7 @@ export function SecondaryDealFields({
 					control={control}
 					name="propertyData.address"
 					render={({ field }) => (
-						<FormItem className="md:col-span-2">
+						<FormItem className="md:col-span-2" data-field="property-address">
 							<RequiredLabel>Property Address</RequiredLabel>
 							<FormControl>
 								<Textarea
@@ -213,7 +213,7 @@ export function SecondaryDealFields({
 							control={control}
 							name="propertyData.spaPrice"
 							render={({ field }) => (
-								<FormItem>
+								<FormItem data-field="spa-price">
 									<RequiredLabel>SPA Price (RM)</RequiredLabel>
 									<FormControl>
 										<CurrencyInput
@@ -253,7 +253,7 @@ export function SecondaryDealFields({
 							control={control}
 							name="commissionValue"
 							render={({ field }) => (
-								<FormItem>
+								<FormItem data-field="commission-percent">
 									<RequiredLabel>Commission Percent</RequiredLabel>
 									<FormControl>
 										<Input
@@ -278,7 +278,7 @@ export function SecondaryDealFields({
 							control={control}
 							name="commissionAmount"
 							render={({ field }) => (
-								<FormItem>
+								<FormItem data-field="commission-amount">
 									<RequiredLabel>Commission Amount (RM)</RequiredLabel>
 									<FormControl>
 										<CurrencyInput
@@ -345,7 +345,7 @@ export function SecondaryDealFields({
 							control={control}
 							name="propertyData.price"
 							render={({ field }) => (
-								<FormItem>
+								<FormItem data-field="monthly-rental-price">
 									<RequiredLabel>Monthly Rental Price (RM)</RequiredLabel>
 									<FormControl>
 										<CurrencyInput
@@ -364,7 +364,7 @@ export function SecondaryDealFields({
 							control={control}
 							name="commissionAmount"
 							render={({ field }) => (
-								<FormItem>
+								<FormItem data-field="commission-amount">
 									<RequiredLabel>Case Commission (RM)</RequiredLabel>
 									<FormControl>
 										<CurrencyInput

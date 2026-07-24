@@ -315,7 +315,7 @@ export function StepProperty({
 												/>
 											</FormControl>
 											<FormDescription>
-												Enter the transaction price (e.g., 500000 for $500,000)
+												Enter the transaction price (e.g., 500000 for RM 500,000)
 											</FormDescription>
 											<FormMessage />
 										</FormItem>

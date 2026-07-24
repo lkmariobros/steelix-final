@@ -27,21 +27,19 @@ export function CurrencyInput({
   disabled,
   "aria-label": ariaLabel,
   "aria-describedby": ariaDescribedBy,
-  currency = "USD",
-  locale = "en-US",
+  currency = "MYR",
+  locale = "en-MY",
 }: CurrencyInputProps) {
   const [displayValue, setDisplayValue] = useState("")
   const [isFocused, setIsFocused] = useState(false)
 
-  // Format number to currency display
+  // Number only — currency symbol is shown via the RM prefix (avoid "$ $1,234")
   const formatCurrency = useCallback((num: number): string => {
     return new Intl.NumberFormat(locale, {
-      style: "currency",
-      currency,
       minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
+      maximumFractionDigits: 2,
     }).format(num)
-  }, [locale, currency])
+  }, [locale])
 
   // Parse currency string to number
   const parseCurrency = useCallback((str: string): number => {
@@ -95,10 +93,12 @@ export function CurrencyInput({
     }
   }, [value, formatCurrency])
 
+  const prefix = currency === "MYR" || currency === "RM" ? "RM" : currency
+
   return (
     <div className="relative">
-      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none">
-        $
+      <span className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground text-sm">
+        {prefix}
       </span>
       <Input
         id={id}
@@ -112,7 +112,7 @@ export function CurrencyInput({
         disabled={disabled}
         aria-label={ariaLabel}
         aria-describedby={ariaDescribedBy}
-        className={cn("pl-7", className)}
+        className={cn("pl-11", className)}
       />
     </div>
   )

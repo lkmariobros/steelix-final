@@ -569,7 +569,7 @@ export function StepDetails({
 									control={form.control}
 									name="projectName"
 									render={({ field }) => (
-										<FormItem>
+										<FormItem data-field="project-name">
 											<RequiredLabel>Project</RequiredLabel>
 											<Select
 												value={field.value || NO_PROJECT}
@@ -624,7 +624,7 @@ export function StepDetails({
 									control={form.control}
 									name="propertyData.price"
 									render={({ field }) => (
-										<FormItem>
+										<FormItem data-field="property-price">
 											<RequiredLabel>Price (RM)</RequiredLabel>
 											<FormControl>
 												<CurrencyInput
