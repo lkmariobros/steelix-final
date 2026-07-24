@@ -63,6 +63,8 @@ import {
 	RiFileDownloadLine,
 	RiFileUploadLine,
 	RiCalendarLine,
+	RiCheckLine,
+	RiCloseLine,
 	RiDashboardLine,
 	RiDeleteBinLine,
 	RiEyeLine,
@@ -226,6 +228,8 @@ export default function CRMPage() {
 	const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
 	const [createTagIds, setCreateTagIds] = useState<string[]>([]);
 	const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
+	const [isEditingLeadName, setIsEditingLeadName] = useState(false);
+	const [leadNameDraft, setLeadNameDraft] = useState("");
 	const [isStagePromptOpen, setIsStagePromptOpen] = useState(false);
 	const [stagePromptProspect, setStagePromptProspect] =
 		useState<Prospect | null>(null);
@@ -507,6 +511,8 @@ export default function CRMPage() {
 
 	useEffect(() => {
 		setNotesPage(1);
+		setIsEditingLeadName(false);
+		setLeadNameDraft("");
 	}, [selectedProspect?.id, isViewDialogOpen]);
 
 	const canManageTasksForSelected =
@@ -523,6 +529,28 @@ export default function CRMPage() {
 	const canEditOwnerForSelected = canManageTasksForSelected;
 
 	const canEditStageForSelected = canManageTasksForSelected;
+	const canEditLeadName =
+		Boolean(activeProspect) &&
+		(activeProspect?.agentId === session?.user?.id ||
+			activeProspect?.isFollower === true);
+
+	const updateLeadNameMutation = trpc.crm.update.useMutation({
+		onSuccess: (updated) => {
+			toast.success("Lead name updated");
+			setIsEditingLeadName(false);
+			setLeadNameDraft("");
+			if (selectedProspect && updated?.id === selectedProspect.id) {
+				setSelectedProspect({
+					...selectedProspect,
+					name: updated.name,
+				});
+			}
+			void trpcUtils.crm.list.invalidate();
+			void trpcUtils.crm.get.invalidate({ id: updated.id });
+		},
+		onError: (error) =>
+			toast.error(error.message || "Failed to update lead name"),
+	});
 
 	useEffect(() => {
 		const current = prospectDetailData?.prospect ?? selectedProspect;
@@ -1196,8 +1224,103 @@ export default function CRMPage() {
 						<DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[700px] [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
 							<DialogHeader className="pr-8">
 								<DialogTitle className="flex items-center gap-2">
-									<RiUserLine className="size-5" />
-									{activeProspect?.name ?? "Lead Detail"}
+									<RiUserLine className="size-5 shrink-0" />
+									{canEditLeadName && isEditingLeadName ? (
+										<div className="flex min-w-0 flex-1 items-center gap-2">
+											<Input
+												value={leadNameDraft}
+												onChange={(e) => setLeadNameDraft(e.target.value)}
+												className="h-9 font-semibold text-base"
+												placeholder="Lead name"
+												autoFocus
+												onKeyDown={(e) => {
+													if (e.key === "Enter") {
+														e.preventDefault();
+														const next = leadNameDraft.trim();
+														if (
+															!next ||
+															!activeProspect ||
+															next === activeProspect.name
+														) {
+															setIsEditingLeadName(false);
+															return;
+														}
+														updateLeadNameMutation.mutate({
+															id: activeProspect.id,
+															name: next,
+														});
+													}
+													if (e.key === "Escape") {
+														setIsEditingLeadName(false);
+														setLeadNameDraft("");
+													}
+												}}
+											/>
+											<Button
+												type="button"
+												size="sm"
+												className="shrink-0"
+												disabled={
+													!leadNameDraft.trim() ||
+													updateLeadNameMutation.isPending
+												}
+												onClick={() => {
+													const next = leadNameDraft.trim();
+													if (
+														!next ||
+														!activeProspect ||
+														next === activeProspect.name
+													) {
+														setIsEditingLeadName(false);
+														return;
+													}
+													updateLeadNameMutation.mutate({
+														id: activeProspect.id,
+														name: next,
+													});
+												}}
+											>
+												{updateLeadNameMutation.isPending ? (
+													<RiLoader4Line className="size-4 animate-spin" />
+												) : (
+													<RiCheckLine className="size-4" />
+												)}
+											</Button>
+											<Button
+												type="button"
+												size="sm"
+												variant="ghost"
+												className="shrink-0"
+												onClick={() => {
+													setIsEditingLeadName(false);
+													setLeadNameDraft("");
+												}}
+											>
+												<RiCloseLine className="size-4" />
+											</Button>
+										</div>
+									) : (
+										<div className="flex min-w-0 items-center gap-2">
+											<span className="truncate">
+												{activeProspect?.name ?? "Lead Detail"}
+											</span>
+											{canEditLeadName ? (
+												<Button
+													type="button"
+													variant="ghost"
+													size="sm"
+													className="h-7 shrink-0 gap-1 px-2 text-muted-foreground"
+													onClick={() => {
+														setLeadNameDraft(activeProspect?.name ?? "");
+														setIsEditingLeadName(true);
+													}}
+												>
+													<RiPencilLine className="size-3.5" />
+													Edit name
+												</Button>
+											) : null}
+										</div>
+									)}
 								</DialogTitle>
 								<DialogDescription>
 									View complete information about this lead.

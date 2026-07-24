@@ -10,8 +10,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
 	RiAlarmWarningLine,
 	RiCalendar2Line,
-	RiCheckLine,
-	RiEyeLine,
 	RiTodoLine,
 } from "@remixicon/react";
 import type { LeadTask, TaskPriority, TaskType } from "./lead-models";
@@ -282,12 +280,11 @@ export function TodayTasksWidget({
 										</span>
 									</div>
 
-									<div className="flex items-center gap-0.5">
+									<div className="flex items-center gap-1">
 										<Button
 											variant="ghost"
 											size="sm"
-											className="size-6 p-0 text-muted-foreground hover:bg-green-100 hover:text-green-700 dark:hover:bg-green-900/20 dark:hover:text-green-400"
-											title="Mark complete"
+											className="h-7 px-2 font-medium text-muted-foreground text-xs hover:bg-green-100 hover:text-green-700 dark:hover:bg-green-900/20 dark:hover:text-green-400"
 											onClick={() =>
 												completeMutation.mutate({
 													id: task.id,
@@ -296,16 +293,15 @@ export function TodayTasksWidget({
 											}
 											disabled={completeMutation.isPending}
 										>
-											<RiCheckLine className="size-3" />
+											Done
 										</Button>
 										<Button
 											variant="ghost"
 											size="sm"
-											className="size-6 p-0 text-muted-foreground hover:bg-accent"
-											title="View lead"
+											className="h-7 px-2 font-medium text-muted-foreground text-xs hover:bg-accent hover:text-foreground"
 											onClick={() => onViewLead(task.prospectId)}
 										>
-											<RiEyeLine className="size-3" />
+											View
 										</Button>
 									</div>
 								</div>

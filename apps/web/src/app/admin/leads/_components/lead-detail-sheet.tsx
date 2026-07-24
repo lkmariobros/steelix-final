@@ -61,6 +61,7 @@ export function LeadDetailSheet({
 	onClose,
 	agents,
 	onRefresh,
+	onEditLead,
 }: {
 	lead: Lead | null;
 	open: boolean;
@@ -71,6 +72,8 @@ export function LeadDetailSheet({
 		agentEmail: string;
 	}>;
 	onRefresh: () => void;
+	/** Opens the full Edit Lead dialog (admin only). */
+	onEditLead?: (lead: Lead) => void;
 }) {
 	const queryClient = useQueryClient();
 	const { openCreateModal } = useTransactionModalActions();
@@ -269,13 +272,28 @@ export function LeadDetailSheet({
 		<Sheet open={open} onOpenChange={(v) => !v && onClose()}>
 			<SheetContent className="w-full overflow-y-auto sm:max-w-2xl">
 				<SheetHeader className="mb-4 pr-8">
-					<SheetTitle className="flex items-center gap-2">
-						<RiUserLine size={20} />
-						{activeLead.name}
-					</SheetTitle>
-					<SheetDescription>
-						Lead details, activity timeline, and management actions
-					</SheetDescription>
+					<div className="flex items-start justify-between gap-3">
+						<div className="min-w-0 space-y-1">
+							<SheetTitle className="flex items-center gap-2">
+								<RiUserLine size={20} />
+								<span className="truncate">{activeLead.name}</span>
+							</SheetTitle>
+							<SheetDescription>
+								Lead details, activity timeline, and management actions
+							</SheetDescription>
+						</div>
+						{onEditLead && activeLead ? (
+							<Button
+								variant="outline"
+								size="sm"
+								className="shrink-0 gap-1.5"
+								onClick={() => onEditLead(activeLead)}
+							>
+								<RiPencilLine className="size-3.5" />
+								Edit lead
+							</Button>
+						) : null}
+					</div>
 				</SheetHeader>
 
 				{isLoading && !detail ? (

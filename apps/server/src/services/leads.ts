@@ -101,7 +101,7 @@ function normaliseType(raw: string): "tenant" | "buyer" {
  * Internal helper — insert one activity log row.
  * Silently swallows errors so a logging failure never breaks the main action.
  */
-async function logActivity(opts: {
+export async function logActivity(opts: {
 	prospectId: string;
 	eventType: ActivityEventType;
 	actorId: string;
@@ -119,6 +119,54 @@ async function logActivity(opts: {
 	} catch {
 		// Logging must never break the main operation
 	}
+}
+
+const PIPELINE_STAGE_LABELS: Record<string, string> = {
+	new_lead: "New Lead",
+	first_follow_up: "1 First Follow Up",
+	second_follow_up: "2 Second Follow Up",
+	third_follow_up: "3 Third Follow Up",
+	fourth_follow_up: "Last Follow Up (Can Recycle)",
+	potential_lead: "Potential Lead",
+	appointment_made: "Appointment Made",
+	need_consider: "Need Consider",
+	reject_project: "Reject Project",
+	booking_made: "Booking Made",
+	spam_fake_lead: "Spam/Fake Lead",
+	follow_up_in_progress: "1 First Follow Up",
+	no_pick_reply: "2 Second Follow Up",
+	can_recycle: "Last Follow Up (Can Recycle)",
+	follow_up_for_appointment: "Appointment Made",
+	consider_seen: "Need Consider",
+	contacted: "1 First Follow Up",
+	appointment_set: "Appointment Made",
+	converted: "Booking Made",
+};
+
+export function formatPipelineStageLabel(stage: string): string {
+	return PIPELINE_STAGE_LABELS[stage] ?? stage.replace(/_/g, " ");
+}
+
+export async function logStageChanged(opts: {
+	prospectId: string;
+	actorId: string;
+	fromStage: string;
+	toStage: string;
+}) {
+	const fromLabel = formatPipelineStageLabel(opts.fromStage);
+	const toLabel = formatPipelineStageLabel(opts.toStage);
+	await logActivity({
+		prospectId: opts.prospectId,
+		eventType: "stage_changed",
+		actorId: opts.actorId,
+		content: `Stage changed from "${fromLabel}" to "${toLabel}"`,
+		metadata: {
+			from: opts.fromStage,
+			to: opts.toStage,
+			fromLabel,
+			toLabel,
+		},
+	});
 }
 
 // ─── Service Functions ────────────────────────────────────────────────────────
@@ -701,12 +749,11 @@ export async function updateLeadAdmin(
 	// Log stage change separately for clarity
 	if (_actorId && before) {
 		if (updateFields.stage && updateFields.stage !== before.stage) {
-			await logActivity({
+			await logStageChanged({
 				prospectId: leadId,
-				eventType: "stage_changed",
 				actorId: _actorId,
-				content: `Stage changed from "${before.stage}" to "${updateFields.stage}"`,
-				metadata: { from: before.stage, to: updateFields.stage },
+				fromStage: before.stage,
+				toStage: updateFields.stage,
 			});
 		} else {
 			// Generic update log (only if something actually changed)

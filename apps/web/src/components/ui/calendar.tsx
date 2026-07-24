@@ -111,7 +111,7 @@ function Calendar({
 				range_middle: cn("rounded-none", defaultClassNames.range_middle),
 				range_end: cn("rounded-r-md bg-accent", defaultClassNames.range_end),
 				today: cn(
-					"rounded-md bg-accent text-accent-foreground data-[selected=true]:rounded-none",
+					"rounded-md bg-green-100 text-green-800 data-[selected=true]:rounded-none dark:bg-green-900/40 dark:text-green-300",
 					defaultClassNames.today,
 				),
 				outside: cn(
@@ -203,6 +203,9 @@ function CalendarDayButton({
 			data-range-middle={modifiers.range_middle}
 			className={cn(
 				"flex aspect-square size-auto w-full min-w-(--cell-size) flex-col gap-1 font-normal leading-none data-[range-end=true]:rounded-md data-[range-middle=true]:rounded-none data-[range-start=true]:rounded-md data-[range-end=true]:rounded-r-md data-[range-start=true]:rounded-l-md data-[range-end=true]:bg-primary data-[range-middle=true]:bg-accent data-[range-start=true]:bg-primary data-[selected-single=true]:bg-primary data-[range-end=true]:text-primary-foreground data-[range-middle=true]:text-accent-foreground data-[range-start=true]:text-primary-foreground data-[selected-single=true]:text-primary-foreground group-data-[focused=true]/day:relative group-data-[focused=true]/day:z-10 group-data-[focused=true]/day:border-ring group-data-[focused=true]/day:ring-[3px] group-data-[focused=true]/day:ring-ring/50 dark:hover:text-accent-foreground [&>span]:text-xs [&>span]:opacity-70",
+				modifiers.today &&
+					!modifiers.selected &&
+					"bg-green-100 font-semibold text-green-800 hover:bg-green-200 hover:text-green-900 dark:bg-green-900/40 dark:text-green-300 dark:hover:bg-green-900/60 dark:hover:text-green-200",
 				defaultClassNames.day,
 				className,
 			)}

@@ -100,8 +100,17 @@ export function DateTimePicker({
 				<Calendar
 					mode="single"
 					selected={isValid ? dateObj : undefined}
+					defaultMonth={isValid ? dateObj : new Date()}
 					onSelect={handleDaySelect}
 					captionLayout="label"
+					classNames={{
+						today:
+							"rounded-md bg-green-100 font-semibold text-green-800 dark:bg-green-900/40 dark:text-green-300 data-[selected=true]:rounded-md",
+					}}
+					modifiersClassNames={{
+						today:
+							"bg-green-100 font-semibold text-green-800 hover:bg-green-200 hover:text-green-900 dark:bg-green-900/40 dark:text-green-300 dark:hover:bg-green-900/60",
+					}}
 				/>
 				{/* ── Time Picker ── */}
 				<div className="border-t px-3 py-3">

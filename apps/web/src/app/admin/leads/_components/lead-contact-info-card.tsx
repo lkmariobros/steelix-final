@@ -28,7 +28,11 @@ export type LeadContactInfoCardLead = {
 function formatLeadDate(d: Date | string | null) {
 	if (!d) return "—";
 	try {
-		return new Date(d).toLocaleDateString();
+		return new Date(d).toLocaleDateString("en-GB", {
+			day: "2-digit",
+			month: "2-digit",
+			year: "numeric",
+		});
 	} catch {
 		return "—";
 	}

@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
-import { RiAlarmWarningLine, RiAddLine, RiCalendar2Line, RiCheckboxMultipleLine, RiCheckLine, RiDeleteBinLine, RiEditLine, RiLoader4Line, RiTodoLine } from "@remixicon/react";
+import { RiAlarmWarningLine, RiAddLine, RiCalendar2Line, RiCheckboxMultipleLine, RiDeleteBinLine, RiEditLine, RiLoader4Line, RiTodoLine } from "@remixicon/react";
 import type { LeadTask, TaskPriority, TaskType } from "./lead-models";
 import { TASK_PRIORITY_CONFIG, TASK_TYPE_LABELS } from "./lead-constants";
 import { DateTimePicker } from "./date-time-picker";
@@ -504,12 +504,11 @@ export function LeadTasksCard({ leadId }: { leadId: string }) {
 												</p>
 											)}
 										</div>
-										<div className="flex shrink-0 gap-0.5">
+										<div className="flex shrink-0 items-center gap-0.5">
 											<Button
 												variant="ghost"
 												size="sm"
-												className="h-7 w-7 p-0 text-muted-foreground hover:text-green-600"
-												title="Mark complete"
+												className="h-7 px-2 font-medium text-muted-foreground text-xs hover:bg-green-100 hover:text-green-700"
 												onClick={() =>
 													completeMutation.mutate({
 														id: task.id,
@@ -518,7 +517,7 @@ export function LeadTasksCard({ leadId }: { leadId: string }) {
 												}
 												disabled={completeMutation.isPending}
 											>
-												<RiCheckLine className="size-3.5" />
+												Done
 											</Button>
 											<Button
 												variant="ghost"

@@ -1508,6 +1508,9 @@ export default function AdminLeadsPage() {
 				onClose={() => setViewLead(null)}
 				agents={agents}
 				onRefresh={handleRefresh}
+				onEditLead={(lead) => {
+					setEditLead(lead);
+				}}
 			/>
 			<EditLeadDialog
 				lead={editLead}

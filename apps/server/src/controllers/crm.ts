@@ -26,7 +26,7 @@ import {
 	updateProspectNoteSchema,
 	updateProspectSchema,
 } from "../models/crm";
-import { getLeadActivityAdmin, importProspectsBulkForAgent, assignLeadAdmin, assertAssignableLeadAgent, buildAgentPersonalLeadsCondition, canAgentAccessProspect, fetchFollowersByProspectIds, getAgentsWithLeads, getProspectFollowers, isAgentProspectFollower, setProspectTagIds, agentLeadDisplayNameSql } from "../services/leads";
+import { getLeadActivityAdmin, importProspectsBulkForAgent, assignLeadAdmin, assertAssignableLeadAgent, buildAgentPersonalLeadsCondition, canAgentAccessProspect, fetchFollowersByProspectIds, getAgentsWithLeads, getProspectFollowers, isAgentProspectFollower, setProspectTagIds, agentLeadDisplayNameSql, logActivity, logStageChanged } from "../services/leads";
 import { withPipelineStageSchemaRetry } from "../utils/pipeline-stage-schema";
 import { withProspectNotesSchemaRetry } from "../utils/prospect-notes-schema";
 import { db } from "../utils/db";
@@ -764,6 +764,33 @@ export const crmRouter = router({
 					.returning(),
 			);
 
+			if (
+				effectiveUpdateData.stage !== undefined &&
+				effectiveUpdateData.stage !== existing.stage
+			) {
+				await logStageChanged({
+					prospectId: id,
+					actorId: agentId,
+					fromStage: existing.stage,
+					toStage: effectiveUpdateData.stage,
+				});
+			} else if (
+				effectiveUpdateData.name !== undefined &&
+				effectiveUpdateData.name !== existing.name
+			) {
+				await logActivity({
+					prospectId: id,
+					eventType: "lead_updated",
+					actorId: agentId,
+					content: `Name updated from "${existing.name}" to "${effectiveUpdateData.name}"`,
+					metadata: {
+						from: existing.name,
+						to: effectiveUpdateData.name,
+						field: "name",
+					},
+				});
+			}
+
 			// Fetch categories for response (agents cannot change them)
 			let prospectTagsData: Array<{
 				tag: {
@@ -839,6 +866,15 @@ export const crmRouter = router({
 					.where(eq(prospects.id, id))
 					.returning(),
 			);
+
+			if (existing.stage !== stage) {
+				await logStageChanged({
+					prospectId: id,
+					actorId: agentId,
+					fromStage: existing.stage,
+					toStage: stage,
+				});
+			}
 
 			// Handle legacy "owner" type - convert to "buyer"
 			const updatedType =
