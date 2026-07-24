@@ -130,6 +130,7 @@ export function KanbanPipelineBoard({
 		dragStartedRef.current = true;
 		setDraggingLeadId(lead.id);
 		e.dataTransfer.effectAllowed = "move";
+		e.dataTransfer.setData("text/plain", lead.id);
 		e.dataTransfer.setData("text/leadId", lead.id);
 	};
 
@@ -143,7 +144,9 @@ export function KanbanPipelineBoard({
 		if (updateStageMutation.isPending) return;
 		e.preventDefault();
 		e.stopPropagation();
-		const leadId = e.dataTransfer.getData("text/leadId");
+		const leadId =
+			e.dataTransfer.getData("text/leadId") ||
+			e.dataTransfer.getData("text/plain");
 		if (!leadId) return;
 
 		const currentStage =
@@ -170,6 +173,7 @@ export function KanbanPipelineBoard({
 					setDraggingLeadId(null);
 					setDragOverStage(null);
 					dragStartedRef.current = false;
+					onRefresh();
 				},
 				onError: (err) => {
 					toast.error(err.message);
@@ -208,14 +212,24 @@ export function KanbanPipelineBoard({
 							onDragOver={(e) => {
 								if (updateStageMutation.isPending) return;
 								e.preventDefault();
+								e.stopPropagation();
+								e.dataTransfer.dropEffect = "move";
 								setDragOver(stage.value);
 							}}
 							onDragEnter={(e) => {
 								if (updateStageMutation.isPending) return;
 								e.preventDefault();
+								e.stopPropagation();
 								setDragOver(stage.value);
 							}}
-							onDragLeave={() => setDragOverStage(null)}
+							onDragLeave={(e) => {
+								// Only clear when leaving the column (not entering a child)
+								const related = e.relatedTarget as Node | null;
+								if (related && e.currentTarget.contains(related)) return;
+								setDragOverStage((prev) =>
+									prev === stage.value ? null : prev,
+								);
+							}}
 							onDrop={(e) => handleDrop(e, stage.value as PipelineStageValue)}
 						>
 							<div className="flex items-center justify-between gap-2 px-0.5 pt-0.5">
@@ -226,11 +240,23 @@ export function KanbanPipelineBoard({
 									</span>
 								</div>
 								{isOver ? (
-									<span className="text-primary text-xs font-medium">Drop</span>
+									<span className="font-medium text-primary text-xs">Drop</span>
 								) : null}
 							</div>
 
-							<div className="flex flex-col gap-1.5">
+							<div
+								className="flex min-h-[120px] flex-1 flex-col gap-1.5"
+								onDragOver={(e) => {
+									if (updateStageMutation.isPending) return;
+									e.preventDefault();
+									e.stopPropagation();
+									e.dataTransfer.dropEffect = "move";
+									setDragOver(stage.value);
+								}}
+								onDrop={(e) =>
+									handleDrop(e, stage.value as PipelineStageValue)
+								}
+							>
 								{columnLeads.length === 0 ? (
 									<div className="px-1 text-muted-foreground text-xs italic">
 										{isOver ? "Release to move here" : "No leads in this stage"}

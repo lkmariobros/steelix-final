@@ -111,29 +111,38 @@ export function KanbanBoard({
 	const handleDragStart = (e: React.DragEvent, prospect: Prospect) => {
 		setDraggedProspect(prospect);
 		e.dataTransfer.effectAllowed = "move";
+		// Required for reliable HTML5 DnD in Firefox / some Chromium builds
+		e.dataTransfer.setData("text/plain", prospect.id);
+		e.dataTransfer.setData("text/prospectId", prospect.id);
 	};
 
 	const handleDragOver = (e: React.DragEvent) => {
 		e.preventDefault();
+		e.stopPropagation();
 		e.dataTransfer.dropEffect = "move";
 	};
 
 	const handleDrop = (e: React.DragEvent, targetStage: PipelineStage) => {
 		e.preventDefault();
-		if (draggedProspect && draggedProspect.stage !== targetStage) {
-			// Optimistically update UI immediately (before backend call)
-			// This provides instant visual feedback while the mutation is in progress
+		e.stopPropagation();
+		const fromData =
+			e.dataTransfer.getData("text/prospectId") ||
+			e.dataTransfer.getData("text/plain");
+		const prospect =
+			draggedProspect ??
+			(fromData ? prospects.find((p) => p.id === fromData) ?? null : null);
+		if (!prospect) {
+			setDraggedProspect(null);
+			return;
+		}
+		const currentStage = optimisticUpdates.get(prospect.id) ?? prospect.stage;
+		if (currentStage !== targetStage) {
 			setOptimisticUpdates((prev) => {
 				const next = new Map(prev);
-				next.set(draggedProspect.id, targetStage);
+				next.set(prospect.id, targetStage);
 				return next;
 			});
-
-			// Call backend mutation (which will also update query cache optimistically)
-			onStageChange(draggedProspect.id, targetStage);
-
-			// Clear optimistic update when query data updates (handled by query cache)
-			// The optimistic update will be replaced by the actual data from the server
+			onStageChange(prospect.id, targetStage);
 		}
 		setDraggedProspect(null);
 	};
@@ -163,7 +172,7 @@ export function KanbanBoard({
 				return (
 					<div
 						key={stage.id}
-						className="w-72 shrink-0"
+						className="flex w-72 shrink-0 flex-col rounded-lg border border-border/50 bg-muted/5 p-1.5"
 						onDragOver={handleDragOver}
 						onDrop={(e) => handleDrop(e, stage.id)}
 					>
@@ -179,8 +188,12 @@ export function KanbanBoard({
 							</div>
 						</div>
 
-						{/* Column Content */}
-						<div className="min-h-[320px] space-y-2">
+						{/* Column Content — full height drop target for mouse DnD */}
+						<div
+							className="min-h-[320px] flex-1 space-y-2"
+							onDragOver={handleDragOver}
+							onDrop={(e) => handleDrop(e, stage.id)}
+						>
 							{stageProspects.map((prospect) => {
 								const tags = tagSummary(prospect);
 								const titleHint = `${prospect.name}\n${prospect.email ?? ""}\n${prospect.phone}`;
