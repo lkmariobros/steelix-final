@@ -37,6 +37,7 @@ ALTER TABLE public.transactions ADD COLUMN IF NOT EXISTS pending_edit_request bo
 ALTER TABLE public.transactions ADD COLUMN IF NOT EXISTS request_item text;
 ALTER TABLE public.transactions ADD COLUMN IF NOT EXISTS request_submitted_at timestamptz;
 ALTER TABLE public.transactions ADD COLUMN IF NOT EXISTS converted_at timestamptz;
+ALTER TABLE public.transactions ADD COLUMN IF NOT EXISTS agent_edit_allowed boolean NOT NULL DEFAULT false;
 `.trim();
 
 export function isTransactionsSchemaOutdatedError(err: unknown): boolean {

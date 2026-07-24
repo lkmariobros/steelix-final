@@ -41,17 +41,23 @@ import { adminProcedure, protectedProcedure, router } from "../utils/trpc";
 
 // Base transaction input schema (without validation)
 // All fields are optional to support draft saving with partial data
+const optionalUuid = z.preprocess(
+	(v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
+	z.string().uuid().optional(),
+);
+
 const baseTransactionInput = z.object({
 	marketType: z.enum(["primary", "secondary"]).optional(),
-	transactionType: z.enum(["sale", "lease"]).optional(),
+	/** `lease` is the UI rental type; `rental` kept for legacy rows/API clients */
+	transactionType: z.enum(["sale", "lease", "rental"]).optional(),
 	transactionDate: z.coerce.date().optional(),
 	propertyData: z
 		.object({
 			address: z.string().optional(),
 			propertyType: z.string().optional(),
-			listingId: z.string().uuid().optional(),
+			listingId: optionalUuid,
 			listingTitle: z.string().optional(),
-			schemeId: z.string().uuid().optional(),
+			schemeId: optionalUuid,
 			salesPackage: z.string().optional(),
 			rebateAmount: z.number().nonnegative().optional(),
 			purchasingMethod: z.enum(["cash", "loan"]).optional(),
@@ -73,7 +79,7 @@ const baseTransactionInput = z.object({
 		.optional(),
 	projectName: z.string().optional(),
 	unitNo: z.string().optional(),
-	blockListingId: z.string().uuid().optional(),
+	blockListingId: optionalUuid,
 	bookingDate: z.coerce.date().optional(),
 	representationType: z.enum(["direct", "co_broking"]).optional(),
 	clientData: z
@@ -142,16 +148,18 @@ const baseTransactionInput = z.object({
 		})
 		.optional(),
 	commissionType: z.enum(["percentage", "fixed"]).optional(),
-	commissionValue: z.number().positive().optional(),
-	commissionAmount: z.number().positive().optional(),
+	/** Drafts often send 0 before commission is locked on submit */
+	commissionValue: z.number().nonnegative().optional(),
+	commissionAmount: z.number().nonnegative().optional(),
 	documents: z
 		.array(
 			z.object({
 				id: z.string(),
 				name: z.string(),
 				type: z.string(),
-				url: z.string(),
+				url: z.string().optional().default(""),
 				uploadedAt: z.string(),
+				category: z.string().optional(),
 			}),
 		)
 		.optional(),
@@ -327,8 +335,8 @@ async function resolveTransactionAgentId(
 			.where(
 				and(
 					eq(user.id, inputAgentId),
-					eq(user.role, "agent"),
 					eq(user.isActive, true),
+					inArray(user.role, ["agent", "team_lead"]),
 				),
 			)
 			.limit(1);
@@ -376,29 +384,49 @@ export const transactionsRouter = router({
 	create: protectedProcedure
 		.input(createTransactionInput)
 		.mutation(async ({ ctx, input }) => {
-			const agentId = await resolveTransactionAgentId(ctx, input.agentId);
-			const { agentId: _omitAgentId, ...transactionInput } = input;
-			const newTransaction = {
-				...transactionInput,
-				agentId,
-				status: "draft" as const,
-				agentEditAllowed: true,
-				representationType: input.representationType ?? "direct",
-				isCoBroking: input.representationType === "co_broking",
-				marketType: input.marketType ?? "primary",
-				transactionType: input.transactionType ?? "sale",
-				transactionDate: input.transactionDate ?? input.bookingDate ?? new Date(),
-				commissionType: input.commissionType ?? "percentage",
-				commissionValue: input.commissionValue?.toString() ?? "0",
-				commissionAmount: input.commissionAmount?.toString() ?? "0",
-			};
+			try {
+				const agentId = await resolveTransactionAgentId(ctx, input.agentId);
+				const { agentId: _omitAgentId, documents: _omitDocs, ...transactionInput } =
+					input;
 
-			const [transaction] = await db
-				.insert(transactions)
-				.values(newTransaction)
-				.returning();
+				const transactionType =
+					transactionInput.transactionType === "rental"
+						? ("lease" as const)
+						: (transactionInput.transactionType ?? "sale");
 
-			return transaction;
+				const newTransaction = {
+					...transactionInput,
+					transactionType,
+					agentId,
+					status: "draft" as const,
+					agentEditAllowed: true,
+					representationType: input.representationType ?? "direct",
+					isCoBroking: input.representationType === "co_broking",
+					marketType: input.marketType ?? "primary",
+					transactionDate:
+						input.transactionDate ?? input.bookingDate ?? new Date(),
+					commissionType: input.commissionType ?? "percentage",
+					commissionValue: input.commissionValue?.toString() ?? "0",
+					commissionAmount: input.commissionAmount?.toString() ?? "0",
+					// Documents are uploaded via documents.upload after create
+					documents: [],
+				};
+
+				const [transaction] = await db
+					.insert(transactions)
+					.values(newTransaction)
+					.returning();
+
+				return transaction;
+			} catch (e) {
+				if (isTransactionsSchemaOutdatedError(e)) {
+					throw new TRPCError({
+						code: "INTERNAL_SERVER_ERROR",
+						message: transactionsSchemaOutdatedMessage(),
+					});
+				}
+				throw e;
+			}
 		}),
 
 	// Update an existing transaction
@@ -454,13 +482,23 @@ export const transactionsRouter = router({
 					updateData.commissionAmount.toString();
 			}
 
-			const [updatedTransaction] = await db
-				.update(transactions)
-				.set(processedUpdateData)
-				.where(eq(transactions.id, id))
-				.returning();
+			try {
+				const [updatedTransaction] = await db
+					.update(transactions)
+					.set(processedUpdateData)
+					.where(eq(transactions.id, id))
+					.returning();
 
-			return updatedTransaction;
+				return updatedTransaction;
+			} catch (e) {
+				if (isTransactionsSchemaOutdatedError(e)) {
+					throw new TRPCError({
+						code: "INTERNAL_SERVER_ERROR",
+						message: transactionsSchemaOutdatedMessage(),
+					});
+				}
+				throw e;
+			}
 		}),
 
 	// Get a transaction by ID

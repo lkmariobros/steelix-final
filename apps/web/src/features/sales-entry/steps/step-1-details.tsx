@@ -292,6 +292,16 @@ export function StepDetails({
 		if (tier) {
 			form.setValue("commissionType", "percentage");
 			form.setValue("commissionValue", tier.commissionPercent);
+			const price =
+				form.getValues("propertyData.nettPrice") ??
+				form.getValues("propertyData.price") ??
+				0;
+			if (price > 0 && tier.commissionPercent > 0) {
+				form.setValue(
+					"commissionAmount",
+					Math.round(((price * tier.commissionPercent) / 100) * 100) / 100,
+				);
+			}
 		}
 	}, [selectedScheme, form]);
 

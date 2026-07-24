@@ -92,7 +92,7 @@ export function TransactionForm({
 		},
 		onError: (error) => {
 			console.error("Create transaction error:", error);
-			toast.error("Failed to create transaction");
+			toast.error(error.message || "Failed to create transaction");
 		},
 	});
 
@@ -103,7 +103,7 @@ export function TransactionForm({
 		},
 		onError: (error) => {
 			console.error("Update transaction error:", error);
-			toast.error("Failed to update transaction");
+			toast.error(error.message || "Failed to update transaction");
 		},
 	});
 
@@ -115,7 +115,7 @@ export function TransactionForm({
 		},
 		onError: (error) => {
 			console.error("Submit transaction error:", error);
-			toast.error("Failed to submit transaction");
+			toast.error(error.message || "Failed to submit transaction");
 		},
 	});
 
@@ -134,15 +134,74 @@ export function TransactionForm({
 		[updateStepData],
 	);
 
+	// Clean form data for create/update API (docs migrate separately)
+	const prepareFormDataForSubmission = useCallback(
+		(
+			data: typeof formData,
+			opts?: { requireCoBroke?: boolean },
+		) => {
+			const cleanedData = { ...data };
+			const requireCoBroke = opts?.requireCoBroke ?? true;
+
+			if (!cleanedData.isCoBroking) {
+				cleanedData.coBrokingData = undefined;
+			} else if (cleanedData.coBrokingData) {
+				const { internalAgentId, agentName, agentPhone } =
+					cleanedData.coBrokingData;
+				if (
+					requireCoBroke &&
+					!internalAgentId?.trim() &&
+					(!agentName?.trim() || !agentPhone?.trim())
+				) {
+					throw new Error(
+						"Please select a co-broke agent or complete agent name and phone.",
+					);
+				}
+			}
+
+			if (!cleanedData.blockListingId?.trim()) {
+				cleanedData.blockListingId = undefined;
+			}
+			if (cleanedData.propertyData) {
+				const listingId = cleanedData.propertyData.listingId;
+				const schemeId = cleanedData.propertyData.schemeId;
+				cleanedData.propertyData = {
+					...cleanedData.propertyData,
+					listingId: listingId?.trim() ? listingId : undefined,
+					schemeId: schemeId?.trim() ? schemeId : undefined,
+				};
+			}
+
+			const price =
+				cleanedData.propertyData?.nettPrice ??
+				cleanedData.propertyData?.price ??
+				0;
+			const commissionValue = cleanedData.commissionValue ?? 0;
+			if (
+				(cleanedData.commissionAmount ?? 0) <= 0 &&
+				commissionValue > 0 &&
+				price > 0 &&
+				(cleanedData.commissionType ?? "percentage") === "percentage"
+			) {
+				cleanedData.commissionAmount =
+					Math.round(((price * commissionValue) / 100) * 100) / 100;
+			}
+
+			cleanedData.documents = undefined;
+
+			return cleanedData;
+		},
+		[],
+	);
+
 	// Handle save draft
 	const handleSaveDraft = useCallback(async () => {
 		setIsSaving(true);
 		try {
-			// For drafts, we can be more lenient with co-broking validation
-			const draftData = { ...formData };
-			if (!draftData.isCoBroking) {
-				draftData.coBrokingData = undefined;
-			}
+			const draftData = prepareFormDataForSubmission(
+				{ ...formData },
+				{ requireCoBroke: false },
+			);
 
 			let savedId: string | undefined;
 
@@ -154,7 +213,18 @@ export function TransactionForm({
 				savedId = effectiveTxId;
 				toast.success("Draft updated successfully");
 			} else {
-				const newTransaction = await createTransaction.mutateAsync(draftData);
+				const newTransaction = await createTransaction.mutateAsync({
+					...draftData,
+					marketType: draftData.marketType ?? "primary",
+					transactionType:
+						draftData.marketType === "secondary"
+							? (draftData.transactionType ?? "sale")
+							: ("sale" as const),
+					transactionDate:
+						draftData.bookingDate ??
+						draftData.transactionDate ??
+						new Date(),
+				});
 				setLocalTxId(newTransaction.id);
 				savedId = newTransaction.id;
 				toast.success("Draft saved successfully");
@@ -202,43 +272,8 @@ export function TransactionForm({
 		clearAutoSave,
 		clearTempDocuments,
 		onSubmit,
+		prepareFormDataForSubmission,
 	]);
-
-	// Clean form data for submission
-	const prepareFormDataForSubmission = useCallback((data: typeof formData) => {
-		const cleanedData = { ...data };
-
-		// Handle co-broking data properly
-		if (!cleanedData.isCoBroking) {
-			// If co-broking is disabled, remove coBrokingData entirely
-			cleanedData.coBrokingData = undefined;
-		} else if (cleanedData.coBrokingData) {
-			const { internalAgentId, agentName, agentPhone } =
-				cleanedData.coBrokingData;
-			if (
-				!internalAgentId?.trim() &&
-				(!agentName?.trim() || !agentPhone?.trim())
-			) {
-				throw new Error(
-					"Please select a co-broke agent or complete agent name and phone.",
-				);
-			}
-		}
-
-		// Ensure uploaded temp documents are included even if formData sync lagged
-		if (!cleanedData.documents?.length && tempDocuments.length > 0) {
-			cleanedData.documents = tempDocuments.map((d) => ({
-				id: d.id,
-				name: d.name,
-				type: d.type,
-				url: d.url,
-				uploadedAt: d.uploadedAt,
-				category: d.category,
-			}));
-		}
-
-		return cleanedData;
-	}, [tempDocuments]);
 
 	// Handle form submission
 	const handleSubmit = useCallback(async () => {
