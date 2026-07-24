@@ -20,7 +20,6 @@ import {
 } from "./transaction-schema";
 import {
 	getCompletedSteps,
-	isFormReadyForSubmission,
 	useTransactionFormState,
 } from "./utils/form-state";
 
@@ -66,7 +65,6 @@ export function TransactionForm({
 		isLoading,
 		hasUnsavedChanges,
 		isHydratingTransaction,
-		serverTransactionStatus,
 		updateStepData,
 		updateFormData,
 		goToStep,
@@ -81,7 +79,7 @@ export function TransactionForm({
 	const isClient = useClientSide();
 
 	// Issue #3 Fix: Use document upload hook for temp document migration
-	const { migrateDocuments, tempDocuments, clearTempDocuments } =
+	const { migrateDocuments, clearTempDocuments } =
 		useDocumentUpload(effectiveTxId);
 
 	// ✅ REAL tRPC mutations for comprehensive transaction data flow
@@ -194,7 +192,7 @@ export function TransactionForm({
 		[],
 	);
 
-	// Handle save draft
+	// Handle save draft — never auto-submit; drafts stay status=draft until Verify
 	const handleSaveDraft = useCallback(async () => {
 		setIsSaving(true);
 		try {
@@ -230,30 +228,17 @@ export function TransactionForm({
 				toast.success("Draft saved successfully");
 			}
 
-			const canAutoSubmit =
-				serverTransactionStatus === undefined ||
-				serverTransactionStatus === "draft";
-
-			if (
-				savedId &&
-				canAutoSubmit &&
-				isFormReadyForSubmission(formData)
-			) {
+			// Always attempt migrate — parent hook tempDocuments may be empty while
+			// step uploads live in localStorage (migrateDocuments loads that itself).
+			if (savedId) {
 				try {
-					if (tempDocuments.length > 0) {
-						await migrateDocuments(savedId);
-					}
-					await submitTransaction.mutateAsync({ id: savedId });
-					toast.success("Transaction submitted for review");
-					clearAutoSave();
-					clearTempDocuments();
-					onSubmit?.();
+					await migrateDocuments(savedId);
 				} catch {
-					// submitTransaction / migrate already toasts
+					// migrateDocuments already toasts
 				}
-			} else {
-				clearAutoSave();
 			}
+
+			clearAutoSave();
 		} catch (error) {
 			console.error("Save draft error:", error);
 			// Error handling is now done in mutation onError callbacks
@@ -265,13 +250,8 @@ export function TransactionForm({
 		formData,
 		updateTransaction,
 		createTransaction,
-		submitTransaction,
-		serverTransactionStatus,
-		tempDocuments,
 		migrateDocuments,
 		clearAutoSave,
-		clearTempDocuments,
-		onSubmit,
 		prepareFormDataForSubmission,
 	]);
 
@@ -332,8 +312,8 @@ export function TransactionForm({
 				setLocalTxId(newTransaction.id);
 			}
 
-			// Issue #3 Fix: Migrate temp documents to the new transaction
-			if (finalTransactionId && tempDocuments.length > 0) {
+			// Migrate temp uploads from localStorage even if this hook's state is empty
+			if (finalTransactionId) {
 				await migrateDocuments(finalTransactionId);
 			}
 
@@ -342,7 +322,7 @@ export function TransactionForm({
 				await submitTransaction.mutateAsync({ id: finalTransactionId });
 				toast.success("Transaction submitted for review successfully!");
 				clearAutoSave();
-				clearTempDocuments(); // Issue #3 Fix: Clear temp docs after successful submission
+				clearTempDocuments();
 				onSubmit?.();
 			}
 		} catch (error) {
@@ -360,7 +340,6 @@ export function TransactionForm({
 		clearAutoSave,
 		clearTempDocuments,
 		migrateDocuments,
-		tempDocuments,
 		onSubmit,
 		setIsLoading,
 		prepareFormDataForSubmission,

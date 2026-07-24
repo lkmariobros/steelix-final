@@ -2,9 +2,15 @@
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+	Dialog,
+	DialogContent,
+	DialogHeader,
+	DialogTitle,
+} from "@/components/ui/dialog";
 import { trpc } from "@/utils/trpc";
 import { ExternalLink, FileText, Loader2 } from "lucide-react";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 type FallbackDocument = {
 	id?: string;
@@ -31,6 +37,11 @@ function isImageType(fileType?: string) {
 	return fileType.startsWith("image/");
 }
 
+function isPdfType(fileType?: string, fileName?: string) {
+	if (fileType === "application/pdf") return true;
+	return Boolean(fileName?.toLowerCase().endsWith(".pdf"));
+}
+
 function formatCategory(category?: string) {
 	if (!category) return "Document";
 	return category.replace(/_/g, " ");
@@ -43,13 +54,24 @@ function formatFileSize(bytes?: number) {
 	return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function DocumentRow({
+function DocumentViewerBody({
 	transactionId,
 	doc,
 }: {
 	transactionId: string;
 	doc: DisplayDocument;
 }) {
+	const isUuid = /^[0-9a-f-]{36}$/i.test(doc.id);
+
+	const { data: signed, isLoading: signedLoading } =
+		trpc.documents.getViewUrl.useQuery(
+			{ documentId: doc.id },
+			{
+				enabled: isUuid && !doc.needsLegacyResolve,
+				staleTime: 60_000,
+			},
+		);
+
 	const { data: legacy, isLoading: legacyLoading } =
 		trpc.documents.resolveLegacyUrl.useQuery(
 			{ transactionId, publicUrl: doc.url },
@@ -61,59 +83,75 @@ function DocumentRow({
 			},
 		);
 
+	const isLoading = doc.needsLegacyResolve
+		? legacyLoading
+		: isUuid
+			? signedLoading
+			: false;
+
 	const viewUrl = doc.needsLegacyResolve
 		? (legacy?.url ?? (doc.url.startsWith("data:") ? doc.url : ""))
-		: doc.url;
+		: (signed?.url ?? doc.url);
 
-	const canPreview = isImageType(doc.fileType) && viewUrl && !legacyLoading;
+	const showImage = isImageType(doc.fileType) && viewUrl && !isLoading;
+	const showPdf =
+		isPdfType(doc.fileType, doc.fileName) && viewUrl && !isLoading;
+
+	if (isLoading) {
+		return (
+			<div className="flex items-center justify-center gap-2 py-16 text-muted-foreground text-sm">
+				<Loader2 className="h-4 w-4 animate-spin" />
+				Loading preview…
+			</div>
+		);
+	}
 
 	return (
-		<div className="overflow-hidden rounded-lg border bg-background">
-			{legacyLoading ? (
-				<div className="flex items-center gap-2 border-b p-4 text-muted-foreground text-sm">
-					<Loader2 className="h-4 w-4 animate-spin" />
-					Loading preview…
-				</div>
-			) : canPreview ? (
-				<div className="border-b bg-muted/30 p-2">
+		<>
+			{showImage ? (
+				<div className="flex min-h-0 flex-1 items-center justify-center overflow-auto rounded-md bg-muted/40 p-2">
 					{/* eslint-disable-next-line @next/next/no-img-element */}
 					<img
 						src={viewUrl}
 						alt={doc.fileName}
-						className="mx-auto max-h-72 w-auto max-w-full rounded object-contain"
+						className="max-h-[70vh] w-auto max-w-full object-contain"
 					/>
 				</div>
+			) : showPdf ? (
+				<iframe
+					title={doc.fileName}
+					src={viewUrl}
+					className="h-[70vh] w-full rounded-md border bg-background"
+				/>
+			) : viewUrl ? (
+				<div className="space-y-3 py-6 text-center">
+					<p className="text-muted-foreground text-sm">
+						Preview is not available for this file type.
+					</p>
+					<Button asChild>
+						<a href={viewUrl} target="_blank" rel="noopener noreferrer">
+							<ExternalLink className="mr-1 h-4 w-4" />
+							Open in new tab
+						</a>
+					</Button>
+				</div>
+			) : (
+				<p className="py-8 text-center text-muted-foreground text-sm">
+					Document unavailable.
+				</p>
+			)}
+
+			{viewUrl ? (
+				<div className="flex justify-end">
+					<Button variant="outline" size="sm" asChild>
+						<a href={viewUrl} target="_blank" rel="noopener noreferrer">
+							<ExternalLink className="mr-1 h-3 w-3" />
+							Open in new tab
+						</a>
+					</Button>
+				</div>
 			) : null}
-			<div className="flex flex-wrap items-center justify-between gap-2 p-3">
-				<div className="flex min-w-0 items-start gap-2">
-					<FileText className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-					<div className="min-w-0">
-						<p className="truncate font-medium text-sm">{doc.fileName}</p>
-						<p className="text-muted-foreground text-xs">
-							{doc.fileType}
-							{doc.fileSize ? ` · ${formatFileSize(doc.fileSize)}` : ""}
-						</p>
-					</div>
-				</div>
-				<div className="flex flex-wrap items-center gap-2">
-					<Badge variant="secondary" className="text-xs capitalize">
-						{formatCategory(doc.documentCategory)}
-					</Badge>
-					{viewUrl && !legacyLoading ? (
-						<Button variant="outline" size="sm" asChild>
-							<a href={viewUrl} target="_blank" rel="noopener noreferrer">
-								<ExternalLink className="mr-1 h-3 w-3" />
-								Open
-							</a>
-						</Button>
-					) : (
-						<span className="text-muted-foreground text-xs">
-							{legacyLoading ? "Loading…" : "Unavailable"}
-						</span>
-					)}
-				</div>
-			</div>
-		</div>
+		</>
 	);
 }
 
@@ -126,6 +164,8 @@ export function TransactionDocumentsPanel({
 	transactionId,
 	fallbackDocuments,
 }: TransactionDocumentsPanelProps) {
+	const [selectedDoc, setSelectedDoc] = useState<DisplayDocument | null>(null);
+
 	const { data: apiDocs = [], isLoading } = trpc.documents.list.useQuery(
 		{ transactionId },
 		{ enabled: Boolean(transactionId) },
@@ -179,10 +219,58 @@ export function TransactionDocumentsPanel({
 	}
 
 	return (
-		<div className="space-y-3">
-			{documents.map((doc) => (
-				<DocumentRow key={doc.id} transactionId={transactionId} doc={doc} />
-			))}
-		</div>
+		<>
+			<ul className="space-y-2">
+				{documents.map((doc) => {
+					const sizeLabel = formatFileSize(doc.fileSize);
+					return (
+						<li key={doc.id}>
+							<button
+								type="button"
+								onClick={() => setSelectedDoc(doc)}
+								className="flex w-full items-center gap-3 rounded-lg border bg-background px-3 py-2.5 text-left transition-colors hover:bg-muted/50"
+							>
+								<FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+								<div className="min-w-0 flex-1">
+									<p className="truncate font-medium text-primary text-sm underline-offset-2 hover:underline">
+										{doc.fileName}
+									</p>
+									<p className="text-muted-foreground text-xs">
+										{sizeLabel ?? doc.fileType}
+									</p>
+								</div>
+								<Badge
+									variant="secondary"
+									className="shrink-0 text-xs capitalize"
+								>
+									{formatCategory(doc.documentCategory)}
+								</Badge>
+							</button>
+						</li>
+					);
+				})}
+			</ul>
+
+			<Dialog
+				open={Boolean(selectedDoc)}
+				onOpenChange={(open) => {
+					if (!open) setSelectedDoc(null);
+				}}
+			>
+				<DialogContent className="flex max-h-[90vh] max-w-3xl flex-col gap-3 sm:max-w-3xl">
+					<DialogHeader>
+						<DialogTitle className="truncate pr-8">
+							{selectedDoc?.fileName ?? "Document"}
+						</DialogTitle>
+					</DialogHeader>
+					{selectedDoc ? (
+						<DocumentViewerBody
+							transactionId={transactionId}
+							doc={selectedDoc}
+						/>
+					) : null}
+				</DialogContent>
+			</Dialog>
+		</>
 	);
 }

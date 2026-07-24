@@ -207,6 +207,7 @@ export function StepDocuments({
 
 		let successCount = 0;
 		let errorCount = 0;
+		let lastError = "";
 
 		try {
 			// Upload files sequentially to avoid overwhelming the server
@@ -221,6 +222,10 @@ export function StepDocuments({
 				} catch (fileError) {
 					console.error(`Failed to upload ${file.name}:`, fileError);
 					errorCount++;
+					lastError =
+						fileError instanceof Error
+							? fileError.message
+							: "Upload failed";
 				}
 			}
 
@@ -229,7 +234,11 @@ export function StepDocuments({
 				toast.success(`${successCount} file(s) uploaded successfully`);
 			}
 			if (errorCount > 0) {
-				toast.error(`${errorCount} file(s) failed to upload`);
+				toast.error(
+					lastError
+						? `${errorCount} file(s) failed to upload: ${lastError}`
+						: `${errorCount} file(s) failed to upload`,
+				);
 			}
 
 			const latestDocs =

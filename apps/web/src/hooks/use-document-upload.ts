@@ -1,6 +1,7 @@
+"use client";
+
 import { trpc } from "@/utils/trpc";
-import { useMutation } from "@tanstack/react-query";
-import React, { useState, useCallback, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 
 export type DocumentCategory =
@@ -26,23 +27,19 @@ export interface DocumentFile {
 	url: string;
 	uploadedAt: string;
 	category?: DocumentCategory;
-	// Issue #3 Fix: Track temp documents
 	isTemp?: boolean;
-	base64Data?: string; // Store base64 for temp documents
+	base64Data?: string;
 	fileSize?: number;
 }
 
-// Issue #3 Fix: Local storage key for temp documents
 const TEMP_DOCUMENTS_KEY = "transaction-temp-documents";
 
-// Helper function to convert file to base64
 const fileToBase64 = (file: File): Promise<string> => {
 	return new Promise((resolve, reject) => {
 		const reader = new FileReader();
 		reader.readAsDataURL(file);
 		reader.onload = () => {
 			const result = reader.result as string;
-			// Remove the data:mime/type;base64, prefix
 			const base64 = result.split(",")[1];
 			resolve(base64);
 		};
@@ -50,7 +47,6 @@ const fileToBase64 = (file: File): Promise<string> => {
 	});
 };
 
-// Issue #3 Fix: Save temp documents to localStorage
 const saveTempDocuments = (docs: DocumentFile[]) => {
 	try {
 		localStorage.setItem(TEMP_DOCUMENTS_KEY, JSON.stringify(docs));
@@ -59,7 +55,6 @@ const saveTempDocuments = (docs: DocumentFile[]) => {
 	}
 };
 
-// Issue #3 Fix: Load temp documents from localStorage
 export const loadTempTransactionDocuments = (): DocumentFile[] => {
 	try {
 		const saved = localStorage.getItem(TEMP_DOCUMENTS_KEY);
@@ -70,11 +65,7 @@ export const loadTempTransactionDocuments = (): DocumentFile[] => {
 	}
 };
 
-// Issue #3 Fix: Load temp documents from localStorage
-const loadTempDocuments = (): DocumentFile[] => loadTempTransactionDocuments();
-
-// Issue #3 Fix: Clear temp documents from localStorage
-const clearTempDocuments = () => {
+const clearTempDocumentsStorage = () => {
 	try {
 		localStorage.removeItem(TEMP_DOCUMENTS_KEY);
 	} catch (error) {
@@ -82,7 +73,6 @@ const clearTempDocuments = () => {
 	}
 };
 
-// Progress tracking with file name
 interface UploadProgressEntry {
 	progress: number;
 	fileName: string;
@@ -95,116 +85,78 @@ export function useDocumentUpload(transactionId?: string) {
 	const [documents, setDocuments] = useState<DocumentFile[]>([]);
 	const [tempDocuments, setTempDocuments] = useState<DocumentFile[]>([]);
 	const [isMigrating, setIsMigrating] = useState(false);
-	const [isUploadingLocal, setIsUploadingLocal] = useState(false); // Track local upload state
+	const [isUploadingLocal, setIsUploadingLocal] = useState(false);
 
-	// Issue #3 Fix: Determine if we're in temp mode (no transaction ID yet)
 	const isTempMode =
 		!transactionId || transactionId === "temp" || transactionId === "";
 
-	// Issue #3 Fix: Load temp documents on mount
 	useEffect(() => {
 		if (isTempMode) {
-			const loaded = loadTempDocuments();
-			setTempDocuments(loaded);
+			setTempDocuments(loadTempTransactionDocuments());
 		}
 	}, [isTempMode]);
 
-	// Fetch documents via tRPC (signed URLs, admin + agent access)
 	const listQuery = trpc.documents.list.useQuery(
 		{ transactionId: transactionId ?? "" },
 		{ enabled: Boolean(transactionId) && !isTempMode },
 	);
 
-	// Update documents when query data changes
 	useEffect(() => {
-		if (listQuery.data) {
-			setDocuments(
-				listQuery.data.map((d) => ({
-					id: d.id,
-					name: d.fileName,
-					type: d.fileType,
-					url: d.url,
-					uploadedAt: d.uploadedAt,
-					category: d.documentCategory as DocumentCategory,
-					fileSize: d.fileSize,
-				})),
-			);
-		}
+		if (!listQuery.data) return;
+		setDocuments(
+			listQuery.data.map((d) => ({
+				id: d.id,
+				name: d.fileName,
+				type: d.fileType,
+				url: d.url,
+				uploadedAt: d.uploadedAt,
+				category: d.documentCategory as DocumentCategory,
+				fileSize: d.fileSize,
+			})),
+		);
 	}, [listQuery.data]);
 
-	// ✅ CORRECT PATTERN: Use useMutation with manual fetch (same as commission-approval-queue)
-	const uploadMutation = useMutation({
-		mutationFn: async (input: {
-			transactionId: string;
-			fileName: string;
-			fileType: string;
-			fileSize: number;
-			documentCategory: string;
-			base64Data: string;
-		}) => {
-			const response = await fetch("/api/trpc/documents.upload", {
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-				},
-				credentials: "include",
-				body: JSON.stringify({ json: input }),
-			});
+	const uploadMutation = trpc.documents.upload.useMutation();
+	const deleteMutation = trpc.documents.delete.useMutation();
 
-			if (!response.ok) {
-				throw new Error("Upload failed");
-			}
-
-			const result = await response.json();
-			return result.result?.data;
-		},
-	});
-
-	const deleteMutation = useMutation({
-		mutationFn: async (input: { documentId: string }) => {
-			const response = await fetch("/api/trpc/documents.delete", {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				credentials: "include",
-				body: JSON.stringify({ json: input }),
-			});
-
-			if (!response.ok) {
-				throw new Error("Delete failed");
-			}
-
-			return response.json();
-		},
-	});
-
-	// Update documents when query data changes — handled in listQuery effect above
-
-	// Issue #3 Fix: Upload file - handles both temp and real transaction modes
 	const uploadFile = async (
 		file: File,
 		category: DocumentCategory,
 	): Promise<DocumentFile> => {
 		const fileId = `temp-${Math.random().toString(36).substring(2, 11)}`;
 
-		console.log(
-			"[DocumentUpload] Starting upload for:",
-			file.name,
-			"isTempMode:",
-			isTempMode,
-		);
-
-		// Set loading state for temp mode
 		if (isTempMode) {
 			setIsUploadingLocal(true);
 		}
 
 		try {
-			// Validate file size (50MB limit)
+			const guessMime = (name: string): string => {
+				const ext = name.split(".").pop()?.toLowerCase();
+				switch (ext) {
+					case "pdf":
+						return "application/pdf";
+					case "jpg":
+					case "jpeg":
+						return "image/jpeg";
+					case "png":
+						return "image/png";
+					case "doc":
+						return "application/msword";
+					case "docx":
+						return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+					case "txt":
+						return "text/plain";
+					default:
+						return "";
+				}
+			};
+
+			const fileType = file.type || guessMime(file.name);
+
 			if (file.size > 50 * 1024 * 1024) {
 				throw new Error("File size exceeds 50MB limit");
 			}
 
-			// Validate file type
 			const allowedTypes = [
 				"image/jpeg",
 				"image/png",
@@ -214,49 +166,33 @@ export function useDocumentUpload(transactionId?: string) {
 				"text/plain",
 			];
 
-			if (!allowedTypes.includes(file.type)) {
-				throw new Error(`File type ${file.type} is not allowed`);
+			if (!allowedTypes.includes(fileType)) {
+				throw new Error(
+					fileType
+						? `File type ${fileType} is not allowed`
+						: "Could not detect file type. Please use PDF, DOC, DOCX, JPG, or PNG.",
+				);
 			}
 
-			// Start progress tracking with file name - use delay to ensure UI updates
-			console.log("[DocumentUpload] Setting progress 0%");
 			setUploadProgress((prev) => ({
 				...prev,
-				[fileId]: { progress: 0, fileName: file.name },
+				[fileId]: { progress: 10, fileName: file.name },
 			}));
-			await new Promise((resolve) => setTimeout(resolve, 50));
 
-			// Convert to base64
-			console.log("[DocumentUpload] Setting progress 25%");
-			setUploadProgress((prev) => ({
-				...prev,
-				[fileId]: { progress: 25, fileName: file.name },
-			}));
 			const base64Data = await fileToBase64(file);
 
-			console.log("[DocumentUpload] Setting progress 50%");
 			setUploadProgress((prev) => ({
 				...prev,
-				[fileId]: { progress: 50, fileName: file.name },
+				[fileId]: { progress: 40, fileName: file.name },
 			}));
 
-			// Issue #3 Fix: If in temp mode, store locally instead of uploading
+			// New transaction (no draft id yet) — keep files locally until create/migrate
 			if (isTempMode) {
-				// Small delay to ensure progress UI is visible
-				await new Promise((resolve) => setTimeout(resolve, 200));
-				console.log("[DocumentUpload] Setting progress 75%");
-				setUploadProgress((prev) => ({
-					...prev,
-					[fileId]: { progress: 75, fileName: file.name },
-				}));
-
-				await new Promise((resolve) => setTimeout(resolve, 200));
-
 				const tempDoc: DocumentFile = {
 					id: fileId,
 					name: file.name,
-					type: file.type,
-					url: `data:${file.type};base64,${base64Data}`, // Data URL for preview
+					type: fileType,
+					url: `data:${fileType};base64,${base64Data}`,
 					uploadedAt: new Date().toISOString(),
 					category,
 					isTemp: true,
@@ -264,66 +200,67 @@ export function useDocumentUpload(transactionId?: string) {
 					fileSize: file.size,
 				};
 
-				console.log("[DocumentUpload] Setting progress 100%");
 				setUploadProgress((prev) => ({
 					...prev,
 					[fileId]: { progress: 100, fileName: file.name },
 				}));
 
-				// Add to temp documents
-				console.log("[DocumentUpload] Adding temp document:", tempDoc.name);
 				setTempDocuments((prev) => {
 					const updated = [...prev, tempDoc];
-					console.log("[DocumentUpload] Total temp documents:", updated.length);
 					saveTempDocuments(updated);
 					return updated;
 				});
 
-				// Clean up progress after a delay
 				setTimeout(() => {
-					console.log("[DocumentUpload] Cleaning up progress");
 					setUploadProgress((prev) => {
-						const newProgress = { ...prev };
-						delete newProgress[fileId];
-						return newProgress;
+						const next = { ...prev };
+						delete next[fileId];
+						return next;
 					});
 					setIsUploadingLocal(false);
-				}, 1500);
+				}, 800);
 
 				return tempDoc;
 			}
 
-			// Upload via tRPC for real transactions
-			if (!transactionId) throw new Error("transactionId is required");
+			if (!transactionId) {
+				throw new Error("Save the draft first, then upload documents.");
+			}
+
+			setUploadProgress((prev) => ({
+				...prev,
+				[fileId]: { progress: 70, fileName: file.name },
+			}));
+
 			const result = await uploadMutation.mutateAsync({
 				transactionId,
 				fileName: file.name,
-				fileType: file.type,
+				fileType,
 				fileSize: file.size,
 				documentCategory: category,
 				base64Data,
 			});
+
+			if (!result?.id) {
+				throw new Error("Upload failed: empty server response");
+			}
 
 			setUploadProgress((prev) => ({
 				...prev,
 				[fileId]: { progress: 100, fileName: file.name },
 			}));
 
-			// Clean up progress after a delay
 			setTimeout(() => {
 				setUploadProgress((prev) => {
-					const newProgress = { ...prev };
-					delete newProgress[fileId];
-					return newProgress;
+					const next = { ...prev };
+					delete next[fileId];
+					return next;
 				});
-			}, 1000);
+			}, 800);
 
-			// Refresh the documents list
-			if (!isTempMode) {
-				listQuery.refetch();
-			}
+			void listQuery.refetch();
 
-			return {
+			const uploaded: DocumentFile = {
 				id: result.id,
 				name: result.fileName,
 				type: result.fileType,
@@ -331,12 +268,18 @@ export function useDocumentUpload(transactionId?: string) {
 				uploadedAt: result.uploadedAt,
 				category: result.documentCategory as DocumentCategory,
 			};
+
+			setDocuments((prev) => {
+				if (prev.some((d) => d.id === uploaded.id)) return prev;
+				return [uploaded, ...prev];
+			});
+
+			return uploaded;
 		} catch (error) {
-			// Clean up progress and loading state on error
 			setUploadProgress((prev) => {
-				const newProgress = { ...prev };
-				delete newProgress[fileId];
-				return newProgress;
+				const next = { ...prev };
+				delete next[fileId];
+				return next;
 			});
 			setIsUploadingLocal(false);
 
@@ -347,10 +290,8 @@ export function useDocumentUpload(transactionId?: string) {
 		}
 	};
 
-	// Issue #3 Fix: Delete file - handles both temp and real documents
 	const deleteFile = async (documentId: string) => {
 		try {
-			// Check if it's a temp document
 			if (documentId.startsWith("temp-") || isTempMode) {
 				setTempDocuments((prev) => {
 					const updated = prev.filter((doc) => doc.id !== documentId);
@@ -361,11 +302,9 @@ export function useDocumentUpload(transactionId?: string) {
 				return;
 			}
 
-			// Delete from server for real documents
 			await deleteMutation.mutateAsync({ documentId });
-			if (!isTempMode) {
-				listQuery.refetch();
-			}
+			setDocuments((prev) => prev.filter((d) => d.id !== documentId));
+			void listQuery.refetch();
 			toast.success("File deleted successfully");
 		} catch (error) {
 			const errorMessage =
@@ -375,30 +314,38 @@ export function useDocumentUpload(transactionId?: string) {
 		}
 	};
 
-	// Issue #3 Fix: Migrate temp documents to a real transaction
 	const migrateDocuments = useCallback(
 		async (newTransactionId: string): Promise<DocumentFile[]> => {
-			if (tempDocuments.length === 0) {
-				return [];
-			}
+			const pending = tempDocuments.length
+				? tempDocuments
+				: loadTempTransactionDocuments();
+			if (pending.length === 0) return [];
 
 			setIsMigrating(true);
 			const migratedDocs: DocumentFile[] = [];
 			const failedDocs: string[] = [];
 
 			try {
-				for (const tempDoc of tempDocuments) {
+				for (const tempDoc of pending) {
 					try {
-						if (!tempDoc.base64Data) continue;
+						if (!tempDoc.base64Data) {
+							failedDocs.push(tempDoc.name);
+							continue;
+						}
 
 						const result = await uploadMutation.mutateAsync({
 							transactionId: newTransactionId,
 							fileName: tempDoc.name,
-							fileType: tempDoc.type,
+							fileType: tempDoc.type || "application/octet-stream",
 							fileSize: tempDoc.fileSize || 0,
 							documentCategory: tempDoc.category || "miscellaneous",
 							base64Data: tempDoc.base64Data,
 						});
+
+						if (!result?.id) {
+							failedDocs.push(tempDoc.name);
+							continue;
+						}
 
 						migratedDocs.push({
 							id: result.id,
@@ -406,7 +353,7 @@ export function useDocumentUpload(transactionId?: string) {
 							type: result.fileType,
 							url: result.url,
 							uploadedAt: result.uploadedAt,
-							category: result.documentCategory,
+							category: result.documentCategory as DocumentCategory,
 						});
 					} catch (error) {
 						console.error(`Failed to migrate document ${tempDoc.name}:`, error);
@@ -414,9 +361,8 @@ export function useDocumentUpload(transactionId?: string) {
 					}
 				}
 
-				// Clear temp documents after successful migration
 				if (failedDocs.length === 0) {
-					clearTempDocuments();
+					clearTempDocumentsStorage();
 					setTempDocuments([]);
 				}
 
@@ -438,7 +384,11 @@ export function useDocumentUpload(transactionId?: string) {
 		[tempDocuments, uploadMutation],
 	);
 
-	// Issue #3 Fix: Get all documents (temp + real)
+	const clearTempDocuments = useCallback(() => {
+		clearTempDocumentsStorage();
+		setTempDocuments([]);
+	}, []);
+
 	const allDocuments = isTempMode ? tempDocuments : documents;
 
 	return {
@@ -446,7 +396,6 @@ export function useDocumentUpload(transactionId?: string) {
 		deleteFile,
 		documents: allDocuments,
 		tempDocuments,
-		// Combine mutation pending state with local uploading state for temp mode
 		isUploading: uploadMutation.isPending || isUploadingLocal,
 		isDeleting: deleteMutation.isPending,
 		isMigrating,
@@ -455,12 +404,8 @@ export function useDocumentUpload(transactionId?: string) {
 		deleteError: deleteMutation.error?.message,
 		isLoadingDocuments: listQuery.isLoading,
 		refetchDocuments: listQuery.refetch,
-		// Issue #3 Fix: Export migration function
 		migrateDocuments,
-		clearTempDocuments: () => {
-			clearTempDocuments();
-			setTempDocuments([]);
-		},
+		clearTempDocuments,
 		isTempMode,
 	};
 }
