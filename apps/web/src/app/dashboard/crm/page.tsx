@@ -265,14 +265,16 @@ export default function CRMPage() {
 			stage: stageFilter === "all" ? undefined : stageFilter,
 			tagId: categoryFilter === "all" ? undefined : categoryFilter,
 			status: statusFilter === "all" ? undefined : statusFilter,
+			// My Leads: assigned/followed. Company Leads: unclaimed company pool.
+			includeCompanyLeads: activeTab === "company",
 			filterAgentId:
-				agentFilter === "all"
+				activeTab === "company"
 					? undefined
-					: agentFilter === "__unassigned__"
-						? ("__unassigned__" as const)
-						: agentFilter,
-			leadType:
-				activeTab === "company" ? ("company" as const) : ("personal" as const),
+					: agentFilter === "all"
+						? undefined
+						: agentFilter === "__unassigned__"
+							? ("__unassigned__" as const)
+							: agentFilter,
 			page: currentPage,
 			limit: viewMode === "kanban" ? 1000 : itemsPerPage,
 		},
@@ -286,15 +288,15 @@ export default function CRMPage() {
 	const prospects = prospectsData?.prospects || [];
 	const totalPages = prospectsData?.pagination.totalPages || 0;
 
-	// Summary cards: own assigned leads only (respects current filters)
+	// Summary cards: own assigned leads only (respects current filters; My Leads scope)
 	const agentStatsQuery = trpc.crm.list.useQuery(
 		{
 			search: searchQuery || undefined,
 			stage: stageFilter === "all" ? undefined : stageFilter,
 			tagId: categoryFilter === "all" ? undefined : categoryFilter,
 			status: statusFilter === "all" ? undefined : statusFilter,
+			includeCompanyLeads: false,
 			filterAgentId: session?.user?.id,
-			leadType: "personal",
 			page: 1,
 			limit: 5000,
 			forExport: true,
@@ -321,14 +323,15 @@ export default function CRMPage() {
 			stage: stageFilter === "all" ? undefined : stageFilter,
 			tagId: categoryFilter === "all" ? undefined : categoryFilter,
 			status: statusFilter === "all" ? undefined : statusFilter,
+			includeCompanyLeads: activeTab === "company",
 			filterAgentId:
-				agentFilter === "all"
+				activeTab === "company"
 					? undefined
-					: agentFilter === "__unassigned__"
-						? ("__unassigned__" as const)
-						: agentFilter,
-			leadType:
-				activeTab === "company" ? ("company" as const) : ("personal" as const),
+					: agentFilter === "all"
+						? undefined
+						: agentFilter === "__unassigned__"
+							? ("__unassigned__" as const)
+							: agentFilter,
 			page: 1,
 			limit: 5000,
 			forExport: true as const,
@@ -803,7 +806,10 @@ export default function CRMPage() {
 										aria-selected={activeTab === "my"}
 										variant={activeTab === "my" ? "default" : "ghost"}
 										size="sm"
-										onClick={() => setActiveTab("my")}
+										onClick={() => {
+											setActiveTab("my");
+											setCurrentPage(1);
+										}}
 										className="h-8"
 									>
 										My Leads
@@ -814,7 +820,11 @@ export default function CRMPage() {
 										aria-selected={activeTab === "company"}
 										variant={activeTab === "company" ? "default" : "ghost"}
 										size="sm"
-										onClick={() => setActiveTab("company")}
+										onClick={() => {
+											setActiveTab("company");
+											setCurrentPage(1);
+											setAgentFilter("all");
+										}}
 										className="h-8"
 									>
 										Company Leads
