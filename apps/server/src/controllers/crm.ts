@@ -18,6 +18,7 @@ import {
 	normalisePipelineStage,
 	pipelineStageSchema,
 	prospectNotes,
+	prospectFollowers,
 	prospectTags,
 	prospects,
 	selectProspectNoteSchema,
@@ -162,21 +163,67 @@ export const crmRouter = router({
 				const conditions: SQL[] = [];
 
 				// Tab scope by lead type:
-				// - My Leads (personal): personal leads assigned to / followed by the agent
-				// - Company Leads: company-type leads (unclaimed pool + ones this agent owns/follows)
+				// - My Leads (personal): personal leads
+				// - Company Leads: company-type leads
 				const isCompanyTab =
 					includeCompanyLeads === true || leadType === "company";
 
 				if (isCompanyTab) {
 					conditions.push(eq(prospects.leadType, "company"));
-					const companyAccess =
-						or(
-							isNull(prospects.agentId),
-							buildAgentPersonalLeadsCondition(agentId),
-						) ?? sql`false`;
-					conditions.push(companyAccess);
 				} else {
 					conditions.push(eq(prospects.leadType, "personal"));
+				}
+
+				// Access + optional Agent filter
+				// "All Agents": assigned to me OR leads I follow
+				// Specific agent: only leads assigned to that agent (and I must still have access)
+				//   - filtering myself → strictly my assigned leads (excludes followed others)
+				//   - filtering another agent → their leads that I follow
+				if (isCompanyTab) {
+					if (filterAgentId && filterAgentId !== "__unassigned__") {
+						conditions.push(eq(prospects.agentId, filterAgentId));
+						if (filterAgentId !== agentId) {
+							conditions.push(
+								inArray(
+									prospects.id,
+									db
+										.select({ id: prospectFollowers.prospectId })
+										.from(prospectFollowers)
+										.where(eq(prospectFollowers.userId, agentId)),
+								),
+							);
+						}
+					} else if (filterAgentId === "__unassigned__") {
+						conditions.push(isNull(prospects.agentId));
+					} else {
+						const companyAccess =
+							or(
+								isNull(prospects.agentId),
+								buildAgentPersonalLeadsCondition(agentId),
+							) ?? sql`false`;
+						conditions.push(companyAccess);
+					}
+				} else if (filterAgentId === "__unassigned__") {
+					conditions.push(isNull(prospects.agentId));
+					conditions.push(buildAgentPersonalLeadsCondition(agentId));
+				} else if (filterAgentId) {
+					// Strict assignee match — this is what Team Leaders expect when
+					// picking themselves or a team member from the Agent filter.
+					conditions.push(eq(prospects.agentId, filterAgentId));
+					if (filterAgentId !== agentId) {
+						// Viewing another agent's leads: only ones I follow
+						conditions.push(
+							inArray(
+								prospects.id,
+								db
+									.select({ id: prospectFollowers.prospectId })
+									.from(prospectFollowers)
+									.where(eq(prospectFollowers.userId, agentId)),
+							),
+						);
+					}
+					// filterAgentId === me: assigned-to-me only (no followed-others)
+				} else {
 					conditions.push(buildAgentPersonalLeadsCondition(agentId));
 				}
 
@@ -244,16 +291,7 @@ export const crmRouter = router({
 					conditions.push(eq(prospects.stage, stage));
 				}
 
-				// Lead type already applied via tab scope above — skip duplicate filter
-
-				// Assigned agent filter (My Leads / team monitoring only)
-				if (filterAgentId && !isCompanyTab) {
-					if (filterAgentId === "__unassigned__") {
-						conditions.push(isNull(prospects.agentId));
-					} else {
-						conditions.push(eq(prospects.agentId, filterAgentId));
-					}
-				}
+				// Lead type + agent filter already applied via tab/access scope above
 
 				// Helper function to execute query with timeout and retry
 				const executeQueryWithRetry = async <T>(

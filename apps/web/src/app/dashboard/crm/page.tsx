@@ -270,13 +270,11 @@ export default function CRMPage() {
 				activeTab === "company" ? ("company" as const) : ("personal" as const),
 			includeCompanyLeads: activeTab === "company",
 			filterAgentId:
-				activeTab === "company"
+				agentFilter === "all"
 					? undefined
-					: agentFilter === "all"
-						? undefined
-						: agentFilter === "__unassigned__"
-							? ("__unassigned__" as const)
-							: agentFilter,
+					: agentFilter === "__unassigned__"
+						? ("__unassigned__" as const)
+						: agentFilter,
 			page: currentPage,
 			limit: viewMode === "kanban" ? 1000 : itemsPerPage,
 		},
@@ -289,6 +287,15 @@ export default function CRMPage() {
 
 	const prospects = prospectsData?.prospects || [];
 	const totalPages = prospectsData?.pagination.totalPages || 0;
+
+	// Client-side safety: Agent filter must restrict to the selected assignee
+	const displayedProspects = useMemo(() => {
+		if (agentFilter === "all") return prospects;
+		if (agentFilter === "__unassigned__") {
+			return prospects.filter((p) => !p.agentId);
+		}
+		return prospects.filter((p) => p.agentId === agentFilter);
+	}, [prospects, agentFilter]);
 
 	// Summary cards: My Leads (personal) assigned to this agent
 	const agentStatsQuery = trpc.crm.list.useQuery(
@@ -330,13 +337,11 @@ export default function CRMPage() {
 				activeTab === "company" ? ("company" as const) : ("personal" as const),
 			includeCompanyLeads: activeTab === "company",
 			filterAgentId:
-				activeTab === "company"
+				agentFilter === "all"
 					? undefined
-					: agentFilter === "all"
-						? undefined
-						: agentFilter === "__unassigned__"
-							? ("__unassigned__" as const)
-							: agentFilter,
+					: agentFilter === "__unassigned__"
+						? ("__unassigned__" as const)
+						: agentFilter,
 			page: 1,
 			limit: 5000,
 			forExport: true as const,
@@ -1968,11 +1973,20 @@ export default function CRMPage() {
 							<SelectContent>
 								<SelectItem value="all">All Agents</SelectItem>
 								<SelectItem value="__unassigned__">Unassigned</SelectItem>
-								{followerAgents.map((a) => (
-									<SelectItem key={a.agentId} value={a.agentId}>
-										{a.agentName ?? a.agentEmail}
+								{session?.user?.id ? (
+									<SelectItem value={session.user.id}>
+										{session.user.name?.trim()
+											? `${session.user.name} (Me)`
+											: "Me (My assigned leads)"}
 									</SelectItem>
-								))}
+								) : null}
+								{followerAgents
+									.filter((a) => a.agentId !== session?.user?.id)
+									.map((a) => (
+										<SelectItem key={a.agentId} value={a.agentId}>
+											{a.agentName ?? a.agentEmail}
+										</SelectItem>
+									))}
 							</SelectContent>
 						</Select>
 
@@ -2065,7 +2079,7 @@ export default function CRMPage() {
 								</div>
 							) : (
 								<KanbanBoard
-									prospects={prospects}
+									prospects={displayedProspects}
 									onView={handleView}
 									onStageChange={handleStageChange}
 									leadsTab={activeTab}
@@ -2131,12 +2145,12 @@ export default function CRMPage() {
 										Retry
 									</Button>
 								</div>
-							) : prospects.length === 0 ? (
+							) : displayedProspects.length === 0 ? (
 								<div className="col-span-full py-12 text-center text-muted-foreground">
 									No prospects found. Click "Add Prospect" to get started.
 								</div>
 							) : (
-								prospects.map((prospect) => (
+								displayedProspects.map((prospect) => (
 									<Card key={prospect.id}>
 										<CardContent className="p-4">
 											<div className="flex items-start justify-between">
