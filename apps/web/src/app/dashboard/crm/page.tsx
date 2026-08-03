@@ -265,7 +265,9 @@ export default function CRMPage() {
 			stage: stageFilter === "all" ? undefined : stageFilter,
 			tagId: categoryFilter === "all" ? undefined : categoryFilter,
 			status: statusFilter === "all" ? undefined : statusFilter,
-			// My Leads: assigned/followed. Company Leads: unclaimed company pool.
+			// Personal → My Leads; Company → Company Leads
+			leadType:
+				activeTab === "company" ? ("company" as const) : ("personal" as const),
 			includeCompanyLeads: activeTab === "company",
 			filterAgentId:
 				activeTab === "company"
@@ -288,13 +290,14 @@ export default function CRMPage() {
 	const prospects = prospectsData?.prospects || [];
 	const totalPages = prospectsData?.pagination.totalPages || 0;
 
-	// Summary cards: own assigned leads only (respects current filters; My Leads scope)
+	// Summary cards: My Leads (personal) assigned to this agent
 	const agentStatsQuery = trpc.crm.list.useQuery(
 		{
 			search: searchQuery || undefined,
 			stage: stageFilter === "all" ? undefined : stageFilter,
 			tagId: categoryFilter === "all" ? undefined : categoryFilter,
 			status: statusFilter === "all" ? undefined : statusFilter,
+			leadType: "personal",
 			includeCompanyLeads: false,
 			filterAgentId: session?.user?.id,
 			page: 1,
@@ -323,6 +326,8 @@ export default function CRMPage() {
 			stage: stageFilter === "all" ? undefined : stageFilter,
 			tagId: categoryFilter === "all" ? undefined : categoryFilter,
 			status: statusFilter === "all" ? undefined : statusFilter,
+			leadType:
+				activeTab === "company" ? ("company" as const) : ("personal" as const),
 			includeCompanyLeads: activeTab === "company",
 			filterAgentId:
 				activeTab === "company"

@@ -161,11 +161,22 @@ export const crmRouter = router({
 				// Build where conditions
 				const conditions: SQL[] = [];
 
-				// Tab scope: "my" = assigned leads only; "company" = unclaimed company pool only
-				if (includeCompanyLeads) {
+				// Tab scope by lead type:
+				// - My Leads (personal): personal leads assigned to / followed by the agent
+				// - Company Leads: company-type leads (unclaimed pool + ones this agent owns/follows)
+				const isCompanyTab =
+					includeCompanyLeads === true || leadType === "company";
+
+				if (isCompanyTab) {
 					conditions.push(eq(prospects.leadType, "company"));
-					conditions.push(isNull(prospects.agentId));
+					const companyAccess =
+						or(
+							isNull(prospects.agentId),
+							buildAgentPersonalLeadsCondition(agentId),
+						) ?? sql`false`;
+					conditions.push(companyAccess);
 				} else {
+					conditions.push(eq(prospects.leadType, "personal"));
 					conditions.push(buildAgentPersonalLeadsCondition(agentId));
 				}
 
@@ -233,13 +244,10 @@ export const crmRouter = router({
 					conditions.push(eq(prospects.stage, stage));
 				}
 
-				// Lead type filter
-				if (leadType) {
-					conditions.push(eq(prospects.leadType, leadType));
-				}
+				// Lead type already applied via tab scope above — skip duplicate filter
 
-				// Assigned agent filter (leaders monitoring team leads they follow)
-				if (filterAgentId && !includeCompanyLeads) {
+				// Assigned agent filter (My Leads / team monitoring only)
+				if (filterAgentId && !isCompanyTab) {
 					if (filterAgentId === "__unassigned__") {
 						conditions.push(isNull(prospects.agentId));
 					} else {
