@@ -6,6 +6,7 @@ import {
 	UnsavedChangesDialog,
 } from "@/components/enhanced-modal";
 import { Button } from "@/components/ui/button";
+import { useTransactionModal } from "@/contexts/transaction-modal-context";
 import { Loader2, Save } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
 import { TransactionForm } from "./transaction-form";
@@ -25,6 +26,7 @@ export function TransactionFormModal({
 	onSubmit,
 	mode = "create",
 }: TransactionFormModalProps) {
+	const { openCreateModal } = useTransactionModal();
 	const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
 	const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 	const [isSaving, setIsSaving] = useState(false);
@@ -76,6 +78,11 @@ export function TransactionFormModal({
 		saveDraftRef.current = fn;
 	}, []);
 
+	const handleStartNew = useCallback(() => {
+		onClose();
+		window.setTimeout(() => openCreateModal({ forceNew: true }), 0);
+	}, [onClose, openCreateModal]);
+
 	const getModalTitle = () => {
 		switch (mode) {
 			case "create":
@@ -85,7 +92,7 @@ export function TransactionFormModal({
 			case "view":
 				return "View Transaction";
 			case "resume":
-				return "Resume Transaction";
+				return "Continue Draft";
 			default:
 				return "Sales Transaction";
 		}
@@ -100,7 +107,7 @@ export function TransactionFormModal({
 			case "view":
 				return "Review transaction details";
 			case "resume":
-				return "Continue where you left off";
+				return "Your last saved draft was restored — continue where you left off";
 			default:
 				return "";
 		}
@@ -115,6 +122,16 @@ export function TransactionFormModal({
 				>
 					Unsaved
 				</Badge>
+			) : null}
+			{mode === "resume" || (mode === "edit" && transactionId) ? (
+				<Button
+					variant="ghost"
+					size="sm"
+					className="text-muted-foreground"
+					onClick={handleStartNew}
+				>
+					Start new
+				</Button>
 			) : null}
 			<Button
 				variant="outline"

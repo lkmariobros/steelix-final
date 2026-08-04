@@ -1,6 +1,10 @@
 "use client";
 
 import {
+	clearRememberedTransactionDraftId,
+	getRememberedTransactionDraftId,
+} from "@/features/sales-entry/draft-persistence";
+import {
 	type ReactNode,
 	createContext,
 	useCallback,
@@ -27,10 +31,11 @@ interface TransactionModalContextType {
 	closeModal: () => void;
 
 	// Convenience methods
-	openCreateModal: () => void;
+	/** Opens create, or resumes the last saved draft after refresh (unless forceNew). */
+	openCreateModal: (opts?: { forceNew?: boolean }) => void;
 	openEditModal: (transactionId: string) => void;
 	openViewModal: (transactionId: string) => void;
-	openResumeModal: () => void;
+	openResumeModal: (transactionId?: string) => void;
 }
 
 const TransactionModalContext = createContext<
@@ -50,7 +55,6 @@ export function TransactionModalProvider({
 		transactionId: undefined,
 	});
 
-	// ✅ Wrap in useCallback to prevent recreation
 	const openModal = useCallback(
 		(mode: TransactionModalMode, transactionId?: string) => {
 			setState({
@@ -69,8 +73,23 @@ export function TransactionModalProvider({
 		}));
 	}, []);
 
-	// ✅ Wrap convenience methods too
-	const openCreateModal = useCallback(() => openModal("create"), [openModal]);
+	const openCreateModal = useCallback(
+		(opts?: { forceNew?: boolean }) => {
+			if (opts?.forceNew) {
+				clearRememberedTransactionDraftId();
+				openModal("create");
+				return;
+			}
+			const draftId = getRememberedTransactionDraftId();
+			if (draftId) {
+				openModal("resume", draftId);
+				return;
+			}
+			openModal("create");
+		},
+		[openModal],
+	);
+
 	const openEditModal = useCallback(
 		(transactionId: string) => openModal("edit", transactionId),
 		[openModal],
@@ -79,19 +98,22 @@ export function TransactionModalProvider({
 		(transactionId: string) => openModal("view", transactionId),
 		[openModal],
 	);
-	const openResumeModal = useCallback(() => openModal("resume"), [openModal]);
+	const openResumeModal = useCallback(
+		(transactionId?: string) => {
+			const id =
+				transactionId ?? getRememberedTransactionDraftId() ?? undefined;
+			if (id) openModal("resume", id);
+			else openModal("create");
+		},
+		[openModal],
+	);
 
 	const contextValue: TransactionModalContextType = {
-		// State
 		isOpen: state.isOpen,
 		mode: state.mode,
 		transactionId: state.transactionId,
-
-		// Actions
 		openModal,
 		closeModal,
-
-		// Convenience methods
 		openCreateModal,
 		openEditModal,
 		openViewModal,
@@ -117,12 +139,13 @@ export function useTransactionModal() {
 
 // Hook for components that just need to trigger the modal (lightweight)
 export function useTransactionModalActions() {
-	const { openCreateModal, openEditModal, openViewModal } =
+	const { openCreateModal, openEditModal, openViewModal, openResumeModal } =
 		useTransactionModal();
 	return {
 		openCreateModal,
 		openEditModal,
 		openViewModal,
+		openResumeModal,
 	};
 }
 

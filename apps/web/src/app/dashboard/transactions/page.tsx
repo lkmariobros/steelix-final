@@ -742,9 +742,21 @@ export default function TransactionsPage() {
 																		e.stopPropagation();
 																		openEditModal(transaction.id);
 																	}}
-																	title="Edit transaction"
+																	title={
+																		transaction.status === "draft"
+																			? "Continue draft"
+																			: "Edit transaction"
+																	}
+																	className={
+																		transaction.status === "draft"
+																			? "gap-1 px-2 text-primary"
+																			: undefined
+																	}
 																>
 																	<RiEditLine className="h-4 w-4" />
+																	{transaction.status === "draft" ? (
+																		<span className="text-xs">Continue</span>
+																	) : null}
 																</Button>
 															</div>
 														</TableCell>

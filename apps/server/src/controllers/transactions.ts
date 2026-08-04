@@ -71,7 +71,7 @@ const baseTransactionInput = z.object({
 			rentPeriod: z.string().optional(),
 			listingReferralShareType: z.enum(["percentage", "fixed"]).optional(),
 			listingReferralShareValue: z.number().nonnegative().optional(),
-			price: z.number().nonnegative("Price must be non-negative"),
+			price: z.number().nonnegative("Price must be non-negative").optional(),
 			spaPrice: z.number().nonnegative().optional(),
 			nettPrice: z.number().nonnegative().optional(),
 			description: z.string().optional(),
@@ -84,10 +84,11 @@ const baseTransactionInput = z.object({
 	representationType: z.enum(["direct", "co_broking"]).optional(),
 	clientData: z
 		.object({
-			name: z.string().min(1, "Purchaser name is required"),
+			/** Empty allowed on draft create/update; enforced on submit in the UI */
+			name: z.string().optional().default(""),
 			icNo: z.string().optional(),
 			email: z.string().email().optional().or(z.literal("")),
-			phone: z.string().min(1, "Phone number is required"),
+			phone: z.string().optional().default(""),
 			address: z.string().optional(),
 			race: z.string().optional(),
 			nationality: z.string().optional(),
@@ -100,10 +101,10 @@ const baseTransactionInput = z.object({
 			additionalPurchasers: z
 				.array(
 					z.object({
-						name: z.string().min(1),
+						name: z.string().optional().default(""),
 						icNo: z.string().optional(),
 						email: z.string().email().optional().or(z.literal("")),
-						phone: z.string().min(1),
+						phone: z.string().optional().default(""),
 						address: z.string().optional(),
 						race: z.string().optional(),
 						nationality: z.string().optional(),
@@ -116,10 +117,10 @@ const baseTransactionInput = z.object({
 			vendors: z
 				.array(
 					z.object({
-						name: z.string().min(1),
+						name: z.string().optional().default(""),
 						icNo: z.string().optional(),
 						email: z.string().email().optional().or(z.literal("")),
-						phone: z.string().min(1),
+						phone: z.string().optional().default(""),
 						address: z.string().optional(),
 						race: z.string().optional(),
 						nationality: z.string().optional(),
@@ -169,25 +170,20 @@ const baseTransactionInput = z.object({
 	agentId: z.string().min(1).optional(),
 });
 
-// Input schemas with Primary Market → Sale validation and Co-broking validation
-const createTransactionInput = baseTransactionInput
-	.refine(
-		(data: z.infer<typeof baseTransactionInput>) => {
-			// Primary market transactions must be sales
-			if (data.marketType === "primary") {
-				return data.transactionType === "sale";
-			}
-			return true;
-		},
-		{
-			message: "Primary market transactions must be sales",
-			path: ["transactionType"],
-		},
-	)
-	.refine((data) => isCoBrokingInputValid(data), {
-			message: "Co-broking agent is required when co-broking is enabled",
-			path: ["coBrokingData"],
-		});
+// Create/update are draft-friendly — co-broking completeness is enforced on submit in the UI
+const createTransactionInput = baseTransactionInput.refine(
+	(data: z.infer<typeof baseTransactionInput>) => {
+		// Primary market transactions must be sales
+		if (data.marketType === "primary") {
+			return data.transactionType === "sale" || data.transactionType === undefined;
+		}
+		return true;
+	},
+	{
+		message: "Primary market transactions must be sales",
+		path: ["transactionType"],
+	},
+);
 
 const updateTransactionInput = baseTransactionInput
 	.partial()
@@ -206,11 +202,7 @@ const updateTransactionInput = baseTransactionInput
 			message: "Primary market transactions must be sales",
 			path: ["transactionType"],
 		},
-	)
-	.refine((data) => isCoBrokingInputValid(data), {
-		message: "Co-broking agent is required when co-broking is enabled",
-		path: ["coBrokingData"],
-	});
+	);
 
 const transactionIdInput = z.object({
 	id: z.string().uuid(),
@@ -295,34 +287,6 @@ function sessionIsAdmin(ctx: {
 	});
 }
 
-function isCoBrokingInputValid(data: {
-	representationType?: string;
-	isCoBroking?: boolean;
-	marketType?: string;
-	coBrokingData?: {
-		internalAgentId?: string;
-		agentName?: string;
-		agentPhone?: string;
-		agencyName?: string;
-	};
-}) {
-	const isCoBroking =
-		data.representationType === "co_broking" || data.isCoBroking === true;
-	if (!isCoBroking || !data.coBrokingData) return true;
-
-	const { internalAgentId, agentName, agentPhone, agencyName } =
-		data.coBrokingData;
-	if (internalAgentId?.trim()) return true;
-	if (
-		data.marketType === "secondary" &&
-		agencyName?.trim() &&
-		agentName?.trim()
-	) {
-		return true;
-	}
-	return Boolean(agentName?.trim() && agentPhone?.trim());
-}
-
 async function resolveTransactionAgentId(
 	ctx: { session: { user: { id: string; role?: string | null; roles?: string[] | null } } },
 	inputAgentId?: string,
@@ -394,8 +358,25 @@ export const transactionsRouter = router({
 						? ("lease" as const)
 						: (transactionInput.transactionType ?? "sale");
 
+				const propertyData = transactionInput.propertyData
+					? {
+							...transactionInput.propertyData,
+							price: transactionInput.propertyData.price ?? 0,
+						}
+					: undefined;
+
+				const clientData = transactionInput.clientData
+					? {
+							...transactionInput.clientData,
+							name: transactionInput.clientData.name ?? "",
+							phone: transactionInput.clientData.phone ?? "",
+						}
+					: { name: "", phone: "" };
+
 				const newTransaction = {
 					...transactionInput,
+					propertyData,
+					clientData,
 					transactionType,
 					agentId,
 					status: "draft" as const,

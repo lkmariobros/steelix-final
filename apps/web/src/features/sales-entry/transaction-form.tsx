@@ -14,6 +14,10 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import {
+	clearRememberedTransactionDraftId,
+	rememberTransactionDraftId,
+} from "./draft-persistence";
+import {
 	type FormStep,
 	type SectionStep,
 	stepConfig,
@@ -193,67 +197,89 @@ export function TransactionForm({
 	);
 
 	// Handle save draft — never auto-submit; drafts stay status=draft until Verify
-	const handleSaveDraft = useCallback(async () => {
-		setIsSaving(true);
-		try {
-			const draftData = prepareFormDataForSubmission(
-				{ ...formData },
-				{ requireCoBroke: false },
-			);
+	const handleSaveDraft = useCallback(
+		async (opts?: { silent?: boolean }) => {
+			setIsSaving(true);
+			try {
+				const draftData = prepareFormDataForSubmission(
+					{ ...formData },
+					{ requireCoBroke: false },
+				);
 
-			let savedId: string | undefined;
+				let savedId: string | undefined;
 
-			if (effectiveTxId) {
-				await updateTransaction.mutateAsync({
-					id: effectiveTxId,
-					...draftData,
-				});
-				savedId = effectiveTxId;
-				toast.success("Draft updated successfully");
-			} else {
-				const newTransaction = await createTransaction.mutateAsync({
-					...draftData,
-					marketType: draftData.marketType ?? "primary",
-					transactionType:
-						draftData.marketType === "secondary"
-							? (draftData.transactionType ?? "sale")
-							: ("sale" as const),
-					transactionDate:
-						draftData.bookingDate ??
-						draftData.transactionDate ??
-						new Date(),
-				});
-				setLocalTxId(newTransaction.id);
-				savedId = newTransaction.id;
-				toast.success("Draft saved successfully");
-			}
-
-			// Always attempt migrate — parent hook tempDocuments may be empty while
-			// step uploads live in localStorage (migrateDocuments loads that itself).
-			if (savedId) {
-				try {
-					await migrateDocuments(savedId);
-				} catch {
-					// migrateDocuments already toasts
+				if (effectiveTxId) {
+					await updateTransaction.mutateAsync({
+						id: effectiveTxId,
+						...draftData,
+					});
+					savedId = effectiveTxId;
+					if (!opts?.silent) {
+						toast.success("Draft updated successfully");
+					}
+				} else {
+					const newTransaction = await createTransaction.mutateAsync({
+						...draftData,
+						marketType: draftData.marketType ?? "primary",
+						transactionType:
+							draftData.marketType === "secondary"
+								? (draftData.transactionType ?? "sale")
+								: ("sale" as const),
+						transactionDate:
+							draftData.bookingDate ??
+							draftData.transactionDate ??
+							new Date(),
+					});
+					setLocalTxId(newTransaction.id);
+					savedId = newTransaction.id;
+					if (!opts?.silent) {
+						toast.success("Draft saved successfully");
+					}
 				}
-			}
 
-			clearAutoSave();
-		} catch (error) {
-			console.error("Save draft error:", error);
-			// Error handling is now done in mutation onError callbacks
-		} finally {
-			setIsSaving(false);
+				if (savedId) {
+					rememberTransactionDraftId(savedId);
+					try {
+						await migrateDocuments(savedId);
+					} catch {
+						// migrateDocuments already toasts
+					}
+				}
+
+				clearAutoSave();
+				return savedId;
+			} catch (error) {
+				console.error("Save draft error:", error);
+				// Error toast comes from mutation onError
+				if (opts?.silent) throw error;
+				return undefined;
+			} finally {
+				setIsSaving(false);
+			}
+		},
+		[
+			effectiveTxId,
+			formData,
+			updateTransaction,
+			createTransaction,
+			migrateDocuments,
+			clearAutoSave,
+			prepareFormDataForSubmission,
+		],
+	);
+
+	const handleNextWithDraftSave = useCallback(async () => {
+		try {
+			await handleSaveDraft({ silent: true });
+			toast.success("Draft auto-saved", {
+				description:
+					"After refresh, click New Transaction again to continue this draft.",
+			});
+			goToNextStep();
+		} catch {
+			// Stay on current step; mutation already toasts the error
 		}
-	}, [
-		effectiveTxId,
-		formData,
-		updateTransaction,
-		createTransaction,
-		migrateDocuments,
-		clearAutoSave,
-		prepareFormDataForSubmission,
-	]);
+	}, [handleSaveDraft, goToNextStep]);
 
 	// Handle form submission
 	const handleSubmit = useCallback(async () => {
@@ -349,6 +375,7 @@ export function TransactionForm({
 			// Submit for review
 			if (finalTransactionId) {
 				await submitTransaction.mutateAsync({ id: finalTransactionId });
+				clearRememberedTransactionDraftId(finalTransactionId);
 				toast.success("Transaction submitted for review successfully!");
 				clearAutoSave();
 				clearTempDocuments();
@@ -398,7 +425,9 @@ export function TransactionForm({
 	}, [isSaving, onSavingChange]);
 
 	useEffect(() => {
-		onRegisterSaveDraft?.(handleSaveDraft);
+		onRegisterSaveDraft?.(() => {
+			void handleSaveDraft();
+		});
 	}, [onRegisterSaveDraft, handleSaveDraft]);
 
 	useEffect(() => {
@@ -413,7 +442,7 @@ export function TransactionForm({
 					<StepDetails
 						formData={formData}
 						onUpdate={updateFormData}
-						onNext={goToNextStep}
+						onNext={handleNextWithDraftSave}
 					/>
 				);
 			case 2:
@@ -422,7 +451,7 @@ export function TransactionForm({
 						formData={formData}
 						transactionId={effectiveTxId}
 						onUpdate={(data) => handleStepUpdate(6, data)}
-						onNext={goToNextStep}
+						onNext={handleNextWithDraftSave}
 						onPrevious={goToPreviousStep}
 					/>
 				);
@@ -475,7 +504,9 @@ export function TransactionForm({
 						<Button
 							variant="outline"
 							size="sm"
-							onClick={handleSaveDraft}
+							onClick={() => {
+								void handleSaveDraft();
+							}}
 							disabled={isSaving}
 							className="gap-1.5"
 						>

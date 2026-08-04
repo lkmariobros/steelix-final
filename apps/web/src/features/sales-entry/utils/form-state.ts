@@ -1,5 +1,7 @@
 import { trpc } from "@/utils/trpc";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
+import { clearRememberedTransactionDraftId } from "../draft-persistence";
 import { takeTransactionPrefillOnce } from "../prefill-stash";
 import {
 	FORM_STEP_COUNT,
@@ -118,11 +120,20 @@ export function useTransactionFormState(
 	const shouldHydrateFromServer =
 		Boolean(transactionId) && (mode === "edit" || mode === "resume");
 
-	const { data: loadedTransaction, isLoading: isLoadingTransaction } =
-		trpc.transactions.getById.useQuery(
-			{ id: transactionId ?? "" },
-			{ enabled: shouldHydrateFromServer },
-		);
+	const {
+		data: loadedTransaction,
+		isLoading: isLoadingTransaction,
+		isError: isLoadError,
+	} = trpc.transactions.getById.useQuery(
+		{ id: transactionId ?? "" },
+		{ enabled: shouldHydrateFromServer, retry: 1 },
+	);
+
+	useEffect(() => {
+		if (!shouldHydrateFromServer || !transactionId || !isLoadError) return;
+		clearRememberedTransactionDraftId(transactionId);
+		toast.error("Could not load that draft. Use New Transaction to start again.");
+	}, [shouldHydrateFromServer, transactionId, isLoadError]);
 
 	useEffect(() => {
 		if (!shouldHydrateFromServer || !transactionId || !loadedTransaction) {
