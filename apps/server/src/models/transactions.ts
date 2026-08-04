@@ -160,6 +160,16 @@ export const transactions = pgTable("transactions", {
 	representationType: text("representation_type").default("direct"),
 	isCoBroking: boolean("is_co_broking").default(false),
 	coBrokingData: jsonb("co_broking_data").$type<{
+		agents?: Array<{
+			id?: string;
+			internalAgentId?: string;
+			agentName?: string;
+			agencyName?: string;
+			commissionSplit?: number;
+			contactInfo?: string;
+			agentEmail?: string;
+			agentPhone?: string;
+		}>;
 		internalAgentId?: string;
 		agentName?: string;
 		agencyName?: string;
@@ -333,6 +343,25 @@ export const insertTransactionSchema = z.object({
 	isCoBroking: z.boolean().default(false),
 	coBrokingData: z
 		.object({
+			agents: z
+				.array(
+					z.object({
+						id: z.string().optional(),
+						internalAgentId: z.string().optional(),
+						agentName: z.string().optional(),
+						agencyName: z.string().optional(),
+						commissionSplit: z
+							.number()
+							.min(0)
+							.max(100, "Commission split must be between 0-100%")
+							.optional(),
+						contactInfo: z.string().optional(),
+						agentEmail: z.string().email().optional().or(z.literal("")),
+						agentPhone: z.string().optional(),
+					}),
+				)
+				.optional(),
+			internalAgentId: z.string().optional(),
 			agentName: z.string().optional(),
 			agencyName: z.string().optional(),
 			commissionSplit: z
@@ -423,10 +452,27 @@ export const selectTransactionSchema = z.object({
 	isCoBroking: z.boolean(),
 	coBrokingData: z
 		.object({
-			agentName: z.string(),
-			agencyName: z.string(),
-			commissionSplit: z.number(),
-			contactInfo: z.string(),
+			agents: z
+				.array(
+					z.object({
+						id: z.string().optional(),
+						internalAgentId: z.string().optional(),
+						agentName: z.string().optional(),
+						agencyName: z.string().optional(),
+						commissionSplit: z.number().optional(),
+						contactInfo: z.string().optional(),
+						agentEmail: z.string().optional(),
+						agentPhone: z.string().optional(),
+					}),
+				)
+				.optional(),
+			internalAgentId: z.string().optional(),
+			agentName: z.string().optional(),
+			agencyName: z.string().optional(),
+			commissionSplit: z.number().optional(),
+			contactInfo: z.string().optional(),
+			agentEmail: z.string().optional(),
+			agentPhone: z.string().optional(),
 		})
 		.nullable(),
 	commissionType: z.enum(["percentage", "fixed"]),

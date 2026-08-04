@@ -135,6 +135,24 @@ const baseTransactionInput = z.object({
 	isCoBroking: z.boolean().default(false),
 	coBrokingData: z
 		.object({
+			agents: z
+				.array(
+					z.object({
+						id: z.string().optional(),
+						internalAgentId: z.string().optional(),
+						agentName: z.string().optional(),
+						agencyName: z.string().optional(),
+						commissionSplit: z
+							.number()
+							.min(0)
+							.max(100, "Commission split must be between 0-100%")
+							.optional(),
+						contactInfo: z.string().optional(),
+						agentEmail: z.string().email().optional().or(z.literal("")),
+						agentPhone: z.string().optional(),
+					}),
+				)
+				.optional(),
 			internalAgentId: z.string().optional(),
 			agentName: z.string().optional(),
 			agencyName: z.string().optional(),

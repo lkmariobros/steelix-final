@@ -491,11 +491,37 @@ export function StepVerify({
 						<>
 							<Separator />
 							<section>
-								<h3 className="mb-2 font-medium">Co-broke Agent</h3>
-								<p className="text-sm">
-									{data.coBrokingData.agentName} ·{" "}
-									{data.coBrokingData.agentPhone}
-								</p>
+								<h3 className="mb-2 font-medium">Co-broke Agents</h3>
+								<ul className="space-y-2 text-sm">
+									{(data.coBrokingData.agents &&
+									data.coBrokingData.agents.length > 0
+										? data.coBrokingData.agents
+										: [
+												{
+													agentName: data.coBrokingData.agentName,
+													agentPhone: data.coBrokingData.agentPhone,
+													agencyName: data.coBrokingData.agencyName,
+													commissionSplit: data.coBrokingData.commissionSplit,
+												},
+											]
+									).map((agent, idx) => (
+										<li
+											key={agent.id ?? `${agent.agentName}-${idx}`}
+											className="rounded border px-3 py-2"
+										>
+											<p className="font-medium">
+												{agent.agentName || "Co-broke agent"}
+												{agent.agencyName ? ` · ${agent.agencyName}` : ""}
+											</p>
+											<p className="text-muted-foreground text-xs">
+												{agent.agentPhone || "—"}
+												{agent.commissionSplit != null
+													? ` · Share ${agent.commissionSplit}%`
+													: ""}
+											</p>
+										</li>
+									))}
+								</ul>
 							</section>
 						</>
 					)}

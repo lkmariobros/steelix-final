@@ -145,19 +145,51 @@ export function TransactionForm({
 			const cleanedData = { ...data };
 			const requireCoBroke = opts?.requireCoBroke ?? true;
 
-			if (!cleanedData.isCoBroking) {
+			const isCoBroking =
+				cleanedData.representationType === "co_broking" ||
+				cleanedData.isCoBroking === true;
+
+			if (!isCoBroking) {
 				cleanedData.coBrokingData = undefined;
 			} else if (cleanedData.coBrokingData) {
-				const { internalAgentId, agentName, agentPhone } =
-					cleanedData.coBrokingData;
-				if (
-					requireCoBroke &&
-					!internalAgentId?.trim() &&
-					(!agentName?.trim() || !agentPhone?.trim())
-				) {
-					throw new Error(
-						"Please select a co-broke agent or complete agent name and phone.",
+				const agents =
+					cleanedData.coBrokingData.agents &&
+					cleanedData.coBrokingData.agents.length > 0
+						? cleanedData.coBrokingData.agents
+						: [
+								{
+									internalAgentId: cleanedData.coBrokingData.internalAgentId,
+									agentName: cleanedData.coBrokingData.agentName,
+									agencyName: cleanedData.coBrokingData.agencyName,
+									agentPhone: cleanedData.coBrokingData.agentPhone,
+									commissionSplit: cleanedData.coBrokingData.commissionSplit,
+								},
+							];
+
+				if (requireCoBroke) {
+					const anyComplete = agents.some((agent) => {
+						if (agent.internalAgentId?.trim()) return true;
+						if (
+							cleanedData.marketType === "secondary" &&
+							agent.agencyName?.trim() &&
+							agent.agentName?.trim()
+						) {
+							return true;
+						}
+						return Boolean(agent.agentName?.trim() && agent.agentPhone?.trim());
+					});
+					if (!anyComplete) {
+						throw new Error(
+							"Please add at least one co-broke agent or complete co-agency details.",
+						);
+					}
+					const total = agents.reduce(
+						(sum, a) => sum + (Number(a.commissionSplit) || 0),
+						0,
 					);
+					if (total > 100) {
+						throw new Error("Combined co-broker shares cannot exceed 100%.");
+					}
 				}
 			}
 

@@ -5,6 +5,10 @@ import type {
 	CompleteTransactionData,
 	PartyPerson,
 } from "../transaction-schema";
+import {
+	buildCoBrokingDataFromAgents,
+	normalizeCoBrokingAgents,
+} from "./co-broking-utils";
 
 export type TransactionRow =
 	inferRouterOutputs<AppRouter>["transactions"]["getById"];
@@ -98,7 +102,15 @@ export function mapTransactionRowToFormData(
 		clientData,
 		representationType: isCo ? "co_broking" : "direct",
 		isCoBroking: isCo,
-		coBrokingData: row.coBrokingData ?? undefined,
+		coBrokingData: isCo
+			? buildCoBrokingDataFromAgents(
+					normalizeCoBrokingAgents(
+						row.coBrokingData as Parameters<
+							typeof normalizeCoBrokingAgents
+						>[0],
+					),
+				)
+			: undefined,
 		commissionType: row.commissionType,
 		commissionValue: Number(row.commissionValue),
 		commissionAmount: Number(row.commissionAmount),

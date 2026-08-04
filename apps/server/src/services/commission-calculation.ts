@@ -22,7 +22,16 @@ function getRepresentationType(tx: TxRow): RepresentationType {
 }
 
 function getCoBrokerSplit(tx: TxRow): number {
-	const co = tx.coBrokingData as { commissionSplit?: number } | null;
+	const co = tx.coBrokingData as {
+		commissionSplit?: number;
+		agents?: Array<{ commissionSplit?: number }>;
+	} | null;
+	if (co?.agents && co.agents.length > 0) {
+		return co.agents.reduce(
+			(sum, a) => sum + (Number(a.commissionSplit) || 0),
+			0,
+		);
+	}
 	return co?.commissionSplit ?? 50;
 }
 

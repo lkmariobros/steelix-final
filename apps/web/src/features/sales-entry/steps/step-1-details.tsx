@@ -42,7 +42,12 @@ import { trpc } from "@/utils/trpc";
 import { isRentalTransactionType } from "@/features/transactions/payment-method-utils";
 
 import { PartyPersonFields } from "../components/party-person-fields";
+import { CoBrokeAgentsFields } from "../components/co-broke-agents-fields";
 import { SecondaryDealFields } from "../components/secondary-deal-fields";
+import {
+	buildCoBrokingDataFromAgents,
+	createEmptyCoBrokeAgent,
+} from "../utils/co-broking-utils";
 import {
 	type CompleteTransactionData,
 	detailsStepSchema,
@@ -81,13 +86,8 @@ export function StepDetails({
 	const isAdminPortal = pathname.startsWith("/admin");
 	const { session } = useUserRole();
 
-	const [agentSearch, setAgentSearch] = useState("");
 	const [caseAgentSearch, setCaseAgentSearch] = useState("");
-	const [coBrokePickerOpen, setCoBrokePickerOpen] = useState(false);
 	const [caseAgentPickerOpen, setCaseAgentPickerOpen] = useState(false);
-	const [selectedCoBrokeLabel, setSelectedCoBrokeLabel] = useState<
-		string | null
-	>(formData.coBrokingData?.agentName ?? null);
 	const [selectedCaseAgentLabel, setSelectedCaseAgentLabel] = useState<
 		string | null
 	>(null);
@@ -305,17 +305,6 @@ export function StepDetails({
 		}
 	}, [selectedScheme, form]);
 
-	const { data: coBrokingAgents = [], isLoading: coBrokingAgentsLoading } =
-		trpc.agents.searchForCoBroking.useQuery(
-			{ search: agentSearch.trim() || undefined, limit: 50 },
-			{
-				enabled:
-					representationType === "co_broking" &&
-					coBrokePickerOpen &&
-					!selectedCoBrokeLabel,
-			},
-		);
-
 	const { data: adminAgentsData, isLoading: caseAgentsLoading } =
 		trpc.agents.list.useQuery(
 			{
@@ -334,7 +323,6 @@ export function StepDetails({
 
 	const adminCaseAgents = adminAgentsData?.agents ?? [];
 
-	const showAgentPicker = coBrokePickerOpen && !selectedCoBrokeLabel;
 	const showCaseAgentPicker =
 		isAdminPortal && caseAgentPickerOpen && !selectedCaseAgentLabel;
 	const isSecondaryDeal = marketType === "secondary";
@@ -418,38 +406,6 @@ export function StepDetails({
 		onNext();
 	};
 
-	const selectCoBrokingAgent = (agent: {
-		id: string;
-		name: string | null;
-		nickName?: string | null;
-		email: string | null;
-		phone: string | null;
-		branch: string | null;
-		agentCode: string | null;
-	}) => {
-		const label = formatAgentPickerLabel(agent);
-		const coBrokingData = {
-			...(form.getValues("coBrokingData") ?? {}),
-			internalAgentId: agent.id,
-			agentName: agent.name ?? "",
-			agentEmail: agent.email ?? "",
-			agentPhone: agent.phone ?? "",
-			agencyName: agent.branch ?? "Devots",
-			contactInfo: [agent.email, agent.phone].filter(Boolean).join(" · "),
-			commissionSplit: form.getValues("coBrokingData.commissionSplit") ?? 50,
-		};
-		form.setValue("coBrokingData", coBrokingData, {
-			shouldDirty: true,
-			shouldValidate: false,
-		});
-		form.clearErrors("coBrokingData");
-		setAgentSearch("");
-		setCoBrokePickerOpen(false);
-		setSelectedCoBrokeLabel(label);
-		syncToParent();
-		toast.success(`Co-broke agent: ${agent.name ?? "Selected"}`);
-	};
-
 	const selectCaseAgent = (agent: {
 		id: string;
 		name: string | null;
@@ -482,6 +438,7 @@ export function StepDetails({
 			errors.clientData?.phone?.message ??
 			errors.clientData?.address?.message ??
 			errors.agentId?.message ??
+			errors.coBrokingData?.agents?.message ??
 			errors.coBrokingData?.agentName?.message ??
 			errors.coBrokingData?.agentPhone?.message ??
 			"Please complete all required fields";
@@ -1072,15 +1029,13 @@ export function StepDetails({
 																if (opt.value === "co_broking") {
 																	form.setValue(
 																		"coBrokingData",
-																		form.getValues("coBrokingData") ?? {
-																			commissionSplit: 50,
-																		},
+																		form.getValues("coBrokingData") ??
+																			buildCoBrokingDataFromAgents([
+																				createEmptyCoBrokeAgent(50),
+																			]),
 																	);
 																} else {
 																	form.setValue("coBrokingData", undefined);
-																	setSelectedCoBrokeLabel(null);
-																	setAgentSearch("");
-																	setCoBrokePickerOpen(false);
 																}
 																syncToParent();
 															}}
@@ -1123,177 +1078,26 @@ export function StepDetails({
 								)}
 
 								{representationType === "co_broking" && (
-									<div className="mt-4 space-y-4 rounded-lg border p-4">
-										<div className="flex items-center gap-2">
-											<UserPlus className="h-4 w-4" />
-											<p className="font-medium text-sm">Co-broke Agent</p>
-										</div>
-
-										{selectedCoBrokeLabel ? (
-											<div className="flex items-center justify-between gap-2 rounded-md border bg-muted/40 px-3 py-2 text-sm">
-												<span>
-													<span className="text-muted-foreground">
-														Selected:{" "}
-													</span>
-													{selectedCoBrokeLabel}
-												</span>
-												<Button
-													type="button"
-													variant="ghost"
-													size="sm"
-													onClick={() => {
-														form.setValue("coBrokingData", {
-															commissionSplit: 50,
-														});
-														setSelectedCoBrokeLabel(null);
-														setAgentSearch("");
-														setCoBrokePickerOpen(true);
-														syncToParent();
-													}}
-												>
-													Change
-												</Button>
-											</div>
-										) : (
-											<div className="relative">
-												<Search className="absolute top-2.5 left-2.5 h-4 w-4 text-muted-foreground" />
-												<Input
-													className="pl-8"
-													placeholder="Search internal agents…"
-													value={agentSearch}
-													onChange={(e) => {
-														setAgentSearch(e.target.value);
-														setCoBrokePickerOpen(true);
-													}}
-													onFocus={() => setCoBrokePickerOpen(true)}
-													onKeyDown={(e) => {
-														if (e.key === "Enter") {
-															e.preventDefault();
-														}
-													}}
-												/>
-											</div>
-										)}
-										{showAgentPicker && (
-											<ul className="max-h-40 space-y-1 overflow-y-auto rounded border p-2">
-												{coBrokingAgentsLoading ? (
-													<li className="px-2 py-1.5 text-muted-foreground text-sm">
-														Loading agents…
-													</li>
-												) : coBrokingAgents.length === 0 ? (
-													<li className="px-2 py-1.5 text-muted-foreground text-sm">
-														No agents found
-													</li>
-												) : (
-													coBrokingAgents.map((a) => (
-														<li key={a.id}>
-															<button
-																type="button"
-																className="w-full rounded px-2 py-1.5 text-left text-sm hover:bg-muted"
-																onMouseDown={(e) => e.preventDefault()}
-																onClick={(e) => {
-																	e.preventDefault();
-																	e.stopPropagation();
-																	selectCoBrokingAgent(a);
-																}}
-															>
-																{formatAgentPickerLabel(a)}
-															</button>
-														</li>
-													))
-												)}
-											</ul>
-										)}
-										<FormField
-											control={form.control}
-											name="coBrokingData.commissionSplit"
-											render={({ field }) => (
-												<FormItem>
-													<FormLabel>Your commission split (%)</FormLabel>
-													<FormControl>
-														<Input
-															type="number"
-															min={0}
-															max={100}
-															value={field.value ?? 50}
-															onChange={(e) => {
-																field.onChange(Number(e.target.value));
-																syncToParent();
-															}}
-														/>
-													</FormControl>
-												</FormItem>
-											)}
-										/>
-
-										{isSecondaryDeal && (
-											<div className="space-y-3 border-t pt-4">
-												<p className="font-medium text-sm">
-													Co-agency (external)
-												</p>
-												<p className="text-muted-foreground text-xs">
-													For subsale and rental deals with an external
-													co-agency, enter the agency and agent name below
-													instead of selecting an internal agent.
-												</p>
-												<div className="grid gap-3 sm:grid-cols-2">
-													<FormField
-														control={form.control}
-														name="coBrokingData.agencyName"
-														render={({ field }) => (
-															<FormItem>
-																<FormLabel>Co-agency name</FormLabel>
-																<FormControl>
-																	<Input
-																		{...field}
-																		value={field.value ?? ""}
-																		onChange={(e) => {
-																			field.onChange(e.target.value);
-																			if (e.target.value.trim()) {
-																				form.setValue(
-																					"coBrokingData.internalAgentId",
-																					undefined,
-																				);
-																				setSelectedCoBrokeLabel(null);
-																			}
-																			syncToParent();
-																		}}
-																	/>
-																</FormControl>
-															</FormItem>
-														)}
+									<FormField
+										control={form.control}
+										name="coBrokingData"
+										render={({ field }) => (
+											<FormItem>
+												<FormControl>
+													<CoBrokeAgentsFields
+														value={field.value}
+														marketType={marketType}
+														onChange={(next) => {
+															field.onChange(next);
+															form.clearErrors("coBrokingData");
+															syncToParent();
+														}}
 													/>
-													<FormField
-														control={form.control}
-														name="coBrokingData.agentName"
-														render={({ field }) => (
-															<FormItem>
-																<FormLabel>Co-agency agent name</FormLabel>
-																<FormControl>
-																	<Input
-																		{...field}
-																		value={field.value ?? ""}
-																		onChange={(e) => {
-																			field.onChange(e.target.value);
-																			if (e.target.value.trim()) {
-																				form.setValue(
-																					"coBrokingData.internalAgentId",
-																					undefined,
-																				);
-																				setSelectedCoBrokeLabel(null);
-																			}
-																			syncToParent();
-																		}}
-																	/>
-																</FormControl>
-																<FormMessage />
-															</FormItem>
-														)}
-													/>
-												</div>
-											</div>
+												</FormControl>
+												<FormMessage />
+											</FormItem>
 										)}
-									</div>
+									/>
 								)}
 							</div>
 

@@ -106,6 +106,25 @@ export const clientSchema = partyPersonSchema.extend({
 
 // Step 4: Representation & Co-Broking Schema
 // Simplified to 2 options: direct representation or co-broking
+const coBrokeAgentEntrySchema = z.object({
+	id: z.string(),
+	internalAgentId: z.string().optional(),
+	agentName: z.string().optional(),
+	agencyName: z.string().optional(),
+	commissionSplit: z
+		.number()
+		.min(0)
+		.max(100, "Commission split must be between 0-100%")
+		.optional(),
+	contactInfo: z.string().optional(),
+	agentEmail: z
+		.string()
+		.email("Please enter a valid email")
+		.optional()
+		.or(z.literal("")),
+	agentPhone: z.string().optional(),
+});
+
 const coBrokingBaseSchema = z.object({
 	// Simplified representation type - single source of truth (required field)
 	representationType: representationTypeEnum,
@@ -113,6 +132,9 @@ const coBrokingBaseSchema = z.object({
 	isCoBroking: z.boolean().optional(),
 	coBrokingData: z
 		.object({
+			/** Multi co-broke agents (preferred) */
+			agents: z.array(coBrokeAgentEntrySchema).optional(),
+			/** Legacy single-agent fields (mirrored from agents[0]) */
 			internalAgentId: z.string().optional(),
 			agentName: z.string().optional(),
 			agencyName: z.string().optional(),
@@ -135,31 +157,57 @@ const coBrokingBaseSchema = z.object({
 // Create a more flexible co-broking schema that validates based on representation type
 export const createCoBrokingSchema = () => {
 	return coBrokingBaseSchema.superRefine((data, ctx) => {
-		// If co-broking is selected, validate required fields
-		if (data.representationType === "co_broking") {
-			const { internalAgentId, agentName, agentPhone, agencyName } =
-				data.coBrokingData || {};
-			const hasInternal = Boolean(internalAgentId?.trim());
-			const hasCoAgency = Boolean(
-				agencyName?.trim() && agentName?.trim(),
-			);
+		if (data.representationType !== "co_broking") return;
 
-			if (!hasInternal && !hasCoAgency) {
-				ctx.addIssue({
-					code: z.ZodIssueCode.custom,
-					message: "Select a co-broke agent or enter co-agency details",
-					path: ["coBrokingData", "agentName"],
-				});
+		const agents =
+			data.coBrokingData?.agents && data.coBrokingData.agents.length > 0
+				? data.coBrokingData.agents
+				: [
+						{
+							id: "legacy",
+							internalAgentId: data.coBrokingData?.internalAgentId,
+							agentName: data.coBrokingData?.agentName,
+							agencyName: data.coBrokingData?.agencyName,
+							agentPhone: data.coBrokingData?.agentPhone,
+							commissionSplit: data.coBrokingData?.commissionSplit,
+						},
+					];
+
+		let anyComplete = false;
+		for (const agent of agents) {
+			const hasInternal = Boolean(agent.internalAgentId?.trim());
+			const hasCoAgency = Boolean(
+				agent.agencyName?.trim() && agent.agentName?.trim(),
+			);
+			if (hasInternal || hasCoAgency) {
+				anyComplete = true;
+				break;
 			}
-			if (!hasInternal && !hasCoAgency && !agentPhone?.trim()) {
-				ctx.addIssue({
-					code: z.ZodIssueCode.custom,
-					message: "Phone number is required for co-broking transactions",
-					path: ["coBrokingData", "agentPhone"],
-				});
+			if (agent.agentName?.trim() && agent.agentPhone?.trim()) {
+				anyComplete = true;
+				break;
 			}
 		}
-		// Direct representation doesn't require co-broking data - always valid
+
+		if (!anyComplete) {
+			ctx.addIssue({
+				code: z.ZodIssueCode.custom,
+				message: "Add at least one co-broke agent or co-agency",
+				path: ["coBrokingData", "agents"],
+			});
+		}
+
+		const totalSplit = agents.reduce(
+			(sum, a) => sum + (Number(a.commissionSplit) || 0),
+			0,
+		);
+		if (totalSplit > 100) {
+			ctx.addIssue({
+				code: z.ZodIssueCode.custom,
+				message: "Combined co-broker splits cannot exceed 100%",
+				path: ["coBrokingData", "agents"],
+			});
+		}
 	});
 };
 
@@ -438,25 +486,52 @@ export const detailsStepSchema = z
 		}
 
 		if (data.representationType === "co_broking") {
-			const { internalAgentId, agentName, agentPhone, agencyName } =
-				data.coBrokingData || {};
-			const hasInternal = Boolean(internalAgentId?.trim());
-			const hasCoAgency =
-				data.marketType === "secondary" &&
-				Boolean(agencyName?.trim() && agentName?.trim());
+			const agents =
+				data.coBrokingData?.agents && data.coBrokingData.agents.length > 0
+					? data.coBrokingData.agents
+					: [
+							{
+								internalAgentId: data.coBrokingData?.internalAgentId,
+								agentName: data.coBrokingData?.agentName,
+								agencyName: data.coBrokingData?.agencyName,
+								agentPhone: data.coBrokingData?.agentPhone,
+								commissionSplit: data.coBrokingData?.commissionSplit,
+							},
+						];
 
-			if (!hasInternal && !hasCoAgency) {
+			let anyComplete = false;
+			for (const agent of agents) {
+				const hasInternal = Boolean(agent.internalAgentId?.trim());
+				const hasCoAgency =
+					data.marketType === "secondary" &&
+					Boolean(agent.agencyName?.trim() && agent.agentName?.trim());
+				if (hasInternal || hasCoAgency) {
+					anyComplete = true;
+					break;
+				}
+				if (agent.agentName?.trim() && agent.agentPhone?.trim()) {
+					anyComplete = true;
+					break;
+				}
+			}
+
+			if (!anyComplete) {
 				ctx.addIssue({
 					code: z.ZodIssueCode.custom,
-					message: "Select a co-broke agent or enter co-agency details",
-					path: ["coBrokingData", "agentName"],
+					message: "Add at least one co-broke agent or co-agency",
+					path: ["coBrokingData", "agents"],
 				});
 			}
-			if (!hasInternal && !hasCoAgency && !agentPhone?.trim()) {
+
+			const totalSplit = agents.reduce(
+				(sum, a) => sum + (Number(a.commissionSplit) || 0),
+				0,
+			);
+			if (totalSplit > 100) {
 				ctx.addIssue({
 					code: z.ZodIssueCode.custom,
-					message: "Co-broke agent phone is required",
-					path: ["coBrokingData", "agentPhone"],
+					message: "Combined co-broker splits cannot exceed 100%",
+					path: ["coBrokingData", "agents"],
 				});
 			}
 		}
