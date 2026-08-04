@@ -195,9 +195,14 @@ export function KanbanPipelineBoard({
 		<div
 			ref={boardScrollRef}
 			{...boardScrollProps}
-			className={cn(boardScrollProps.className, "w-full")}
+			className={cn(
+				boardScrollProps.className,
+				// Cap height so the horizontal scrollbar stays at the bottom of the
+				// visible board (not below a tall column list).
+				"h-[min(75vh,calc(100dvh-13rem))] w-full overflow-y-hidden",
+			)}
 		>
-			<div className="flex min-w-max gap-2.5 pb-2">
+			<div className="flex h-full min-w-max items-stretch gap-2.5 pb-1">
 				{PIPELINE_STAGES.map((stage) => {
 					const columnLeads = leadsByStage.get(stage.value) ?? [];
 					const isOver = dragOverStage === stage.value;
@@ -206,7 +211,7 @@ export function KanbanPipelineBoard({
 						<div
 							key={stage.value}
 							className={[
-								"flex w-[280px] flex-col gap-1.5 rounded-lg border bg-muted/10 p-2",
+								"flex h-full w-[280px] shrink-0 flex-col gap-1.5 rounded-lg border bg-muted/10 p-2",
 								isOver ? "border-primary/60 bg-primary/5" : "border-border/60",
 							].join(" ")}
 							onDragOver={(e) => {
@@ -232,7 +237,7 @@ export function KanbanPipelineBoard({
 							}}
 							onDrop={(e) => handleDrop(e, stage.value as PipelineStageValue)}
 						>
-							<div className="flex items-center justify-between gap-2 px-0.5 pt-0.5">
+							<div className="flex shrink-0 items-center justify-between gap-2 px-0.5 pt-0.5">
 								<div className="flex min-w-0 flex-1 items-center gap-1.5">
 									<StageBadge stage={stage.value} />
 									<span className="text-muted-foreground text-[11px] tabular-nums">
@@ -245,7 +250,7 @@ export function KanbanPipelineBoard({
 							</div>
 
 							<div
-								className="flex min-h-[120px] flex-1 flex-col gap-1.5"
+								className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto overscroll-contain pr-0.5"
 								onDragOver={(e) => {
 									if (updateStageMutation.isPending) return;
 									e.preventDefault();
@@ -302,13 +307,13 @@ export function KanbanPipelineBoard({
 
 				{unknownStages.length > 0 && (
 					<div
-						className="flex w-[280px] flex-col gap-1.5 rounded-lg border bg-muted/10 p-2"
+						className="flex h-full w-[280px] shrink-0 flex-col gap-1.5 overflow-y-auto rounded-lg border bg-muted/10 p-2"
 						onDragOver={(e) => {
 							if (updateStageMutation.isPending) return;
 							e.preventDefault();
 						}}
 					>
-						<div className="flex items-center justify-between gap-2">
+						<div className="flex shrink-0 items-center justify-between gap-2">
 							<span className="text-sm font-medium">Other</span>
 							<span className="text-muted-foreground text-xs">
 								{unknownStages.reduce(

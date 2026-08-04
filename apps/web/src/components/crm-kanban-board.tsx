@@ -165,19 +165,24 @@ export function KanbanBoard({
 		<div
 			ref={boardScrollRef}
 			{...boardScrollProps}
-			className={cn(boardScrollProps.className, "flex gap-3 pb-3")}
+			className={cn(
+				boardScrollProps.className,
+				// Cap height so the horizontal scrollbar stays at the bottom of the
+				// visible board (not below a tall column list).
+				"flex h-[min(75vh,calc(100dvh-13rem))] items-stretch gap-3 overflow-y-hidden pb-1",
+			)}
 		>
 			{PIPELINE_STAGES.map((stage) => {
 				const stageProspects = prospectsByStage[stage.id] || [];
 				return (
 					<div
 						key={stage.id}
-						className="flex w-72 shrink-0 flex-col rounded-lg border border-border/50 bg-muted/5 p-1.5"
+						className="flex h-full w-72 shrink-0 flex-col rounded-lg border border-border/50 bg-muted/5 p-1.5"
 						onDragOver={handleDragOver}
 						onDrop={(e) => handleDrop(e, stage.id)}
 					>
 						{/* Column Header */}
-						<div className="mb-2 rounded-md border border-border bg-muted/20 px-2 py-2">
+						<div className="mb-2 shrink-0 rounded-md border border-border bg-muted/20 px-2 py-2">
 							<div className="flex items-center justify-between gap-2">
 								<div className="flex min-w-0 flex-1 items-center gap-1.5">
 									<StageBadge stage={stage.id} />
@@ -188,9 +193,9 @@ export function KanbanBoard({
 							</div>
 						</div>
 
-						{/* Column Content — full height drop target for mouse DnD */}
+						{/* Column Content — scrolls vertically inside the board viewport */}
 						<div
-							className="min-h-[320px] flex-1 space-y-2"
+							className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain pr-0.5"
 							onDragOver={handleDragOver}
 							onDrop={(e) => handleDrop(e, stage.id)}
 						>
