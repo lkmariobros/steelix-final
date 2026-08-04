@@ -194,6 +194,34 @@ export default function TransactionsPage() {
 		</Badge>
 	);
 
+	const getPropertyDisplay = (transaction: {
+		marketType?: string | null;
+		projectName?: string | null;
+		unitNo?: string | null;
+		propertyData?: {
+			address?: string | null;
+			propertyType?: string | null;
+		} | null;
+	}) => {
+		// Primary market uses project + unit (no street address)
+		if (transaction.marketType === "primary") {
+			const project = transaction.projectName?.trim();
+			const unit = transaction.unitNo?.trim();
+			if (project || unit) {
+				return {
+					title: project || `Unit ${unit}`,
+					subtitle: project && unit ? `Unit ${unit}` : null,
+				};
+			}
+		}
+		// Secondary (and fallback): property address
+		const address = transaction.propertyData?.address?.trim();
+		return {
+			title: address || "N/A",
+			subtitle: transaction.propertyData?.propertyType ?? null,
+		};
+	};
+
 	// Format currency
 	const formatCurrency = (amount: string | number) => {
 		const num = typeof amount === "string" ? Number.parseFloat(amount) : amount;
@@ -683,12 +711,22 @@ export default function TransactionsPage() {
 														}
 													>
 														<TableCell>
-															<div className="font-medium">
-																{transaction.propertyData?.address || "N/A"}
-															</div>
-															<div className="text-muted-foreground text-sm">
-																{transaction.propertyData?.propertyType}
-															</div>
+															{(() => {
+																const property =
+																	getPropertyDisplay(transaction);
+																return (
+																	<>
+																		<div className="font-medium">
+																			{property.title}
+																		</div>
+																		{property.subtitle ? (
+																			<div className="text-muted-foreground text-sm">
+																				{property.subtitle}
+																			</div>
+																		) : null}
+																	</>
+																);
+															})()}
 														</TableCell>
 														<TableCell>
 															<div className="font-medium">
