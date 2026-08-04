@@ -90,12 +90,12 @@ export const leadTasksRouter = router({
 	 */
 	listMyReminders: protectedProcedure
 		.input(
-			z.object({ upcomingDays: z.number().min(1).max(30).default(7) }).optional(),
+			z.object({ upcomingDays: z.number().min(1).max(90).default(30) }).optional(),
 		)
 		.query(async ({ ctx, input }) => {
 			return await getTasksForAgentReminders(
 				ctx.session.user.id,
-				input?.upcomingDays ?? 7,
+				input?.upcomingDays ?? 30,
 			);
 		}),
 

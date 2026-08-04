@@ -286,6 +286,20 @@ const AGENT_ACCESSIBLE_LEADS_SQL = `
   )
 `;
 
+/** Reminder access: owned/followed leads, or tasks assigned to / created by the agent. */
+const AGENT_REMINDER_ACCESS_SQL = `
+  (
+    p.agent_id = $1
+    OR t.assigned_to = $1
+    OR t.created_by = $1
+    OR EXISTS (
+      SELECT 1
+      FROM public.prospect_followers pf
+      WHERE pf.prospect_id = p.id AND pf.user_id = $1
+    )
+  )
+`;
+
 /**
  * Today's + overdue tasks for an agent (owned or followed leads).
  */
@@ -326,11 +340,11 @@ export async function getTasksForAgentToday(
 
 /**
  * Reminder tasks for an agent: overdue, due today, and upcoming within N days
- * on leads they own or follow.
+ * on leads they own/follow, or tasks assigned to / created by them.
  */
 export async function getTasksForAgentReminders(
 	agentId: string,
-	upcomingDays = 7,
+	upcomingDays = 30,
 ): Promise<LeadTask[]> {
 	const res = await pool.query(
 		`SELECT
@@ -355,7 +369,7 @@ export async function getTasksForAgentReminders(
     LEFT JOIN public."user"    cu ON cu.id = t.created_by
     WHERE t.completed_at IS NULL
       AND t.due_date::date <= (CURRENT_DATE + $2::int)
-      AND ${AGENT_ACCESSIBLE_LEADS_SQL}
+      AND ${AGENT_REMINDER_ACCESS_SQL}
     ORDER BY t.due_date ASC
     LIMIT 100`,
 		[agentId, upcomingDays],

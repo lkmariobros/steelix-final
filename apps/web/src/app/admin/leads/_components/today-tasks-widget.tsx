@@ -52,9 +52,9 @@ export function TodayTasksWidget({
 		enabled: enabled && scope === "admin",
 	});
 	const agentQuery = trpc.leadTasks.listMyReminders.useQuery(
-		{ upcomingDays: 7 },
+		{ upcomingDays: 30 },
 		{
-			staleTime: 3 * 60 * 1000,
+			staleTime: 15_000,
 			enabled: enabled && scope === "agent",
 		},
 	);

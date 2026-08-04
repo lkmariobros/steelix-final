@@ -82,7 +82,8 @@ import {
 import { FileSpreadsheet, FileText } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRedirectUnauthenticated } from "@/hooks/use-redirect-unauthenticated";
-import { useCallback, useMemo, useState, useEffect } from "react";
+import { useCallback, useMemo, useState, useEffect, useRef } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -215,6 +216,8 @@ type LeadsTab = "my" | "company";
 export default function CRMPage() {
 	const queryClient = useQueryClient();
 	const trpcUtils = trpc.useUtils();
+	const router = useRouter();
+	const searchParams = useSearchParams();
 	const { data: session, isPending } = authClient.useSession();
 	useRedirectUnauthenticated(session?.user?.id, isPending);
 	const [activeTab, setActiveTab] = useState<LeadsTab>("my"); // My Leads | Company Leads
@@ -497,6 +500,27 @@ export default function CRMPage() {
 			toast.error("Could not open this lead. It may not be in your current list.");
 		}
 	};
+
+	const openedLeadFromQuery = useRef<string | null>(null);
+	useEffect(() => {
+		const leadId = searchParams.get("lead");
+		if (!leadId) {
+			openedLeadFromQuery.current = null;
+			return;
+		}
+		if (!session || openedLeadFromQuery.current === leadId) return;
+		openedLeadFromQuery.current = leadId;
+		void handleViewLeadById(leadId).finally(() => {
+			const next = new URLSearchParams(searchParams.toString());
+			next.delete("lead");
+			const qs = next.toString();
+			router.replace(qs ? `/dashboard/crm?${qs}` : "/dashboard/crm", {
+				scroll: false,
+			});
+		});
+		// Open once per lead query param; avoid re-running on every prospects change.
+		// eslint-disable-next-line react-hooks/exhaustive-deps -- intentional one-shot deep link
+	}, [searchParams, session?.user?.id]);
 
 	const [ownerAgentId, setOwnerAgentId] = useState<string>("");
 	const [categoryTagIds, setCategoryTagIds] = useState<string[]>([]);
