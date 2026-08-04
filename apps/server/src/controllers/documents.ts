@@ -31,6 +31,7 @@ const documentUploadSchema = z.object({
 	fileSize: z.number().max(50 * 1024 * 1024),
 	documentCategory: z.enum(DOCUMENT_CATEGORIES),
 	base64Data: z.string(),
+	uploadedFrom: z.string().max(64).optional(),
 });
 
 const SIGNED_URL_TTL_SECONDS = 60 * 60;
@@ -144,6 +145,7 @@ export const documentsRouter = router({
 				fileSize,
 				documentCategory,
 				base64Data,
+				uploadedFrom,
 			} = input;
 
 			const sessionUser = ctx.session.user as typeof ctx.session.user & {
@@ -214,7 +216,7 @@ export const documentsRouter = router({
 						documentCategory,
 						metadata: {
 							originalName: fileName,
-							uploadedFrom: "transaction-form",
+							uploadedFrom: uploadedFrom ?? "transaction-form",
 						},
 					})
 					.returning();

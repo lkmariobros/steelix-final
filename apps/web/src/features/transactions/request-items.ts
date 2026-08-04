@@ -1,5 +1,6 @@
 export const TRANSACTION_REQUEST_ITEM_VALUES = [
 	"add_change_name",
+	"add_document",
 	"cancel_case",
 	"case_status_update",
 	"converted_case",
@@ -21,6 +22,7 @@ export const TRANSACTION_REQUEST_ITEMS: {
 	label: string;
 }[] = [
 	{ value: "add_change_name", label: "Add/Change Name" },
+	{ value: "add_document", label: "Add Document" },
 	{ value: "cancel_case", label: "Cancel Case" },
 	{ value: "case_status_update", label: "Case Status Update" },
 	{ value: "converted_case", label: "Converted Case" },

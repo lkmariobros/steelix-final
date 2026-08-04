@@ -3,6 +3,7 @@ import { z } from "zod";
 /** Mirrors apps/web request-items.ts — keep labels in sync. */
 export const TRANSACTION_REQUEST_ITEM_VALUES = [
 	"add_change_name",
+	"add_document",
 	"cancel_case",
 	"case_status_update",
 	"converted_case",

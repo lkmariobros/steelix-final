@@ -257,6 +257,17 @@ const addMessageInput = z.object({
 		.enum(["remark", "edit_request", "status_note", "admin_reply"])
 		.default("remark"),
 	requestItem: transactionRequestItemSchema.optional(),
+	attachments: z
+		.array(
+			z.object({
+				id: z.string().uuid(),
+				fileName: z.string().min(1).max(255),
+				fileType: z.string().min(1),
+				fileSize: z.number().nonnegative().optional(),
+			}),
+		)
+		.max(10)
+		.optional(),
 });
 
 const listTransactionsInput = z.object({
@@ -1054,12 +1065,25 @@ export const transactionsRouter = router({
 				});
 			}
 
+			if (
+				isEditRequest &&
+				isTransactionAgent &&
+				input.requestItem === "add_document" &&
+				(!input.attachments || input.attachments.length === 0)
+			) {
+				throw new TRPCError({
+					code: "BAD_REQUEST",
+					message: "Please upload at least one document for Add Document requests",
+				});
+			}
+
 			const message = await addTransactionMessage({
 				transactionId: input.transactionId,
 				authorId: ctx.session.user.id,
 				authorRole,
 				body: input.body,
 				messageType: input.messageType,
+				attachments: input.attachments,
 			});
 
 			// Queue for admin Approval Requests when the case owner submits an edit request
