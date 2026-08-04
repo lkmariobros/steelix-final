@@ -45,6 +45,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useTransactionModalActions } from "@/contexts/transaction-modal-context";
 import {
+	agentCanEditTransaction,
 	formatStatusLabel,
 	getStatusBadgeClass,
 } from "@/features/transactions/transaction-detail-utils";
@@ -773,29 +774,38 @@ export default function TransactionsPage() {
 																>
 																	<RiEyeLine className="h-4 w-4" />
 																</Button>
-																<Button
-																	variant="ghost"
-																	size="sm"
-																	onClick={(e) => {
-																		e.stopPropagation();
-																		openEditModal(transaction.id);
-																	}}
-																	title={
-																		transaction.status === "draft"
-																			? "Continue draft"
-																			: "Edit transaction"
-																	}
-																	className={
-																		transaction.status === "draft"
-																			? "gap-1 px-2 text-primary"
-																			: undefined
-																	}
-																>
-																	<RiEditLine className="h-4 w-4" />
-																	{transaction.status === "draft" ? (
-																		<span className="text-xs">Continue</span>
-																	) : null}
-																</Button>
+																{agentCanEditTransaction(
+																	transaction.status,
+																	(
+																		transaction as {
+																			agentEditAllowed?: boolean;
+																		}
+																	).agentEditAllowed,
+																) ? (
+																	<Button
+																		variant="ghost"
+																		size="sm"
+																		onClick={(e) => {
+																			e.stopPropagation();
+																			openEditModal(transaction.id);
+																		}}
+																		title={
+																			transaction.status === "draft"
+																				? "Continue draft"
+																				: "Edit transaction"
+																		}
+																		className={
+																			transaction.status === "draft"
+																				? "gap-1 px-2 text-primary"
+																				: undefined
+																		}
+																	>
+																		<RiEditLine className="h-4 w-4" />
+																		{transaction.status === "draft" ? (
+																			<span className="text-xs">Continue</span>
+																		) : null}
+																	</Button>
+																) : null}
 															</div>
 														</TableCell>
 													</TableRow>
