@@ -23,6 +23,7 @@ interface Prospect {
 	name: string;
 	email: string | null;
 	phone: string;
+	whatsappUsername?: string | null;
 	source: string;
 	type: "tenant" | "buyer";
 	property: string; // Free text field
@@ -233,7 +234,10 @@ export function KanbanBoard({
 										<p className="mt-1 truncate text-muted-foreground text-[11px]">
 											<span className="inline-flex items-center gap-1">
 												<RiPhoneLine className="size-3 shrink-0 opacity-70" />
-												{prospect.phone}
+												{prospect.phone?.trim() ||
+													(prospect.whatsappUsername
+														? `@${String(prospect.whatsappUsername).replace(/^@/, "")}`
+														: "—")}
 											</span>
 										</p>
 

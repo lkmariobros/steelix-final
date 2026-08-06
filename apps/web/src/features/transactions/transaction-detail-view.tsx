@@ -1,7 +1,11 @@
 "use client";
 
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { trpc } from "@/utils/trpc";
+import { FileText, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 import { TransactionDocumentsPanel } from "./transaction-documents-panel";
 import {
 	formatRm,
@@ -120,6 +124,22 @@ export function TransactionDetailView({
 	const spa = prop?.spaPrice ?? prop?.price;
 	const nett = prop?.nettPrice ?? prop?.price;
 	const coBroking = tx.coBrokingData;
+	const isSecondary = (tx.marketType ?? "").toLowerCase() === "secondary";
+
+	const generateForm = trpc.transactions.generateLetterheadForm.useMutation({
+		onSuccess: (result) => {
+			const blob = new Blob([result.html], { type: "text/html;charset=utf-8" });
+			const url = URL.createObjectURL(blob);
+			window.open(url, "_blank", "noopener,noreferrer");
+			const a = document.createElement("a");
+			a.href = url;
+			a.download = result.fileName;
+			a.click();
+			setTimeout(() => URL.revokeObjectURL(url), 60_000);
+			toast.success("Form opened — use Print → Save as PDF");
+		},
+		onError: (e) => toast.error(e.message || "Failed to generate form"),
+	});
 
 	return (
 		<div className="space-y-8">
@@ -141,6 +161,23 @@ export function TransactionDetailView({
 					<Badge variant="outline" className="capitalize">
 						{tx.transactionType}
 					</Badge>
+				) : null}
+				{isSecondary ? (
+					<Button
+						type="button"
+						size="sm"
+						variant="outline"
+						className="ml-auto gap-1.5"
+						disabled={generateForm.isPending}
+						onClick={() => generateForm.mutate({ id: tx.id })}
+					>
+						{generateForm.isPending ? (
+							<Loader2 className="size-3.5 animate-spin" />
+						) : (
+							<FileText className="size-3.5" />
+						)}
+						Generate Form
+					</Button>
 				) : null}
 			</div>
 

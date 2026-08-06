@@ -76,7 +76,10 @@ export const prospects = pgTable(
 		id: uuid("id").primaryKey().defaultRandom(),
 		name: text("name").notNull(),
 		email: text("email"),
-		phone: text("phone").notNull(),
+		/** Primary contact identity when present. May be empty when only WhatsApp username is known. */
+		phone: text("phone").notNull().default(""),
+		/** Fallback contact identity when phone is unavailable (WhatsApp username feature). */
+		whatsappUsername: text("whatsapp_username"),
 		source: text("source").notNull(), // e.g., "Website", "Social Media", "Referral"
 		type: prospectTypeEnum("type").notNull(),
 		property: text("property").notNull(), // Free text field - users can enter any property name
@@ -251,10 +254,32 @@ export function normalisePipelineStage(
 }
 export const leadTypeSchema = z.enum(["personal", "company"]);
 
-export const insertProspectSchema = z.object({
+/** WhatsApp username after normalizing (no leading @). */
+export const WHATSAPP_USERNAME_REGEX = /^[a-zA-Z0-9._]{3,30}$/;
+
+export function normalizeWhatsappUsername(
+	value: string | null | undefined,
+): string | null {
+	if (value == null) return null;
+	const trimmed = value.trim().replace(/^@+/, "");
+	return trimmed === "" ? null : trimmed;
+}
+
+const whatsappUsernameField = z
+	.union([z.string(), z.null(), z.undefined()])
+	.transform((v) => normalizeWhatsappUsername(typeof v === "string" ? v : null))
+	.refine(
+		(v) => v === null || WHATSAPP_USERNAME_REGEX.test(v),
+		"WhatsApp username may only contain letters, numbers, dots, and underscores (3–30 chars)",
+	);
+
+export const prospectFieldsSchema = z.object({
 	name: z.string().min(2, "Name must be at least 2 characters"),
 	email: z
-		.union([z.string().email("Please enter a valid email address"), z.literal("")])
+		.union([
+			z.string().email("Please enter a valid email address"),
+			z.literal(""),
+		])
 		.optional()
 		.transform((v) => {
 			const t = typeof v === "string" ? v.trim() : "";
@@ -263,7 +288,9 @@ export const insertProspectSchema = z.object({
 	phone: z
 		.string()
 		.trim()
-		.min(1, "Phone number is required"),
+		.optional()
+		.transform((v) => (typeof v === "string" ? v.trim() : "")),
+	whatsappUsername: whatsappUsernameField.optional(),
 	source: z.string().min(1, "Please select a source"),
 	type: prospectTypeSchema,
 	property: propertyTypeSchema,
@@ -277,11 +304,52 @@ export const insertProspectSchema = z.object({
 	nextContact: z.date().optional(),
 });
 
+/** Shared create-time check: phone or WhatsApp username required. */
+export function hasRequiredLeadContact(data: {
+	phone?: string | null;
+	whatsappUsername?: string | null;
+}): boolean {
+	return Boolean(data.phone?.trim()) || Boolean(data.whatsappUsername);
+}
+
+/**
+ * Zod superRefine helper. Always call as `(data, ctx) => refineRequiredLeadContact(data, ctx)`
+ * — never pass this function directly to `.superRefine()`, or Zod's type-predicate overload
+ * can collapse the schema type to only `{ phone?, whatsappUsername? }`.
+ */
+export function refineRequiredLeadContact(
+	data: { phone?: string | null; whatsappUsername?: string | null },
+	ctx: z.RefinementCtx,
+) {
+	if (hasRequiredLeadContact(data)) return;
+	ctx.addIssue({
+		code: z.ZodIssueCode.custom,
+		message: "Phone number or WhatsApp username is required",
+		path: ["phone"],
+	});
+	ctx.addIssue({
+		code: z.ZodIssueCode.custom,
+		message: "Phone number or WhatsApp username is required",
+		path: ["whatsappUsername"],
+	});
+}
+
+/**
+ * Create/insert parse schema (includes phone-or-WhatsApp rule).
+ * ZodEffects — do not `.extend()` this; extend `prospectFieldsSchema` instead.
+ */
+export const insertProspectSchema = prospectFieldsSchema.superRefine(
+	(data, ctx) => {
+		refineRequiredLeadContact(data, ctx);
+	},
+);
+
 export const selectProspectSchema = z.object({
 	id: z.string(),
 	name: z.string(),
 	email: z.string().nullable(),
 	phone: z.string(),
+	whatsappUsername: z.string().nullable().optional(),
 	source: z.string(),
 	type: prospectTypeSchema,
 	property: propertyTypeSchema,
@@ -298,9 +366,28 @@ export const selectProspectSchema = z.object({
 	updatedAt: z.date(),
 });
 
-export const updateProspectSchema = insertProspectSchema.partial().extend({
+/** Base update object (extendable). Contact refine applied below. */
+export const updateProspectFieldsSchema = prospectFieldsSchema.partial().extend({
 	id: z.string(),
 });
+
+export const updateProspectSchema = updateProspectFieldsSchema.superRefine(
+	(data, ctx) => {
+		// Only enforce when both contact fields are present in the patch
+		const touchingContact =
+			data.phone !== undefined && data.whatsappUsername !== undefined;
+		if (!touchingContact) return;
+		const hasPhone = Boolean(data.phone?.trim());
+		const hasWa = Boolean(data.whatsappUsername);
+		if (!hasPhone && !hasWa) {
+			ctx.addIssue({
+				code: z.ZodIssueCode.custom,
+				message: "Phone number or WhatsApp username is required",
+				path: ["phone"],
+			});
+		}
+	},
+);
 
 // CRM projects schemas
 export const insertCrmProjectSchema = z.object({
@@ -371,7 +458,7 @@ export type PropertyType = string; // Property is now free text
 export type ProspectStatus = z.infer<typeof prospectStatusSchema>;
 export type PipelineStage = z.infer<typeof pipelineStageSchema>;
 export type LeadType = z.infer<typeof leadTypeSchema>;
-export type InsertProspect = z.infer<typeof insertProspectSchema>;
+export type InsertProspect = z.infer<typeof prospectFieldsSchema>;
 export type SelectProspect = z.infer<typeof selectProspectSchema>;
 export type UpdateProspect = z.infer<typeof updateProspectSchema>;
 export type InsertCrmProject = z.infer<typeof insertCrmProjectSchema>;

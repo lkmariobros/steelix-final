@@ -1,8 +1,10 @@
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import {
-	insertProspectSchema,
+	prospectFieldsSchema,
 	pipelineStageSchema,
-	updateProspectSchema,
+	hasRequiredLeadContact,
+	updateProspectFieldsSchema,
 } from "../models/crm";
 import {
 	addNoteToLeadAdmin,
@@ -50,12 +52,14 @@ const adminGetLeadInput = z.object({
 	id: z.string().uuid(),
 });
 
-const adminCreateLeadInput = insertProspectSchema.extend({
+const adminCreateLeadInput = prospectFieldsSchema.extend({
 	agentId: z.string().min(1, "Assign to Agent is required"),
-	tagIds: z.array(z.string().uuid()).min(1, "At least one category is required"),
+	tagIds: z
+		.array(z.string().uuid())
+		.min(1, "At least one category is required"),
 });
 
-const adminUpdateLeadInput = updateProspectSchema.extend({
+const adminUpdateLeadInput = updateProspectFieldsSchema.extend({
 	agentId: z.string().optional(), // admin can reassign while updating
 	tagIds: z.array(z.string().uuid()).optional(),
 });
@@ -125,7 +129,8 @@ const adminCheckDuplicateInput = z.object({
 		.string()
 		.optional()
 		.transform((v) => (typeof v === "string" ? v.trim() : "")),
-	phone: z.string().min(1),
+	phone: z.string().optional().default(""),
+	whatsappUsername: z.string().optional().default(""),
 	excludeId: z.string().uuid().optional(), // pass when editing an existing lead
 });
 
@@ -175,8 +180,9 @@ export const adminLeadsRouter = router({
 		.query(async ({ input }) => {
 			return await checkLeadDuplicateAdmin(
 				input.email ?? "",
-				input.phone,
+				input.phone ?? "",
 				input.excludeId,
+				input.whatsappUsername,
 			);
 		}),
 
@@ -195,6 +201,12 @@ export const adminLeadsRouter = router({
 	create: adminProcedure
 		.input(adminCreateLeadInput)
 		.mutation(async ({ input, ctx }) => {
+			if (!hasRequiredLeadContact(input)) {
+				throw new TRPCError({
+					code: "BAD_REQUEST",
+					message: "Phone number or WhatsApp username is required",
+				});
+			}
 			const { tagIds, ...rest } = input;
 			return await createLeadAdmin({
 				...rest,

@@ -57,6 +57,7 @@ export interface LeadWithAgent {
 	name: string;
 	email: string | null;
 	phone: string;
+	whatsappUsername: string | null;
 	source: string;
 	type: "tenant" | "buyer";
 	property: string;
@@ -219,6 +220,7 @@ export async function getAllLeadsAdmin(filter: AdminLeadsFilter = {}) {
 			ilike(prospects.name, `%${search}%`),
 			sql`coalesce(${prospects.email}, '') ilike ${`%${search}%`}`,
 			ilike(prospects.phone, `%${search}%`),
+			sql`coalesce(${prospects.whatsappUsername}, '') ilike ${`%${search}%`}`,
 		);
 		if (cond) conditions.push(cond);
 	}
@@ -324,6 +326,7 @@ export async function getAllLeadsAdmin(filter: AdminLeadsFilter = {}) {
 		});
 		return {
 			...parsed,
+			whatsappUsername: parsed.whatsappUsername ?? null,
 			notes: parsed.notes ?? null,
 			projectName: r.projectName ?? null,
 			agentName: r.agentName ?? null,
@@ -350,10 +353,11 @@ export async function getAllLeadsAdmin(filter: AdminLeadsFilter = {}) {
 		if (
 			/column .*notes.* does not exist/i.test(msg) ||
 			/column .*email.* does not exist/i.test(msg) ||
+			/column .*whatsapp_username.* does not exist/i.test(msg) ||
 			/invalid input value for enum pipeline_stage/i.test(msg)
 		) {
 			throw new Error(
-				`Leads query failed because the DB schema is out of date. Please apply the latest leads schema patch (prospects.notes, nullable email, pipeline_stage values). Original error: ${msg}`,
+				`Leads query failed because the DB schema is out of date. Please apply apps/server/sql/prospect-whatsapp-username-setup.sql (and other lead schema patches). Original error: ${msg}`,
 			);
 		}
 		throw e;
@@ -1402,17 +1406,19 @@ export async function getLeadActivityAdmin(
 }
 
 /**
- * Check if an email or phone number is already in use by another lead.
+ * Check if an email, phone, or WhatsApp username is already in use by another lead.
  * Pass excludeId when editing an existing lead so the lead doesn't conflict with itself.
  */
 export async function checkLeadDuplicateAdmin(
 	email: string,
 	phone: string,
 	excludeId?: string,
+	whatsappUsername?: string | null,
 ) {
 	// Normalise: trim and lowercase email, strip spaces from phone
 	const normEmail = email.trim().toLowerCase();
 	const normPhone = phone.trim().replace(/\s+/g, "");
+	const normWa = (whatsappUsername ?? "").trim().replace(/^@+/, "").toLowerCase();
 
 	let emailRow: { id: string; name: string } | undefined;
 	if (normEmail) {
@@ -1433,33 +1439,75 @@ export async function checkLeadDuplicateAdmin(
 		emailRow = undefined;
 	}
 
-	const [phoneRow] = await db
-		.select({ id: prospects.id, name: prospects.name })
-		.from(prospects)
-		.where(
-			excludeId
-				? and(
-						sql`replace(${prospects.phone}, ' ', '') = ${normPhone}`,
-						sql`${prospects.id} != ${excludeId}::uuid`,
-					)
-				: sql`replace(${prospects.phone}, ' ', '') = ${normPhone}`,
-		)
-		.limit(1);
+	let phoneRow: { id: string; name: string } | undefined;
+	if (normPhone) {
+		const [row] = await db
+			.select({ id: prospects.id, name: prospects.name })
+			.from(prospects)
+			.where(
+				excludeId
+					? and(
+							sql`replace(${prospects.phone}, ' ', '') = ${normPhone}`,
+							sql`${prospects.id} != ${excludeId}::uuid`,
+						)
+					: sql`replace(${prospects.phone}, ' ', '') = ${normPhone}`,
+			)
+			.limit(1);
+		phoneRow = row;
+	} else {
+		phoneRow = undefined;
+	}
+
+	let whatsappRow: { id: string; name: string } | undefined;
+	if (normWa) {
+		const [row] = await db
+			.select({ id: prospects.id, name: prospects.name })
+			.from(prospects)
+			.where(
+				excludeId
+					? and(
+							sql`lower(btrim(coalesce(${prospects.whatsappUsername}, ''))) = ${normWa}`,
+							sql`${prospects.id} != ${excludeId}::uuid`,
+						)
+					: sql`lower(btrim(coalesce(${prospects.whatsappUsername}, ''))) = ${normWa}`,
+			)
+			.limit(1);
+		whatsappRow = row;
+	} else {
+		whatsappRow = undefined;
+	}
 
 	return {
 		emailTaken: !!emailRow,
 		emailConflictName: emailRow?.name ?? null,
 		phoneTaken: !!phoneRow,
 		phoneConflictName: phoneRow?.name ?? null,
+		whatsappUsernameTaken: !!whatsappRow,
+		whatsappUsernameConflictName: whatsappRow?.name ?? null,
 	};
 }
 
 /** Find lead id + owner by normalized phone (spaces stripped). */
 export async function findProspectByNormalizedPhone(normPhone: string) {
+	if (!normPhone.trim()) return null;
 	const [row] = await db
 		.select({ id: prospects.id, agentId: prospects.agentId })
 		.from(prospects)
 		.where(sql`replace(${prospects.phone}, ' ', '') = ${normPhone}`)
+		.limit(1);
+	return row ?? null;
+}
+
+/** Find lead by WhatsApp username (case-insensitive, leading @ stripped). */
+export async function findProspectByWhatsappUsername(username: string) {
+	const norm = username.trim().replace(/^@+/, "").toLowerCase();
+	if (!norm) return null;
+	const [row] = await db
+		.select({ id: prospects.id, agentId: prospects.agentId })
+		.from(prospects)
+		.where(
+			sql`lower(btrim(coalesce(${prospects.whatsappUsername}, ''))) = ${norm}`,
+		)
 		.limit(1);
 	return row ?? null;
 }

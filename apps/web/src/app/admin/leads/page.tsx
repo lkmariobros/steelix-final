@@ -77,6 +77,7 @@ import { LeadDetailSheet } from "./_components/lead-detail-sheet";
 import {
 	type Lead,
 	type SortKey,
+	formatLeadContact,
 	getLeadDisplayTags,
 } from "./_components/lead-models";
 import { StageBadge } from "./_components/lead-ui";
@@ -175,6 +176,7 @@ export default function AdminLeadsPage() {
 					lead.name.toLowerCase().includes(q) ||
 					(lead.email ?? "").toLowerCase().includes(q) ||
 					lead.phone.toLowerCase().includes(q) ||
+					(lead.whatsappUsername ?? "").toLowerCase().includes(q) ||
 					lead.property.toLowerCase().includes(q) ||
 					lead.source.toLowerCase().includes(q) ||
 					getLeadDisplayTags(lead).some((t) => t.toLowerCase().includes(q)) ||
@@ -310,6 +312,7 @@ export default function AdminLeadsPage() {
 			"Name": lead.name ?? "",
 			"Email": lead.email ?? "",
 			"Phone": lead.phone ?? "",
+			"WhatsApp Username": lead.whatsappUsername ?? "",
 			"Property": lead.property ?? "",
 			"Project": lead.projectName ?? "",
 			"Stage": stageMap[lead.stage]?.label ?? lead.stage ?? "",
@@ -1181,11 +1184,21 @@ export default function AdminLeadsPage() {
 																{lead.name}
 															</p>
 															<p className="text-muted-foreground text-xs md:hidden">
-																{lead.phone}
+																{formatLeadContact(lead)}
 															</p>
 														</TableCell>
 														<TableCell className="hidden md:table-cell">
-															<p className="font-medium text-sm">{lead.phone}</p>
+															<p className="font-medium text-sm">
+																{lead.phone?.trim() || "—"}
+															</p>
+															{lead.whatsappUsername?.trim() ? (
+																<p className="text-muted-foreground text-xs">
+																	WA:{" "}
+																	{lead.whatsappUsername.trim().startsWith("@")
+																		? lead.whatsappUsername.trim()
+																		: `@${lead.whatsappUsername.trim()}`}
+																</p>
+															) : null}
 															<p className="text-muted-foreground text-xs">
 																{lead.email ?? "—"}
 															</p>

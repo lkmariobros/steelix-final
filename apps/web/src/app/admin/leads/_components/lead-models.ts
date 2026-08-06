@@ -3,6 +3,7 @@ export type Lead = {
 	name: string;
 	email: string | null;
 	phone: string;
+	whatsappUsername?: string | null;
 	source: string;
 	type: "tenant" | "buyer";
 	property: string;
@@ -25,6 +26,18 @@ export type Lead = {
 	createdAt: Date | string;
 	updatedAt: Date | string;
 };
+
+/** Prefer phone; fall back to WhatsApp username for display. */
+export function formatLeadContact(lead: {
+	phone?: string | null;
+	whatsappUsername?: string | null;
+}): string {
+	const phone = lead.phone?.trim();
+	if (phone) return phone;
+	const wa = lead.whatsappUsername?.trim();
+	if (wa) return wa.startsWith("@") ? wa : `@${wa}`;
+	return "—";
+}
 
 /** Short display ID for leads (first 8 chars of UUID). */
 export function formatLeadId(id: string): string {

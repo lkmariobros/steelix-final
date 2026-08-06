@@ -307,6 +307,7 @@ export function LeadDetailSheet({
 								status: activeLead.status,
 								email: activeLead.email,
 								phone: activeLead.phone,
+								whatsappUsername: activeLead.whatsappUsername,
 								source: activeLead.source,
 								leadType: activeLead.leadType,
 								tagNames: activeLead.tagNames,

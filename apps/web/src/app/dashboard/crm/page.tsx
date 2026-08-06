@@ -122,6 +122,7 @@ interface Prospect {
 	name: string;
 	email: string | null;
 	phone: string;
+	whatsappUsername?: string | null;
 	source: string;
 	type: "tenant" | "buyer";
 	property: string; // Free text field
@@ -157,21 +158,43 @@ interface ProspectNote {
 }
 
 // Form validation schema — Type / Property Interest removed from create UI
-const prospectFormSchema = z.object({
-	name: z.string().min(2, "Name must be at least 2 characters"),
-	email: z
-		.union([z.string().email("Please enter a valid email address"), z.literal("")])
-		.optional(),
-	phone: z.string().trim().min(1, "Phone number is required"),
-	source: z.string().min(1, "Please select a source"),
-	status: z.enum(["active", "inactive"], {
-		required_error: "Please select a status",
-	}),
-	// Defaults live in useForm defaultValues (avoid .default() — breaks zodResolver input/output types)
-	stage: z.enum(PIPELINE_STAGE_VALUES),
-	leadType: z.enum(["personal", "company"]),
-	agentId: z.string().min(1, "Assign to Agent is required"),
-});
+// Avoid .default() on fields — it breaks zodResolver input/output types with RHF.
+const prospectFormSchema = z
+	.object({
+		name: z.string().min(2, "Name must be at least 2 characters"),
+		email: z
+			.union([
+				z.string().email("Please enter a valid email address"),
+				z.literal(""),
+			])
+			.optional(),
+		phone: z.string().trim(),
+		whatsappUsername: z
+			.string()
+			.trim()
+			.refine(
+				(v) => !v || /^@?[a-zA-Z0-9._]{3,30}$/.test(v),
+				"WhatsApp username may only contain letters, numbers, dots, and underscores (3–30 chars)",
+			),
+		source: z.string().min(1, "Please select a source"),
+		status: z.enum(["active", "inactive"], {
+			required_error: "Please select a status",
+		}),
+		stage: z.enum(PIPELINE_STAGE_VALUES),
+		leadType: z.enum(["personal", "company"]),
+		agentId: z.string().min(1, "Assign to Agent is required"),
+	})
+	.superRefine((data, ctx) => {
+		const hasPhone = Boolean(data.phone.trim());
+		const hasWa = Boolean(data.whatsappUsername.trim());
+		if (!hasPhone && !hasWa) {
+			ctx.addIssue({
+				code: z.ZodIssueCode.custom,
+				message: "Phone number or WhatsApp username is required",
+				path: ["phone"],
+			});
+		}
+	});
 
 type ProspectFormValues = z.infer<typeof prospectFormSchema>;
 
@@ -400,6 +423,7 @@ export default function CRMPage() {
 			name: "",
 			email: "",
 			phone: "",
+			whatsappUsername: "",
 			source: "",
 			status: "active",
 			stage: "new_lead",
@@ -429,6 +453,7 @@ export default function CRMPage() {
 			name: "",
 			email: "",
 			phone: "",
+			whatsappUsername: "",
 			source: "",
 			status: "active",
 			stage: "new_lead",
@@ -448,6 +473,7 @@ export default function CRMPage() {
 			name: data.name.trim(),
 			email: data.email?.trim() ?? "",
 			phone: data.phone.trim(),
+			whatsappUsername: data.whatsappUsername.trim() || null,
 			source: data.source,
 			type: DEFAULT_CREATE_TYPE,
 			property: DEFAULT_CREATE_PROPERTY,
@@ -1034,12 +1060,27 @@ export default function CRMPage() {
 											name="phone"
 											render={({ field }) => (
 												<FormItem>
-													<FormLabel>
-														Phone <span className="text-destructive">*</span>
-													</FormLabel>
+													<FormLabel>Phone</FormLabel>
 													<FormControl>
 														<Input placeholder="+60 12-345 6789" {...field} />
 													</FormControl>
+													<FormMessage />
+												</FormItem>
+											)}
+										/>
+
+										<FormField
+											control={form.control}
+											name="whatsappUsername"
+											render={({ field }) => (
+												<FormItem>
+													<FormLabel>WhatsApp Username (optional)</FormLabel>
+													<FormControl>
+														<Input placeholder="@username" {...field} />
+													</FormControl>
+													<p className="text-muted-foreground text-xs">
+														Required if phone is empty.
+													</p>
 													<FormMessage />
 												</FormItem>
 											)}
@@ -1378,6 +1419,7 @@ export default function CRMPage() {
 											status: activeProspect.status,
 											email: activeProspect.email,
 											phone: activeProspect.phone,
+											whatsappUsername: activeProspect.whatsappUsername,
 											source: activeProspect.source,
 											leadType: activeProspect.leadType,
 											tagNames: activeProspect.tagNames,
@@ -2193,7 +2235,12 @@ export default function CRMPage() {
 														</div>
 														<div className="flex items-center gap-2">
 															<RiPhoneLine className="size-4" />
-															<span>{prospect.phone}</span>
+															<span>
+																{prospect.phone?.trim() ||
+																	(prospect.whatsappUsername
+																		? `@${prospect.whatsappUsername.replace(/^@/, "")}`
+																		: "—")}
+															</span>
 														</div>
 													</div>
 

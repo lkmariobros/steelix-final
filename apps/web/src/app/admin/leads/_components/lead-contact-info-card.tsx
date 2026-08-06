@@ -15,6 +15,7 @@ export type LeadContactInfoCardLead = {
 	status: string;
 	email?: string | null;
 	phone: string;
+	whatsappUsername?: string | null;
 	source?: string | null;
 	leadType: string;
 	tagNames?: string[];
@@ -70,7 +71,28 @@ export function LeadContactInfoCard({
 				</div>
 				<div>
 					<span className="text-muted-foreground">Phone</span>
-					<p className="font-medium">{lead.phone}</p>
+					<p className="font-medium">{lead.phone?.trim() || "—"}</p>
+				</div>
+				<div>
+					<span className="text-muted-foreground">WhatsApp Username</span>
+					<p
+						className={
+							!lead.phone?.trim() && lead.whatsappUsername?.trim()
+								? "font-semibold text-primary"
+								: "font-medium"
+						}
+					>
+						{lead.whatsappUsername?.trim()
+							? lead.whatsappUsername.trim().startsWith("@")
+								? lead.whatsappUsername.trim()
+								: `@${lead.whatsappUsername.trim()}`
+							: "—"}
+					</p>
+					{!lead.phone?.trim() && lead.whatsappUsername?.trim() ? (
+						<p className="mt-0.5 text-muted-foreground text-xs">
+							Primary contact (no phone on file)
+						</p>
+					) : null}
 				</div>
 				<div>
 					<span className="text-muted-foreground">Source</span>

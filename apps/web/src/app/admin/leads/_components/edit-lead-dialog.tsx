@@ -54,6 +54,7 @@ export function EditLeadDialog({
 		name: "",
 		email: "",
 		phone: "",
+		whatsappUsername: "",
 		source: "",
 		type: "buyer" as "tenant" | "buyer",
 		stage: "new_lead",
@@ -65,6 +66,7 @@ export function EditLeadDialog({
 	// Debounced values for duplicate check
 	const [debouncedEmail, setDebouncedEmail] = useState("");
 	const [debouncedPhone, setDebouncedPhone] = useState("");
+	const [debouncedWa, setDebouncedWa] = useState("");
 
 	useEffect(() => {
 		const t = setTimeout(() => setDebouncedEmail(form.email.trim()), 500);
@@ -76,10 +78,20 @@ export function EditLeadDialog({
 		return () => clearTimeout(t);
 	}, [form.phone]);
 
+	useEffect(() => {
+		const t = setTimeout(
+			() => setDebouncedWa(form.whatsappUsername.trim()),
+			500,
+		);
+		return () => clearTimeout(t);
+	}, [form.whatsappUsername]);
+
 	const isValidEmail =
 		debouncedEmail.length === 0 ||
 		/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(debouncedEmail);
 	const isValidPhone = debouncedPhone.length >= 8;
+	const isValidWa =
+		debouncedWa.length === 0 || /^@?[a-zA-Z0-9._]{3,30}$/.test(debouncedWa);
 
 	// excludeId = this lead's own ID — so its own email/phone don't flag as duplicate
 	const { data: dupeCheck, isFetching: dupeChecking } =
@@ -87,9 +99,17 @@ export function EditLeadDialog({
 			{
 				email: debouncedEmail,
 				phone: debouncedPhone,
+				whatsappUsername: debouncedWa,
 				excludeId: lead?.id,
 			},
-			{ enabled: !!lead?.id && isValidEmail && isValidPhone, staleTime: 3000 },
+			{
+				enabled:
+					!!lead?.id &&
+					isValidEmail &&
+					isValidWa &&
+					(isValidPhone || debouncedWa.length >= 3 || debouncedPhone.length === 0),
+				staleTime: 3000,
+			},
 		);
 
 	const hasBlockingDuplicate = !!dupeCheck?.emailTaken;
@@ -98,6 +118,11 @@ export function EditLeadDialog({
 		onSuccess: () => {
 			if (dupeCheck?.phoneTaken) {
 				toast.warning("Phone number already exists. Lead was still saved as requested.");
+			}
+			if (dupeCheck?.whatsappUsernameTaken) {
+				toast.warning(
+					"WhatsApp username already exists. Lead was still saved as requested.",
+				);
 			}
 			toast.success("Lead updated successfully");
 			onSuccess();
@@ -113,6 +138,7 @@ export function EditLeadDialog({
 				name: lead.name,
 				email: lead.email ?? "",
 				phone: lead.phone,
+				whatsappUsername: lead.whatsappUsername ?? "",
 				source: lead.source,
 				type: lead.type,
 				stage: lead.stage,
@@ -188,6 +214,34 @@ export function EditLeadDialog({
 						</div>
 						{dupeCheck?.phoneTaken && (
 							<DupeError name={dupeCheck.phoneConflictName} />
+						)}
+					</div>
+					<div className="space-y-1.5">
+						<Label htmlFor="edit-whatsapp">WhatsApp Username (optional)</Label>
+						<div className="relative">
+							<Input
+								id="edit-whatsapp"
+								value={form.whatsappUsername}
+								onChange={f("whatsappUsername")}
+								placeholder="@username"
+								className={
+									dupeCheck?.whatsappUsernameTaken
+										? "border-destructive pr-8 focus-visible:ring-destructive"
+										: ""
+								}
+							/>
+							{dupeChecking && debouncedWa.length >= 3 && (
+								<RiLoader4Line className="absolute top-2.5 right-2.5 size-4 animate-spin text-muted-foreground" />
+							)}
+						</div>
+						<p className="text-muted-foreground text-xs">
+							Required if phone is empty.
+						</p>
+						{!isValidWa && form.whatsappUsername.trim() ? (
+							<p className="text-destructive text-xs">Invalid username format</p>
+						) : null}
+						{dupeCheck?.whatsappUsernameTaken && (
+							<DupeError name={dupeCheck.whatsappUsernameConflictName} />
 						)}
 					</div>
 					<div className="space-y-1.5">
@@ -294,13 +348,17 @@ export function EditLeadDialog({
 				</div>
 
 				{/* Summary banner when duplicates detected */}
-				{(dupeCheck?.emailTaken || dupeCheck?.phoneTaken) && (
+				{(dupeCheck?.emailTaken ||
+					dupeCheck?.phoneTaken ||
+					dupeCheck?.whatsappUsernameTaken) && (
 					<div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2.5 text-destructive text-sm">
 						<RiErrorWarningLine className="mt-0.5 size-4 shrink-0" />
 						<span>
 							{dupeCheck?.emailTaken
 								? "Cannot save because the email already belongs to another lead."
-								: "This phone number already belongs to another lead. Saving is still allowed."}
+								: dupeCheck?.whatsappUsernameTaken
+									? "This WhatsApp username already belongs to another lead. Saving is still allowed."
+									: "This phone number already belongs to another lead. Saving is still allowed."}
 						</span>
 					</div>
 				)}
@@ -311,14 +369,19 @@ export function EditLeadDialog({
 					</Button>
 					<Button
 						disabled={
-							updateMutation.isPending || hasBlockingDuplicate || dupeChecking
+							updateMutation.isPending ||
+							hasBlockingDuplicate ||
+							dupeChecking ||
+							(!form.phone.trim() && !form.whatsappUsername.trim()) ||
+							!isValidWa
 						}
 						onClick={() =>
 							updateMutation.mutate({
 								id: lead.id,
 								name: form.name,
 								email: form.email,
-								phone: form.phone,
+								phone: form.phone.trim(),
+								whatsappUsername: form.whatsappUsername.trim() || null,
 								source: form.source,
 								type: form.type,
 								agentId:

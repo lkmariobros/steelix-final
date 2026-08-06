@@ -13,10 +13,11 @@ import {
 	crmTags,
 	insertCrmProjectSchema,
 	insertProspectNoteSchema,
-	insertProspectSchema,
 	leadTypeSchema,
 	normalisePipelineStage,
 	pipelineStageSchema,
+	hasRequiredLeadContact,
+	prospectFieldsSchema,
 	prospectNotes,
 	prospectFollowers,
 	prospectTags,
@@ -68,9 +69,11 @@ const getProspectInput = z.object({
 	id: z.string().uuid(),
 });
 
-const createProspectInput = insertProspectSchema.extend({
+const createProspectInput = prospectFieldsSchema.extend({
 	agentId: z.string().min(1, "Assign to Agent is required"),
-	tagIds: z.array(z.string().uuid()).min(1, "At least one category is required"),
+	tagIds: z
+		.array(z.string().uuid())
+		.min(1, "At least one category is required"),
 });
 const updateProspectInput = updateProspectSchema;
 
@@ -227,12 +230,13 @@ export const crmRouter = router({
 					conditions.push(buildAgentPersonalLeadsCondition(agentId));
 				}
 
-				// Search filter (name, email, or phone)
+				// Search filter (name, email, phone, or WhatsApp username)
 				if (search) {
 					const searchConditions = or(
 						ilike(prospects.name, `%${search}%`),
 						sql`coalesce(${prospects.email}, '') ilike ${`%${search}%`}`,
 						ilike(prospects.phone, `%${search}%`),
+						sql`coalesce(${prospects.whatsappUsername}, '') ilike ${`%${search}%`}`,
 					);
 					if (searchConditions) {
 						conditions.push(searchConditions);
@@ -639,12 +643,21 @@ export const crmRouter = router({
 		.input(createProspectInput)
 		.mutation(async ({ input, ctx }) => {
 			try {
+				if (!hasRequiredLeadContact(input)) {
+					throw new TRPCError({
+						code: "BAD_REQUEST",
+						message: "Phone number or WhatsApp username is required",
+					});
+				}
+
 				const { agentId: assignedAgentId, tagIds, ...prospectFields } = input;
 
 				await assertAssignableLeadAgent(assignedAgentId);
 
 				const newProspect: InsertProspect & { agentId?: string | null } = {
 					...prospectFields,
+					phone: prospectFields.phone?.trim() || "",
+					whatsappUsername: prospectFields.whatsappUsername ?? null,
 					agentId: assignedAgentId,
 				};
 

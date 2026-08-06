@@ -23,6 +23,7 @@ import {
 	assertCanAccessTransactionMessages,
 	listTransactionMessages,
 } from "../services/transaction-messages";
+import { generateSecondaryTransactionFormHtml } from "../services/secondary-transaction-form";
 import {
 	transactionRequestItemSchema,
 } from "../utils/transaction-request-items";
@@ -535,6 +536,37 @@ export const transactionsRouter = router({
 					});
 				}
 				throw e;
+			}
+		}),
+
+	/**
+	 * Secondary market letterhead form (subsale / subrent) — printable HTML.
+	 * Use browser Print → Save as PDF until official PDF template is supplied.
+	 */
+	generateLetterheadForm: protectedProcedure
+		.input(transactionIdInput)
+		.mutation(async ({ ctx, input }) => {
+			const [transaction] = await db
+				.select({ id: transactions.id })
+				.from(transactions)
+				.where(transactionOwnershipCondition(ctx, input.id))
+				.limit(1);
+
+			if (!transaction) {
+				throw new TRPCError({
+					code: "NOT_FOUND",
+					message: "Transaction not found or access denied",
+				});
+			}
+
+			try {
+				return await generateSecondaryTransactionFormHtml(input.id);
+			} catch (e) {
+				throw new TRPCError({
+					code: "BAD_REQUEST",
+					message:
+						e instanceof Error ? e.message : "Failed to generate form",
+				});
 			}
 		}),
 
