@@ -1753,25 +1753,96 @@ function normalizePhoneForImport(raw: string): string {
 }
 
 /**
- * Normalise a phone number for storage/matching. Defaults bare local numbers
- * (no country code) to Malaysian +60, but leaves any number that already
- * carries a country code (a leading +) untouched aside from stripping
- * formatting characters — it must NOT be reinterpreted as a Malaysian number.
+ * Common non-MY country calling codes seen in lead CSVs. Longest-first so
+ * e.g. 852 matches before a shorter prefix. Intentionally excludes "1" (NANP)
+ * because Malaysian mobiles are bare `1xxxxxxxx` / `1xxxxxxxxx` without +60.
+ */
+const FOREIGN_CALLING_CODES = [
+	"852",
+	"853",
+	"886",
+	"971",
+	"966",
+	"974",
+	"973",
+	"965",
+	"968",
+	"65", // Singapore — 65 + 8 digits = 10 (often loses "+" in Excel)
+	"62",
+	"66",
+	"84",
+	"63",
+	"86",
+	"81",
+	"82",
+	"91",
+	"61",
+	"64",
+	"44",
+	"33",
+	"49",
+	"39",
+	"34",
+	"55",
+	"52",
+	"90",
+	"92",
+	"94",
+	"95",
+	"98",
+	"20",
+	"27",
+] as const;
+
+function looksLikeForeignCallingCode(digitsOnly: string): boolean {
+	for (const cc of FOREIGN_CALLING_CODES) {
+		if (!digitsOnly.startsWith(cc)) continue;
+		const nationalLen = digitsOnly.length - cc.length;
+		// National significant number is typically ≥6 digits; E.164 max 15.
+		if (nationalLen >= 6 && digitsOnly.length <= 15) return true;
+	}
+	return false;
+}
+
+/**
+ * Normalise a phone number for storage/matching. Defaults bare local Malaysian
+ * numbers to +60, but must not reinterpret foreign numbers as Malaysian —
+ * including when CSV/Excel stripped the leading "+" (e.g. SG `+6598…` → `6598…`
+ * must stay `+65…`, not become `+6065…`).
  */
 function normalizeMalaysianPhoneKey(raw: string): string {
 	const d = normalizePhoneForImport(raw).replace(/\s+/g, "");
-	if (d.startsWith("+60")) return `+${d.slice(1).replace(/\D/g, "")}`;
-	if (d.startsWith("60") && d.length >= 10) return `+${d.replace(/\D/g, "")}`;
-	if (d.startsWith("0")) return `+60${d.slice(1).replace(/\D/g, "")}`;
+	if (!d) return d;
+
+	// Explicit international (+…) or 00-prefix — keep country code as-is.
 	if (d.startsWith("+")) return `+${d.slice(1).replace(/\D/g, "")}`;
-	// A bare Malaysian number (no leading 0, no country code) never exceeds 10
-	// digits (the longest case is the "011" mobile series without its leading
-	// zero). An 11+ digit bare string is a foreign number that lost its "+"
-	// somewhere upstream (e.g. a CSV/Excel export treating the column as a
-	// plain number) — do not misassign it to Malaysia.
+	if (d.startsWith("00")) {
+		const rest = d.slice(2).replace(/\D/g, "");
+		return rest ? `+${rest}` : d;
+	}
+
 	const digitsOnly = d.replace(/\D/g, "");
+	if (!digitsOnly) return d;
+
+	// Already Malaysian country code (60 + national digits).
+	if (digitsOnly.startsWith("60") && digitsOnly.length >= 10) {
+		return `+${digitsOnly}`;
+	}
+
+	// Local Malaysian trunk prefix (01x…).
+	if (digitsOnly.startsWith("0")) {
+		return `+60${digitsOnly.slice(1)}`;
+	}
+
+	// Foreign CC without "+" (Excel/CSV often drops it). E.g. 6598582840 → +6598582840.
+	if (looksLikeForeignCallingCode(digitsOnly)) {
+		return `+${digitsOnly}`;
+	}
+
+	// Bare MY local (no leading 0 / country code): typically 8–10 digits.
+	// Longer digit strings already include some country code — prefix "+" only.
 	if (/^\d{8,10}$/.test(digitsOnly)) return `+60${digitsOnly}`;
-	return digitsOnly ? `+${digitsOnly}` : d;
+	return `+${digitsOnly}`;
 }
 
 function parseOptionalDate(raw: string): Date | undefined {
