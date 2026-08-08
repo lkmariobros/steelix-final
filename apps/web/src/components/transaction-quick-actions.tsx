@@ -16,7 +16,7 @@ export function TransactionQuickActions() {
 	return (
 		<div className="flex items-center gap-2">
 			<Button 
-				onClick={openCreateModal}
+				onClick={() => openCreateModal()}
 				size="sm"
 				className="flex items-center gap-2"
 			>
@@ -60,7 +60,7 @@ export function CreateTransactionButton({
 
 	return (
 		<Button 
-			onClick={openCreateModal}
+			onClick={() => openCreateModal()}
 			variant={variant}
 			size={size}
 			className={className}

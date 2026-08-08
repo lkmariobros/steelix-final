@@ -506,7 +506,11 @@ export function StepVerify({
 											]
 									).map((agent, idx) => (
 										<li
-											key={agent.id ?? `${agent.agentName}-${idx}`}
+											key={
+												"id" in agent && agent.id
+													? agent.id
+													: `${agent.agentName ?? "agent"}-${idx}`
+											}
 											className="rounded border px-3 py-2"
 										>
 											<p className="font-medium">

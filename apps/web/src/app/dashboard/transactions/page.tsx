@@ -369,7 +369,7 @@ export default function TransactionsPage() {
 								</Button>
 
 								{/* New Transaction Button */}
-								<Button size="sm" onClick={openCreateModal}>
+								<Button size="sm" onClick={() => openCreateModal()}>
 									<RiAddLine className="mr-2 h-4 w-4" />
 									New Transaction
 								</Button>
@@ -681,7 +681,7 @@ export default function TransactionsPage() {
 												? "Create a new transaction to start your pipeline"
 												: "Start by creating your first transaction"}
 										</p>
-										<Button onClick={openCreateModal}>
+										<Button onClick={() => openCreateModal()}>
 											<RiAddLine className="mr-2 h-4 w-4" />
 											Add Transaction
 										</Button>
