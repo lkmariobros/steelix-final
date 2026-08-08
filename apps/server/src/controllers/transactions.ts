@@ -1274,8 +1274,17 @@ export const transactionsRouter = router({
 				input.coBrokerSplitPercentage,
 			);
 
+			// Draft propertyData may omit price; DB jsonb type requires number.
+			const propertyData = input.propertyData
+				? {
+						...input.propertyData,
+						price: input.propertyData.price ?? 0,
+					}
+				: undefined;
+
 			const newTransaction = {
 				...input,
+				propertyData,
 				agentId: ctx.session.user.id,
 				status: "draft" as const,
 				// Convert numbers to strings for decimal fields
