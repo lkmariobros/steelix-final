@@ -16,6 +16,7 @@ import {
 	BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 import { Separator } from "@/components/ui/separator";
+import { LoadingScreen } from "@/components/ui/loading-spinner";
 import { GenerateRecruitmentLinkCard } from "@/features/erecruitment/generate-recruitment-link-card";
 import { useRedirectUnauthenticated } from "@/hooks/use-redirect-unauthenticated";
 import { authClient } from "@/lib/auth-client";
@@ -24,6 +25,9 @@ import { RiDashboardLine, RiUserAddLine } from "@remixicon/react";
 export default function AgentERecruitmentPage() {
 	const { data: session, isPending } = authClient.useSession();
 	useRedirectUnauthenticated(session?.user?.id, isPending);
+
+	if (isPending) return <LoadingScreen text="Loading..." />;
+	if (!session) return <LoadingScreen text="Redirecting..." />;
 
 	return (
 		<SidebarProvider>

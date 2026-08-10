@@ -37,6 +37,7 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/table";
+import { FolderGridSkeleton, TableRowsSkeleton } from "@/components/loading-skeletons";
 import { trpc } from "@/utils/trpc";
 import {
 	RiDeleteBinLine,
@@ -221,6 +222,7 @@ export function PortalFilesBrowser({ mode }: { mode: PortalFilesMode }) {
 
 	const folders = foldersQuery.data ?? [];
 	const files = filesQuery.data ?? [];
+	const isContentLoading = foldersQuery.isLoading || filesQuery.isLoading;
 	const usage = usageQuery.data;
 	const agents = agentsQuery.data?.agents ?? [];
 
@@ -369,7 +371,9 @@ export function PortalFilesBrowser({ mode }: { mode: PortalFilesMode }) {
 				</div>
 			) : null}
 
-			{folders.length > 0 ? (
+			{isContentLoading ? (
+				<FolderGridSkeleton count={4} />
+			) : folders.length > 0 ? (
 				<div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
 					{folders.map((folder) => (
 						<div
@@ -423,103 +427,119 @@ export function PortalFilesBrowser({ mode }: { mode: PortalFilesMode }) {
 							<TableHead className="text-right">Actions</TableHead>
 						</TableRow>
 					</TableHeader>
-					<TableBody>
-						{files.map((file) => (
-							<TableRow key={file.id}>
-								<TableCell className="max-w-[240px] truncate font-medium">
-									{file.fileName}
-								</TableCell>
-								<TableCell>
-									{file.isShared ? (
-										<Badge variant="secondary" className="text-xs">
-											Company
+					{isContentLoading ? (
+						<TableBody>
+							<TableRowsSkeleton
+								rows={5}
+								columns={[
+									"double",
+									"badge",
+									"badge",
+									"text-sm",
+									"text-sm",
+									"actions",
+								]}
+							/>
+						</TableBody>
+					) : (
+						<TableBody>
+							{files.map((file) => (
+								<TableRow key={file.id}>
+									<TableCell className="max-w-[240px] truncate font-medium">
+										{file.fileName}
+									</TableCell>
+									<TableCell>
+										{file.isShared ? (
+											<Badge variant="secondary" className="text-xs">
+												Company
+											</Badge>
+										) : (
+											<Badge variant="outline" className="text-xs">
+												Personal
+											</Badge>
+										)}
+									</TableCell>
+									<TableCell>
+										<Badge variant="outline" className="font-mono text-xs">
+											{file.fileType.split("/").pop()}
 										</Badge>
-									) : (
-										<Badge variant="outline" className="text-xs">
-											Personal
-										</Badge>
-									)}
-								</TableCell>
-								<TableCell>
-									<Badge variant="outline" className="font-mono text-xs">
-										{file.fileType.split("/").pop()}
-									</Badge>
-								</TableCell>
-								<TableCell className="tabular-nums">
-									{formatFileSize(file.fileSize)}
-								</TableCell>
-								<TableCell className="text-muted-foreground text-sm">
-									{format(new Date(file.createdAt), "dd MMM yyyy HH:mm")}
-								</TableCell>
-								<TableCell className="text-right">
-									<div className="flex justify-end gap-1">
-										{canView ? (
-											<Button
-												type="button"
-												variant="ghost"
-												size="sm"
-												className="h-8 w-8 p-0"
-												title={
-													isPreviewableType(file.fileType)
-														? "Preview"
-														: "View"
-												}
-												onClick={() =>
-													void handlePreview(
-														file.id,
-														file.fileName,
-														file.fileType,
-													)
-												}
-											>
-												<RiEyeLine className="size-4" />
-											</Button>
-										) : null}
-										{canDownload ? (
-											<Button
-												type="button"
-												variant="ghost"
-												size="sm"
-												className="h-8 w-8 p-0"
-												title="Download"
-												onClick={() => void handleDownload(file.id)}
-											>
-												<RiDownloadLine className="size-4" />
-											</Button>
-										) : null}
-										{canManage ? (
-											<Button
-												type="button"
-												variant="ghost"
-												size="sm"
-												className="h-8 w-8 p-0 text-destructive"
-												title="Delete"
-												onClick={() =>
-													setDeleteTarget({
-														type: "file",
-														id: file.id,
-														name: file.fileName,
-													})
-												}
-											>
-												<RiDeleteBinLine className="size-4" />
-											</Button>
-										) : null}
-									</div>
-								</TableCell>
-							</TableRow>
-						))}
-						{files.length === 0 && !foldersQuery.isLoading ? (
-							<TableRow>
-								<TableCell
-									colSpan={6}
-									className="py-10 text-center text-muted-foreground"
-								>
-									No files in this folder yet.
-								</TableCell>
-							</TableRow>
-						) : null}
-					</TableBody>
+									</TableCell>
+									<TableCell className="tabular-nums">
+										{formatFileSize(file.fileSize)}
+									</TableCell>
+									<TableCell className="text-muted-foreground text-sm">
+										{format(new Date(file.createdAt), "dd MMM yyyy HH:mm")}
+									</TableCell>
+									<TableCell className="text-right">
+										<div className="flex justify-end gap-1">
+											{canView ? (
+												<Button
+													type="button"
+													variant="ghost"
+													size="sm"
+													className="h-8 w-8 p-0"
+													title={
+														isPreviewableType(file.fileType)
+															? "Preview"
+															: "View"
+													}
+													onClick={() =>
+														void handlePreview(
+															file.id,
+															file.fileName,
+															file.fileType,
+														)
+													}
+												>
+													<RiEyeLine className="size-4" />
+												</Button>
+											) : null}
+											{canDownload ? (
+												<Button
+													type="button"
+													variant="ghost"
+													size="sm"
+													className="h-8 w-8 p-0"
+													title="Download"
+													onClick={() => void handleDownload(file.id)}
+												>
+													<RiDownloadLine className="size-4" />
+												</Button>
+											) : null}
+											{canManage ? (
+												<Button
+													type="button"
+													variant="ghost"
+													size="sm"
+													className="h-8 w-8 p-0 text-destructive"
+													title="Delete"
+													onClick={() =>
+														setDeleteTarget({
+															type: "file",
+															id: file.id,
+															name: file.fileName,
+														})
+													}
+												>
+													<RiDeleteBinLine className="size-4" />
+												</Button>
+											) : null}
+										</div>
+									</TableCell>
+								</TableRow>
+							))}
+							{files.length === 0 ? (
+								<TableRow>
+									<TableCell
+										colSpan={6}
+										className="py-10 text-center text-muted-foreground"
+									>
+										No files in this folder yet.
+									</TableCell>
+								</TableRow>
+							) : null}
+						</TableBody>
+					)}
 				</Table>
 			</div>
 

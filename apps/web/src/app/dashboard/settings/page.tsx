@@ -367,7 +367,7 @@ export default function AgentSettingsPage() {
 														type="button"
 														variant="ghost"
 														size="sm"
-														className="text-muted-foreground"
+														className="text-destructive hover:bg-destructive/10 hover:text-destructive"
 														disabled={updateProfileMutation.isPending}
 														onClick={handleRemovePhoto}
 													>
@@ -433,26 +433,38 @@ export default function AgentSettingsPage() {
 										</div>
 										<div>
 											<p className="text-muted-foreground">Branch</p>
-											<Badge variant="secondary" className="mt-1">
-												{profileData?.agent?.branch || "—"}
-											</Badge>
-										</div>
-										{profileData?.team && (
-											<div>
-												<p className="text-muted-foreground">Team</p>
-												<p className="mt-1 font-medium">
-													{profileData.team.name}
+											{profileData?.agent?.branch?.trim() ? (
+												<Badge variant="secondary" className="mt-1">
+													{profileData.agent.branch}
+												</Badge>
+											) : (
+												<p className="mt-1 font-medium text-muted-foreground text-sm">
+													Not set
 												</p>
-											</div>
-										)}
-										{profileData?.agency && (
-											<div>
-												<p className="text-muted-foreground">Agency</p>
+											)}
+										</div>
+										<div>
+											<p className="text-muted-foreground">Team</p>
+											{profileData?.team?.name?.trim() ? (
+												<p className="mt-1 font-medium">{profileData.team.name}</p>
+											) : (
+												<p className="mt-1 font-medium text-muted-foreground text-sm">
+													Not set
+												</p>
+											)}
+										</div>
+										<div>
+											<p className="text-muted-foreground">Agency</p>
+											{profileData?.agency?.name?.trim() ? (
 												<p className="mt-1 font-medium">
 													{profileData.agency.name}
 												</p>
-											</div>
-										)}
+											) : (
+												<p className="mt-1 font-medium text-muted-foreground text-sm">
+													Not set
+												</p>
+											)}
+										</div>
 									</div>
 								</div>
 							</CardContent>

@@ -28,6 +28,7 @@ import {
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { ListGridRowsSkeleton } from "@/components/loading-skeletons";
 import { LoadingScreen } from "@/components/ui/loading-spinner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
@@ -224,7 +225,7 @@ export default function ListingsPage() {
 							<div className="col-span-1 text-right">Actions</div>
 						</div>
 						{isLoading ? (
-							<div className="p-6 text-sm text-muted-foreground">Loading listings...</div>
+							<ListGridRowsSkeleton rows={6} />
 						) : (data?.listings?.length || 0) === 0 ? (
 							<div className="p-6 text-sm text-muted-foreground">No listings found.</div>
 						) : (

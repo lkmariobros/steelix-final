@@ -2,6 +2,7 @@
 
 import { AppSidebar } from "@/components/app-sidebar";
 import { HeaderActions } from "@/components/header-actions";
+import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/sidebar";
 import {
 	Breadcrumb,
 	BreadcrumbItem,
@@ -13,9 +14,9 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { DetailCardsSkeleton } from "@/components/loading-skeletons";
 import { LoadingScreen } from "@/components/ui/loading-spinner";
 import { Separator } from "@/components/ui/separator";
-import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/sidebar";
 import { useRedirectUnauthenticated } from "@/hooks/use-redirect-unauthenticated";
 import { authClient } from "@/lib/auth-client";
 import { trpc } from "@/utils/trpc";
@@ -44,19 +45,9 @@ export default function AgentCommissionDetailPage() {
 	if (isPending) return <LoadingScreen text="Loading..." />;
 	if (!session) return <LoadingScreen text="Redirecting..." />;
 
-	if (q.isLoading || !q.data) {
-		return (
-			<SidebarProvider>
-				<AppSidebar />
-				<SidebarInset className="px-4 py-8">
-					<p className="text-muted-foreground">Loading…</p>
-				</SidebarInset>
-			</SidebarProvider>
-		);
-	}
-
+	const showSkeleton = q.isLoading;
 	const row = q.data;
-	const p = row.payout;
+	const p = row?.payout;
 
 	return (
 		<SidebarProvider>
@@ -65,7 +56,10 @@ export default function AgentCommissionDetailPage() {
 				<header className="flex h-16 shrink-0 items-center gap-2 border-b">
 					<div className="flex flex-1 items-center gap-2 px-3">
 						<SidebarTrigger className="-ms-4" />
-						<Separator orientation="vertical" className="mr-2 data-[orientation=vertical]:h-4" />
+						<Separator
+							orientation="vertical"
+							className="mr-2 data-[orientation=vertical]:h-4"
+						/>
 						<Breadcrumb>
 							<BreadcrumbList>
 								<BreadcrumbItem>
@@ -75,11 +69,15 @@ export default function AgentCommissionDetailPage() {
 								</BreadcrumbItem>
 								<BreadcrumbSeparator />
 								<BreadcrumbItem>
-									<BreadcrumbLink href="/dashboard/commissions">Commissions</BreadcrumbLink>
+									<BreadcrumbLink href="/dashboard/commissions">
+										Commissions
+									</BreadcrumbLink>
 								</BreadcrumbItem>
 								<BreadcrumbSeparator />
 								<BreadcrumbItem>
-									<BreadcrumbPage>{p.caseNo ?? p.id.slice(0, 8)}</BreadcrumbPage>
+									<BreadcrumbPage>
+										{p?.caseNo ?? (p ? p.id.slice(0, 8) : "…")}
+									</BreadcrumbPage>
 								</BreadcrumbItem>
 							</BreadcrumbList>
 						</Breadcrumb>
@@ -95,85 +93,102 @@ export default function AgentCommissionDetailPage() {
 						</Link>
 					</Button>
 
-					<div className="flex flex-wrap items-center justify-between gap-2">
-						<h1 className="font-semibold text-2xl">
-							{p.caseNo ? `Case ${p.caseNo}` : "Commission"}
-						</h1>
-						<Badge variant="outline">{p.status.replaceAll("_", " ")}</Badge>
-					</div>
+					{showSkeleton ? (
+						<DetailCardsSkeleton />
+					) : !row || !p ? (
+						<p className="text-muted-foreground">Commission not found.</p>
+					) : (
+						<>
+							<div className="flex flex-wrap items-center justify-between gap-2">
+								<h1 className="font-semibold text-2xl">
+									{p.caseNo ? `Case ${p.caseNo}` : "Commission"}
+								</h1>
+								<Badge variant="outline">
+									{p.status.replaceAll("_", " ")}
+								</Badge>
+							</div>
 
-					<div className="grid gap-4 lg:grid-cols-2">
-						<Card>
-							<CardHeader>
-								<CardTitle className="text-base">Amounts</CardTitle>
-							</CardHeader>
-							<CardContent className="grid gap-2 text-sm">
-								<div className="flex justify-between">
-									<span className="text-muted-foreground">Project</span>
-									<span>{p.projectName ?? "—"}</span>
-								</div>
-								<div className="flex justify-between">
-									<span className="text-muted-foreground">Nett price</span>
-									<span>{formatRm(p.nettPrice)}</span>
-								</div>
-								<div className="flex justify-between">
-									<span className="text-muted-foreground">Gross commission</span>
-									<span>{formatRm(p.grossCommission)}</span>
-								</div>
-								<div className="flex justify-between">
-									<span className="text-muted-foreground">SST</span>
-									<span>{formatRm(p.sstAmount)}</span>
-								</div>
-								<div className="flex justify-between font-medium">
-									<span>Net commission</span>
-									<span>{formatRm(p.netCommission)}</span>
-								</div>
-							</CardContent>
-						</Card>
-						<Card>
-							<CardHeader>
-								<CardTitle className="text-base">Payment</CardTitle>
-							</CardHeader>
-							<CardContent className="grid gap-2 text-sm">
-								<div className="flex justify-between">
-									<span className="text-muted-foreground">Your bank</span>
-									<span>{row.bankName ?? "—"}</span>
-								</div>
-								<div className="flex justify-between">
-									<span className="text-muted-foreground">Account</span>
-									<span className="font-mono">{row.bankAccountNo ?? "—"}</span>
-								</div>
-								<div className="flex justify-between">
-									<span className="text-muted-foreground">Status</span>
-									<span>{p.status}</span>
-								</div>
-								{p.paymentReferenceNo && (
-									<div className="flex justify-between">
-										<span className="text-muted-foreground">Reference</span>
-										<span className="font-mono">{p.paymentReferenceNo}</span>
-									</div>
-								)}
-							</CardContent>
-						</Card>
-					</div>
+							<div className="grid gap-4 lg:grid-cols-2">
+								<Card>
+									<CardHeader>
+										<CardTitle className="text-base">Amounts</CardTitle>
+									</CardHeader>
+									<CardContent className="grid gap-2 text-sm">
+										<div className="flex justify-between">
+											<span className="text-muted-foreground">Project</span>
+											<span>{p.projectName ?? "—"}</span>
+										</div>
+										<div className="flex justify-between">
+											<span className="text-muted-foreground">Nett price</span>
+											<span>{formatRm(p.nettPrice)}</span>
+										</div>
+										<div className="flex justify-between">
+											<span className="text-muted-foreground">
+												Gross commission
+											</span>
+											<span>{formatRm(p.grossCommission)}</span>
+										</div>
+										<div className="flex justify-between">
+											<span className="text-muted-foreground">SST</span>
+											<span>{formatRm(p.sstAmount)}</span>
+										</div>
+										<div className="flex justify-between font-medium">
+											<span>Net commission</span>
+											<span>{formatRm(p.netCommission)}</span>
+										</div>
+									</CardContent>
+								</Card>
+								<Card>
+									<CardHeader>
+										<CardTitle className="text-base">Payment</CardTitle>
+									</CardHeader>
+									<CardContent className="grid gap-2 text-sm">
+										<div className="flex justify-between">
+											<span className="text-muted-foreground">Your bank</span>
+											<span>{row.bankName ?? "—"}</span>
+										</div>
+										<div className="flex justify-between">
+											<span className="text-muted-foreground">Account</span>
+											<span className="font-mono">
+												{row.bankAccountNo ?? "—"}
+											</span>
+										</div>
+										<div className="flex justify-between">
+											<span className="text-muted-foreground">Status</span>
+											<span>{p.status}</span>
+										</div>
+										{p.paymentReferenceNo ? (
+											<div className="flex justify-between">
+												<span className="text-muted-foreground">Reference</span>
+												<span className="font-mono">{p.paymentReferenceNo}</span>
+											</div>
+										) : null}
+									</CardContent>
+								</Card>
+							</div>
 
-					<Card>
-						<CardHeader>
-							<CardTitle className="text-base">Activity</CardTitle>
-						</CardHeader>
-						<CardContent className="space-y-2 text-sm">
-							{(p.auditLog ?? []).map((e, i) => (
-								<div key={`${e.at}-${i}`} className="rounded-md border px-3 py-2">
-									<div className="flex justify-between gap-2">
-										<span className="font-medium">{e.action}</span>
-										<span className="text-muted-foreground text-xs">
-											{new Date(e.at).toLocaleString("en-MY")}
-										</span>
-									</div>
-								</div>
-							))}
-						</CardContent>
-					</Card>
+							<Card>
+								<CardHeader>
+									<CardTitle className="text-base">Activity</CardTitle>
+								</CardHeader>
+								<CardContent className="space-y-2 text-sm">
+									{(p.auditLog ?? []).map((e, i) => (
+										<div
+											key={`${e.at}-${i}`}
+											className="rounded-md border px-3 py-2"
+										>
+											<div className="flex justify-between gap-2">
+												<span className="font-medium">{e.action}</span>
+												<span className="text-muted-foreground text-xs">
+													{new Date(e.at).toLocaleString("en-MY")}
+												</span>
+											</div>
+										</div>
+									))}
+								</CardContent>
+							</Card>
+						</>
+					)}
 				</div>
 			</SidebarInset>
 		</SidebarProvider>

@@ -21,6 +21,10 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import {
+	StatsCardsSkeleton,
+	TableRowsSkeleton,
+} from "@/components/loading-skeletons";
 import { LoadingScreen } from "@/components/ui/loading-spinner";
 import {
 	Select,
@@ -143,32 +147,36 @@ export default function AgentCommissionsPage() {
 						</p>
 					</div>
 
-					<div className="grid gap-3 sm:grid-cols-3">
-						<Card>
-							<CardContent className="pt-4">
-								<p className="text-muted-foreground text-xs">Total earned</p>
-								<p className="font-semibold text-lg">
-									{formatRm(summary.data?.totalEarnedRm ?? 0)}
-								</p>
-							</CardContent>
-						</Card>
-						<Card>
-							<CardContent className="pt-4">
-								<p className="text-muted-foreground text-xs">Total received</p>
-								<p className="font-semibold text-lg">
-									{formatRm(summary.data?.totalReceivedRm ?? 0)}
-								</p>
-							</CardContent>
-						</Card>
-						<Card>
-							<CardContent className="pt-4">
-								<p className="text-muted-foreground text-xs">Outstanding</p>
-								<p className="font-semibold text-lg">
-									{formatRm(summary.data?.outstandingRm ?? 0)}
-								</p>
-							</CardContent>
-						</Card>
-					</div>
+					{summary.isLoading ? (
+						<StatsCardsSkeleton count={3} />
+					) : (
+						<div className="grid gap-3 sm:grid-cols-3">
+							<Card>
+								<CardContent className="pt-4">
+									<p className="text-muted-foreground text-xs">Total earned</p>
+									<p className="font-semibold text-lg">
+										{formatRm(summary.data?.totalEarnedRm ?? 0)}
+									</p>
+								</CardContent>
+							</Card>
+							<Card>
+								<CardContent className="pt-4">
+									<p className="text-muted-foreground text-xs">Total received</p>
+									<p className="font-semibold text-lg">
+										{formatRm(summary.data?.totalReceivedRm ?? 0)}
+									</p>
+								</CardContent>
+							</Card>
+							<Card>
+								<CardContent className="pt-4">
+									<p className="text-muted-foreground text-xs">Outstanding</p>
+									<p className="font-semibold text-lg">
+										{formatRm(summary.data?.outstandingRm ?? 0)}
+									</p>
+								</CardContent>
+							</Card>
+						</div>
+					)}
 
 					<Card>
 						<CardContent className="flex flex-col gap-3 pt-4">
@@ -220,11 +228,17 @@ export default function AgentCommissionsPage() {
 									</TableHeader>
 									<TableBody>
 										{list.isLoading ? (
-											<TableRow>
-												<TableCell colSpan={6} className="text-center text-muted-foreground">
-													Loading…
-												</TableCell>
-											</TableRow>
+											<TableRowsSkeleton
+												rows={6}
+												columns={[
+													"text",
+													"text-sm",
+													"amount",
+													"amount",
+													"badge",
+													"text-sm",
+												]}
+											/>
 										) : items.length === 0 ? (
 											<TableRow>
 												<TableCell colSpan={6} className="text-center text-muted-foreground">

@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { MessageListSkeleton } from "@/components/loading-skeletons";
 import {
 	Select,
 	SelectContent,
@@ -194,9 +195,7 @@ export function TransactionMessagesPanel({
 	return (
 		<div className="space-y-4">
 			{isLoading ? (
-				<div className="flex justify-center py-8">
-					<Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-				</div>
+				<MessageListSkeleton count={4} />
 			) : messages.length === 0 ? (
 				<p className="text-muted-foreground text-sm">No messages yet.</p>
 			) : (

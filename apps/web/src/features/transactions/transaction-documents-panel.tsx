@@ -8,6 +8,7 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@/components/ui/dialog";
+import { DocumentListSkeleton } from "@/components/loading-skeletons";
 import { trpc } from "@/utils/trpc";
 import { ExternalLink, FileText, Loader2 } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -204,12 +205,7 @@ export function TransactionDocumentsPanel({
 	}, [apiDocs, fallbackDocuments]);
 
 	if (isLoading) {
-		return (
-			<div className="flex items-center gap-2 py-4 text-muted-foreground text-sm">
-				<Loader2 className="h-4 w-4 animate-spin" />
-				Loading documents…
-			</div>
-		);
+		return <DocumentListSkeleton count={4} />;
 	}
 
 	if (documents.length === 0) {

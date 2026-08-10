@@ -16,6 +16,7 @@ import {
 	BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { LoadingScreen } from "@/components/ui/loading-spinner";
 import { Separator } from "@/components/ui/separator";
 import { PortalFilesBrowser } from "@/features/portal-files/portal-files-browser";
 import { useRedirectUnauthenticated } from "@/hooks/use-redirect-unauthenticated";
@@ -25,6 +26,9 @@ import { RiDashboardLine, RiFolderCloudLine } from "@remixicon/react";
 export default function AgentFilesPage() {
 	const { data: session, isPending } = authClient.useSession();
 	useRedirectUnauthenticated(session?.user?.id, isPending);
+
+	if (isPending) return <LoadingScreen text="Loading..." />;
+	if (!session) return <LoadingScreen text="Redirecting..." />;
 
 	return (
 		<SidebarProvider>

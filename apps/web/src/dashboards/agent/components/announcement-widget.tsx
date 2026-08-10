@@ -9,6 +9,7 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@/components/ui/card";
+import { FeedCardsSkeleton } from "@/components/loading-skeletons";
 import { authClient } from "@/lib/auth-client";
 import { trpc } from "@/utils/trpc";
 import {
@@ -77,9 +78,11 @@ export function AnnouncementWidget({ className }: AnnouncementWidgetProps) {
 						<div>
 							<CardTitle className="text-lg">Office Announcements</CardTitle>
 							<CardDescription>
-								{announcements.length === 0
-									? "No new announcements"
-									: `${announcements.length} announcement${announcements.length !== 1 ? "s" : ""}`}
+								{isLoading
+									? "Loading…"
+									: announcements.length === 0
+										? "No new announcements"
+										: `${announcements.length} announcement${announcements.length !== 1 ? "s" : ""}`}
 							</CardDescription>
 						</div>
 					</div>
@@ -98,11 +101,7 @@ export function AnnouncementWidget({ className }: AnnouncementWidgetProps) {
 			</CardHeader>
 			<CardContent>
 				{isLoading ? (
-					<div className="flex flex-col items-center justify-center py-8 text-center">
-						<div className="text-muted-foreground text-sm">
-							Loading announcements...
-						</div>
-					</div>
+					<FeedCardsSkeleton count={3} />
 				) : displayAnnouncements.length === 0 ? (
 					<div className="flex flex-col items-center justify-center py-8 text-center">
 						<RiNotificationLine className="mb-4 size-12 text-muted-foreground" />
