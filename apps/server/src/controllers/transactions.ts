@@ -1287,10 +1287,8 @@ export const transactionsRouter = router({
 				propertyData,
 				agentId: ctx.session.user.id,
 				status: "draft" as const,
-				// Convert numbers to strings for decimal fields
 				commissionValue: commissionValue.toString(),
 				commissionAmount: commissionBreakdown.totalCommission.toString(),
-				// Ensure required fields have defaults for drafts
 				marketType: input.marketType ?? "secondary",
 				transactionType: input.transactionType ?? "sale",
 				transactionDate: input.transactionDate ?? new Date(),
