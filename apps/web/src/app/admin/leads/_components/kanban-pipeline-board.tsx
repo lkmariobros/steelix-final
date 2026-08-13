@@ -211,7 +211,7 @@ export function KanbanPipelineBoard({
 						<div
 							key={stage.value}
 							className={[
-								"flex h-full w-[280px] shrink-0 flex-col gap-1.5 rounded-lg border bg-muted/10 p-2",
+								"flex h-full w-[280px] min-w-[280px] shrink-0 flex-col gap-1.5 rounded-lg border bg-muted/10 p-2 sm:w-[300px] sm:min-w-[300px]",
 								isOver ? "border-primary/60 bg-primary/5" : "border-border/60",
 							].join(" ")}
 							onDragOver={(e) => {
@@ -237,11 +237,14 @@ export function KanbanPipelineBoard({
 							}}
 							onDrop={(e) => handleDrop(e, stage.value as PipelineStageValue)}
 						>
-							<div className="flex shrink-0 items-center justify-between gap-2 px-0.5 pt-0.5">
-								<div className="flex min-w-0 flex-1 items-center gap-1.5">
-									<StageBadge stage={stage.value} />
-									<span className="text-muted-foreground text-[11px] tabular-nums">
-										{columnLeads.length}
+							<div className="flex shrink-0 items-start justify-between gap-2 px-0.5 pt-0.5">
+								<div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+									<StageBadge
+										stage={stage.value}
+										className="max-w-full whitespace-normal text-left leading-snug"
+									/>
+									<span className="shrink-0 text-muted-foreground text-[11px] tabular-nums">
+										({columnLeads.length})
 									</span>
 								</div>
 								{isOver ? (

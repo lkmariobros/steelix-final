@@ -14,14 +14,27 @@ export function TaskPriorityBadge({ priority }: { priority: TaskPriority }) {
 	return <span className={`font-medium text-xs ${cfg.color}`}>{cfg.label}</span>;
 }
 
-export function StageBadge({ stage }: { stage: string }) {
+export function StageBadge({
+	stage,
+	className,
+	title,
+}: {
+	stage: string;
+	className?: string;
+	title?: string;
+}) {
 	const info = stageMap[stage] ?? {
 		label: formatPipelineStageLabel(stage),
 		color: "bg-gray-100 text-gray-700 dark:bg-gray-900/20 dark:text-gray-400",
 	};
 	return (
 		<span
-			className={`inline-flex items-center rounded-full px-2 py-0.5 font-medium text-xs ${info.color}`}
+			title={title ?? info.label}
+			className={cn(
+				"inline-flex items-center rounded-full px-2 py-0.5 font-medium text-xs",
+				info.color,
+				className,
+			)}
 		>
 			{info.label}
 		</span>

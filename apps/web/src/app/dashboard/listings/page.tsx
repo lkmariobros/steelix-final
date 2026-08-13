@@ -182,12 +182,12 @@ export default function ListingsPage() {
 
 				<div className="flex flex-1 flex-col gap-4 py-4 lg:gap-6 lg:py-6">
 					<div className="flex flex-wrap items-center gap-2">
-						<div className="relative min-w-[260px] flex-1">
+						<div className="relative min-w-[min(100%,240px)] w-full flex-1 basis-full sm:basis-0">
 							<RiSearchLine className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-							<Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search listings..." className="pl-9" />
+							<Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search listings..." className="h-9 pl-9" />
 						</div>
 						<Select value={status} onValueChange={(v) => setStatus(v as typeof status)}>
-							<SelectTrigger className="w-40">
+							<SelectTrigger className="h-9 w-full min-w-[140px] sm:w-40">
 								<SelectValue placeholder="Status" />
 							</SelectTrigger>
 							<SelectContent>
@@ -200,7 +200,7 @@ export default function ListingsPage() {
 							</SelectContent>
 						</Select>
 						<Select value={listingType} onValueChange={(v) => setListingType(v as typeof listingType)}>
-							<SelectTrigger className="w-36">
+							<SelectTrigger className="h-9 w-full min-w-[120px] sm:w-36">
 								<SelectValue placeholder="Type" />
 							</SelectTrigger>
 							<SelectContent>
@@ -209,7 +209,7 @@ export default function ListingsPage() {
 								<SelectItem value="all">All</SelectItem>
 							</SelectContent>
 						</Select>
-						<Button onClick={() => setIsCreateOpen(true)} className="bg-green-600 hover:bg-green-700">
+						<Button onClick={() => setIsCreateOpen(true)} className="w-full bg-green-600 hover:bg-green-700 sm:w-auto">
 							<RiAddLine className="mr-2 h-4 w-4" />
 							Add Listing
 						</Button>

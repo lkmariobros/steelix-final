@@ -43,7 +43,7 @@ export function AgentLeadStatsCards({
 
 	if (isLoading) {
 		return (
-			<div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+			<div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
 				{[...Array(4)].map((_, i) => (
 					<Card key={i} className="overflow-hidden">
 						<CardHeader className="pb-2">
@@ -71,7 +71,7 @@ export function AgentLeadStatsCards({
 		: 0;
 
 	return (
-		<div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+		<div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
 			<Card className="overflow-hidden">
 				<CardHeader className="pb-2">
 					<CardDescription>Total Lead</CardDescription>

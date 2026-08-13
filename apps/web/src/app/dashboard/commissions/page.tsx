@@ -180,11 +180,11 @@ export default function AgentCommissionsPage() {
 
 					<Card>
 						<CardContent className="flex flex-col gap-3 pt-4">
-							<div className="flex flex-wrap gap-2">
-								<div className="relative min-w-[200px] flex-1">
+							<div className="flex flex-wrap items-center gap-2">
+								<div className="relative min-w-[min(100%,220px)] w-full flex-1 basis-full sm:basis-0">
 									<RiSearchLine className="absolute top-2.5 left-2 size-4 text-muted-foreground" />
 									<Input
-										className="ps-8"
+										className="h-9 ps-8"
 										placeholder="Search case or project…"
 										value={search}
 										onChange={(e) => {
@@ -200,7 +200,7 @@ export default function AgentCommissionsPage() {
 										setPage(0);
 									}}
 								>
-									<SelectTrigger className="w-[200px]">
+									<SelectTrigger className="h-9 w-full min-w-[160px] sm:w-[200px]">
 										<SelectValue placeholder="Status" />
 									</SelectTrigger>
 									<SelectContent>

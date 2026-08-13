@@ -170,25 +170,33 @@ export function KanbanBoard({
 				boardScrollProps.className,
 				// Cap height so the horizontal scrollbar stays at the bottom of the
 				// visible board (not below a tall column list).
-				"flex h-[min(75vh,calc(100dvh-13rem))] items-stretch gap-3 overflow-y-hidden pb-1",
+				"flex h-[min(75vh,calc(100dvh-13rem))] w-full items-stretch overflow-y-hidden pb-1",
 			)}
 		>
+			<div className="flex h-full min-w-max items-stretch gap-3">
 			{PIPELINE_STAGES.map((stage) => {
 				const stageProspects = prospectsByStage[stage.id] || [];
+				const stageLabel =
+					SHARED_PIPELINE_STAGES.find((s) => s.value === stage.id)?.label ??
+					stage.id;
 				return (
 					<div
 						key={stage.id}
-						className="flex h-full w-72 shrink-0 flex-col rounded-lg border border-border/50 bg-muted/5 p-1.5"
+						className="flex h-full w-[280px] min-w-[280px] shrink-0 flex-col rounded-lg border border-border/50 bg-muted/5 p-1.5 sm:w-[300px] sm:min-w-[300px]"
 						onDragOver={handleDragOver}
 						onDrop={(e) => handleDrop(e, stage.id)}
 					>
 						{/* Column Header */}
 						<div className="mb-2 shrink-0 rounded-md border border-border bg-muted/20 px-2 py-2">
-							<div className="flex items-center justify-between gap-2">
-								<div className="flex min-w-0 flex-1 items-center gap-1.5">
-									<StageBadge stage={stage.id} />
-									<span className="text-muted-foreground text-[11px] tabular-nums">
-										{stageProspects.length}
+							<div className="flex items-start justify-between gap-2">
+								<div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+									<StageBadge
+										stage={stage.id}
+										className="max-w-full whitespace-normal text-left leading-snug"
+										title={stageLabel}
+									/>
+									<span className="shrink-0 text-muted-foreground text-[11px] tabular-nums">
+										({stageProspects.length})
 									</span>
 								</div>
 							</div>
@@ -306,6 +314,7 @@ export function KanbanBoard({
 					</div>
 				);
 			})}
+			</div>
 		</div>
 	);
 }

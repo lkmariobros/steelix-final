@@ -848,48 +848,46 @@ export default function CRMPage() {
 				</header>
 				<div className="flex flex-1 flex-col gap-4 py-4 lg:gap-6 lg:py-6">
 					{/* Page Header with My Leads / Company Leads tabs */}
-					<div className="flex flex-col gap-2">
-						<div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-							<div className="flex items-center gap-4">
-								<h1 className="font-semibold text-2xl">
-									CRM - Prospect Management
-								</h1>
-								{/* My Leads | Company Leads tabs */}
-								<div
-									className="flex items-center gap-1 rounded-md border bg-muted/50 p-1"
-									role="tablist"
-									aria-label="Lead type"
+					<div className="flex flex-col gap-3">
+						<h1 className="font-semibold text-2xl">
+							CRM - Prospect Management
+						</h1>
+						<div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+							{/* My Leads | Company Leads tabs */}
+							<div
+								className="flex w-fit max-w-full items-center gap-1 rounded-md border bg-muted/50 p-1"
+								role="tablist"
+								aria-label="Lead type"
+							>
+								<Button
+									type="button"
+									role="tab"
+									aria-selected={activeTab === "my"}
+									variant={activeTab === "my" ? "default" : "ghost"}
+									size="sm"
+									onClick={() => {
+										setActiveTab("my");
+										setCurrentPage(1);
+									}}
+									className="h-8"
 								>
-									<Button
-										type="button"
-										role="tab"
-										aria-selected={activeTab === "my"}
-										variant={activeTab === "my" ? "default" : "ghost"}
-										size="sm"
-										onClick={() => {
-											setActiveTab("my");
-											setCurrentPage(1);
-										}}
-										className="h-8"
-									>
-										My Leads
-									</Button>
-									<Button
-										type="button"
-										role="tab"
-										aria-selected={activeTab === "company"}
-										variant={activeTab === "company" ? "default" : "ghost"}
-										size="sm"
-										onClick={() => {
-											setActiveTab("company");
-											setCurrentPage(1);
-											setAgentFilter("all");
-										}}
-										className="h-8"
-									>
-										Company Leads
-									</Button>
-								</div>
+									My Leads
+								</Button>
+								<Button
+									type="button"
+									role="tab"
+									aria-selected={activeTab === "company"}
+									variant={activeTab === "company" ? "default" : "ghost"}
+									size="sm"
+									onClick={() => {
+										setActiveTab("company");
+										setCurrentPage(1);
+										setAgentFilter("all");
+									}}
+									className="h-8"
+								>
+									Company Leads
+								</Button>
 							</div>
 							<div className="flex flex-wrap items-center gap-2 sm:gap-3">
 							<div className="inline-flex items-center overflow-hidden rounded-md border border-border/80 bg-muted/30">
@@ -1995,16 +1993,17 @@ export default function CRMPage() {
 					</Dialog>
 
 					{/* Search and Filters */}
-					<div className="flex items-center gap-3">
-						<div className="relative flex-1">
+					<div className="flex flex-wrap items-center gap-2 rounded-lg border bg-card px-3 py-3 sm:px-4">
+						<div className="relative w-full min-w-[min(100%,240px)] flex-1 basis-full xl:basis-0">
 							<RiSearchLine className="-translate-y-1/2 absolute top-1/2 left-3 size-4 text-muted-foreground" />
 							<Input
 								placeholder="Search prospects..."
 								value={searchQuery}
 								onChange={(e) => setSearchQuery(e.target.value)}
-								className="pl-9"
+								className="h-9 pl-9"
 							/>
 						</div>
+						<div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
 						<Select
 							value={categoryFilter}
 							onValueChange={(v) => {
@@ -2012,7 +2011,7 @@ export default function CRMPage() {
 								setCurrentPage(1);
 							}}
 						>
-							<SelectTrigger className="w-52 min-w-52">
+							<SelectTrigger className="h-9 w-full min-w-[140px] flex-1 sm:w-[150px] sm:flex-none">
 								<SelectValue placeholder="Category" />
 							</SelectTrigger>
 							<SelectContent>
@@ -2032,7 +2031,7 @@ export default function CRMPage() {
 								setCurrentPage(1);
 							}}
 						>
-							<SelectTrigger className="w-52 min-w-52">
+							<SelectTrigger className="h-9 w-full min-w-[140px] flex-1 sm:w-[160px] sm:flex-none">
 								<RiUserLine className="mr-1.5 size-4 shrink-0 text-muted-foreground" />
 								<SelectValue placeholder="Agent" />
 							</SelectTrigger>
@@ -2063,7 +2062,7 @@ export default function CRMPage() {
 								setCurrentPage(1);
 							}}
 						>
-							<SelectTrigger className="w-52 min-w-52">
+							<SelectTrigger className="h-9 w-full min-w-[140px] flex-1 sm:w-[150px] sm:flex-none">
 								<SelectValue placeholder="Lead Stage" />
 							</SelectTrigger>
 							<SelectContent>
@@ -2083,7 +2082,7 @@ export default function CRMPage() {
 								setCurrentPage(1);
 							}}
 						>
-							<SelectTrigger className="w-52 min-w-52">
+							<SelectTrigger className="h-9 w-full min-w-[120px] flex-1 sm:w-[130px] sm:flex-none">
 								<SelectValue placeholder="Status" />
 							</SelectTrigger>
 							<SelectContent>
@@ -2092,7 +2091,7 @@ export default function CRMPage() {
 								<SelectItem value="inactive">Inactive</SelectItem>
 							</SelectContent>
 						</Select>
-
+						</div>
 					</div>
 
 					{/* Prospects View - Kanban or List */}

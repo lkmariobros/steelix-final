@@ -316,9 +316,9 @@ export default function TransactionsPage() {
 				<div className="flex flex-1 flex-col gap-4 py-4 lg:gap-6 lg:py-6">
 					{/* Transactions Page Header */}
 					<div className="flex flex-col gap-4">
-						<div className="flex items-center justify-between gap-4">
+						<div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
 							<div className="space-y-1">
-								<h1 className="flex items-center gap-2 font-semibold text-2xl">
+								<h1 className="flex flex-wrap items-center gap-2 font-semibold text-2xl">
 									{viewMode === "pipeline" ? (
 										<>
 											<RiBarChartLine className="size-6" />
@@ -339,7 +339,7 @@ export default function TransactionsPage() {
 							</div>
 
 							{/* Transaction Controls */}
-							<div className="flex items-center gap-2">
+							<div className="flex flex-wrap items-center gap-2">
 							{/* Segment filter — Primary / Subsale / Rental */}
 								{viewMode === "all" && (
 									<Select
