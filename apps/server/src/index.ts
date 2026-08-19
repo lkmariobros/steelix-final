@@ -7,8 +7,9 @@ import { logger } from "hono/logger";
 import { appRouter } from "./routers/index";
 import { debugRoutes } from "./routes/debug";
 import { webhookRoutes } from "./routes/webhooks";
-import { eq, sql } from "drizzle-orm";
-import { user } from "./models/auth";
+import { and, eq, sql } from "drizzle-orm";
+import { verifyPassword } from "better-auth/crypto";
+import { account, user } from "./models/auth";
 import { auth } from "./utils/auth";
 import { evaluateAccountSignInAccess } from "./utils/account-access";
 import { createContext } from "./utils/context";
@@ -143,6 +144,8 @@ async function handleEmailSignIn(c: Context) {
 
 		const [record] = await db
 			.select({
+				id: user.id,
+				email: user.email,
 				role: user.role,
 				agentStatus: user.agentStatus,
 				isActive: user.isActive,
@@ -152,18 +155,78 @@ async function handleEmailSignIn(c: Context) {
 			.limit(1);
 
 		console.log(
-			`🔐 sign-in/email: dbUser=${record ? "found" : "missing"} role=${record?.role ?? "n/a"} status=${record?.agentStatus ?? "n/a"}`,
+			`🔐 sign-in/email: dbUser=${record ? "found" : "missing"} storedEmail=${record?.email ?? "n/a"} role=${record?.role ?? "n/a"} status=${record?.agentStatus ?? "n/a"}`,
 		);
 
 		const access = evaluateAccountSignInAccess(record);
-		if (!access.allowed) {
+		if (!access.allowed || !record) {
 			return c.json(
 				{
 					code: "FORBIDDEN",
-					message: access.message,
+					message: access.allowed
+						? "Account not found. Please contact support."
+						: access.message,
 				},
 				403,
 			);
+		}
+
+		const [credential] = await db
+			.select({
+				id: account.id,
+				accountId: account.accountId,
+				password: account.password,
+			})
+			.from(account)
+			.where(
+				and(
+					eq(account.userId, record.id),
+					eq(account.providerId, "credential"),
+				),
+			)
+			.limit(1);
+
+		if (!credential?.password) {
+			console.warn(
+				`🔐 sign-in/email: credential account missing for ${email}`,
+			);
+			return c.json(
+				{
+					code: "INVALID_EMAIL_OR_PASSWORD",
+					message: "Invalid email or password",
+				},
+				401,
+			);
+		}
+
+		const passwordValid = await verifyPassword({
+			hash: credential.password,
+			password,
+		});
+		console.log(`🔐 sign-in/email: passwordValid=${passwordValid}`);
+		if (!passwordValid) {
+			return c.json(
+				{
+					code: "INVALID_EMAIL_OR_PASSWORD",
+					message: "Invalid email or password",
+				},
+				401,
+			);
+		}
+
+		// Better Auth looks up email with exact eq(lowercased input). Mixed-case
+		// rows match our SQL lower() check but then fail as "User not found".
+		if (record.email !== email) {
+			await db
+				.update(user)
+				.set({ email, updatedAt: new Date() })
+				.where(eq(user.id, record.id));
+		}
+		if (credential.accountId !== email) {
+			await db
+				.update(account)
+				.set({ accountId: email, updatedAt: new Date() })
+				.where(eq(account.id, credential.id));
 		}
 
 		const origin =
@@ -178,21 +241,23 @@ async function handleEmailSignIn(c: Context) {
 		const userAgent = c.req.header("user-agent");
 		if (userAgent) authHeaders.set("user-agent", userAgent);
 
-		// Call Better Auth with a reconstructed body. Forwarding the raw Vercel
-		// request (and X-Forwarded-Host=portal.devots.com.my) made Better Auth
-		// look up a missing email and log "User not found".
-		return await auth.api.signInEmail({
-			body: {
+		const baseURL = (
+			process.env.BETTER_AUTH_URL || "http://localhost:8080"
+		).replace(/\/$/, "");
+		const signInRequest = new Request(`${baseURL}/api/auth/sign-in/email`, {
+			method: "POST",
+			headers: authHeaders,
+			body: JSON.stringify({
 				email,
 				password,
 				rememberMe: parsedBody?.rememberMe !== false,
 				...(typeof parsedBody?.callbackURL === "string"
 					? { callbackURL: parsedBody.callbackURL }
 					: {}),
-			},
-			headers: authHeaders,
-			asResponse: true,
+			}),
 		});
+
+		return await auth.handler(signInRequest);
 	} catch (error) {
 		console.error("❌ Auth sign-in gate error:", error);
 		return c.json({ error: "Auth handler failed" }, 500);

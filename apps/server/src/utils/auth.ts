@@ -30,7 +30,12 @@ try {
 	auth = betterAuth({
 		database: drizzleAdapter(db, {
 			provider: "pg",
-			schema: schema,
+			schema: {
+				user: schema.user,
+				session: schema.session,
+				account: schema.account,
+				verification: schema.verification,
+			},
 		}),
 		// ✅ CRITICAL FIX: baseURL should be the backend URL, not frontend
 		baseURL: process.env.BETTER_AUTH_URL || "http://localhost:8080",
