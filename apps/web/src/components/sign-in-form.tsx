@@ -69,7 +69,7 @@ export default function SignInForm({ onForgotPassword }: SignInFormProps) {
 				await authClient.signIn.email(
 					{
 						email: value.email.trim().toLowerCase(),
-						password: value.password.trim(),
+						password: value.password,
 						rememberMe: value.rememberMe,
 					},
 					{

@@ -211,6 +211,16 @@ function createPool(): Pool {
 	return next;
 }
 
+function getSupabaseProjectRef(connectionString: string): string | null {
+	try {
+		const username = new URL(connectionString).username;
+		const dot = username.indexOf(".");
+		return dot >= 0 ? username.slice(dot + 1) : null;
+	} catch {
+		return null;
+	}
+}
+
 const pool = createPool();
 
 console.log("🔗 Database pool initialized:", {
@@ -218,6 +228,7 @@ console.log("🔗 Database pool initialized:", {
 	min: poolConfig.min,
 	connectionTimeoutMillis: poolConfig.connectionTimeoutMillis,
 	hasConnectionString: !!(process.env.DATABASE_URL && process.env.DATABASE_URL.length > 0),
+	supabaseProjectRef: getSupabaseProjectRef(poolConfig.connectionString ?? ""),
 	supabasePooler: isSupabasePooler(poolConfig.connectionString ?? ""),
 	transactionPooler: poolConfig.connectionString?.includes(":6543") ?? false,
 	sslMode: poolConfig.ssl === false ? "off" : poolConfig.ssl ? "explicit" : "default",

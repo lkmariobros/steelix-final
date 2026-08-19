@@ -89,14 +89,26 @@ async function handler(request: Request) {
 
 	stripAcceptEncoding(headers);
 
+	const body =
+		request.method !== "GET" && request.method !== "HEAD"
+			? await request.text()
+			: undefined;
+
+	// Stale content-length / transfer-encoding from the browser breaks bodies
+	// when Vercel re-posts to Railway (Better Auth then logs "User not found").
+	if (body) {
+		headers.delete("content-length");
+		headers.delete("transfer-encoding");
+		if (!headers.has("content-type")) {
+			headers.set("content-type", "application/json");
+		}
+	}
+
 	try {
 		const response = await fetch(targetUrl, {
 			method: request.method,
 			headers,
-			body:
-				request.method !== "GET" && request.method !== "HEAD"
-					? await request.text()
-					: undefined,
+			body,
 			redirect: "manual",
 		});
 

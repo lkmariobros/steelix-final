@@ -104,8 +104,6 @@ app.get("/api/auth/me-role", async (c) => {
  */
 app.post("/api/auth/sign-in/email", async (c) => {
 	try {
-		// Read body once — req.clone().json() + auth.handler(req) can leave Better Auth
-		// with an empty body behind Vercel/Railway proxies ("User not found" / 401).
 		const bodyText = await c.req.text();
 		let parsedBody: Record<string, unknown> | null = null;
 		if (bodyText) {
@@ -123,46 +121,56 @@ app.post("/api/auth/sign-in/email", async (c) => {
 			parsedBody && "email" in parsedBody
 				? String(parsedBody.email ?? "").toLowerCase().trim()
 				: "";
+		const password =
+			parsedBody && "password" in parsedBody
+				? String(parsedBody.password ?? "")
+				: "";
 
-		if (email) {
-			const [record] = await db
-				.select({
-					role: user.role,
-					agentStatus: user.agentStatus,
-					isActive: user.isActive,
-				})
-				.from(user)
-				.where(sql`lower(${user.email}) = ${email}`)
-				.limit(1);
-
-			const access = evaluateAccountSignInAccess(record);
-			if (!access.allowed) {
-				return c.json(
-					{
-						code: "FORBIDDEN",
-						message: access.message,
-					},
-					403,
-				);
-			}
+		if (!email || !password) {
+			return c.json(
+				{
+					code: "INVALID_EMAIL_OR_PASSWORD",
+					message: "Invalid email or password",
+				},
+				401,
+			);
 		}
 
-		const authBody =
-			parsedBody && email
-				? JSON.stringify({ ...parsedBody, email })
-				: bodyText;
+		const [record] = await db
+			.select({
+				role: user.role,
+				agentStatus: user.agentStatus,
+				isActive: user.isActive,
+			})
+			.from(user)
+			.where(sql`lower(${user.email}) = ${email}`)
+			.limit(1);
 
-		const authRequest = new Request(c.req.url, {
-			method: c.req.method,
+		const access = evaluateAccountSignInAccess(record);
+		if (!access.allowed) {
+			return c.json(
+				{
+					code: "FORBIDDEN",
+					message: access.message,
+				},
+				403,
+			);
+		}
+
+		// Call Better Auth directly — auth.handler(Request) drops the JSON body on
+		// Vercel → Railway, which produced "User not found" despite a valid user row.
+		return await auth.api.signInEmail({
+			body: {
+				email,
+				password,
+				rememberMe: parsedBody?.rememberMe !== false,
+				...(typeof parsedBody?.callbackURL === "string"
+					? { callbackURL: parsedBody.callbackURL }
+					: {}),
+			},
 			headers: c.req.raw.headers,
-			body: authBody || undefined,
+			asResponse: true,
 		});
-
-		const result = await auth.handler(authRequest);
-		return (
-			result ??
-			c.json({ error: "Auth endpoint not found", path: c.req.path }, 404)
-		);
 	} catch (error) {
 		console.error("❌ Auth sign-in gate error:", error);
 		return c.json({ error: "Auth handler failed" }, 500);
