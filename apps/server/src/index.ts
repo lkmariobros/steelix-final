@@ -6,7 +6,7 @@ import { logger } from "hono/logger";
 import { appRouter } from "./routers/index";
 import { debugRoutes } from "./routes/debug";
 import { webhookRoutes } from "./routes/webhooks";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { user } from "./models/auth";
 import { auth } from "./utils/auth";
 import { evaluateAccountSignInAccess } from "./utils/account-access";
@@ -104,11 +104,24 @@ app.get("/api/auth/me-role", async (c) => {
  */
 app.post("/api/auth/sign-in/email", async (c) => {
 	try {
-		const req = c.req.raw;
-		const body = await req.clone().json().catch(() => null);
+		// Read body once — req.clone().json() + auth.handler(req) can leave Better Auth
+		// with an empty body behind Vercel/Railway proxies ("User not found" / 401).
+		const bodyText = await c.req.text();
+		let parsedBody: Record<string, unknown> | null = null;
+		if (bodyText) {
+			try {
+				const json: unknown = JSON.parse(bodyText);
+				if (json && typeof json === "object" && !Array.isArray(json)) {
+					parsedBody = json as Record<string, unknown>;
+				}
+			} catch {
+				parsedBody = null;
+			}
+		}
+
 		const email =
-			body && typeof body === "object" && "email" in body
-				? String((body as { email?: unknown }).email ?? "").toLowerCase().trim()
+			parsedBody && "email" in parsedBody
+				? String(parsedBody.email ?? "").toLowerCase().trim()
 				: "";
 
 		if (email) {
@@ -119,7 +132,7 @@ app.post("/api/auth/sign-in/email", async (c) => {
 					isActive: user.isActive,
 				})
 				.from(user)
-				.where(eq(user.email, email))
+				.where(sql`lower(${user.email}) = ${email}`)
 				.limit(1);
 
 			const access = evaluateAccountSignInAccess(record);
@@ -134,7 +147,18 @@ app.post("/api/auth/sign-in/email", async (c) => {
 			}
 		}
 
-		const result = await auth.handler(req);
+		const authBody =
+			parsedBody && email
+				? JSON.stringify({ ...parsedBody, email })
+				: bodyText;
+
+		const authRequest = new Request(c.req.url, {
+			method: c.req.method,
+			headers: c.req.raw.headers,
+			body: authBody || undefined,
+		});
+
+		const result = await auth.handler(authRequest);
 		return (
 			result ??
 			c.json({ error: "Auth endpoint not found", path: c.req.path }, 404)
