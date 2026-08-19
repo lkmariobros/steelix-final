@@ -21,7 +21,7 @@ export function postLoginPathFromRole(role: AppRole | undefined): string {
 	return isAdministrator(role) ? PORTAL_PATHS.admin : PORTAL_PATHS.agent;
 }
 
-/** Extract user (with role) from Better Auth sign-in/sign-up payload. */
+/** Extract user (with role) from sign-in/sign-up payload. */
 export function userFromAuthResponse(data: unknown): SessionUser {
 	if (!data || typeof data !== "object") return undefined;
 	const payload = data as Record<string, unknown>;

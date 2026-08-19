@@ -10,7 +10,7 @@ import { pool } from "../utils/db";
  *
  * All queries use raw SQL via the shared pg Pool so the lead_tasks table
  * does not need to be added to the Drizzle schema.
- * User name lookups join against public."user" (Better Auth user table).
+ * User name lookups join against public."user".
  */
 
 // ─── Row mapper ──────────────────────────────────────────────────────────────

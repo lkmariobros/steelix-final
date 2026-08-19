@@ -20,7 +20,7 @@ export function isAppRole(value: string | null | undefined): value is AppRole {
 
 /**
  * Resolve role from session (merged from DB in createContext) with DB fallback.
- * Never trusts client-only hints — session role comes from Better Auth + context merge.
+ * Never trusts client-only hints — session role comes from the DB-backed session.
  */
 export async function resolveUserRole(ctx: Context): Promise<AppRole> {
 	if (!ctx.session?.user) {

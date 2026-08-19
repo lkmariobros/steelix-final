@@ -78,8 +78,7 @@ function isSupabasePooler(connectionString: string): boolean {
  *
  * Do NOT auto-enable `ssl: { rejectUnauthorized: false }` for remote hosts.
  * With Supabase Supavisor (pooler.supabase.com:5432) that misconfiguration causes
- * ~15s connection acquire timeouts and "Connection terminated unexpectedly" on
- * Better Auth session lookups — exactly the GET /api/auth/get-session 500 symptom.
+ * ~15s connection acquire timeouts and "Connection terminated unexpectedly".
  *
  * Default: omit `ssl` and let the connection string / host handle TLS.
  * Opt in with DATABASE_SSL=true only when your provider requires an explicit Pool.ssl object.

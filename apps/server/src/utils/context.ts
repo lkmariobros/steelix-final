@@ -2,7 +2,7 @@ import type { InferSelectModel } from "drizzle-orm";
 import { eq } from "drizzle-orm";
 import type { Context as HonoContext } from "hono";
 import { user } from "../models/auth";
-import { auth } from "./auth";
+import { getSession, type AuthSession } from "./session";
 import { db } from "./db";
 
 type UserWithTier = Pick<
@@ -47,9 +47,7 @@ export function invalidateUserCache(userId: string) {
 // ─── Context factory ─────────────────────────────────────────────────────────
 
 export async function createContext({ context }: CreateContextOptions) {
-	const session = await auth.api.getSession({
-		headers: context.req.raw.headers,
-	});
+	const session = await getSession(context.req.raw.headers);
 
 	if (session?.user) {
 		// Try cache first to avoid a DB round-trip on every request
@@ -74,7 +72,7 @@ export async function createContext({ context }: CreateContextOptions) {
 }
 
 async function fetchAndCacheUser(
-	session: NonNullable<Awaited<ReturnType<typeof auth.api.getSession>>>,
+	session: NonNullable<AuthSession>,
 ) {
 	const MAX_RETRIES = 2;
 	const TIMEOUT_MS = 5_000; // 5 seconds (was 30 — major latency source!)

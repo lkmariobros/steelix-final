@@ -48,7 +48,7 @@ const GUEST_VALUE: UserRoleContextValue = {
 
 const UserRoleContext = createContext<UserRoleContextValue | null>(null);
 
-/** Plain copy — never call methods on Better Auth proxy objects. */
+/** Plain copy of session user fields. */
 function plainSessionUser(user: unknown): SessionUser | undefined {
 	if (!user || typeof user !== "object") return undefined;
 	const record = user as Record<string, unknown>;

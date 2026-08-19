@@ -30,7 +30,6 @@ function collectErrorPayloads(error: unknown): Record<string, unknown>[] {
 	const record = error as Record<string, unknown>;
 	payloads.push(record);
 
-	// better-fetch / better-auth ErrorContext: { response, responseText, error }
 	if (record.error && typeof record.error === "object") {
 		payloads.push(record.error as Record<string, unknown>);
 	} else if (typeof record.error === "string" && record.error.trim()) {

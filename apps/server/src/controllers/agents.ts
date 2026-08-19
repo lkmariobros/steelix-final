@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import { hashPassword } from "better-auth/crypto";
+import { hashPassword } from "../utils/password";
 import { and, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import { z } from "zod";
 import { approvalTemplates, approvalWorkflowHistory } from "../models/approvals";

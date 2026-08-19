@@ -29,12 +29,7 @@ function sanitizeCookieHeader(rawCookie: string | null) {
 		.filter(Boolean);
 	const filtered = parts.filter((part) => {
 		const [name] = part.split("=", 1);
-		if (
-			name === "better-auth.session_data" ||
-			name === "__Secure-better-auth.session_data" ||
-			name.startsWith("better-auth.session_data.") ||
-			name.startsWith("__Secure-better-auth.session_data.")
-		) {
+		if (name.includes("better-auth")) {
 			return false;
 		}
 		return true;

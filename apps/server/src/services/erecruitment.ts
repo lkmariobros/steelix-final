@@ -1,4 +1,4 @@
-import { hashPassword } from "better-auth/crypto";
+import { hashPassword } from "../utils/password";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { account, user } from "../models/auth";
 import {

@@ -1,8 +1,5 @@
 /**
- * Auth Proxy Route
- *
- * Proxies Better Auth requests to the backend as same-origin requests so
- * session cookies work on mobile and production (Vercel → Railway).
+ * Auth proxy — same-origin requests so session cookies work on the portal.
  */
 
 export const runtime = "nodejs";
@@ -56,12 +53,7 @@ function sanitizeCookieHeader(rawCookie: string | null) {
 		.filter(Boolean);
 	const filtered = parts.filter((part) => {
 		const [name] = part.split("=", 1);
-		if (
-			name === "better-auth.session_data" ||
-			name === "__Secure-better-auth.session_data" ||
-			name.startsWith("better-auth.session_data.") ||
-			name.startsWith("__Secure-better-auth.session_data.")
-		) {
+		if (name.includes("better-auth")) {
 			return false;
 		}
 		return true;
@@ -124,8 +116,6 @@ async function handler(request: Request) {
 			? await request.text()
 			: undefined;
 
-	// Stale content-length / transfer-encoding from the browser breaks bodies
-	// when Vercel re-posts to Railway (Better Auth then logs "User not found").
 	if (body) {
 		headers.delete("content-length");
 		headers.delete("transfer-encoding");

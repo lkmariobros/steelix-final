@@ -1,5 +1,5 @@
 /**
- * Frontend origins allowed for CORS and Better Auth trustedOrigins.
+ * Frontend origins allowed for CORS.
  * Also set CORS_ORIGIN on Railway (comma-separated) for extra domains without redeploying.
  */
 const DEFAULT_ALLOWED_ORIGINS = [

@@ -1,29 +1,19 @@
 import "dotenv/config";
 import { trpcServer } from "@hono/trpc-server";
 import { Hono } from "hono";
-import type { Context } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { appRouter } from "./routers/index";
+import { authRoutes } from "./routes/auth";
 import { debugRoutes } from "./routes/debug";
 import { webhookRoutes } from "./routes/webhooks";
-import { and, eq, sql } from "drizzle-orm";
-import { verifyPassword } from "better-auth/crypto";
-import { account, user } from "./models/auth";
-import { auth } from "./utils/auth";
-import { evaluateAccountSignInAccess } from "./utils/account-access";
 import { createContext } from "./utils/context";
-import { db } from "./utils/db";
-import { isAppRole } from "./utils/rbac";
-import { hasAdminAccess, hasSuperAdminAccess } from "./utils/user-roles";
 import { startServer } from "./utils/server";
 import { getAllowedOrigins } from "./utils/allowed-origins";
 import { ensurePipelineStageEnumValues } from "./utils/pipeline-stage-schema";
 import { ensureDocumentCategoryEnumValues } from "./utils/document-category-schema";
 
 const app = new Hono();
-
-// ─── Global error handler ────────────────────────────────────────────────────
 
 app.onError((err, c) => {
 	console.error(`❌ [${c.req.method}] ${c.req.path}:`, err.message);
@@ -36,8 +26,6 @@ app.onError((err, c) => {
 		500,
 	);
 });
-
-// ─── Middleware ───────────────────────────────────────────────────────────────
 
 app.use(logger());
 
@@ -62,234 +50,7 @@ app.use(
 	}),
 );
 
-// ─── Auth ─────────────────────────────────────────────────────────────────────
-
-/** DB-backed role for middleware / proxies when session JSON omits custom fields. */
-app.get("/api/auth/me-role", async (c) => {
-	try {
-		const session = await auth.api.getSession({ headers: c.req.raw.headers });
-		if (!session?.user?.id) {
-			return c.json({ hasAdminAccess: false, role: null }, 401);
-		}
-
-		const fromSession = (session.user as { role?: string | null }).role;
-		if (isAppRole(fromSession)) {
-			return c.json({
-				role: fromSession,
-				hasAdminAccess: hasAdminAccess({ role: fromSession }),
-				hasSuperAdminAccess: hasSuperAdminAccess({ role: fromSession }),
-			});
-		}
-
-		const [record] = await db
-			.select({ role: user.role })
-			.from(user)
-			.where(eq(user.id, session.user.id))
-			.limit(1);
-
-		const role = isAppRole(record?.role) ? record.role : "agent";
-		return c.json({
-			role,
-			hasAdminAccess: hasAdminAccess({ role }),
-			hasSuperAdminAccess: hasSuperAdminAccess({ role }),
-		});
-	} catch (error) {
-		console.error("❌ me-role error:", error);
-		return c.json({ hasAdminAccess: false, role: null }, 500);
-	}
-});
-
-/**
- * Hard gate: prevent pending/suspended users from creating sessions.
- * This is intentionally duplicated from auth databaseHooks as a defense-in-depth
- * check in case the auth adapter bypasses session.create hooks.
- */
-async function handleEmailSignIn(c: Context) {
-	try {
-		const bodyText = await c.req.text();
-		let parsedBody: Record<string, unknown> | null = null;
-		if (bodyText) {
-			try {
-				const json: unknown = JSON.parse(bodyText);
-				if (json && typeof json === "object" && !Array.isArray(json)) {
-					parsedBody = json as Record<string, unknown>;
-				}
-			} catch {
-				parsedBody = null;
-			}
-		}
-
-		const email =
-			parsedBody && "email" in parsedBody
-				? String(parsedBody.email ?? "").toLowerCase().trim()
-				: "";
-		const password =
-			parsedBody && "password" in parsedBody
-				? String(parsedBody.password ?? "")
-				: "";
-
-		console.log(
-			`🔐 sign-in/email: bodyLength=${bodyText.length} hasEmail=${Boolean(email)} origin=${c.req.header("origin") ?? "none"}`,
-		);
-
-		if (!email || !password) {
-			return c.json(
-				{
-					code: "INVALID_EMAIL_OR_PASSWORD",
-					message: "Invalid email or password",
-				},
-				401,
-			);
-		}
-
-		const [record] = await db
-			.select({
-				id: user.id,
-				email: user.email,
-				role: user.role,
-				agentStatus: user.agentStatus,
-				isActive: user.isActive,
-			})
-			.from(user)
-			.where(sql`lower(${user.email}) = ${email}`)
-			.limit(1);
-
-		console.log(
-			`🔐 sign-in/email: dbUser=${record ? "found" : "missing"} storedEmail=${record?.email ?? "n/a"} role=${record?.role ?? "n/a"} status=${record?.agentStatus ?? "n/a"}`,
-		);
-
-		const access = evaluateAccountSignInAccess(record);
-		if (!access.allowed || !record) {
-			return c.json(
-				{
-					code: "FORBIDDEN",
-					message: access.allowed
-						? "Account not found. Please contact support."
-						: access.message,
-				},
-				403,
-			);
-		}
-
-		const [credential] = await db
-			.select({
-				id: account.id,
-				accountId: account.accountId,
-				password: account.password,
-			})
-			.from(account)
-			.where(
-				and(
-					eq(account.userId, record.id),
-					eq(account.providerId, "credential"),
-				),
-			)
-			.limit(1);
-
-		if (!credential?.password) {
-			console.warn(
-				`🔐 sign-in/email: credential account missing for ${email}`,
-			);
-			return c.json(
-				{
-					code: "INVALID_EMAIL_OR_PASSWORD",
-					message: "Invalid email or password",
-				},
-				401,
-			);
-		}
-
-		const passwordValid = await verifyPassword({
-			hash: credential.password,
-			password,
-		});
-		console.log(`🔐 sign-in/email: passwordValid=${passwordValid}`);
-		if (!passwordValid) {
-			return c.json(
-				{
-					code: "INVALID_EMAIL_OR_PASSWORD",
-					message: "Invalid email or password",
-				},
-				401,
-			);
-		}
-
-		// Better Auth looks up email with exact eq(lowercased input). Mixed-case
-		// rows match our SQL lower() check but then fail as "User not found".
-		if (record.email !== email) {
-			await db
-				.update(user)
-				.set({ email, updatedAt: new Date() })
-				.where(eq(user.id, record.id));
-		}
-		if (credential.accountId !== email) {
-			await db
-				.update(account)
-				.set({ accountId: email, updatedAt: new Date() })
-				.where(eq(account.id, credential.id));
-		}
-
-		const origin =
-			c.req.header("origin") ||
-			allowedOrigins.find((item) => item.startsWith("https://portal.")) ||
-			allowedOrigins[0] ||
-			"https://portal.devots.com.my";
-
-		const authHeaders = new Headers();
-		authHeaders.set("origin", origin);
-		authHeaders.set("content-type", "application/json");
-		const userAgent = c.req.header("user-agent");
-		if (userAgent) authHeaders.set("user-agent", userAgent);
-
-		const baseURL = (
-			process.env.BETTER_AUTH_URL || "http://localhost:8080"
-		).replace(/\/$/, "");
-		const signInRequest = new Request(`${baseURL}/api/auth/sign-in/email`, {
-			method: "POST",
-			headers: authHeaders,
-			body: JSON.stringify({
-				email,
-				password,
-				rememberMe: parsedBody?.rememberMe !== false,
-				...(typeof parsedBody?.callbackURL === "string"
-					? { callbackURL: parsedBody.callbackURL }
-					: {}),
-			}),
-		});
-
-		return await auth.handler(signInRequest);
-	} catch (error) {
-		console.error("❌ Auth sign-in gate error:", error);
-		return c.json({ error: "Auth handler failed" }, 500);
-	}
-}
-
-app.post("/api/auth/sign-in/email", (c) => handleEmailSignIn(c));
-app.post("/api/auth/signin/email", (c) => handleEmailSignIn(c));
-
-app.all("/api/auth/*", async (c) => {
-	try {
-		const result = await auth.handler(c.req.raw);
-		return (
-			result ??
-			c.json({ error: "Auth endpoint not found", path: c.req.path }, 404)
-		);
-	} catch (error) {
-		console.error(
-			"❌ Auth error:",
-			error instanceof Error ? error.message : error,
-		);
-		return c.json(
-			{
-				error: "Auth handler failed",
-				details: error instanceof Error ? error.message : String(error),
-			},
-			500,
-		);
-	}
-});
-
-// ─── tRPC ─────────────────────────────────────────────────────────────────────
+app.route("/", authRoutes);
 
 app.use(
 	"/trpc/*",
@@ -298,8 +59,6 @@ app.use(
 		createContext: (_opts, context) => createContext({ context }),
 	}),
 );
-
-// ─── Health ───────────────────────────────────────────────────────────────────
 
 app.get("/", (c) => c.text(`OK - ${new Date().toISOString()}`));
 app.get("/health", (c) =>
@@ -313,15 +72,11 @@ app.get("/healthz", (c) => c.text("OK"));
 app.get("/ping", (c) => c.text("pong"));
 app.get("/.well-known/health", (c) => c.json({ status: "ok" }));
 
-// ─── Feature routes ───────────────────────────────────────────────────────────
-
 app.route("/", webhookRoutes);
 
 if (process.env.NODE_ENV !== "production") {
 	app.route("/", debugRoutes);
 }
-
-// ─── Process error guards ─────────────────────────────────────────────────────
 
 process.on("unhandledRejection", (reason) =>
 	console.error("❌ Unhandled rejection:", reason),
@@ -330,14 +85,10 @@ process.on("uncaughtException", (error) =>
 	console.error("❌ Uncaught exception:", error),
 );
 
-// ─── Startup ──────────────────────────────────────────────────────────────────
-
 console.log(
 	`🚀 Starting on port ${process.env.PORT || 8080} [${process.env.NODE_ENV}]`,
 );
-console.log(
-	`   DB: ${process.env.DATABASE_URL ? "✓" : "✗ NOT SET"}  |  AUTH_URL: ${process.env.BETTER_AUTH_URL}`,
-);
+console.log(`   DB: ${process.env.DATABASE_URL ? "✓" : "✗ NOT SET"}`);
 
 void ensurePipelineStageEnumValues()
 	.then(() => console.log("✅ Pipeline stage enum values ready"))
