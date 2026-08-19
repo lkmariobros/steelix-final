@@ -22,7 +22,31 @@ const getBackendUrl = () => {
 	return "http://127.0.0.1:8080";
 };
 
-const BACKEND_URL = getBackendUrl();
+const BACKEND_URL = getBackendUrl().replace(/\/$/, "");
+
+const DROP_REQUEST_HEADERS = new Set([
+	"host",
+	"connection",
+	"content-length",
+	"transfer-encoding",
+	"accept-encoding",
+	"x-forwarded-host",
+	"x-forwarded-proto",
+	"x-forwarded-port",
+	"x-forwarded-for",
+	"forwarded",
+]);
+
+function normalizeAuthPath(pathname: string): string {
+	const authPath = pathname.replace(/^\/api\/auth\/?/, "");
+	if (authPath.toLowerCase() === "signin/email") {
+		return "sign-in/email";
+	}
+	if (authPath.toLowerCase() === "signup/email") {
+		return "sign-up/email";
+	}
+	return authPath;
+}
 
 function sanitizeCookieHeader(rawCookie: string | null) {
 	if (!rawCookie) return null;
@@ -61,11 +85,12 @@ function getSetCookies(response: Response): string[] {
 
 async function handler(request: Request) {
 	const url = new URL(request.url);
-	const authPath = url.pathname.replace("/api/auth/", "");
+	const authPath = normalizeAuthPath(url.pathname);
 	const targetUrl = `${BACKEND_URL}/api/auth/${authPath}${url.search}`;
 	const authPathLower = authPath.toLowerCase();
 	const isFreshAuthAction =
 		authPathLower.includes("sign-in") ||
+		authPathLower.includes("signin") ||
 		authPathLower.includes("signup") ||
 		authPathLower.includes("sign-up") ||
 		authPathLower.includes("register") ||
@@ -75,10 +100,15 @@ async function handler(request: Request) {
 
 	const headers = new Headers();
 	request.headers.forEach((value, key) => {
-		if (key.toLowerCase() !== "host") {
+		if (!DROP_REQUEST_HEADERS.has(key.toLowerCase())) {
 			headers.set(key, value);
 		}
 	});
+
+	const origin =
+		request.headers.get("origin") ||
+		`${url.protocol}//${url.host}`;
+	headers.set("origin", origin);
 
 	const cookies = sanitizeCookieHeader(request.headers.get("cookie"));
 	if (cookies && !isFreshAuthAction) {

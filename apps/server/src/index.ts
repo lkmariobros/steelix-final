@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { trpcServer } from "@hono/trpc-server";
 import { Hono } from "hono";
+import type { Context } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { appRouter } from "./routers/index";
@@ -102,7 +103,7 @@ app.get("/api/auth/me-role", async (c) => {
  * This is intentionally duplicated from auth databaseHooks as a defense-in-depth
  * check in case the auth adapter bypasses session.create hooks.
  */
-app.post("/api/auth/sign-in/email", async (c) => {
+async function handleEmailSignIn(c: Context) {
 	try {
 		const bodyText = await c.req.text();
 		let parsedBody: Record<string, unknown> | null = null;
@@ -126,6 +127,10 @@ app.post("/api/auth/sign-in/email", async (c) => {
 				? String(parsedBody.password ?? "")
 				: "";
 
+		console.log(
+			`🔐 sign-in/email: bodyLength=${bodyText.length} hasEmail=${Boolean(email)} origin=${c.req.header("origin") ?? "none"}`,
+		);
+
 		if (!email || !password) {
 			return c.json(
 				{
@@ -146,6 +151,10 @@ app.post("/api/auth/sign-in/email", async (c) => {
 			.where(sql`lower(${user.email}) = ${email}`)
 			.limit(1);
 
+		console.log(
+			`🔐 sign-in/email: dbUser=${record ? "found" : "missing"} role=${record?.role ?? "n/a"} status=${record?.agentStatus ?? "n/a"}`,
+		);
+
 		const access = evaluateAccountSignInAccess(record);
 		if (!access.allowed) {
 			return c.json(
@@ -157,8 +166,21 @@ app.post("/api/auth/sign-in/email", async (c) => {
 			);
 		}
 
-		// Call Better Auth directly — auth.handler(Request) drops the JSON body on
-		// Vercel → Railway, which produced "User not found" despite a valid user row.
+		const origin =
+			c.req.header("origin") ||
+			allowedOrigins.find((item) => item.startsWith("https://portal.")) ||
+			allowedOrigins[0] ||
+			"https://portal.devots.com.my";
+
+		const authHeaders = new Headers();
+		authHeaders.set("origin", origin);
+		authHeaders.set("content-type", "application/json");
+		const userAgent = c.req.header("user-agent");
+		if (userAgent) authHeaders.set("user-agent", userAgent);
+
+		// Call Better Auth with a reconstructed body. Forwarding the raw Vercel
+		// request (and X-Forwarded-Host=portal.devots.com.my) made Better Auth
+		// look up a missing email and log "User not found".
 		return await auth.api.signInEmail({
 			body: {
 				email,
@@ -168,14 +190,17 @@ app.post("/api/auth/sign-in/email", async (c) => {
 					? { callbackURL: parsedBody.callbackURL }
 					: {}),
 			},
-			headers: c.req.raw.headers,
+			headers: authHeaders,
 			asResponse: true,
 		});
 	} catch (error) {
 		console.error("❌ Auth sign-in gate error:", error);
 		return c.json({ error: "Auth handler failed" }, 500);
 	}
-});
+}
+
+app.post("/api/auth/sign-in/email", (c) => handleEmailSignIn(c));
+app.post("/api/auth/signin/email", (c) => handleEmailSignIn(c));
 
 app.all("/api/auth/*", async (c) => {
 	try {

@@ -9,6 +9,7 @@ const DEFAULT_ALLOWED_ORIGINS = [
 	"https://portal.devots.com.my",
 	"https://steelix-final-web.vercel.app",
 	"https://steelix-final-web-git-master-lkmariobros-projects.vercel.app",
+	"https://steelix-final-web-git-feature-sideb-6d33df-lkmariobros-projects.vercel.app",
 	"https://steelix-final-mx4or73lk-lkmariobros-projects.vercel.app",
 	"my-better-t-app://",
 ] as const;
