@@ -11,21 +11,16 @@ import {
 	BreadcrumbPage,
 	BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
-import {
-	Card,
-	CardContent,
-	CardDescription,
-	CardHeader,
-	CardTitle,
-} from "@/components/ui/card";
-import { RiDashboardLine, RiMoneyDollarCircleLine } from "@remixicon/react";
+import { Button } from "@/components/ui/button";
+import { RiDashboardLine, RiGiftLine, RiMoneyDollarCircleLine } from "@remixicon/react";
+import Link from "next/link";
 
 export default function AdminIncentivesPage() {
 	return (
 		<>
-			<header className="flex h-16 shrink-0 items-center gap-2 border-b">
-				<div className="flex flex-1 items-center gap-2 px-3">
-					<SidebarTrigger className="-ms-4" />
+			<header className="sticky top-0 z-40 -mx-4 flex h-16 shrink-0 items-center gap-2 border-border/60 border-b bg-background px-4 backdrop-blur-md supports-backdrop-filter:bg-background/95 md:-mx-6 md:px-6 lg:-mx-8 lg:px-8">
+				<div className="flex flex-1 items-center gap-2 px-1 sm:px-0">
+					<SidebarTrigger className="-ms-1 rounded-xl" />
 					<Separator
 						orientation="vertical"
 						className="mr-2 data-[orientation=vertical]:h-4"
@@ -40,42 +35,52 @@ export default function AdminIncentivesPage() {
 							</BreadcrumbItem>
 							<BreadcrumbSeparator className="hidden md:block" />
 							<BreadcrumbItem>
-								<BreadcrumbPage className="flex items-center gap-2">
-									<RiMoneyDollarCircleLine size={18} aria-hidden="true" />
+								<BreadcrumbPage className="flex items-center gap-2 font-medium">
+									<span className="flex size-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
+										<RiMoneyDollarCircleLine size={16} aria-hidden="true" />
+									</span>
 									Incentive
 								</BreadcrumbPage>
 							</BreadcrumbItem>
 						</BreadcrumbList>
 					</Breadcrumb>
 				</div>
-				<HeaderActions />
+				<div className="ml-auto flex gap-2">
+					<HeaderActions />
+				</div>
 			</header>
 
-			<div className="flex flex-1 flex-col gap-4 py-4 lg:gap-6 lg:py-6">
-				<div className="space-y-1">
-					<h1 className="flex items-center gap-2 font-semibold text-2xl">
-						<RiMoneyDollarCircleLine className="size-6" />
-						Incentive
-					</h1>
-					<p className="text-muted-foreground text-sm">
-						Agent incentive programs and bonus tracking.
+			<div className="flex min-h-[calc(100svh-4rem)] flex-1 flex-col items-center justify-center px-4 py-10">
+				<div className="flex w-full max-w-xl flex-col items-center rounded-3xl border border-border/70 bg-card px-8 py-14 text-center shadow-card sm:px-12 sm:py-16">
+					<span className="mb-6 flex size-20 items-center justify-center rounded-3xl bg-primary/15 text-primary shadow-sm sm:size-24">
+						<RiGiftLine className="size-10 sm:size-12" aria-hidden="true" />
+					</span>
+					<p className="mb-2 font-semibold text-primary text-sm uppercase tracking-[0.2em]">
+						Finance
 					</p>
+					<h1 className="font-bold text-3xl tracking-tight sm:text-4xl">
+						Coming soon
+					</h1>
+					<p className="mt-4 max-w-md text-base text-muted-foreground leading-relaxed sm:text-lg">
+						Incentive management will be available in a future update. Use
+						Commission approvals and Commission payout for commission workflows
+						in the meantime.
+					</p>
+					<div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+						<Button className="h-11 rounded-full px-6" asChild>
+							<Link href="/admin/commissions?status=pending_approval">
+								Commission approvals
+							</Link>
+						</Button>
+						<Button
+							variant="outline"
+							className="h-11 rounded-full border-border/70 px-6 shadow-card"
+							asChild
+						>
+							<Link href="/admin/commissions">Commission payout</Link>
+						</Button>
+					</div>
 				</div>
-
-				<Card>
-					<CardHeader>
-						<CardTitle>Coming soon</CardTitle>
-						<CardDescription>
-							Incentive management will be available in a future update.
-						</CardDescription>
-					</CardHeader>
-					<CardContent>
-						<p className="text-muted-foreground text-sm">
-							Use Commission approvals and Commission payout for commission
-							workflows in the meantime.
-						</p>
-					</CardContent>
-				</Card>
 			</div>
 		</>
 	);

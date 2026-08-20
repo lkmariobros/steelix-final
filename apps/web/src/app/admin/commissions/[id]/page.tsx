@@ -20,9 +20,15 @@ import {
 } from "@/components/ui/breadcrumb";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+	Popover,
+	PopoverContent,
+	PopoverTrigger,
+} from "@/components/ui/popover";
 import {
 	Select,
 	SelectContent,
@@ -32,12 +38,15 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { authClient } from "@/lib/auth-client";
+import { cn } from "@/lib/utils";
 import { trpc } from "@/utils/trpc";
 import {
 	RiArrowLeftLine,
+	RiCalendarLine,
 	RiDashboardLine,
 	RiMoneyDollarCircleLine,
 } from "@remixicon/react";
+import { format } from "date-fns";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useState } from "react";
@@ -49,6 +58,17 @@ function formatRm(n: number | string) {
 		currency: "MYR",
 		minimumFractionDigits: 2,
 	}).format(typeof n === "string" ? Number.parseFloat(n) : n);
+}
+
+function parseYmd(value: string): Date | undefined {
+	if (!value) return undefined;
+	const d = new Date(`${value}T00:00:00`);
+	return Number.isNaN(d.getTime()) ? undefined : d;
+}
+
+function toYmd(date: Date | undefined): string {
+	if (!date) return "";
+	return format(date, "yyyy-MM-dd");
 }
 
 export default function CommissionPayoutDetailPage() {
@@ -66,6 +86,7 @@ export default function CommissionPayoutDetailPage() {
 	const [method, setMethod] = useState<"bank_transfer" | "cheque" | "cash">("bank_transfer");
 	const [ref, setRef] = useState("");
 	const [payDate, setPayDate] = useState("");
+	const [payDateOpen, setPayDateOpen] = useState(false);
 
 	const utils = trpc.useUtils();
 
@@ -394,7 +415,37 @@ export default function CommissionPayoutDetailPage() {
 							</div>
 							<div>
 								<Label>Payment date</Label>
-								<Input type="date" value={payDate} onChange={(e) => setPayDate(e.target.value)} />
+								<Popover open={payDateOpen} onOpenChange={setPayDateOpen}>
+									<PopoverTrigger asChild>
+										<Button
+											type="button"
+											variant="outline"
+											className={cn(
+												"mt-1 h-9 w-full justify-start gap-2 rounded-full font-normal shadow-card",
+												!payDate && "text-muted-foreground",
+											)}
+										>
+											<RiCalendarLine className="size-3.5 text-muted-foreground" />
+											{payDate
+												? format(parseYmd(payDate) ?? new Date(), "dd MMM yyyy")
+												: "Select payment date"}
+										</Button>
+									</PopoverTrigger>
+									<PopoverContent
+										className="w-auto border-border/70 p-0 shadow-card"
+										align="start"
+									>
+										<Calendar
+											mode="single"
+											selected={parseYmd(payDate)}
+											onSelect={(date) => {
+												setPayDate(toYmd(date));
+												if (date) setPayDateOpen(false);
+											}}
+											initialFocus
+										/>
+									</PopoverContent>
+								</Popover>
 							</div>
 							<div>
 								<Label>Reference no.</Label>
