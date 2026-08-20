@@ -10,7 +10,6 @@ import { stashTransactionPrefillOnce } from "@/features/sales-entry/prefill-stas
 import {
 	type ActivityEventType,
 	type Lead,
-	formatLeadId,
 	getLeadDisplayTags,
 	withCurrentAssigneeOption,
 } from "./lead-models";
@@ -45,15 +44,58 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import {
 	RiDeleteBinLine,
+	RiGitBranchLine,
+	RiGroupLine,
 	RiHistoryLine,
 	RiLoader4Line,
 	RiPencilLine,
 	RiStickyNoteLine,
+	RiUserAddLine,
 	RiUserLine,
 } from "@remixicon/react";
-import { StageBadge, ActivityEventIcon, StatusBadge } from "./lead-ui";
+import { StageBadge, ActivityEventIcon } from "./lead-ui";
 import { LeadTasksCard } from "./lead-tasks-card";
 import { LeadContactInfoCard } from "./lead-contact-info-card";
+import { cn } from "@/lib/utils";
+import type { ReactNode } from "react";
+
+function DetailSection({
+	title,
+	description,
+	icon,
+	children,
+	className,
+}: {
+	title: string;
+	description?: string;
+	icon: ReactNode;
+	children: ReactNode;
+	className?: string;
+}) {
+	return (
+		<Card
+			className={cn(
+				"gap-0 overflow-hidden border-border/70 py-0 shadow-sm",
+				className,
+			)}
+		>
+			<CardHeader className="border-border/60 border-b bg-muted/40 px-4 py-3 dark:bg-muted/50">
+				<CardTitle className="flex items-center gap-2 font-semibold text-sm">
+					<span className="flex size-7 items-center justify-center rounded-lg bg-primary/12 text-primary">
+						{icon}
+					</span>
+					{title}
+				</CardTitle>
+				{description ? (
+					<CardDescription className="mt-1 text-foreground/60 text-xs">
+						{description}
+					</CardDescription>
+				) : null}
+			</CardHeader>
+			<CardContent className="space-y-3 p-4">{children}</CardContent>
+		</Card>
+	);
+}
 
 export function LeadDetailSheet({
 	lead,
@@ -270,15 +312,17 @@ export function LeadDetailSheet({
 
 	return (
 		<Sheet open={open} onOpenChange={(v) => !v && onClose()}>
-			<SheetContent className="w-full overflow-y-auto sm:max-w-2xl">
-				<SheetHeader className="mb-4 pr-8">
+			<SheetContent className="w-full gap-0 overflow-y-auto p-0 sm:max-w-2xl">
+				<SheetHeader className="sticky top-0 z-20 border-border/70 border-b bg-background/95 px-6 py-4 pr-14 backdrop-blur-md supports-backdrop-filter:bg-background/85">
 					<div className="flex items-start justify-between gap-3">
 						<div className="min-w-0 space-y-1">
-							<SheetTitle className="flex items-center gap-2">
-								<RiUserLine size={20} />
+							<SheetTitle className="flex items-center gap-2.5 text-lg">
+								<span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary/12 text-primary">
+									<RiUserLine size={18} />
+								</span>
 								<span className="truncate">{activeLead.name}</span>
 							</SheetTitle>
-							<SheetDescription>
+							<SheetDescription className="text-foreground/65">
 								Lead details, activity timeline, and management actions
 							</SheetDescription>
 						</div>
@@ -286,7 +330,7 @@ export function LeadDetailSheet({
 							<Button
 								variant="outline"
 								size="sm"
-								className="shrink-0 gap-1.5"
+								className="shrink-0 gap-1.5 border-border bg-background shadow-sm"
 								onClick={() => onEditLead(activeLead)}
 							>
 								<RiPencilLine className="size-3.5" />
@@ -301,7 +345,7 @@ export function LeadDetailSheet({
 						<RiLoader4Line className="size-6 animate-spin text-muted-foreground" />
 					</div>
 				) : (
-					<div className="space-y-6">
+					<div className="space-y-4 px-6 py-5">
 						<LeadContactInfoCard
 							lead={{
 								status: activeLead.status,
@@ -322,76 +366,83 @@ export function LeadDetailSheet({
 						/>
 
 						{/* Pipeline Stage */}
-						<Card>
-							<CardHeader className="pb-3">
-								<CardTitle className="text-sm">Pipeline Stage</CardTitle>
-							</CardHeader>
-							<CardContent className="space-y-3">
+						<DetailSection
+							title="Pipeline Stage"
+							icon={<RiGitBranchLine className="size-3.5" />}
+						>
+							<div className="flex flex-wrap items-center gap-2">
+								<span className="font-medium text-foreground/65 text-xs">
+									Current
+								</span>
 								<StageBadge stage={activeLead.stage} />
-								<div className="flex gap-2">
-									<Select
-										value={newStage || activeLead.stage}
-										onValueChange={setNewStage}
-									>
-										<SelectTrigger className="flex-1">
-											<SelectValue placeholder="Change stage…" />
-										</SelectTrigger>
-										<SelectContent>
-											{PIPELINE_STAGES.map((s) => (
-												<SelectItem key={s.value} value={s.value}>
-													{s.label}
-												</SelectItem>
-											))}
-										</SelectContent>
-									</Select>
-									<Button
-										size="sm"
-										disabled={
-											!newStage ||
-											newStage === activeLead.stage ||
-											updateStageMutation.isPending
-										}
-										onClick={() =>
-											updateStageMutation.mutate({
-												id: lead.id,
-												stage: newStage as PipelineStageValue,
-											})
-										}
-									>
-										{updateStageMutation.isPending ? (
-											<RiLoader4Line className="size-4 animate-spin" />
-										) : (
-											"Update"
-										)}
-									</Button>
-								</div>
-								{activeLead.stage === "booking_made" ? (
-									<Button
-										size="sm"
-										variant="secondary"
-										onClick={handleConvertToTransaction}
-									>
-										Convert to Transaction
-									</Button>
-								) : null}
-							</CardContent>
-						</Card>
+							</div>
+							<div className="flex gap-2 rounded-xl border border-border/60 bg-muted/30 p-2 dark:bg-muted/40">
+								<Select
+									value={newStage || activeLead.stage}
+									onValueChange={setNewStage}
+								>
+									<SelectTrigger className="h-10 flex-1 border-border/70 bg-background shadow-sm">
+										<SelectValue placeholder="Change stage…" />
+									</SelectTrigger>
+									<SelectContent>
+										{PIPELINE_STAGES.map((s) => (
+											<SelectItem key={s.value} value={s.value}>
+												{s.label}
+											</SelectItem>
+										))}
+									</SelectContent>
+								</Select>
+								<Button
+									size="sm"
+									className="h-10 shrink-0 px-4"
+									disabled={
+										!newStage ||
+										newStage === activeLead.stage ||
+										updateStageMutation.isPending
+									}
+									onClick={() =>
+										updateStageMutation.mutate({
+											id: lead.id,
+											stage: newStage as PipelineStageValue,
+										})
+									}
+								>
+									{updateStageMutation.isPending ? (
+										<RiLoader4Line className="size-4 animate-spin" />
+									) : (
+										"Update"
+									)}
+								</Button>
+							</div>
+							{activeLead.stage === "booking_made" ? (
+								<Button
+									size="sm"
+									variant="secondary"
+									className="w-full sm:w-auto"
+									onClick={handleConvertToTransaction}
+								>
+									Convert to Transaction
+								</Button>
+							) : null}
+						</DetailSection>
 
 						{/* Assign to Agent */}
-						<Card>
-							<CardHeader className="pb-3">
-								<CardTitle className="text-sm">Assign to Agent</CardTitle>
-							</CardHeader>
-							<CardContent className="flex gap-2">
+						<DetailSection
+							title="Assign to Agent"
+							icon={<RiUserAddLine className="size-3.5" />}
+						>
+							<div className="flex gap-2 rounded-xl border border-border/60 bg-muted/30 p-2 dark:bg-muted/40">
 								<Select
 									value={assignAgentId || activeLead.agentId || "__unassigned__"}
 									onValueChange={setAssignAgentId}
 								>
-									<SelectTrigger className="flex-1">
+									<SelectTrigger className="h-10 flex-1 border-border/70 bg-background shadow-sm">
 										<SelectValue placeholder="Select agent…" />
 									</SelectTrigger>
 									<SelectContent>
-										<SelectItem value="__unassigned__">— Unassigned —</SelectItem>
+										<SelectItem value="__unassigned__">
+											— Unassigned —
+										</SelectItem>
 										{assignAgentOptions.map((a) => (
 											<SelectItem key={a.agentId} value={a.agentId}>
 												{a.agentName ?? a.agentEmail}
@@ -401,9 +452,11 @@ export function LeadDetailSheet({
 								</Select>
 								<Button
 									size="sm"
+									className="h-10 shrink-0 px-4"
 									disabled={
 										!assignAgentId ||
-										assignAgentId === (activeLead.agentId ?? "__unassigned__") ||
+										assignAgentId ===
+											(activeLead.agentId ?? "__unassigned__") ||
 										assignMutation.isPending
 									}
 									onClick={() =>
@@ -422,17 +475,15 @@ export function LeadDetailSheet({
 										"Assign"
 									)}
 								</Button>
-							</CardContent>
-						</Card>
+							</div>
+						</DetailSection>
 
-						<Card>
-							<CardHeader className="pb-3">
-								<CardTitle className="text-sm">Followers</CardTitle>
-								<CardDescription className="text-xs">
-									Sales leaders can follow leads to track team activity
-								</CardDescription>
-							</CardHeader>
-							<CardContent className="flex gap-2">
+						<DetailSection
+							title="Followers"
+							description="Sales leaders can follow leads to track team activity"
+							icon={<RiGroupLine className="size-3.5" />}
+						>
+							<div className="flex gap-2 rounded-xl border border-border/60 bg-muted/30 p-2 dark:bg-muted/40">
 								<FollowerSelector
 									value={followerIds}
 									onChange={setFollowerIds}
@@ -441,6 +492,7 @@ export function LeadDetailSheet({
 								/>
 								<Button
 									size="sm"
+									className="h-10 shrink-0 px-4"
 									disabled={
 										setFollowersMutation.isPending ||
 										JSON.stringify(followerIds) ===
@@ -459,275 +511,260 @@ export function LeadDetailSheet({
 										"Save"
 									)}
 								</Button>
-							</CardContent>
-						</Card>
+							</div>
+						</DetailSection>
 
 						{/* ── Tasks & Follow-ups ── */}
 						<LeadTasksCard leadId={lead.id} />
 
 						{/* ── Activity Timeline ── */}
-						<Card>
-							<CardHeader className="pb-3">
-								<div className="flex items-center justify-between">
-									<CardTitle className="flex items-center gap-2 text-sm">
-										<RiHistoryLine className="size-4" />
-										Activity Timeline
-									</CardTitle>
-									{timeline && timeline.length > 0 && (
-										<span className="text-muted-foreground text-xs">
-											{timeline.length} event
-											{timeline.length !== 1 ? "s" : ""}
-										</span>
-									)}
+						<DetailSection
+							title="Activity Timeline"
+							description="Every touchpoint with this lead, newest first"
+							icon={<RiHistoryLine className="size-3.5" />}
+						>
+							{timeline && timeline.length > 0 ? (
+								<p className="-mt-1 mb-1 text-foreground/60 text-xs">
+									{timeline.length} event
+									{timeline.length !== 1 ? "s" : ""}
+								</p>
+							) : null}
+
+							<Button
+								size="sm"
+								variant={showNoteInput ? "default" : "outline"}
+								className="h-9 gap-1.5 border-border/70 bg-background text-xs shadow-sm"
+								onClick={() => setShowNoteInput((v) => !v)}
+							>
+								<RiStickyNoteLine className="size-3.5" />
+								Add Note
+							</Button>
+
+							{showNoteInput && (
+								<div className="space-y-2 rounded-xl border border-border/60 bg-muted/30 p-3 dark:bg-muted/40">
+									<p className="font-medium text-foreground text-xs">Note</p>
+									<Textarea
+										placeholder="Add a note about this lead…"
+										value={inputContent}
+										onChange={(e) => setInputContent(e.target.value)}
+										rows={3}
+										className="resize-none border-border/70 bg-background shadow-sm"
+										autoFocus
+									/>
+									<div className="flex gap-2">
+										<Button
+											size="sm"
+											disabled={!inputContent.trim() || isSubmitting}
+											onClick={handleSubmitNote}
+										>
+											{isSubmitting ? (
+												<RiLoader4Line className="mr-1 size-4 animate-spin" />
+											) : null}
+											Save Note
+										</Button>
+										<Button
+											size="sm"
+											variant="ghost"
+											onClick={() => {
+												setShowNoteInput(false);
+												setInputContent("");
+											}}
+										>
+											Cancel
+										</Button>
+									</div>
 								</div>
-								<CardDescription className="text-xs">
-									Every touchpoint with this lead, newest first
-								</CardDescription>
-							</CardHeader>
-							<CardContent className="space-y-4">
-								<Button
-									size="sm"
-									variant={showNoteInput ? "default" : "outline"}
-									className="h-8 gap-1.5 text-xs"
-									onClick={() => setShowNoteInput((v) => !v)}
-								>
-									<RiStickyNoteLine className="size-3.5" />
-									Add Note
-								</Button>
+							)}
 
-								{showNoteInput && (
-									<div className="space-y-2 rounded-md border bg-muted/30 p-3">
-										<p className="font-medium text-xs">Note</p>
-										<Textarea
-											placeholder="Add a note about this lead…"
-											value={inputContent}
-											onChange={(e) => setInputContent(e.target.value)}
-											rows={3}
-											className="resize-none bg-background"
-											autoFocus
-										/>
-										<div className="flex gap-2">
-											<Button
-												size="sm"
-												disabled={!inputContent.trim() || isSubmitting}
-												onClick={handleSubmitNote}
-											>
-												{isSubmitting ? (
-													<RiLoader4Line className="mr-1 size-4 animate-spin" />
-												) : null}
-												Save Note
-											</Button>
-											<Button
-												size="sm"
-												variant="ghost"
-												onClick={() => {
-													setShowNoteInput(false);
-													setInputContent("");
-												}}
-											>
-												Cancel
-											</Button>
-										</div>
-									</div>
-								)}
-
-								{/* Timeline feed */}
-								{timelineLoading ? (
-									<div className="space-y-3 pt-1">
-										{[1, 2, 3].map((i) => (
-											<div key={i} className="flex gap-3">
-												<Skeleton className="mt-0.5 size-7 shrink-0 rounded-full" />
-												<div className="flex-1 space-y-1.5 pt-1">
-													<Skeleton className="h-3.5 w-28 rounded" />
-													<Skeleton className="h-3 w-48 rounded" />
-													<Skeleton className="h-3 w-20 rounded" />
-												</div>
+							{/* Timeline feed */}
+							{timelineLoading ? (
+								<div className="space-y-3 pt-1">
+									{[1, 2, 3].map((i) => (
+										<div key={i} className="flex gap-3">
+											<Skeleton className="mt-0.5 size-7 shrink-0 rounded-full" />
+											<div className="flex-1 space-y-1.5 pt-1">
+												<Skeleton className="h-3.5 w-28 rounded" />
+												<Skeleton className="h-3 w-48 rounded" />
+												<Skeleton className="h-3 w-20 rounded" />
 											</div>
-										))}
-									</div>
-								) : timeline && timeline.length > 0 ? (
-									<div className="relative">
-										{/* Vertical connector line — sits behind dots */}
-										<div className="absolute top-3.5 bottom-3.5 left-3.5 w-px bg-gradient-to-b from-border via-border/60 to-transparent" />
-										<div className="space-y-1">
-											{timeline.map((event, idx) => {
-												const cfg =
-													ACTIVITY_CONFIG[
-														event.eventType as ActivityEventType
-													] ?? ACTIVITY_CONFIG.lead_updated;
-												const isLast = idx === timeline.length - 1;
-												const noteId = resolveNoteId(event);
-												const isNote = Boolean(noteId);
-												const isEditing =
-													isNote && editingNoteId === noteId;
-												const isConfirmingDelete =
-													isNote && confirmDeleteNoteId === noteId;
-												const wasEdited = event.metadata?.edited === "1";
+										</div>
+									))}
+								</div>
+							) : timeline && timeline.length > 0 ? (
+								<div className="relative">
+									<div className="absolute top-3.5 bottom-3.5 left-3.5 w-px bg-gradient-to-b from-border via-border/60 to-transparent" />
+									<div className="space-y-1">
+										{timeline.map((event, idx) => {
+											const cfg =
+												ACTIVITY_CONFIG[
+													event.eventType as ActivityEventType
+												] ?? ACTIVITY_CONFIG.lead_updated;
+											const isLast = idx === timeline.length - 1;
+											const noteId = resolveNoteId(event);
+											const isNote = Boolean(noteId);
+											const isEditing = isNote && editingNoteId === noteId;
+											const isConfirmingDelete =
+												isNote && confirmDeleteNoteId === noteId;
+											const wasEdited = event.metadata?.edited === "1";
 
-												return (
+											return (
+												<div key={event.id} className="relative flex gap-3">
 													<div
-														key={event.id}
-														className="relative flex gap-3"
+														className={`relative z-10 mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full border-2 border-background shadow-sm ${cfg.dotColor}`}
 													>
-														{/* Dot */}
-														<div
-															className={`relative z-10 mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full border-2 border-background shadow-sm ${cfg.dotColor}`}
-														>
-															<span className="text-white [&>svg]:size-3">
-																{cfg.icon}
+														<span className="text-white [&>svg]:size-3">
+															{cfg.icon}
+														</span>
+													</div>
+													<div
+														className={`flex-1 rounded-xl border border-border/60 bg-background/80 px-3 py-2.5 shadow-sm dark:bg-background/40 ${isLast ? "mb-0" : "mb-1"}`}
+													>
+														<div className="flex flex-wrap items-center gap-2">
+															<ActivityEventIcon
+																type={event.eventType as ActivityEventType}
+															/>
+															<span className="text-foreground/65 text-xs">
+																by{" "}
+																<span className="font-semibold text-foreground">
+																	{event.actorName}
+																</span>
+															</span>
+															{wasEdited && (
+																<span className="text-foreground/55 text-xs italic">
+																	(edited)
+																</span>
+															)}
+															<span className="ml-auto shrink-0 text-foreground/55 text-xs">
+																{formatDateTime(event.createdAt)}
 															</span>
 														</div>
-														{/* Content bubble */}
-														<div
-															className={`flex-1 rounded-lg border bg-muted/20 px-3 py-2 ${isLast ? "mb-0" : "mb-1"}`}
-														>
-															<div className="flex flex-wrap items-center gap-2">
-																<ActivityEventIcon
-																	type={event.eventType as ActivityEventType}
-																/>
-																<span className="text-muted-foreground text-xs">
-																	by{" "}
-																	<span className="font-medium text-foreground">
-																		{event.actorName}
-																	</span>
-																</span>
-																{wasEdited && (
-																	<span className="text-muted-foreground text-xs italic">
-																		(edited)
-																	</span>
-																)}
-																<span className="ml-auto shrink-0 text-muted-foreground text-xs">
-																	{formatDateTime(event.createdAt)}
-																</span>
-															</div>
 
-															{isEditing ? (
-																<div className="mt-2 space-y-2">
-																	<Textarea
-																		value={editingNoteContent}
-																		onChange={(e) =>
-																			setEditingNoteContent(e.target.value)
+														{isEditing ? (
+															<div className="mt-2 space-y-2">
+																<Textarea
+																	value={editingNoteContent}
+																	onChange={(e) =>
+																		setEditingNoteContent(e.target.value)
+																	}
+																	rows={3}
+																	className="resize-none border-border/70 bg-background text-sm shadow-sm"
+																	autoFocus
+																/>
+																<div className="flex gap-2">
+																	<Button
+																		size="sm"
+																		className="h-7 px-2 text-xs"
+																		onClick={handleSaveEditNote}
+																		disabled={
+																			!editingNoteContent.trim() ||
+																			updateNoteMutation.isPending
 																		}
-																		rows={3}
-																		className="resize-none bg-background text-sm"
-																		autoFocus
-																	/>
-																	<div className="flex gap-2">
-																		<Button
-																			size="sm"
-																			className="h-7 px-2 text-xs"
-																			onClick={handleSaveEditNote}
-																			disabled={
-																				!editingNoteContent.trim() ||
-																				updateNoteMutation.isPending
+																	>
+																		{updateNoteMutation.isPending ? (
+																			<RiLoader4Line className="size-3.5 animate-spin" />
+																		) : (
+																			"Save"
+																		)}
+																	</Button>
+																	<Button
+																		size="sm"
+																		variant="outline"
+																		className="h-7 px-2 text-xs"
+																		onClick={handleCancelEditNote}
+																	>
+																		Cancel
+																	</Button>
+																</div>
+															</div>
+														) : (
+															<>
+																{event.content && (
+																	<p className="mt-1.5 break-words whitespace-pre-line text-foreground text-sm leading-relaxed">
+																		{event.content}
+																	</p>
+																)}
+																{isNote && noteId && !isConfirmingDelete && (
+																	<div className="mt-2 flex items-center gap-2">
+																		<button
+																			type="button"
+																			className="text-foreground/55 hover:text-foreground"
+																			title="Edit note"
+																			onClick={() =>
+																				handleStartEditNote(
+																					noteId,
+																					event.content,
+																				)
 																			}
 																		>
-																			{updateNoteMutation.isPending ? (
+																			<RiPencilLine className="size-3.5" />
+																		</button>
+																		<button
+																			type="button"
+																			className="text-foreground/55 hover:text-destructive"
+																			title="Delete note"
+																			onClick={() =>
+																				setConfirmDeleteNoteId(noteId)
+																			}
+																		>
+																			<RiDeleteBinLine className="size-3.5" />
+																		</button>
+																	</div>
+																)}
+																{isConfirmingDelete && noteId && (
+																	<div className="mt-2 flex items-center gap-2">
+																		<span className="text-foreground/65 text-xs">
+																			Delete this note?
+																		</span>
+																		<Button
+																			size="sm"
+																			variant="destructive"
+																			className="h-6 px-2 text-xs"
+																			onClick={() =>
+																				deleteNoteMutation.mutate({
+																					id: noteId,
+																				})
+																			}
+																			disabled={deleteNoteMutation.isPending}
+																		>
+																			{deleteNoteMutation.isPending ? (
 																				<RiLoader4Line className="size-3.5 animate-spin" />
 																			) : (
-																				"Save"
+																				"Delete"
 																			)}
 																		</Button>
 																		<Button
 																			size="sm"
 																			variant="outline"
-																			className="h-7 px-2 text-xs"
-																			onClick={handleCancelEditNote}
+																			className="h-6 px-2 text-xs"
+																			onClick={() =>
+																				setConfirmDeleteNoteId(null)
+																			}
 																		>
 																			Cancel
 																		</Button>
 																	</div>
-																</div>
-															) : (
-																<>
-																	{event.content && (
-																		<p className="mt-1.5 break-words whitespace-pre-line text-foreground/90 text-sm leading-relaxed">
-																			{event.content}
-																		</p>
-																	)}
-																	{isNote && noteId && !isConfirmingDelete && (
-																		<div className="mt-2 flex items-center gap-2">
-																			<button
-																				type="button"
-																				className="text-muted-foreground hover:text-foreground"
-																				title="Edit note"
-																				onClick={() =>
-																					handleStartEditNote(
-																						noteId,
-																						event.content,
-																					)
-																				}
-																			>
-																				<RiPencilLine className="size-3.5" />
-																			</button>
-																			<button
-																				type="button"
-																				className="text-muted-foreground hover:text-destructive"
-																				title="Delete note"
-																				onClick={() =>
-																					setConfirmDeleteNoteId(noteId)
-																				}
-																			>
-																				<RiDeleteBinLine className="size-3.5" />
-																			</button>
-																		</div>
-																	)}
-																	{isConfirmingDelete && noteId && (
-																		<div className="mt-2 flex items-center gap-2">
-																			<span className="text-muted-foreground text-xs">
-																				Delete this note?
-																			</span>
-																			<Button
-																				size="sm"
-																				variant="destructive"
-																				className="h-6 px-2 text-xs"
-																				onClick={() =>
-																					deleteNoteMutation.mutate({
-																						id: noteId,
-																					})
-																				}
-																				disabled={deleteNoteMutation.isPending}
-																			>
-																				{deleteNoteMutation.isPending ? (
-																					<RiLoader4Line className="size-3.5 animate-spin" />
-																				) : (
-																					"Delete"
-																				)}
-																			</Button>
-																			<Button
-																				size="sm"
-																				variant="outline"
-																				className="h-6 px-2 text-xs"
-																				onClick={() =>
-																					setConfirmDeleteNoteId(null)
-																				}
-																			>
-																				Cancel
-																			</Button>
-																		</div>
-																	)}
-																</>
-															)}
-														</div>
+																)}
+															</>
+														)}
 													</div>
-												);
-											})}
-										</div>
+												</div>
+											);
+										})}
 									</div>
-								) : (
-									<div className="flex flex-col items-center gap-2 py-8 text-center">
-										<RiHistoryLine className="size-8 text-muted-foreground/40" />
-										<p className="text-muted-foreground text-sm">
-											No activity yet
-										</p>
-										<p className="text-muted-foreground text-xs">
-											Add a note, log a call, or change the stage to start the
-											timeline
-										</p>
-									</div>
-								)}
-							</CardContent>
-						</Card>
+								</div>
+							) : (
+								<div className="flex flex-col items-center gap-2 rounded-xl border border-border/50 border-dashed bg-muted/20 py-8 text-center">
+									<RiHistoryLine className="size-8 text-foreground/35" />
+									<p className="font-medium text-foreground/80 text-sm">
+										No activity yet
+									</p>
+									<p className="max-w-xs text-foreground/55 text-xs">
+										Add a note, log a call, or change the stage to start the
+										timeline
+									</p>
+								</div>
+							)}
+						</DetailSection>
 					</div>
 				)}
 			</SheetContent>

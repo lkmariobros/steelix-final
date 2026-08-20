@@ -49,6 +49,7 @@ import {
 	RiFileUploadLine,
 	RiFileList3Line,
 	RiLoader4Line,
+	RiMore2Line,
 	RiPriceTagLine,
 	RiSearchLine,
 	RiShieldUserLine,
@@ -80,13 +81,24 @@ import {
 	formatLeadContact,
 	getLeadDisplayTags,
 } from "./_components/lead-models";
-import { StageBadge } from "./_components/lead-ui";
+import { StageBadge, StatusBadge } from "./_components/lead-ui";
 import { LeadsCharts } from "./_components/leads-charts";
 import { SortHeader } from "./_components/sort-header";
 import { StatsCards } from "./_components/stats-cards";
 import { TodayTasksWidget } from "./_components/today-tasks-widget";
 import { KanbanPipelineBoard } from "./_components/kanban-pipeline-board";
 import { ImportLeadsDialog } from "./_components/import-leads-dialog";
+import { cn } from "@/lib/utils";
+
+function leadInitials(name: string) {
+	const parts = name.trim().split(/\s+/).filter(Boolean);
+	if (parts.length === 0) return "?";
+	if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+	return `${parts[0][0] ?? ""}${parts[1][0] ?? ""}`.toUpperCase();
+}
+
+const actionBtnClass =
+	"size-8 shrink-0 rounded-full border border-border/60 bg-muted/40 p-0 text-muted-foreground shadow-none hover:bg-muted hover:text-foreground";
 
 export default function AdminLeadsPage() {
 	// Defer non-critical widgets so the table can render first
@@ -486,9 +498,9 @@ export default function AdminLeadsPage() {
 	return (
 		<>
 			{/* Header */}
-			<header className="flex h-16 shrink-0 items-center gap-2 border-b">
-				<div className="flex flex-1 items-center gap-2 px-3">
-					<SidebarTrigger className="-ms-4" />
+			<header className="sticky top-0 z-30 -mx-4 flex h-16 shrink-0 items-center gap-2 border-border/60 border-b bg-background/95 px-4 backdrop-blur-md supports-backdrop-filter:bg-background/80 md:-mx-6 md:px-6 lg:-mx-8 lg:px-8">
+				<div className="flex flex-1 items-center gap-2 px-1 sm:px-0">
+					<SidebarTrigger className="-ms-1 rounded-xl" />
 					<Separator
 						orientation="vertical"
 						className="mr-2 data-[orientation=vertical]:h-4"
@@ -518,7 +530,7 @@ export default function AdminLeadsPage() {
 						</BreadcrumbList>
 					</Breadcrumb>
 				</div>
-				<div className="ml-auto flex gap-3">
+				<div className="ml-auto flex gap-2">
 					<HeaderActions />
 				</div>
 			</header>
@@ -553,11 +565,11 @@ export default function AdminLeadsPage() {
 					/>
 
 					{/* Table */}
-					<Card className="overflow-hidden">
+					<Card className="gap-0 overflow-hidden border-border/70 py-0 shadow-card">
 						{/* ── Toolbar ── */}
-						<div className="flex flex-col gap-2 border-b px-4 py-3">
+						<div className="flex flex-col gap-3 border-border/60 border-b bg-card px-4 py-4 sm:px-5">
 							{/* Row 1: search + filters */}
-							<div className="flex flex-wrap items-center gap-2">
+							<div className="flex flex-wrap items-center gap-2.5">
 								{/* Search */}
 								<div className="relative min-w-[220px] flex-1">
 									<RiSearchLine className="-translate-y-1/2 absolute top-1/2 left-3 size-4 text-muted-foreground" />
@@ -568,7 +580,7 @@ export default function AdminLeadsPage() {
 											setSearch(e.target.value);
 											setPage(1);
 										}}
-										className="h-9 pl-9 text-sm"
+										className="h-10 rounded-xl border-border/70 bg-muted/30 pl-9 text-sm shadow-none focus-visible:bg-background"
 									/>
 								</div>
 
@@ -581,7 +593,7 @@ export default function AdminLeadsPage() {
 										value={agentFilter}
 										onValueChange={setFilter(setAgentFilter)}
 									>
-										<SelectTrigger className="h-9 w-[130px] text-xs">
+										<SelectTrigger className="h-10 w-[140px] rounded-xl border-border/70 bg-muted/30 text-xs shadow-none">
 											<RiUserLine
 												size={13}
 												className="mr-1.5 shrink-0 text-muted-foreground"
@@ -603,7 +615,7 @@ export default function AdminLeadsPage() {
 										value={stageFilter}
 										onValueChange={setFilter(setStageFilter)}
 									>
-										<SelectTrigger className="h-9 w-[140px] text-xs">
+										<SelectTrigger className="h-10 w-[150px] rounded-xl border-border/70 bg-muted/30 text-xs shadow-none">
 											<SelectValue placeholder="Stage" />
 										</SelectTrigger>
 										<SelectContent>
@@ -620,7 +632,7 @@ export default function AdminLeadsPage() {
 										value={statusFilter}
 										onValueChange={setFilter(setStatusFilter)}
 									>
-										<SelectTrigger className="h-9 w-[110px] text-xs">
+										<SelectTrigger className="h-10 w-[120px] rounded-xl border-border/70 bg-muted/30 text-xs shadow-none">
 											<SelectValue placeholder="Status" />
 										</SelectTrigger>
 										<SelectContent>
@@ -634,7 +646,7 @@ export default function AdminLeadsPage() {
 										value={leadTypeFilter}
 										onValueChange={setFilter(setLeadTypeFilter)}
 									>
-										<SelectTrigger className="h-9 w-[120px] text-xs">
+										<SelectTrigger className="h-10 w-[130px] rounded-xl border-border/70 bg-muted/30 text-xs shadow-none">
 											<SelectValue placeholder="Lead Type" />
 										</SelectTrigger>
 										<SelectContent>
@@ -651,7 +663,7 @@ export default function AdminLeadsPage() {
 										value={categoryFilter}
 										onValueChange={setFilter(setCategoryFilter)}
 									>
-										<SelectTrigger className="h-9 w-[150px] text-xs">
+										<SelectTrigger className="h-10 w-[160px] rounded-xl border-border/70 bg-muted/30 text-xs shadow-none">
 											<RiPriceTagLine
 												size={13}
 												className="mr-1.5 shrink-0 text-muted-foreground"
@@ -673,7 +685,7 @@ export default function AdminLeadsPage() {
 										<Button
 											variant="ghost"
 											size="sm"
-											className="h-9 gap-1.5 text-muted-foreground text-xs hover:text-foreground"
+											className="h-10 gap-1.5 rounded-xl text-muted-foreground text-xs hover:text-foreground"
 											onClick={resetFilters}
 										>
 											<RiCloseLine size={13} />
@@ -985,38 +997,38 @@ export default function AdminLeadsPage() {
 									<div className="overflow-x-auto">
 										<Table>
 											<TableHeader>
-												<TableRow className="hover:bg-transparent">
-													<TableHead className="w-10 pl-4">
-														<Skeleton className="h-4 w-4 rounded" />
+												<TableRow className="border-border/60 hover:bg-transparent">
+													<TableHead className="h-11 w-12 bg-muted/50 pl-5">
+														<Skeleton className="size-4 rounded" />
 													</TableHead>
-													<TableHead>
-														<Skeleton className="h-3.5 w-12" />
+													<TableHead className="h-11 bg-muted/50 px-4">
+														<Skeleton className="h-3.5 w-24" />
 													</TableHead>
-													<TableHead className="hidden md:table-cell">
+													<TableHead className="hidden h-11 bg-muted/50 px-4 md:table-cell">
 														<Skeleton className="h-3.5 w-16" />
 													</TableHead>
-													<TableHead className="hidden lg:table-cell">
+													<TableHead className="hidden h-11 bg-muted/50 px-4 lg:table-cell">
 														<Skeleton className="h-3.5 w-16" />
 													</TableHead>
-													<TableHead>
+													<TableHead className="h-11 bg-muted/50 px-4">
 														<Skeleton className="h-3.5 w-12" />
 													</TableHead>
-													<TableHead>
+													<TableHead className="h-11 bg-muted/50 px-4">
 														<Skeleton className="h-3.5 w-14" />
 													</TableHead>
-													<TableHead>
+													<TableHead className="h-11 bg-muted/50 px-4">
 														<Skeleton className="h-3.5 w-12" />
 													</TableHead>
-													<TableHead className="hidden xl:table-cell">
+													<TableHead className="hidden h-11 bg-muted/50 px-4 xl:table-cell">
 														<Skeleton className="h-3.5 w-16" />
 													</TableHead>
-													<TableHead className="hidden xl:table-cell">
-														<Skeleton className="h-3.5 w-10" />
-													</TableHead>
-													<TableHead>
+													<TableHead className="hidden h-11 bg-muted/50 px-4 xl:table-cell">
 														<Skeleton className="h-3.5 w-16" />
 													</TableHead>
-													<TableHead className="w-[100px]" />
+													<TableHead className="h-11 bg-muted/50 px-4">
+														<Skeleton className="h-3.5 w-16" />
+													</TableHead>
+													<TableHead className="h-11 w-[108px] bg-muted/50" />
 												</TableRow>
 											</TableHeader>
 											<TableBody>
@@ -1030,45 +1042,45 @@ export default function AdminLeadsPage() {
 													"sk-leads-table-7",
 													"sk-leads-table-8",
 												].map((id) => (
-													<TableRow key={id} className="hover:bg-transparent">
-														<TableCell className="pl-4">
-															<Skeleton className="h-4 w-4 rounded" />
+													<TableRow key={id} className="border-border/50 hover:bg-transparent">
+														<TableCell className="pl-5">
+															<Skeleton className="size-4 rounded" />
 														</TableCell>
-														<TableCell>
-															<Skeleton className="mb-1 h-4 w-28" />
-															<Skeleton className="h-3 w-36 md:hidden" />
+														<TableCell className="px-4 py-3.5">
+															<div className="flex items-center gap-3">
+																<Skeleton className="size-9 rounded-full" />
+																<Skeleton className="h-4 w-28" />
+															</div>
 														</TableCell>
-														<TableCell className="hidden md:table-cell">
-															<Skeleton className="mb-1 h-3.5 w-36" />
-															<Skeleton className="h-3 w-24" />
+														<TableCell className="hidden px-4 md:table-cell">
+															<Skeleton className="mb-1 h-3.5 w-28" />
+															<Skeleton className="h-3 w-36" />
 														</TableCell>
-														<TableCell className="hidden lg:table-cell">
-															<Skeleton className="h-3.5 w-28" />
-														</TableCell>
-														<TableCell>
+														<TableCell className="hidden px-4 lg:table-cell">
 															<Skeleton className="h-5 w-24 rounded-full" />
 														</TableCell>
-														<TableCell>
+														<TableCell className="px-4">
+															<Skeleton className="h-5 w-24 rounded-full" />
+														</TableCell>
+														<TableCell className="px-4">
 															<Skeleton className="h-5 w-16 rounded-full" />
 														</TableCell>
-														<TableCell className="hidden xl:table-cell">
-															<Skeleton className="h-3.5 w-16" />
-														</TableCell>
-														<TableCell className="hidden xl:table-cell">
+														<TableCell className="px-4">
 															<Skeleton className="h-3.5 w-20" />
 														</TableCell>
-														<TableCell className="hidden xl:table-cell">
-															<Skeleton className="mb-1 h-3 w-12" />
-															<Skeleton className="h-3 w-16" />
-														</TableCell>
-														<TableCell>
+														<TableCell className="hidden px-4 xl:table-cell">
 															<Skeleton className="h-3.5 w-16" />
 														</TableCell>
-														<TableCell className="w-[100px] pr-4">
-															<div className="flex justify-center gap-1">
-																<Skeleton className="h-7 w-7 rounded" />
-																<Skeleton className="h-7 w-7 rounded" />
-																<Skeleton className="h-7 w-7 rounded" />
+														<TableCell className="hidden px-4 xl:table-cell">
+															<Skeleton className="h-3.5 w-20" />
+														</TableCell>
+														<TableCell className="px-4">
+															<Skeleton className="h-3.5 w-16" />
+														</TableCell>
+														<TableCell className="w-[108px] pr-5">
+															<div className="flex justify-center gap-1.5">
+																<Skeleton className="size-8 rounded-full" />
+																<Skeleton className="size-8 rounded-full" />
 															</div>
 														</TableCell>
 													</TableRow>
@@ -1100,26 +1112,26 @@ export default function AdminLeadsPage() {
 									<div className="overflow-x-auto">
 										<Table>
 											<TableHeader>
-												<TableRow className="hover:bg-transparent">
-													<TableHead className="w-10 pl-4">
+												<TableRow className="border-border/60 hover:bg-transparent">
+													<TableHead className="h-11 w-12 bg-muted/50 pl-5">
 														<input
 															type="checkbox"
 															checked={allSelected}
 															onChange={toggleSelectAll}
-															className="cursor-pointer rounded"
+															className="size-4 cursor-pointer rounded border-border"
 														/>
 													</TableHead>
 													<SortHeader
-														label="Name"
+														label="Name & Profile"
 														sortKey="name"
 														current={sortKey}
 														order={sortOrder}
 														onSort={handleSort}
 													/>
-													<TableHead className="hidden md:table-cell">
+													<TableHead className="hidden h-11 bg-muted/50 px-4 font-semibold text-foreground/80 text-xs tracking-wide md:table-cell">
 														Contact
 													</TableHead>
-													<TableHead className="hidden lg:table-cell">
+													<TableHead className="hidden h-11 bg-muted/50 px-4 font-semibold text-foreground/80 text-xs tracking-wide lg:table-cell">
 														Categories
 													</TableHead>
 													<SortHeader
@@ -1129,6 +1141,9 @@ export default function AdminLeadsPage() {
 														order={sortOrder}
 														onSort={handleSort}
 													/>
+													<TableHead className="h-11 bg-muted/50 px-4 font-semibold text-foreground/80 text-xs tracking-wide">
+														Status
+													</TableHead>
 													<SortHeader
 														label="Agent"
 														sortKey="agentName"
@@ -1136,10 +1151,10 @@ export default function AdminLeadsPage() {
 														order={sortOrder}
 														onSort={handleSort}
 													/>
-													<TableHead className="hidden xl:table-cell">
+													<TableHead className="hidden h-11 bg-muted/50 px-4 font-semibold text-foreground/80 text-xs tracking-wide xl:table-cell">
 														Followers
 													</TableHead>
-													<TableHead className="hidden xl:table-cell">
+													<TableHead className="hidden h-11 bg-muted/50 px-4 font-semibold text-foreground/80 text-xs tracking-wide xl:table-cell">
 														Lead Type
 													</TableHead>
 													<SortHeader
@@ -1149,8 +1164,8 @@ export default function AdminLeadsPage() {
 														order={sortOrder}
 														onSort={handleSort}
 													/>
-													<TableHead className="w-[100px] pr-4 text-center">
-														Actions
+													<TableHead className="h-11 w-[108px] bg-muted/50 pr-5 text-center font-semibold text-foreground/80 text-xs tracking-wide">
+														Action
 													</TableHead>
 												</TableRow>
 											</TableHeader>
@@ -1158,90 +1173,131 @@ export default function AdminLeadsPage() {
 												{visibleLeads.map((lead) => (
 													<TableRow
 														key={lead.id}
-														className={`transition-colors ${selectedIds.has(lead.id) ? "bg-muted/50" : "hover:bg-muted/30"}`}
+														className={cn(
+															"cursor-pointer border-border/50 transition-colors",
+															selectedIds.has(lead.id)
+																? "bg-primary/5"
+																: "hover:bg-muted/35",
+														)}
 														onClick={(e) => {
 															const target = e.target as HTMLElement | null;
-															// Avoid opening details when user is selecting rows or using an action button.
 															if (
 																target?.closest('input[type="checkbox"]') ||
-																target?.closest("button")
+																target?.closest("button") ||
+																target?.closest("[data-radix-menu-content]") ||
+																target?.closest("[role='menu']")
 															) {
 																return;
 															}
 															setViewLead(lead);
 														}}
 													>
-														<TableCell className="pl-4">
+														<TableCell className="pl-5">
 															<input
 																type="checkbox"
 																checked={selectedIds.has(lead.id)}
 																onChange={() => toggleSelect(lead.id)}
-																className="cursor-pointer rounded"
+																className="size-4 cursor-pointer rounded border-border"
 															/>
 														</TableCell>
-														<TableCell>
-															<p className="font-medium text-sm leading-snug">
-																{lead.name}
-															</p>
-															<p className="text-muted-foreground text-xs md:hidden">
-																{formatLeadContact(lead)}
-															</p>
+														<TableCell className="px-4 py-3.5">
+															<div className="flex min-w-0 items-center gap-3">
+																<span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/12 font-semibold text-primary text-xs">
+																	{leadInitials(lead.name)}
+																</span>
+																<div className="min-w-0">
+																	<p className="truncate font-semibold text-foreground text-sm leading-snug">
+																		{lead.name}
+																	</p>
+																	<p className="mt-0.5 truncate text-muted-foreground text-xs md:hidden">
+																		{formatLeadContact(lead)}
+																	</p>
+																</div>
+															</div>
 														</TableCell>
-														<TableCell className="hidden md:table-cell">
-															<p className="font-medium text-sm">
-																{lead.phone?.trim() || "—"}
-															</p>
-															{lead.whatsappUsername?.trim() ? (
-																<p className="text-muted-foreground text-xs">
-																	WA:{" "}
-																	{lead.whatsappUsername.trim().startsWith("@")
-																		? lead.whatsappUsername.trim()
-																		: `@${lead.whatsappUsername.trim()}`}
+														<TableCell className="hidden px-4 py-3.5 md:table-cell">
+															<div className="min-w-0 space-y-0.5">
+																<p className="font-medium text-foreground/90 text-sm tabular-nums">
+																	{lead.phone?.trim() || "—"}
 																</p>
-															) : null}
-															<p className="text-muted-foreground text-xs">
-																{lead.email ?? "—"}
-															</p>
-															<p
-																className="max-w-[180px] truncate text-muted-foreground text-xs"
-																title={lead.source}
-															>
-																{lead.source?.trim() || "—"}
-															</p>
+																<p className="truncate text-muted-foreground text-xs">
+																	{lead.email ?? "—"}
+																</p>
+																{(lead.whatsappUsername?.trim() ||
+																	lead.source?.trim()) && (
+																	<p
+																		className="max-w-[200px] truncate text-muted-foreground/80 text-[11px]"
+																		title={[
+																			lead.whatsappUsername?.trim()
+																				? `WA: ${
+																						lead.whatsappUsername
+																							.trim()
+																							.startsWith("@")
+																							? lead.whatsappUsername.trim()
+																							: `@${lead.whatsappUsername.trim()}`
+																					}`
+																				: null,
+																			lead.source?.trim() || null,
+																		]
+																			.filter(Boolean)
+																			.join(" · ")}
+																	>
+																		{lead.whatsappUsername?.trim()
+																			? `WA: ${
+																					lead.whatsappUsername
+																						.trim()
+																						.startsWith("@")
+																						? lead.whatsappUsername.trim()
+																						: `@${lead.whatsappUsername.trim()}`
+																				}`
+																			: null}
+																		{lead.whatsappUsername?.trim() &&
+																		lead.source?.trim()
+																			? " · "
+																			: null}
+																		{lead.source?.trim() || null}
+																	</p>
+																)}
+															</div>
 														</TableCell>
-														<TableCell className="hidden lg:table-cell">
+														<TableCell className="hidden px-4 py-3.5 lg:table-cell">
 															{(() => {
 																const tags = getLeadDisplayTags(lead);
 																if (tags.length === 0) {
 																	return (
-																		<p className="text-muted-foreground text-sm">
+																		<span className="text-muted-foreground text-sm">
 																			—
-																		</p>
+																		</span>
 																	);
 																}
 																const label = tags.join(", ");
 																return (
-																	<p
-																		className="max-w-[160px] truncate text-sm"
+																	<span
+																		className="inline-flex max-w-[160px] truncate rounded-full bg-muted/70 px-2.5 py-0.5 font-medium text-foreground/80 text-xs"
 																		title={label}
 																	>
-																		{label}
-																	</p>
+																		{tags[0]}
+																		{tags.length > 1
+																			? ` +${tags.length - 1}`
+																			: ""}
+																	</span>
 																);
 															})()}
 														</TableCell>
-														<TableCell>
+														<TableCell className="px-4 py-3.5">
 															<StageBadge stage={lead.stage} />
 														</TableCell>
-														<TableCell>
+														<TableCell className="px-4 py-3.5">
+															<StatusBadge status={lead.status} />
+														</TableCell>
+														<TableCell className="px-4 py-3.5">
 															{lead.agentName ? (
-																<div className="flex items-center gap-1.5">
-																	<RiUserLine
-																		size={13}
-																		className="shrink-0 text-muted-foreground"
-																	/>
+																<div className="flex items-center gap-2">
+																	<span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
+																		<RiUserLine size={13} />
+																	</span>
 																	<span
-																		className="max-w-[110px] truncate text-sm"
+																		className="max-w-[120px] truncate text-sm"
 																		title={lead.agentName}
 																	>
 																		{lead.agentName}
@@ -1253,10 +1309,11 @@ export default function AdminLeadsPage() {
 																</span>
 															)}
 														</TableCell>
-														<TableCell className="hidden xl:table-cell">
-															{lead.followerNames && lead.followerNames.length > 0 ? (
+														<TableCell className="hidden px-4 py-3.5 xl:table-cell">
+															{lead.followerNames &&
+															lead.followerNames.length > 0 ? (
 																<p
-																	className="max-w-[140px] truncate text-xs"
+																	className="max-w-[140px] truncate text-sm text-foreground/80"
 																	title={lead.followerNames.join(", ")}
 																>
 																	{lead.followerNames.join(", ")}
@@ -1267,58 +1324,57 @@ export default function AdminLeadsPage() {
 																</span>
 															)}
 														</TableCell>
-														<TableCell className="hidden xl:table-cell">
-															<p className="text-xs">
+														<TableCell className="hidden px-4 py-3.5 xl:table-cell">
+															<span className="text-sm text-foreground/80">
 																{formatLeadTypeLabel(lead.leadType)}
-															</p>
+															</span>
 														</TableCell>
-														<TableCell className="whitespace-nowrap text-muted-foreground text-xs">
+														<TableCell className="whitespace-nowrap px-4 py-3.5 text-muted-foreground text-sm">
 															{new Date(lead.createdAt).toLocaleDateString()}
 														</TableCell>
-														<TableCell className="w-[100px] pr-4">
-															<div className="flex items-center justify-center gap-0.5">
+														<TableCell className="w-[108px] pr-5">
+															<div className="flex items-center justify-center gap-1.5">
 																<Tooltip>
 																	<TooltipTrigger asChild>
 																		<Button
 																			variant="ghost"
-																			size="sm"
-																			className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+																			size="icon"
+																			className={actionBtnClass}
 																			title="View details"
 																			onClick={() => setViewLead(lead)}
 																		>
-																			<RiEyeLine size={14} />
+																			<RiEyeLine size={15} />
 																		</Button>
 																	</TooltipTrigger>
 																	<TooltipContent>View details</TooltipContent>
 																</Tooltip>
-																<Tooltip>
-																	<TooltipTrigger asChild>
+																<DropdownMenu>
+																	<DropdownMenuTrigger asChild>
 																		<Button
 																			variant="ghost"
-																			size="sm"
-																			className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
-																			title="Edit lead"
+																			size="icon"
+																			className={actionBtnClass}
+																			aria-label="More actions"
+																		>
+																			<RiMore2Line size={15} />
+																		</Button>
+																	</DropdownMenuTrigger>
+																	<DropdownMenuContent align="end" className="w-40">
+																		<DropdownMenuItem
 																			onClick={() => setEditLead(lead)}
 																		>
-																			<RiEditLine size={14} />
-																		</Button>
-																	</TooltipTrigger>
-																	<TooltipContent>Edit lead</TooltipContent>
-																</Tooltip>
-																<Tooltip>
-																	<TooltipTrigger asChild>
-																		<Button
-																			variant="ghost"
-																			size="sm"
-																			className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
-																			title="Delete lead"
+																			<RiEditLine className="mr-2 size-3.5" />
+																			Edit
+																		</DropdownMenuItem>
+																		<DropdownMenuItem
+																			className="text-destructive focus:text-destructive"
 																			onClick={() => setDeleteLead(lead)}
 																		>
-																			<RiDeleteBinLine size={14} />
-																		</Button>
-																	</TooltipTrigger>
-																	<TooltipContent>Delete lead</TooltipContent>
-																</Tooltip>
+																			<RiDeleteBinLine className="mr-2 size-3.5" />
+																			Delete
+																		</DropdownMenuItem>
+																	</DropdownMenuContent>
+																</DropdownMenu>
 															</div>
 														</TableCell>
 													</TableRow>
@@ -1329,13 +1385,29 @@ export default function AdminLeadsPage() {
 								)}
 
 								{/* Pagination */}
-								{totalFiltered > 0 && (
-									<div className="flex flex-wrap items-center justify-center gap-1.5 border-t px-4 py-3">
+								{totalFiltered > 0 && viewMode === "table" && (
+									<div className="flex flex-wrap items-center justify-between gap-3 border-border/60 border-t bg-muted/20 px-5 py-3.5">
+										<p className="text-muted-foreground text-xs">
+											Showing{" "}
+											<span className="font-medium text-foreground">
+												{(page - 1) * pageSize + 1}
+											</span>{" "}
+											to{" "}
+											<span className="font-medium text-foreground">
+												{Math.min(page * pageSize, totalFiltered)}
+											</span>{" "}
+											of{" "}
+											<span className="font-medium text-foreground">
+												{totalFiltered}
+											</span>{" "}
+											entries
+										</p>
+										<div className="flex flex-wrap items-center gap-1.5">
 										{/* |◄ First */}
 										<Button
 											variant="outline"
 											size="sm"
-											className="h-8 w-8 p-0"
+											className="size-8 rounded-lg p-0"
 											disabled={page <= 1}
 											onClick={() => setPage(1)}
 											title="First page"
@@ -1355,7 +1427,7 @@ export default function AdminLeadsPage() {
 										<Button
 											variant="outline"
 											size="sm"
-											className="h-8 w-8 p-0"
+											className="size-8 rounded-lg p-0"
 											disabled={page <= 1}
 											onClick={() => setPage((p) => p - 1)}
 											title="Previous page"
@@ -1397,7 +1469,10 @@ export default function AdminLeadsPage() {
 														key={p}
 														variant={p === page ? "default" : "outline"}
 														size="sm"
-														className="h-8 w-8 p-0 text-xs"
+														className={cn(
+															"size-8 rounded-lg p-0 text-xs",
+															p === page && "shadow-sm",
+														)}
 														onClick={() => setPage(p)}
 													>
 														{p}
@@ -1410,7 +1485,7 @@ export default function AdminLeadsPage() {
 										<Button
 											variant="outline"
 											size="sm"
-											className="h-8 w-8 p-0"
+											className="size-8 rounded-lg p-0"
 											disabled={page >= totalPages}
 											onClick={() => setPage((p) => p + 1)}
 											title="Next page"
@@ -1430,7 +1505,7 @@ export default function AdminLeadsPage() {
 										<Button
 											variant="outline"
 											size="sm"
-											className="h-8 w-8 p-0"
+											className="size-8 rounded-lg p-0"
 											disabled={page >= totalPages}
 											onClick={() => setPage(totalPages)}
 											title="Last page"
@@ -1447,7 +1522,7 @@ export default function AdminLeadsPage() {
 										</Button>
 
 										{/* Items-per-page selector */}
-										<div className="ml-2 flex items-center gap-1.5 border-l pl-2">
+										<div className="ml-2 flex items-center gap-1.5 border-border/60 border-l pl-2">
 											<Select
 												value={String(pageSize)}
 												onValueChange={(v) => {
@@ -1455,7 +1530,7 @@ export default function AdminLeadsPage() {
 													setPage(1);
 												}}
 											>
-												<SelectTrigger className="h-8 w-16 px-2 text-xs">
+												<SelectTrigger className="h-8 w-16 rounded-lg px-2 text-xs">
 													<SelectValue />
 												</SelectTrigger>
 												<SelectContent>
@@ -1471,8 +1546,9 @@ export default function AdminLeadsPage() {
 												</SelectContent>
 											</Select>
 											<span className="whitespace-nowrap text-muted-foreground text-xs">
-												items per page
+												/ page
 											</span>
+										</div>
 										</div>
 									</div>
 								)}

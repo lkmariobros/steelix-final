@@ -5,11 +5,78 @@ import { toast } from "sonner";
 import type React from "react";
 import type { Lead } from "./lead-models";
 import { PIPELINE_STAGES, type PipelineStageValue } from "./lead-constants";
-import { StageBadge, StatusBadge } from "./lead-ui";
-import { Card } from "@/components/ui/card";
+import { StatusBadge } from "./lead-ui";
 import { trpc } from "@/utils/trpc";
 import { useHorizontalBoardScroll } from "@/hooks/use-horizontal-board-scroll";
 import { cn } from "@/lib/utils";
+
+/** Soft column tints — inspired by the reference board, brand-safe (no purple-first look). */
+const COLUMN_STYLE: Record<
+	string,
+	{ column: string; accent: string; count: string }
+> = {
+	new_lead: {
+		column: "bg-[#eef4f8] dark:bg-sky-950/35",
+		accent: "bg-sky-500",
+		count: "bg-sky-500/15 text-sky-800 dark:text-sky-300",
+	},
+	first_follow_up: {
+		column: "bg-[#f3f0f8] dark:bg-violet-950/30",
+		accent: "bg-violet-500",
+		count: "bg-violet-500/15 text-violet-800 dark:text-violet-300",
+	},
+	second_follow_up: {
+		column: "bg-[#f5f2ec] dark:bg-amber-950/30",
+		accent: "bg-amber-500",
+		count: "bg-amber-500/15 text-amber-900 dark:text-amber-300",
+	},
+	third_follow_up: {
+		column: "bg-[#f7f0ea] dark:bg-orange-950/30",
+		accent: "bg-orange-500",
+		count: "bg-orange-500/15 text-orange-900 dark:text-orange-300",
+	},
+	fourth_follow_up: {
+		column: "bg-[#eef2f6] dark:bg-slate-900/50",
+		accent: "bg-slate-500",
+		count: "bg-slate-500/15 text-slate-700 dark:text-slate-300",
+	},
+	potential_lead: {
+		column: "bg-[#eaf4f3] dark:bg-teal-950/35",
+		accent: "bg-[#2a6b73]",
+		count: "bg-primary/15 text-primary",
+	},
+	appointment_made: {
+		column: "bg-[#eaf3f8] dark:bg-cyan-950/30",
+		accent: "bg-cyan-600",
+		count: "bg-cyan-500/15 text-cyan-900 dark:text-cyan-300",
+	},
+	need_consider: {
+		column: "bg-[#f3f4f6] dark:bg-zinc-900/50",
+		accent: "bg-zinc-500",
+		count: "bg-zinc-500/15 text-zinc-700 dark:text-zinc-300",
+	},
+	reject_project: {
+		column: "bg-[#f8eeee] dark:bg-rose-950/30",
+		accent: "bg-rose-500",
+		count: "bg-rose-500/15 text-rose-800 dark:text-rose-300",
+	},
+	booking_made: {
+		column: "bg-[#eaf6f0] dark:bg-emerald-950/30",
+		accent: "bg-emerald-500",
+		count: "bg-emerald-500/15 text-emerald-800 dark:text-emerald-300",
+	},
+	spam_fake_lead: {
+		column: "bg-[#f1f1f1] dark:bg-neutral-900/50",
+		accent: "bg-neutral-500",
+		count: "bg-neutral-500/15 text-neutral-700 dark:text-neutral-300",
+	},
+};
+
+const DEFAULT_COLUMN_STYLE = {
+	column: "bg-muted/40",
+	accent: "bg-muted-foreground",
+	count: "bg-muted text-muted-foreground",
+};
 
 export function KanbanPipelineBoard({
 	leads,
@@ -34,16 +101,6 @@ export function KanbanPipelineBoard({
 		const ms = dt.getTime();
 		return Number.isNaN(ms) ? null : ms;
 	};
-
-	const renderCardMeta = (lead: Lead) => (
-		<div className="mt-0.5 flex min-w-0 items-center gap-1 text-[11px]">
-			<StatusBadge status={lead.status} />
-			<span className="text-muted-foreground">·</span>
-			<span className="truncate text-muted-foreground">
-				{lead.agentName ?? "Unassigned"}
-			</span>
-		</div>
-	);
 
 	const effectiveLeads = useMemo(() => {
 		if (Object.keys(optimisticStages).length === 0) return leads;
@@ -202,18 +259,21 @@ export function KanbanPipelineBoard({
 				"h-[min(75vh,calc(100dvh-13rem))] w-full overflow-y-hidden",
 			)}
 		>
-			<div className="flex h-full min-w-max items-stretch gap-2.5 pb-1">
+			<div className="flex h-full min-w-max items-stretch gap-3 pb-1">
 				{PIPELINE_STAGES.map((stage) => {
 					const columnLeads = leadsByStage.get(stage.value) ?? [];
 					const isOver = dragOverStage === stage.value;
+					const style = COLUMN_STYLE[stage.value] ?? DEFAULT_COLUMN_STYLE;
 
 					return (
 						<div
 							key={stage.value}
-							className={[
-								"flex h-full w-[280px] min-w-[280px] shrink-0 flex-col gap-1.5 rounded-lg border bg-muted/10 p-2 sm:w-[300px] sm:min-w-[300px]",
-								isOver ? "border-primary/60 bg-primary/5" : "border-border/60",
-							].join(" ")}
+							className={cn(
+								"flex h-full w-[280px] min-w-[280px] shrink-0 flex-col rounded-2xl p-3 transition-all sm:w-[300px] sm:min-w-[300px]",
+								style.column,
+								isOver &&
+									"ring-2 ring-primary/45 ring-offset-2 ring-offset-background",
+							)}
 							onDragOver={(e) => {
 								if (updateStageMutation.isPending) return;
 								e.preventDefault();
@@ -228,7 +288,6 @@ export function KanbanPipelineBoard({
 								setDragOver(stage.value);
 							}}
 							onDragLeave={(e) => {
-								// Only clear when leaving the column (not entering a child)
 								const related = e.relatedTarget as Node | null;
 								if (related && e.currentTarget.contains(related)) return;
 								setDragOverStage((prev) =>
@@ -237,23 +296,35 @@ export function KanbanPipelineBoard({
 							}}
 							onDrop={(e) => handleDrop(e, stage.value as PipelineStageValue)}
 						>
-							<div className="flex shrink-0 items-start justify-between gap-2 px-0.5 pt-0.5">
-								<div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
-									<StageBadge
-										stage={stage.value}
-										className="max-w-full whitespace-normal text-left leading-snug"
+							<div className="mb-3 flex shrink-0 items-center justify-between gap-2 px-0.5">
+								<div className="flex min-w-0 items-center gap-2">
+									<span
+										className={cn("size-2 shrink-0 rounded-full", style.accent)}
+										aria-hidden
 									/>
-									<span className="shrink-0 text-muted-foreground text-[11px] tabular-nums">
-										({columnLeads.length})
+									<h3 className="truncate font-semibold text-foreground text-sm tracking-tight">
+										{stage.label}
+									</h3>
+								</div>
+								<div className="flex shrink-0 items-center gap-1.5">
+									{isOver ? (
+										<span className="font-medium text-primary text-xs">
+											Drop
+										</span>
+									) : null}
+									<span
+										className={cn(
+											"inline-flex min-w-6 items-center justify-center rounded-full px-2 py-0.5 font-semibold text-[11px] tabular-nums",
+											style.count,
+										)}
+									>
+										{columnLeads.length}
 									</span>
 								</div>
-								{isOver ? (
-									<span className="font-medium text-primary text-xs">Drop</span>
-								) : null}
 							</div>
 
 							<div
-								className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto overscroll-contain pr-0.5"
+								className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto overscroll-contain pr-0.5"
 								onDragOver={(e) => {
 									if (updateStageMutation.isPending) return;
 									e.preventDefault();
@@ -266,27 +337,30 @@ export function KanbanPipelineBoard({
 								}
 							>
 								{columnLeads.length === 0 ? (
-									<div className="px-1 text-muted-foreground text-xs italic">
+									<div className="rounded-xl border border-dashed border-border/60 bg-background/50 px-3 py-6 text-center text-muted-foreground text-xs">
 										{isOver ? "Release to move here" : "No leads in this stage"}
 									</div>
 								) : (
 									columnLeads.map((lead) => (
-										<Card
+										<button
 											key={lead.id}
+											type="button"
 											draggable={!updateStageMutation.isPending}
 											onDragStart={(e) => handleDragStart(e, lead)}
 											onDragEnd={handleDragEnd}
-											className={[
-												"select-none p-2.5",
+											className={cn(
+												"w-full select-none rounded-xl border border-border/40 bg-card p-3.5 text-left shadow-sm transition-all",
+												"hover:border-border/70 hover:shadow-md",
 												updateStageMutation.isPending
 													? "cursor-not-allowed opacity-60"
-													: "cursor-grab",
-												draggingLeadId === lead.id
-													? "opacity-60"
-													: "hover:bg-muted/40",
-											].join(" ")}
+													: "cursor-grab active:cursor-grabbing",
+												draggingLeadId === lead.id && "opacity-50 shadow-none",
+											)}
 											onClick={() => {
-												if (dragStartedRef.current || updateStageMutation.isPending) {
+												if (
+													dragStartedRef.current ||
+													updateStageMutation.isPending
+												) {
 													dragStartedRef.current = false;
 													return;
 												}
@@ -294,13 +368,18 @@ export function KanbanPipelineBoard({
 											}}
 											title={`${lead.name}\n${lead.email}\n${lead.source}\n${lead.agentName ?? "Unassigned"}`}
 										>
-											<div className="min-w-0">
-												<div className="line-clamp-2 font-medium text-sm leading-tight">
+											<div className="min-w-0 space-y-2.5">
+												<p className="line-clamp-2 font-semibold text-foreground text-sm leading-snug">
 													{lead.name}
+												</p>
+												<div className="flex items-center justify-between gap-2">
+													<span className="min-w-0 truncate text-muted-foreground text-xs">
+														{lead.agentName ?? "Unassigned"}
+													</span>
+													<StatusBadge status={lead.status} />
 												</div>
-												{renderCardMeta(lead)}
 											</div>
-										</Card>
+										</button>
 									))
 								)}
 							</div>
@@ -309,61 +388,66 @@ export function KanbanPipelineBoard({
 				})}
 
 				{unknownStages.length > 0 && (
-					<div
-						className="flex h-full w-[280px] shrink-0 flex-col gap-1.5 overflow-y-auto rounded-lg border bg-muted/10 p-2"
-						onDragOver={(e) => {
-							if (updateStageMutation.isPending) return;
-							e.preventDefault();
-						}}
-					>
-						<div className="flex shrink-0 items-center justify-between gap-2">
-							<span className="text-sm font-medium">Other</span>
-							<span className="text-muted-foreground text-xs">
+					<div className="flex h-full w-[280px] shrink-0 flex-col rounded-2xl bg-muted/40 p-3 sm:w-[300px]">
+						<div className="mb-3 flex shrink-0 items-center justify-between gap-2 px-0.5">
+							<div className="flex items-center gap-2">
+								<span className="size-2 rounded-full bg-muted-foreground" />
+								<h3 className="font-semibold text-foreground text-sm">Other</h3>
+							</div>
+							<span className="inline-flex min-w-6 items-center justify-center rounded-full bg-muted px-2 py-0.5 font-semibold text-muted-foreground text-[11px] tabular-nums">
 								{unknownStages.reduce(
 									(sum, s) => sum + (leadsByStage.get(s)?.length ?? 0),
 									0,
 								)}
 							</span>
 						</div>
-						{unknownStages.map((s) => (
-							<div key={s} className="space-y-2">
-								{(leadsByStage.get(s) ?? []).map((lead) => (
-									<Card
-										key={lead.id}
-												draggable={!updateStageMutation.isPending}
-												onDragStart={(e) => handleDragStart(e, lead)}
-												onDragEnd={handleDragEnd}
-												className={[
-													"select-none p-2.5",
+						<div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto">
+							{unknownStages.map((s) => (
+								<div key={s} className="space-y-2.5">
+									{(leadsByStage.get(s) ?? []).map((lead) => (
+										<button
+											key={lead.id}
+											type="button"
+											draggable={!updateStageMutation.isPending}
+											onDragStart={(e) => handleDragStart(e, lead)}
+											onDragEnd={handleDragEnd}
+											className={cn(
+												"w-full select-none rounded-xl border border-border/40 bg-card p-3.5 text-left shadow-sm transition-all",
+												"hover:border-border/70 hover:shadow-md",
+												updateStageMutation.isPending
+													? "cursor-not-allowed opacity-60"
+													: "cursor-grab active:cursor-grabbing",
+											)}
+											onClick={() => {
+												if (
+													dragStartedRef.current ||
 													updateStageMutation.isPending
-														? "cursor-not-allowed opacity-60"
-														: "cursor-grab",
-													"hover:bg-muted/40",
-												].join(" ")}
-												onClick={() => {
-													if (
-														dragStartedRef.current ||
-														updateStageMutation.isPending
-													) {
-														dragStartedRef.current = false;
-														return;
-													}
-													onViewLead(lead);
-												}}
-												title={`${lead.name}\n${lead.email}\n${lead.source}\n${lead.agentName ?? "Unassigned"}`}
-									>
-										<div className="min-w-0">
-											<div className="line-clamp-2 font-medium text-sm leading-tight">
-												{lead.name}
+												) {
+													dragStartedRef.current = false;
+													return;
+												}
+												onViewLead(lead);
+											}}
+											title={`${lead.name}\n${lead.email}\n${lead.source}\n${lead.agentName ?? "Unassigned"}`}
+										>
+											<div className="min-w-0 space-y-2.5">
+												<p className="line-clamp-2 font-semibold text-foreground text-sm leading-snug">
+													{lead.name}
+												</p>
+												<div className="flex items-center justify-between gap-2">
+													<span className="min-w-0 truncate text-muted-foreground text-xs">
+														{lead.agentName ?? "Unassigned"}
+													</span>
+													<StatusBadge status={lead.status} />
+												</div>
 											</div>
-											{renderCardMeta(lead)}
-										</div>
-									</Card>
-								))}
-							</div>
-						))}
-						<div className="text-muted-foreground text-xs italic">
-							Drop only supports configured pipeline stages
+										</button>
+									))}
+								</div>
+							))}
+							<p className="text-muted-foreground text-xs italic">
+								Drop only supports configured pipeline stages
+							</p>
 						</div>
 					</div>
 				)}

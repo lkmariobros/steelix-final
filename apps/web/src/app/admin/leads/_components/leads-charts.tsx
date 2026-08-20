@@ -1,15 +1,17 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 import { useTheme } from "next-themes";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
 import type { Lead } from "./lead-models";
 import { PIPELINE_STAGES } from "./lead-constants";
 import { getLeadDisplayTags } from "./lead-models";
 import {
 	Area,
 	AreaChart,
+	CartesianGrid,
 	Cell,
 	Pie,
 	PieChart,
@@ -18,33 +20,42 @@ import {
 	XAxis,
 	YAxis,
 } from "recharts";
-import { RiBarChartLine } from "@remixicon/react";
+import { RiBarChartBoxLine, RiPieChart2Line } from "@remixicon/react";
 
-// Color palette — matches the original implementation order
+/** Brand-aligned palette (teal family + soft accents) */
 const CHART_COLORS = [
-	"#60a5fa", // blue-400
-	"#fbbf24", // amber-400
-	"#94a3b8", // slate-400
-	"#c084fc", // purple-400
-	"#2dd4bf", // teal-400
-	"#fb923c", // orange-400
-	"#4ade80", // green-400
-	"#f87171", // red-400
-	"#34d399", // emerald-400
-	"#f472b6", // pink-400
+	"#2a6b73",
+	"#3d8f8a",
+	"#5aa8a3",
+	"#0ea5e9",
+	"#38bdf8",
+	"#f59e0b",
+	"#f97316",
+	"#10b981",
+	"#64748b",
+	"#94a3b8",
 ];
+
+const PRIMARY = "#2a6b73";
+const PRIMARY_SOFT = "#3d8f8a";
 
 function AreaTooltip({
 	active,
 	payload,
 	label,
-}: { active?: boolean; payload?: Array<{ value: number }>; label?: string }) {
+}: {
+	active?: boolean;
+	payload?: Array<{ value: number }>;
+	label?: string;
+}) {
 	if (!active || !payload?.length) return null;
 	return (
-		<div className="rounded-lg border border-border bg-popover px-3 py-2 shadow-lg">
+		<div className="rounded-xl border border-border/70 bg-popover px-3 py-2 shadow-card">
 			<p className="mb-1 font-semibold text-foreground text-xs">{label}</p>
 			<p className="text-muted-foreground text-xs">
-				<span className="font-bold text-blue-400">{payload[0].value}</span>{" "}
+				<span className="font-bold tabular-nums text-primary">
+					{payload[0].value}
+				</span>{" "}
 				leads
 			</p>
 		</div>
@@ -61,7 +72,7 @@ function PieTooltip({
 	if (!active || !payload?.length) return null;
 	const item = payload[0];
 	return (
-		<div className="rounded-lg border border-border bg-popover px-3 py-2 shadow-lg">
+		<div className="rounded-xl border border-border/70 bg-popover px-3 py-2 shadow-card">
 			<div className="flex items-center gap-2">
 				<span
 					className="size-2.5 shrink-0 rounded-full"
@@ -70,8 +81,132 @@ function PieTooltip({
 				<p className="font-semibold text-foreground text-xs">{item.name}</p>
 			</div>
 			<p className="mt-0.5 text-muted-foreground text-xs">
-				<span className="font-bold text-foreground">{item.value}</span> leads
+				<span className="font-bold tabular-nums text-foreground">
+					{item.value}
+				</span>{" "}
+				leads
 			</p>
+		</div>
+	);
+}
+
+function ChartCardShell({
+	title,
+	description,
+	icon,
+	children,
+	className,
+	action,
+	compact,
+}: {
+	title: string;
+	description: string;
+	icon: ReactNode;
+	children: ReactNode;
+	className?: string;
+	action?: ReactNode;
+	compact?: boolean;
+}) {
+	return (
+		<Card className={cn("flex h-full flex-col gap-0 py-0", className)}>
+			<CardHeader className={cn(compact ? "shrink-0 px-4 pb-1 pt-3.5" : "shrink-0 px-4 pb-2 pt-4")}>
+				<div className="flex items-start justify-between gap-3">
+					<div className="min-w-0">
+						<div className="flex items-center gap-2.5">
+							<span className="flex size-8 items-center justify-center rounded-xl bg-primary/10 text-primary">
+								{icon}
+							</span>
+							<CardTitle className="font-semibold text-base">{title}</CardTitle>
+						</div>
+						<p className="mt-1 text-muted-foreground text-xs">{description}</p>
+					</div>
+					{action}
+				</div>
+			</CardHeader>
+			<CardContent
+				className={cn(
+					"flex flex-1 flex-col px-4",
+					compact ? "pb-3.5 pt-0" : "pb-4 pt-1",
+				)}
+			>
+				{children}
+			</CardContent>
+		</Card>
+	);
+}
+
+function DistributionLegend({
+	items,
+	total,
+}: {
+	items: Array<{ name: string; value: number; color: string }>;
+	total: number;
+}) {
+	return (
+		<div className="mt-1 space-y-0.5">
+			{items.map((item) => {
+				const pct = total ? Math.round((item.value / total) * 100) : 0;
+				return (
+					<div key={item.name} className="flex items-center gap-1.5 leading-tight">
+						<span
+							className="size-2 shrink-0 rounded-sm"
+							style={{ backgroundColor: item.color }}
+						/>
+						<span
+							className="min-w-0 flex-1 truncate font-medium text-foreground/90 text-[11px]"
+							title={item.name}
+						>
+							{item.name}
+						</span>
+						<span className="shrink-0 text-muted-foreground text-[11px] tabular-nums">
+							{pct}%
+						</span>
+						<span className="w-5 shrink-0 text-right font-semibold text-foreground text-[11px] tabular-nums">
+							{item.value}
+						</span>
+					</div>
+				);
+			})}
+		</div>
+	);
+}
+
+function DistributionDonut({
+	data,
+	total,
+}: {
+	data: Array<{ name: string; value: number; color: string }>;
+	total: number;
+}) {
+	return (
+		<div className="relative mx-auto w-full max-w-[130px] shrink-0">
+			<ResponsiveContainer width="100%" height={112}>
+				<PieChart>
+					<Pie
+						data={data}
+						cx="50%"
+						cy="50%"
+						innerRadius={34}
+						outerRadius={48}
+						paddingAngle={2}
+						cornerRadius={3}
+						dataKey="value"
+						strokeWidth={0}
+					>
+						{data.map((entry) => (
+							<Cell key={entry.name} fill={entry.color} />
+						))}
+					</Pie>
+					{/* @ts-expect-error recharts custom tooltip */}
+					<Tooltip content={<PieTooltip />} />
+				</PieChart>
+			</ResponsiveContainer>
+			<div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+				<span className="font-bold text-lg text-foreground tabular-nums leading-none">
+					{total}
+				</span>
+				<span className="mt-0.5 text-muted-foreground text-[10px]">total</span>
+			</div>
 		</div>
 	);
 }
@@ -86,11 +221,10 @@ export function LeadsCharts({
 	const { resolvedTheme } = useTheme();
 	const isDark = resolvedTheme === "dark";
 	const tickColor = isDark ? "#94a3b8" : "#64748b";
-	const axisStroke = isDark ? "#334155" : "#e2e8f0";
-	const dotStroke = isDark ? "#1e3a5f" : "#ffffff";
+	const gridStroke = isDark ? "#2a3538" : "#e8eef0";
+	const dotStroke = isDark ? "#1a2a2c" : "#ffffff";
 
 	const { stageData, monthlyData, categoryData, totalLeads } = useMemo(() => {
-		// Stage distribution — attach color to each datum for the custom tooltip
 		const stageCounts: Record<string, number> = {};
 		for (const lead of leads) {
 			stageCounts[lead.stage] = (stageCounts[lead.stage] ?? 0) + 1;
@@ -102,7 +236,6 @@ export function LeadsCharts({
 			color: CHART_COLORS[i % CHART_COLORS.length],
 		})).filter((s) => s.value > 0);
 
-		// Monthly trend (last 6 months)
 		const now = new Date();
 		const months: { key: string; label: string }[] = [];
 		for (let i = 5; i >= 0; i--) {
@@ -127,12 +260,12 @@ export function LeadsCharts({
 
 		const totalLeads = leads.length;
 
-		// Category distribution (tags)
 		const categoryCounts: Record<string, number> = {};
 		for (const lead of leads) {
 			const tags = getLeadDisplayTags(lead);
 			if (tags.length === 0) {
-				categoryCounts["Uncategorized"] = (categoryCounts["Uncategorized"] ?? 0) + 1;
+				categoryCounts.Uncategorized =
+					(categoryCounts.Uncategorized ?? 0) + 1;
 				continue;
 			}
 			for (const t of tags) {
@@ -147,39 +280,37 @@ export function LeadsCharts({
 				color: CHART_COLORS[i % CHART_COLORS.length],
 			}))
 			.sort((a, b) => b.value - a.value)
-			.slice(0, 10); // keep legend readable
+			.slice(0, 10);
 
 		return { stageData, monthlyData, categoryData, totalLeads };
 	}, [leads]);
 
 	if (isLoading) {
 		return (
-			<div className="grid gap-4 lg:grid-cols-4">
-				<Card className="lg:col-span-2">
+			<div className="grid items-stretch gap-4 lg:grid-cols-4">
+				<Card className="h-full lg:col-span-2">
 					<CardHeader className="pb-3">
-						<Skeleton className="h-4 w-40" />
+						<Skeleton className="h-5 w-44" />
 						<Skeleton className="h-3 w-56" />
 					</CardHeader>
 					<CardContent>
-						<Skeleton className="h-[200px] w-full rounded-lg" />
+						<Skeleton className="h-[220px] w-full rounded-xl" />
 					</CardContent>
 				</Card>
-				<Card>
+				<Card className="h-full">
 					<CardHeader className="pb-3">
-						<Skeleton className="h-4 w-36" />
-						<Skeleton className="h-3 w-48" />
+						<Skeleton className="h-5 w-36" />
 					</CardHeader>
-					<CardContent className="flex items-center justify-center">
-						<Skeleton className="h-[180px] w-[180px] rounded-full" />
+					<CardContent className="flex justify-center">
+						<Skeleton className="size-[140px] rounded-full" />
 					</CardContent>
 				</Card>
-				<Card>
+				<Card className="h-full">
 					<CardHeader className="pb-3">
-						<Skeleton className="h-4 w-40" />
-						<Skeleton className="h-3 w-52" />
+						<Skeleton className="h-5 w-40" />
 					</CardHeader>
-					<CardContent className="flex items-center justify-center">
-						<Skeleton className="h-[180px] w-[180px] rounded-full" />
+					<CardContent className="flex justify-center">
+						<Skeleton className="size-[140px] rounded-full" />
 					</CardContent>
 				</Card>
 			</div>
@@ -189,57 +320,51 @@ export function LeadsCharts({
 	if (leads.length === 0) return null;
 
 	return (
-		<div className="grid gap-4 lg:grid-cols-4">
-			{/* ── Monthly trend — area chart ── */}
-			<Card className="lg:col-span-2">
-				<CardHeader className="pb-2">
-					<div className="flex items-center gap-2">
-						<RiBarChartLine size={16} className="text-blue-400" />
-						<CardTitle className="font-semibold text-sm">
-							Monthly Lead Trend
-						</CardTitle>
-					</div>
-					<CardDescription className="text-xs">
-						Leads created over the last 6 months
-					</CardDescription>
-				</CardHeader>
-				<CardContent className="pr-4 pb-4 pl-0">
-					<ResponsiveContainer width="100%" height={210}>
-						<AreaChart
-							data={monthlyData}
-							margin={{ top: 8, right: 8, bottom: 0, left: 4 }}
-						>
+		<div className="grid items-stretch gap-4 lg:grid-cols-4">
+			<ChartCardShell
+				className="lg:col-span-2"
+				title="Monthly Lead Trend"
+				description="Leads created over the last 6 months"
+				icon={<RiBarChartBoxLine size={16} />}
+			>
+				<div className="relative min-h-[200px] w-full flex-1">
+					<div className="absolute inset-0 pr-2">
+						<ResponsiveContainer width="100%" height="100%">
+							<AreaChart
+								data={monthlyData}
+								margin={{ top: 8, right: 8, bottom: 0, left: 0 }}
+							>
 							<defs>
-								<linearGradient
-									id="leadsGradient"
-									x1="0"
-									y1="0"
-									x2="0"
-									y2="1"
-								>
-									<stop offset="5%" stopColor="#60a5fa" stopOpacity={0.3} />
-									<stop offset="95%" stopColor="#60a5fa" stopOpacity={0.02} />
+								<linearGradient id="leadsAreaFill" x1="0" y1="0" x2="0" y2="1">
+									<stop offset="0%" stopColor={PRIMARY} stopOpacity={0.35} />
+									<stop offset="55%" stopColor={PRIMARY_SOFT} stopOpacity={0.12} />
+									<stop offset="100%" stopColor={PRIMARY} stopOpacity={0.02} />
 								</linearGradient>
 							</defs>
+							<CartesianGrid
+								strokeDasharray="3 6"
+								vertical={false}
+								stroke={gridStroke}
+							/>
 							<XAxis
 								dataKey="month"
-								tick={{ fontSize: 12, fill: tickColor, fontWeight: 500 }}
-								axisLine={{ stroke: axisStroke }}
+								tick={{ fontSize: 11, fill: tickColor, fontWeight: 500 }}
+								axisLine={false}
 								tickLine={false}
-								dy={6}
+								dy={8}
 							/>
 							<YAxis
-								tick={{ fontSize: 12, fill: tickColor, fontWeight: 500 }}
+								tick={{ fontSize: 11, fill: tickColor, fontWeight: 500 }}
 								axisLine={false}
 								tickLine={false}
 								allowDecimals={false}
-								width={32}
+								width={34}
 							/>
-							{/* @ts-ignore — recharts custom tooltip */}
+							{/* @ts-expect-error recharts custom tooltip */}
 							<Tooltip
 								content={<AreaTooltip />}
 								cursor={{
-									stroke: "#60a5fa",
+									stroke: PRIMARY,
 									strokeWidth: 1,
 									strokeDasharray: "4 4",
 								}}
@@ -247,169 +372,51 @@ export function LeadsCharts({
 							<Area
 								type="monotone"
 								dataKey="leads"
-								stroke="#60a5fa"
+								stroke={PRIMARY}
 								strokeWidth={2.5}
-								fill="url(#leadsGradient)"
+								fill="url(#leadsAreaFill)"
 								dot={{
-									r: 4,
-									fill: "#60a5fa",
+									r: 3.5,
+									fill: PRIMARY,
 									stroke: dotStroke,
 									strokeWidth: 2,
 								}}
 								activeDot={{
 									r: 6,
-									fill: "#60a5fa",
-									stroke: isDark ? "#fff" : "#1e3a5f",
+									fill: PRIMARY,
+									stroke: isDark ? "#fff" : "#fff",
 									strokeWidth: 2,
 								}}
 							/>
 						</AreaChart>
-					</ResponsiveContainer>
-				</CardContent>
-			</Card>
-
-			{/* ── Stage distribution — donut chart ── */}
-			<Card>
-				<CardHeader className="pb-2">
-					<CardTitle className="font-semibold text-sm">
-						Stage Distribution
-					</CardTitle>
-					<CardDescription className="text-xs">
-						Leads by pipeline stage
-					</CardDescription>
-				</CardHeader>
-				<CardContent className="pb-3">
-					{/* Donut + center label */}
-					<div className="relative">
-						<ResponsiveContainer width="100%" height={180}>
-							<PieChart>
-								<Pie
-									data={stageData}
-									cx="50%"
-									cy="50%"
-									innerRadius={54}
-									outerRadius={80}
-									paddingAngle={3}
-									dataKey="value"
-									strokeWidth={0}
-								>
-									{stageData.map((entry, idx) => (
-										<Cell key={`cell-${idx}`} fill={entry.color} />
-									))}
-								</Pie>
-								{/* @ts-ignore */}
-								<Tooltip content={<PieTooltip />} />
-							</PieChart>
 						</ResponsiveContainer>
-
-						{/* Center total */}
-						<div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-							<span className="font-bold text-2xl text-foreground leading-none">
-								{totalLeads}
-							</span>
-							<span className="mt-0.5 text-muted-foreground text-xs">
-								total
-							</span>
-						</div>
 					</div>
+				</div>
+			</ChartCardShell>
 
-					{/* Legend — all visible stages */}
-					<div className="mt-2 space-y-1.5">
-						{stageData.map((s) => {
-							const pct = totalLeads ? Math.round((s.value / totalLeads) * 100) : 0;
-							return (
-								<div key={s.name} className="flex items-center gap-2">
-									<span
-										className="size-2.5 shrink-0 rounded-sm"
-										style={{ backgroundColor: s.color }}
-									/>
-									<span
-										className="min-w-0 flex-1 truncate font-medium text-foreground/90 text-xs"
-										title={s.name}
-									>
-										{s.name}
-									</span>
-									<span className="shrink-0 text-muted-foreground text-xs">
-										{pct}%
-									</span>
-									<span className="w-5 shrink-0 text-right font-semibold text-foreground text-xs">
-										{s.value}
-									</span>
-								</div>
-							);
-						})}
-					</div>
-				</CardContent>
-			</Card>
+			<ChartCardShell
+				title="Stage Distribution"
+				description="Leads by pipeline stage"
+				icon={<RiPieChart2Line size={16} />}
+				compact
+			>
+				<div className="flex flex-1 flex-col">
+					<DistributionDonut data={stageData} total={totalLeads} />
+					<DistributionLegend items={stageData} total={totalLeads} />
+				</div>
+			</ChartCardShell>
 
-			{/* ── Category distribution — donut chart ── */}
-			<Card>
-				<CardHeader className="pb-2">
-					<CardTitle className="font-semibold text-sm">
-						Category Distribution
-					</CardTitle>
-					<CardDescription className="text-xs">
-						Leads by category (top 10)
-					</CardDescription>
-				</CardHeader>
-				<CardContent className="pb-3">
-					<div className="relative">
-						<ResponsiveContainer width="100%" height={180}>
-							<PieChart>
-								<Pie
-									data={categoryData}
-									cx="50%"
-									cy="50%"
-									innerRadius={54}
-									outerRadius={80}
-									paddingAngle={3}
-									dataKey="value"
-									strokeWidth={0}
-								>
-									{categoryData.map((entry, idx) => (
-										<Cell key={`cat-cell-${idx}`} fill={entry.color} />
-									))}
-								</Pie>
-								{/* @ts-ignore */}
-								<Tooltip content={<PieTooltip />} />
-							</PieChart>
-						</ResponsiveContainer>
-						<div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-							<span className="font-bold text-2xl text-foreground leading-none">
-								{totalLeads}
-							</span>
-							<span className="mt-0.5 text-muted-foreground text-xs">total</span>
-						</div>
-					</div>
-
-					<div className="mt-2 space-y-1.5">
-						{categoryData.map((c) => {
-							const pct = totalLeads ? Math.round((c.value / totalLeads) * 100) : 0;
-							return (
-								<div key={c.name} className="flex items-center gap-2">
-									<span
-										className="size-2.5 shrink-0 rounded-sm"
-										style={{ backgroundColor: c.color }}
-									/>
-									<span
-										className="min-w-0 flex-1 truncate font-medium text-foreground/90 text-xs"
-										title={c.name}
-									>
-										{c.name}
-									</span>
-									<span className="shrink-0 text-muted-foreground text-xs">
-										{pct}%
-									</span>
-									<span className="w-5 shrink-0 text-right font-semibold text-foreground text-xs">
-										{c.value}
-									</span>
-								</div>
-							);
-						})}
-					</div>
-				</CardContent>
-			</Card>
+			<ChartCardShell
+				title="Category Distribution"
+				description="Leads by category (top 10)"
+				icon={<RiPieChart2Line size={16} />}
+				compact
+			>
+				<div className="flex flex-1 flex-col">
+					<DistributionDonut data={categoryData} total={totalLeads} />
+					<DistributionLegend items={categoryData} total={totalLeads} />
+				</div>
+			</ChartCardShell>
 		</div>
 	);
 }
-

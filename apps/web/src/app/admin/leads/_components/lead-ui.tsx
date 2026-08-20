@@ -41,19 +41,26 @@ export function StageBadge({
 	);
 }
 
-export function StatusBadge({ status }: { status: string }) {
+export function StatusBadge({
+	status,
+	className,
+}: {
+	status: string;
+	className?: string;
+}) {
 	const normalizedStatus = status === "pending" ? "inactive" : status;
 	const colors: Record<string, string> = {
 		active:
-			"bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400",
+			"bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300",
 		inactive:
-			"bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400",
+			"bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300",
 	};
 	return (
 		<span
 			className={cn(
-				`inline-flex items-center rounded-full px-2 py-0.5 font-medium text-xs`,
+				"inline-flex shrink-0 items-center rounded-full px-2.5 py-0.5 font-medium text-[11px]",
 				colors[normalizedStatus] ?? colors.inactive,
+				className,
 			)}
 		>
 			{normalizedStatus.charAt(0).toUpperCase() + normalizedStatus.slice(1)}

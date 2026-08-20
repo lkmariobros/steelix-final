@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
 import {
 	Card,
@@ -7,6 +8,8 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
+import { RiContactsLine } from "@remixicon/react";
 import { formatLeadTypeLabel } from "./lead-constants";
 import { getLeadDisplayTags } from "./lead-models";
 import { StatusBadge } from "./lead-ui";
@@ -39,6 +42,30 @@ function formatLeadDate(d: Date | string | null) {
 	}
 }
 
+function InfoField({
+	label,
+	children,
+	className,
+}: {
+	label: string;
+	children: ReactNode;
+	className?: string;
+}) {
+	return (
+		<div
+			className={cn(
+				"rounded-xl border border-border/60 bg-background/80 p-3 dark:bg-background/50",
+				className,
+			)}
+		>
+			<p className="font-medium text-[11px] text-foreground/65 uppercase tracking-wide">
+				{label}
+			</p>
+			<div className="mt-1.5 min-w-0 text-sm text-foreground">{children}</div>
+		</div>
+	);
+}
+
 export function LeadContactInfoCard({
 	lead,
 	showDescription = true,
@@ -54,32 +81,31 @@ export function LeadContactInfoCard({
 	});
 
 	return (
-		<Card>
-			<CardHeader className="pb-3">
-				<CardTitle className="text-sm">Contact Info</CardTitle>
+		<Card className="gap-0 overflow-hidden border-border/70 py-0 shadow-sm">
+			<CardHeader className="border-border/60 border-b bg-muted/40 px-4 py-3 dark:bg-muted/50">
+				<CardTitle className="flex items-center gap-2 font-semibold text-sm">
+					<span className="flex size-7 items-center justify-center rounded-lg bg-primary/12 text-primary">
+						<RiContactsLine className="size-3.5" />
+					</span>
+					Contact Info
+				</CardTitle>
 			</CardHeader>
-			<CardContent className="grid grid-cols-2 gap-3 text-sm">
-				<div>
-					<span className="text-muted-foreground">Status</span>
-					<div className="mt-0.5">
-						<StatusBadge status={lead.status} />
-					</div>
-				</div>
-				<div>
-					<span className="text-muted-foreground">Email</span>
-					<p className="truncate font-medium">{lead.email || "—"}</p>
-				</div>
-				<div>
-					<span className="text-muted-foreground">Phone</span>
-					<p className="font-medium">{lead.phone?.trim() || "—"}</p>
-				</div>
-				<div>
-					<span className="text-muted-foreground">WhatsApp Username</span>
+			<CardContent className="grid grid-cols-2 gap-2.5 p-4">
+				<InfoField label="Status">
+					<StatusBadge status={lead.status} />
+				</InfoField>
+				<InfoField label="Email">
+					<p className="truncate font-semibold">{lead.email || "—"}</p>
+				</InfoField>
+				<InfoField label="Phone">
+					<p className="font-semibold">{lead.phone?.trim() || "—"}</p>
+				</InfoField>
+				<InfoField label="WhatsApp Username">
 					<p
 						className={
 							!lead.phone?.trim() && lead.whatsappUsername?.trim()
 								? "font-semibold text-primary"
-								: "font-medium"
+								: "font-semibold"
 						}
 					>
 						{lead.whatsappUsername?.trim()
@@ -89,57 +115,54 @@ export function LeadContactInfoCard({
 							: "—"}
 					</p>
 					{!lead.phone?.trim() && lead.whatsappUsername?.trim() ? (
-						<p className="mt-0.5 text-muted-foreground text-xs">
+						<p className="mt-1 text-foreground/60 text-xs">
 							Primary contact (no phone on file)
 						</p>
 					) : null}
-				</div>
-				<div>
-					<span className="text-muted-foreground">Source</span>
-					<p className="font-medium">{lead.source?.trim() || "—"}</p>
-				</div>
-				<div>
-					<span className="text-muted-foreground">Lead Type</span>
-					<p className="font-medium">{formatLeadTypeLabel(lead.leadType)}</p>
-				</div>
-				<div className="col-span-2">
-					<span className="text-muted-foreground">Categories</span>
+				</InfoField>
+				<InfoField label="Source">
+					<p className="font-semibold">{lead.source?.trim() || "—"}</p>
+				</InfoField>
+				<InfoField label="Lead Type">
+					<p className="font-semibold">{formatLeadTypeLabel(lead.leadType)}</p>
+				</InfoField>
+				<InfoField label="Categories" className="col-span-2">
 					{displayTags.length > 0 ? (
-						<div className="mt-1 flex flex-wrap gap-1.5">
+						<div className="flex flex-wrap gap-1.5">
 							{displayTags.map((tag) => (
-								<Badge key={tag} variant="secondary">
+								<Badge
+									key={tag}
+									variant="secondary"
+									className="border border-border/50 bg-muted/80 font-medium"
+								>
 									{tag}
 								</Badge>
 							))}
 						</div>
 					) : (
-						<p className="font-medium">—</p>
+						<p className="font-semibold">—</p>
 					)}
-				</div>
+				</InfoField>
 				{showDescription ? (
-					<div className="col-span-2">
-						<span className="text-muted-foreground">Description</span>
-						<p className="mt-0.5 break-words whitespace-pre-line font-medium leading-relaxed">
+					<InfoField label="Description" className="col-span-2">
+						<p className="break-words whitespace-pre-line font-medium leading-relaxed">
 							{lead.property?.trim() || "—"}
 						</p>
-					</div>
+					</InfoField>
 				) : null}
 				{showNotes ? (
-					<div className="col-span-2">
-						<span className="text-muted-foreground">Notes</span>
-						<p className="mt-0.5 break-words whitespace-pre-line font-medium leading-relaxed">
+					<InfoField label="Notes" className="col-span-2">
+						<p className="break-words whitespace-pre-line font-medium leading-relaxed">
 							{lead.notesSummary?.trim() || "—"}
 						</p>
-					</div>
+					</InfoField>
 				) : null}
-				<div>
-					<span className="text-muted-foreground">Created</span>
-					<p className="font-medium">{formatLeadDate(lead.createdAt)}</p>
-				</div>
-				<div>
-					<span className="text-muted-foreground">Assigned Agent</span>
-					<p className="font-medium">{lead.agentName ?? "Unassigned"}</p>
-				</div>
+				<InfoField label="Created">
+					<p className="font-semibold">{formatLeadDate(lead.createdAt)}</p>
+				</InfoField>
+				<InfoField label="Assigned Agent">
+					<p className="font-semibold">{lead.agentName ?? "Unassigned"}</p>
+				</InfoField>
 			</CardContent>
 		</Card>
 	);

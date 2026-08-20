@@ -182,27 +182,29 @@ export function LeadTasksCard({ leadId }: { leadId: string }) {
 	);
 
 	return (
-		<Card>
-			<CardHeader className="pb-3">
-				<div className="flex items-center justify-between">
-					<CardTitle className="flex items-center gap-2 text-sm">
-						<RiTodoLine className="size-4" />
+		<Card className="gap-0 overflow-hidden border-border/70 py-0 shadow-sm">
+			<CardHeader className="border-border/60 border-b bg-muted/40 px-4 py-3 dark:bg-muted/50">
+				<div className="flex items-center justify-between gap-2">
+					<CardTitle className="flex flex-wrap items-center gap-2 font-semibold text-sm">
+						<span className="flex size-7 items-center justify-center rounded-lg bg-primary/12 text-primary">
+							<RiTodoLine className="size-3.5" />
+						</span>
 						Tasks & Follow-ups
 						{pendingTasks.length > 0 && (
-							<span className="ml-1 rounded-full bg-primary/10 px-1.5 py-0.5 font-medium text-primary text-xs">
+							<span className="rounded-full bg-primary/12 px-1.5 py-0.5 font-medium text-primary text-xs">
 								{pendingTasks.length}
 							</span>
 						)}
 						{overduePending.length > 0 && (
-							<span className="ml-0.5 rounded-full bg-red-100 px-1.5 py-0.5 font-medium text-red-700 text-xs dark:bg-red-900/20 dark:text-red-400">
+							<span className="rounded-full bg-rose-100 px-1.5 py-0.5 font-medium text-rose-700 text-xs dark:bg-rose-900/30 dark:text-rose-300">
 								{overduePending.length} overdue
 							</span>
 						)}
 					</CardTitle>
 					<Button
 						size="sm"
-						variant="ghost"
-						className="h-7 gap-1 px-2 text-xs"
+						variant="outline"
+						className="h-8 gap-1 border-border/70 bg-background px-2.5 text-xs shadow-sm"
 						onClick={() => setShowForm((v) => !v)}
 					>
 						<RiAddLine className="size-3.5" />
@@ -211,11 +213,11 @@ export function LeadTasksCard({ leadId }: { leadId: string }) {
 				</div>
 			</CardHeader>
 
-			<CardContent className="space-y-3">
+			<CardContent className="space-y-3 p-4">
 				{/* ── Add Task Form ── */}
 				{showForm && (
-					<div className="space-y-3 rounded-md border bg-muted/30 p-3">
-						<p className="font-medium text-xs">New Task</p>
+					<div className="space-y-3 rounded-xl border border-border/60 bg-muted/30 p-3 dark:bg-muted/40">
+						<p className="font-medium text-foreground text-xs">New Task</p>
 						<div className="space-y-2">
 							<Input
 								placeholder="Task title e.g. Call Ahmad on Thursday 10am"
@@ -223,7 +225,7 @@ export function LeadTasksCard({ leadId }: { leadId: string }) {
 								onChange={(e) =>
 									setForm((p) => ({ ...p, title: e.target.value }))
 								}
-								className="h-8 text-sm"
+								className="h-9 border-border/70 bg-background text-sm shadow-sm"
 								autoFocus
 							/>
 							<div className="grid grid-cols-2 gap-2">
@@ -233,7 +235,7 @@ export function LeadTasksCard({ leadId }: { leadId: string }) {
 										setForm((p) => ({ ...p, taskType: v as TaskType }))
 									}
 								>
-									<SelectTrigger className="h-8 text-xs">
+									<SelectTrigger className="h-9 border-border/70 bg-background text-xs shadow-sm">
 										<SelectValue />
 									</SelectTrigger>
 									<SelectContent>
