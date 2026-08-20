@@ -18,7 +18,7 @@ import {
 	BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -55,6 +55,7 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/tooltip";
 import { authClient } from "@/lib/auth-client";
+import { cn } from "@/lib/utils";
 import { trpc } from "@/utils/trpc";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
@@ -99,7 +100,7 @@ import {
 	PIPELINE_STAGES,
 	STATUS_OPTIONS,
 } from "@/app/admin/leads/_components/lead-constants";
-import { StageBadge } from "@/app/admin/leads/_components/lead-ui";
+import { StageBadge, StatusBadge } from "@/app/admin/leads/_components/lead-ui";
 import { LeadContactInfoCard } from "@/app/admin/leads/_components/lead-contact-info-card";
 import {
 	exportProspectsToCsv,
@@ -813,13 +814,16 @@ export default function CRMPage() {
 		return <LoadingScreen text="Redirecting..." />;
 	}
 
+	const actionBtnClass =
+		"size-8 shrink-0 rounded-full border border-border/60 bg-muted/40 p-0 text-muted-foreground shadow-none hover:bg-muted hover:text-foreground";
+
 	return (
-		<SidebarProvider>
+		<SidebarProvider className="h-svh overflow-hidden">
 			<AppSidebar />
-			<SidebarInset className="overflow-hidden px-4 md:px-6 lg:px-8">
-				<header className="flex h-16 shrink-0 items-center gap-2 border-b">
-					<div className="flex flex-1 items-center gap-2 px-3">
-						<SidebarTrigger className="-ms-4" />
+			<SidebarInset className="h-svh min-h-0 overflow-y-auto overscroll-y-contain bg-background px-4 md:px-6 lg:px-8">
+				<header className="sticky top-0 z-40 -mx-4 flex h-16 shrink-0 items-center gap-2 border-border/60 border-b bg-background px-4 backdrop-blur-md supports-backdrop-filter:bg-background/95 md:-mx-6 md:px-6 lg:-mx-8 lg:px-8">
+					<div className="flex flex-1 items-center gap-2 px-1 sm:px-0">
+						<SidebarTrigger className="-ms-1 rounded-xl" />
 						<Separator
 							orientation="vertical"
 							className="mr-2 data-[orientation=vertical]:h-4"
@@ -834,28 +838,34 @@ export default function CRMPage() {
 								</BreadcrumbItem>
 								<BreadcrumbSeparator className="hidden md:block" />
 								<BreadcrumbItem>
-									<BreadcrumbPage className="flex items-center gap-2">
-										<RiUserLine size={18} />
+									<BreadcrumbPage className="flex items-center gap-2 font-medium">
+										<span className="flex size-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
+											<RiUserLine size={16} />
+										</span>
 										CRM
 									</BreadcrumbPage>
 								</BreadcrumbItem>
 							</BreadcrumbList>
 						</Breadcrumb>
 					</div>
-					<div className="ml-auto flex gap-3">
+					<div className="ml-auto flex gap-2">
 						<HeaderActions />
 					</div>
 				</header>
-				<div className="flex flex-1 flex-col gap-4 py-4 lg:gap-6 lg:py-6">
+				<div className="flex flex-1 flex-col gap-5 py-5 lg:gap-6 lg:py-7">
 					{/* Page Header with My Leads / Company Leads tabs */}
-					<div className="flex flex-col gap-3">
-						<h1 className="font-semibold text-2xl">
-							CRM - Prospect Management
-						</h1>
-						<div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-							{/* My Leads | Company Leads tabs */}
+					<div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+						<div className="min-w-0 flex-1 space-y-3">
+							<div>
+								<h1 className="font-bold text-2xl tracking-tight">
+									CRM — Prospect Management
+								</h1>
+								<p className="mt-0.5 text-muted-foreground text-sm">
+									Manage your leads, follow-ups, and pipeline stages
+								</p>
+							</div>
 							<div
-								className="flex w-fit max-w-full items-center gap-1 rounded-md border bg-muted/50 p-1"
+								className="inline-flex items-center rounded-md border border-border/70 bg-background p-1 shadow-sm"
 								role="tablist"
 								aria-label="Lead type"
 							>
@@ -863,13 +873,18 @@ export default function CRMPage() {
 									type="button"
 									role="tab"
 									aria-selected={activeTab === "my"}
-									variant={activeTab === "my" ? "default" : "ghost"}
+									variant="ghost"
 									size="sm"
 									onClick={() => {
 										setActiveTab("my");
 										setCurrentPage(1);
 									}}
-									className="h-8"
+									className={cn(
+										"h-9 rounded-md px-3",
+										activeTab === "my"
+											? "bg-primary text-primary-foreground hover:bg-primary/90"
+											: "text-muted-foreground hover:bg-muted hover:text-foreground",
+									)}
 								>
 									My Leads
 								</Button>
@@ -877,27 +892,33 @@ export default function CRMPage() {
 									type="button"
 									role="tab"
 									aria-selected={activeTab === "company"}
-									variant={activeTab === "company" ? "default" : "ghost"}
+									variant="ghost"
 									size="sm"
 									onClick={() => {
 										setActiveTab("company");
 										setCurrentPage(1);
 										setAgentFilter("all");
 									}}
-									className="h-8"
+									className={cn(
+										"h-9 rounded-md px-3",
+										activeTab === "company"
+											? "bg-primary text-primary-foreground hover:bg-primary/90"
+											: "text-muted-foreground hover:bg-muted hover:text-foreground",
+									)}
 								>
 									Company Leads
 								</Button>
 							</div>
-							<div className="flex flex-wrap items-center gap-2 sm:gap-3">
-							<div className="inline-flex items-center overflow-hidden rounded-md border border-border/80 bg-muted/30">
+						</div>
+						<div className="flex flex-shrink-0 flex-wrap items-center justify-end gap-2">
+							<div className="inline-flex items-center overflow-hidden rounded-md border border-border/70 bg-card shadow-sm">
 								<Tooltip>
 									<TooltipTrigger asChild>
 										<Button
 											type="button"
 											size="icon"
 											variant="ghost"
-											className="h-8 w-8 rounded-none p-0 text-muted-foreground hover:text-foreground"
+											className="h-9 w-9 rounded-none p-0 text-muted-foreground hover:text-foreground"
 											disabled={isLoadingProspects}
 											aria-label="Import prospects from CSV"
 											onClick={() => setIsImportOpen(true)}
@@ -923,7 +944,7 @@ export default function CRMPage() {
 														type="button"
 														size="icon"
 														variant="ghost"
-														className="h-8 w-8 rounded-none p-0 text-muted-foreground hover:text-foreground"
+														className="h-9 w-9 rounded-none p-0 text-muted-foreground hover:text-foreground"
 														disabled={isLoadingProspects || isExporting}
 														aria-label="Export prospects"
 													>
@@ -946,7 +967,7 @@ export default function CRMPage() {
 														onSelect={() => {
 															void handleExportProspects("csv");
 														}}
-														className="h-9 w-9 gap-0 !px-0 !py-0 justify-center"
+														className="h-9 w-9 justify-center gap-0 !px-0 !py-0"
 													>
 														<FileText size={15} aria-hidden />
 													</DropdownMenuItem>
@@ -960,7 +981,7 @@ export default function CRMPage() {
 														onSelect={() => {
 															void handleExportProspects("excel");
 														}}
-														className="h-9 w-9 gap-0 !px-0 !py-0 justify-center"
+														className="h-9 w-9 justify-center gap-0 !px-0 !py-0"
 													>
 														<FileSpreadsheet size={15} aria-hidden />
 													</DropdownMenuItem>
@@ -971,23 +992,34 @@ export default function CRMPage() {
 									</DropdownMenuContent>
 								</DropdownMenu>
 							</div>
-							{/* View Toggle */}
-							<div className="flex items-center gap-1 rounded-md border bg-muted/50 p-1">
+							<div className="inline-flex items-center rounded-md border border-border/70 bg-background p-1 shadow-sm">
 								<Button
 									type="button"
-									variant={viewMode === "list" ? "default" : "ghost"}
+									variant="ghost"
 									size="sm"
+									aria-pressed={viewMode === "list"}
 									onClick={() => setViewMode("list")}
-									className="h-8"
+									className={cn(
+										"h-9 rounded-md px-3",
+										viewMode === "list"
+											? "bg-primary text-primary-foreground hover:bg-primary/90"
+											: "text-muted-foreground hover:bg-muted hover:text-foreground",
+									)}
 								>
 									List View
 								</Button>
 								<Button
 									type="button"
-									variant={viewMode === "kanban" ? "default" : "ghost"}
+									variant="ghost"
 									size="sm"
+									aria-pressed={viewMode === "kanban"}
 									onClick={() => setViewMode("kanban")}
-									className="h-8"
+									className={cn(
+										"h-9 rounded-md px-3",
+										viewMode === "kanban"
+											? "bg-primary text-primary-foreground hover:bg-primary/90"
+											: "text-muted-foreground hover:bg-muted hover:text-foreground",
+									)}
 								>
 									Board View
 								</Button>
@@ -996,12 +1028,11 @@ export default function CRMPage() {
 								type="button"
 								onClick={handleAddProspect}
 								size="sm"
-								className="bg-green-600 hover:bg-green-700"
+								className="h-9"
 							>
-								<RiAddLine className="mr-2 h-4 w-4" />
+								<RiAddLine size={16} className="mr-1.5" aria-hidden />
 								New Lead
 							</Button>
-						</div>
 						</div>
 					</div>
 
@@ -1304,10 +1335,12 @@ export default function CRMPage() {
 
 					{/* View Prospect Dialog */}
 					<Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
-						<DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[700px] [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+						<DialogContent className="max-h-[90vh] overflow-y-auto border-border/70 sm:max-w-[700px] [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
 							<DialogHeader className="pr-8">
 								<DialogTitle className="flex items-center gap-2">
-									<RiUserLine className="size-5 shrink-0" />
+									<span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/12 text-primary">
+										<RiUserLine className="size-4" />
+									</span>
 									{canEditLeadName && isEditingLeadName ? (
 										<div className="flex min-w-0 flex-1 items-center gap-2">
 											<Input
@@ -1430,11 +1463,16 @@ export default function CRMPage() {
 									/>
 
 									{/* Lead Detail */}
-									<div className="space-y-3" style={{ marginBottom: "15px" }}>
-										<div className="font-medium text-muted-foreground text-sm">
-											Lead Detail
-										</div>
-										<div className="space-y-3 rounded-lg border bg-muted/30 p-4">
+									<Card className="gap-0 overflow-hidden border-border/70 py-0 shadow-sm">
+										<CardHeader className="border-border/60 border-b bg-muted/40 px-4 py-3 dark:bg-muted/50">
+											<CardTitle className="flex items-center gap-2 font-semibold text-sm">
+												<span className="flex size-7 items-center justify-center rounded-lg bg-primary/12 text-primary">
+													<RiLinksLine className="size-3.5" />
+												</span>
+												Lead Detail
+											</CardTitle>
+										</CardHeader>
+										<CardContent className="space-y-3 p-4">
 											<div className="space-y-2">
 												<div className="flex items-center gap-2 text-muted-foreground text-sm">
 													<RiLinksLine className="size-4" />
@@ -1448,7 +1486,7 @@ export default function CRMPage() {
 																setDetailStage(v as PipelineStage)
 															}
 														>
-															<SelectTrigger className="sm:flex-1">
+															<SelectTrigger className="rounded-xl border-border/70 sm:flex-1">
 																<SelectValue placeholder="Select stage…" />
 															</SelectTrigger>
 															<SelectContent>
@@ -1461,7 +1499,7 @@ export default function CRMPage() {
 														</Select>
 														<Button
 															size="sm"
-															className="shrink-0"
+															className="h-9 shrink-0 rounded-full px-4"
 															disabled={
 																!detailStage ||
 																detailStage === activeProspect.stage ||
@@ -1497,6 +1535,7 @@ export default function CRMPage() {
 														</p>
 														<Button
 															size="sm"
+															className="h-8 rounded-full px-4"
 															disabled={
 																setCategoriesMutation.isPending ||
 																JSON.stringify(categoryTagIds) ===
@@ -1633,17 +1672,22 @@ export default function CRMPage() {
 													</div>
 												</div>
 											)}
-										</div>
-									</div>
+										</CardContent>
+									</Card>
 
 									{/* Contact History */}
 									{(activeProspect.lastContact ||
 										activeProspect.nextContact) && (
-										<div className="space-y-3">
-											<div className="font-medium text-muted-foreground text-sm">
-												Contact History
-											</div>
-											<div className="space-y-2 rounded-lg border bg-muted/30 p-4">
+										<Card className="gap-0 overflow-hidden border-border/70 py-0 shadow-sm">
+											<CardHeader className="border-border/60 border-b bg-muted/40 px-4 py-3 dark:bg-muted/50">
+												<CardTitle className="flex items-center gap-2 font-semibold text-sm">
+													<span className="flex size-7 items-center justify-center rounded-lg bg-primary/12 text-primary">
+														<RiCalendarLine className="size-3.5" />
+													</span>
+													Contact History
+												</CardTitle>
+											</CardHeader>
+											<CardContent className="space-y-2 p-4">
 												{activeProspect.lastContact && (
 													<div className="flex items-center gap-3">
 														<RiCalendarLine className="size-4 text-muted-foreground" />
@@ -1674,8 +1718,8 @@ export default function CRMPage() {
 														</div>
 													</div>
 												)}
-											</div>
-										</div>
+											</CardContent>
+										</Card>
 									)}
 
 									{canManageTasksForSelected && activeProspect ? (
@@ -1993,14 +2037,15 @@ export default function CRMPage() {
 					</Dialog>
 
 					{/* Search and Filters */}
-					<div className="flex flex-wrap items-center gap-2 rounded-lg border bg-card px-3 py-3 sm:px-4">
+					<Card className="gap-0 overflow-hidden border-border/70 py-0 shadow-card">
+						<CardContent className="flex flex-wrap items-center gap-2.5 p-4 sm:p-5">
 						<div className="relative w-full min-w-[min(100%,240px)] flex-1 basis-full xl:basis-0">
 							<RiSearchLine className="-translate-y-1/2 absolute top-1/2 left-3 size-4 text-muted-foreground" />
 							<Input
 								placeholder="Search prospects..."
 								value={searchQuery}
 								onChange={(e) => setSearchQuery(e.target.value)}
-								className="h-9 pl-9"
+								className="h-10 rounded-xl border-border/70 bg-muted/30 pl-9 shadow-none focus-visible:bg-background"
 							/>
 						</div>
 						<div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
@@ -2011,7 +2056,7 @@ export default function CRMPage() {
 								setCurrentPage(1);
 							}}
 						>
-							<SelectTrigger className="h-9 w-full min-w-[140px] flex-1 sm:w-[150px] sm:flex-none">
+							<SelectTrigger className="h-10 w-full min-w-[140px] flex-1 rounded-full border-border/70 bg-card shadow-card sm:w-[150px] sm:flex-none">
 								<SelectValue placeholder="Category" />
 							</SelectTrigger>
 							<SelectContent>
@@ -2031,7 +2076,7 @@ export default function CRMPage() {
 								setCurrentPage(1);
 							}}
 						>
-							<SelectTrigger className="h-9 w-full min-w-[140px] flex-1 sm:w-[160px] sm:flex-none">
+							<SelectTrigger className="h-10 w-full min-w-[140px] flex-1 rounded-full border-border/70 bg-card shadow-card sm:w-[160px] sm:flex-none">
 								<RiUserLine className="mr-1.5 size-4 shrink-0 text-muted-foreground" />
 								<SelectValue placeholder="Agent" />
 							</SelectTrigger>
@@ -2062,7 +2107,7 @@ export default function CRMPage() {
 								setCurrentPage(1);
 							}}
 						>
-							<SelectTrigger className="h-9 w-full min-w-[140px] flex-1 sm:w-[150px] sm:flex-none">
+							<SelectTrigger className="h-10 w-full min-w-[140px] flex-1 rounded-full border-border/70 bg-card shadow-card sm:w-[150px] sm:flex-none">
 								<SelectValue placeholder="Lead Stage" />
 							</SelectTrigger>
 							<SelectContent>
@@ -2082,7 +2127,7 @@ export default function CRMPage() {
 								setCurrentPage(1);
 							}}
 						>
-							<SelectTrigger className="h-9 w-full min-w-[120px] flex-1 sm:w-[130px] sm:flex-none">
+							<SelectTrigger className="h-10 w-full min-w-[120px] flex-1 rounded-full border-border/70 bg-card shadow-card sm:w-[130px] sm:flex-none">
 								<SelectValue placeholder="Status" />
 							</SelectTrigger>
 							<SelectContent>
@@ -2092,30 +2137,35 @@ export default function CRMPage() {
 							</SelectContent>
 						</Select>
 						</div>
-					</div>
+						</CardContent>
+					</Card>
 
 					{/* Prospects View - Kanban or List */}
 					{viewMode === "kanban" ? (
 						// Kanban Board View
 						<div className="flex flex-col gap-4">
 							{isLoadingProspects ? (
-								<div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-5">
+								<div className="flex h-[min(75vh,calc(100dvh-13rem))] gap-3 overflow-hidden">
 									{["sk-kb-1", "sk-kb-2", "sk-kb-3", "sk-kb-4", "sk-kb-5"].map(
 										(colId) => (
 											<div
 												key={colId}
-												className="rounded-lg border bg-muted/30 p-3"
+												className="w-[280px] shrink-0 rounded-2xl bg-muted/40 p-3 sm:w-[300px]"
 											>
-												<Skeleton className="mb-3 h-5 w-3/4" />
-												<div className="space-y-2">
+												<div className="mb-3 flex items-center justify-between">
+													<Skeleton className="h-4 w-28" />
+													<Skeleton className="h-5 w-8 rounded-full" />
+												</div>
+												<div className="space-y-2.5">
 													{[`${colId}-a`, `${colId}-b`].map((cardId) => (
 														<div
 															key={cardId}
-															className="rounded-md border bg-card p-3 shadow-sm"
+															className="rounded-xl border border-border/40 bg-card p-3.5 shadow-sm"
 														>
 															<Skeleton className="mb-2 h-4 w-full" />
 															<Skeleton className="h-3 w-3/4" />
-															<div className="mt-2 flex gap-1">
+															<div className="mt-2 flex justify-between">
+																<Skeleton className="h-3 w-16" />
 																<Skeleton className="h-5 w-14 rounded-full" />
 															</div>
 														</div>
@@ -2158,35 +2208,28 @@ export default function CRMPage() {
 								<div className="flex flex-col gap-3">
 									{["sk-lv-1", "sk-lv-2", "sk-lv-3", "sk-lv-4", "sk-lv-5"].map(
 										(id) => (
-											<Card key={id}>
-												<CardContent className="p-4">
-													<div className="flex items-start justify-between">
+											<Card
+												key={id}
+												className="gap-0 overflow-hidden border-border/70 py-0 shadow-card"
+											>
+												<CardContent className="p-4 sm:p-5">
+													<div className="flex items-start justify-between gap-3">
 														<div className="flex-1 space-y-3">
-															{/* Name */}
 															<div className="flex items-center gap-2">
-																<Skeleton className="h-4 w-4 rounded" />
+																<Skeleton className="size-9 rounded-xl" />
 																<Skeleton className="h-4 w-36" />
+																<Skeleton className="h-5 w-16 rounded-full" />
 															</div>
-															{/* Contact */}
 															<div className="flex flex-wrap gap-4">
 																<Skeleton className="h-3.5 w-40" />
 																<Skeleton className="h-3.5 w-32" />
 															</div>
-															{/* Badges */}
 															<div className="flex gap-2">
 																<Skeleton className="h-5 w-16 rounded-full" />
 																<Skeleton className="h-5 w-24 rounded-full" />
 															</div>
-															{/* Details row */}
-															<div className="flex gap-4">
-																<Skeleton className="h-3.5 w-32" />
-																<Skeleton className="h-5 w-20 rounded-full" />
-															</div>
 														</div>
-														<div className="ml-4 flex gap-2">
-															<Skeleton className="h-8 w-8 rounded-md" />
-															<Skeleton className="h-8 w-8 rounded-md" />
-														</div>
+														<Skeleton className="size-8 rounded-full" />
 													</div>
 												</CardContent>
 											</Card>
@@ -2216,24 +2259,39 @@ export default function CRMPage() {
 								</div>
 							) : (
 								displayedProspects.map((prospect) => (
-									<Card key={prospect.id}>
-										<CardContent className="p-4">
-											<div className="flex items-start justify-between">
-												<div className="flex-1 space-y-3">
-													{/* Name */}
-													<div className="flex items-center gap-2">
-														<RiUserLine className="size-4 text-muted-foreground" />
-														<span className="font-medium">{prospect.name}</span>
+									<Card
+										key={prospect.id}
+										className="gap-0 overflow-hidden border-border/70 py-0 shadow-card transition-shadow hover:shadow-md"
+									>
+										<CardContent className="p-4 sm:p-5">
+											<div className="flex items-start justify-between gap-3">
+												<div className="min-w-0 flex-1 space-y-3">
+													<div className="flex flex-wrap items-center gap-2">
+														<span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary/12 font-semibold text-primary text-sm">
+															{prospect.name
+																.trim()
+																.split(/\s+/)
+																.slice(0, 2)
+																.map((p) => p[0] ?? "")
+																.join("")
+																.toUpperCase() || "?"}
+														</span>
+														<span className="font-semibold text-sm sm:text-base">
+															{prospect.name}
+														</span>
+														<StatusBadge status={prospect.status} />
+														<StageBadge stage={prospect.stage} />
 													</div>
 
-													{/* Contact Info */}
-													<div className="flex flex-wrap items-center gap-4 text-muted-foreground text-sm">
-														<div className="flex items-center gap-2">
-															<RiMailLine className="size-4" />
-															<span>{prospect.email}</span>
+													<div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-muted-foreground text-sm">
+														<div className="flex items-center gap-1.5">
+															<RiMailLine className="size-3.5 shrink-0" />
+															<span className="truncate">
+																{prospect.email || "—"}
+															</span>
 														</div>
-														<div className="flex items-center gap-2">
-															<RiPhoneLine className="size-4" />
+														<div className="flex items-center gap-1.5">
+															<RiPhoneLine className="size-3.5 shrink-0" />
 															<span>
 																{prospect.phone?.trim() ||
 																	(prospect.whatsappUsername
@@ -2243,99 +2301,62 @@ export default function CRMPage() {
 														</div>
 													</div>
 
-													{/* Tags */}
 													{(prospect.tagNames &&
 														prospect.tagNames.length > 0) ||
 													prospect.tags?.trim() ? (
-														<div className="flex flex-wrap items-center gap-2">
+														<div className="flex flex-wrap items-center gap-1.5">
 															{prospect.tagNames && prospect.tagNames.length > 0
 																? prospect.tagNames.map((tag) => (
-																		<Badge
+																		<span
 																			key={tag}
-																			variant="secondary"
-																			className="text-xs"
+																			className="inline-flex rounded-full bg-muted px-2 py-0.5 font-medium text-[11px] text-muted-foreground"
 																		>
 																			{tag}
-																		</Badge>
+																		</span>
 																	))
 																: prospect.tags
 																	? prospect.tags.split(",").map((tag) => (
-																			<Badge
+																			<span
 																				key={tag.trim()}
-																				variant="secondary"
-																				className="text-xs"
+																				className="inline-flex rounded-full bg-muted px-2 py-0.5 font-medium text-[11px] text-muted-foreground"
 																			>
 																				{tag.trim()}
-																			</Badge>
+																			</span>
 																		))
 																	: null}
 														</div>
 													) : null}
 
-													{/* Details */}
-													<div className="flex flex-wrap items-center gap-4 text-sm">
-														<div className="flex items-center gap-2">
-															<RiMapPinLine className="size-4 text-muted-foreground" />
-															<span className="text-muted-foreground">
-																Source: {prospect.source}
+													<div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-muted-foreground text-xs">
+														<span className="inline-flex items-center gap-1">
+															<RiMapPinLine className="size-3.5" />
+															Source: {prospect.source}
+														</span>
+														{prospect.agentName ? (
+															<span className="inline-flex items-center gap-1">
+																<RiUserLine className="size-3.5" />
+																Owner: {prospect.agentName}
 															</span>
-														</div>
-														<div className="flex items-center gap-2">
-															<RiLinksLine className="size-4 text-muted-foreground" />
-															<span className="text-muted-foreground">
-																Lead Stage:
+														) : null}
+														{prospect.nextContact ? (
+															<span className="inline-flex items-center gap-1">
+																<RiCalendarLine className="size-3.5" />
+																Next:{" "}
+																{formatContactDate(prospect.nextContact)}
 															</span>
-															<StageBadge stage={prospect.stage} />
-														</div>
-														{prospect.projectName && (
-															<div className="flex items-center gap-2">
-																<RiHomeLine className="size-4 text-muted-foreground" />
-																<span className="text-muted-foreground">
-																	Project: {prospect.projectName}
-																</span>
-															</div>
-														)}
-														{prospect.agentName && (
-															<div className="flex items-center gap-2">
-																<RiUserLine className="size-4 text-muted-foreground" />
-																<span className="text-muted-foreground">
-																	Owner: {prospect.agentName}
-																</span>
-															</div>
-														)}
-														{prospect.lastContact && (
-															<div className="flex items-center gap-2">
-																<RiCalendarLine className="size-4 text-muted-foreground" />
-																<span className="text-muted-foreground">
-																	Last:{" "}
-																	{formatContactDate(prospect.lastContact)}
-																</span>
-															</div>
-														)}
-														{prospect.nextContact && (
-															<div className="flex items-center gap-2">
-																<RiCalendarLine className="size-4 text-muted-foreground" />
-																<span className="text-muted-foreground">
-																	Next:{" "}
-																	{formatContactDate(prospect.nextContact)}
-																</span>
-															</div>
-														)}
+														) : null}
 													</div>
 												</div>
 
-												{/* Action Buttons */}
-												<div className="flex items-center gap-2">
-													<Button
-														variant="outline"
-														size="sm"
-														onClick={() => handleView(prospect)}
-														className="cursor-pointer border-green-600/60 text-green-600 hover:bg-green-600/10 hover:text-green-700 dark:border-green-500/50 dark:text-green-400 dark:hover:bg-green-600/20 dark:hover:text-green-300"
-													>
-														<RiEyeLine className="mr-2 h-4 w-4" />
-														View
-													</Button>
-												</div>
+												<Button
+													variant="outline"
+													size="icon"
+													onClick={() => handleView(prospect)}
+													className={actionBtnClass}
+													aria-label={`View ${prospect.name}`}
+												>
+													<RiEyeLine className="size-4" />
+												</Button>
 											</div>
 										</CardContent>
 									</Card>
@@ -2346,7 +2367,7 @@ export default function CRMPage() {
 
 					{/* Pagination - Only show in List View */}
 					{viewMode === "list" && totalPages > 0 && (
-						<div className="flex items-center justify-between">
+						<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 							<div className="text-muted-foreground text-sm">
 								Showing {(currentPage - 1) * itemsPerPage + 1}-
 								{Math.min(
@@ -2359,6 +2380,7 @@ export default function CRMPage() {
 								<Button
 									variant="outline"
 									size="sm"
+									className="h-9 rounded-full border-border/70 px-4 shadow-card"
 									onClick={() =>
 										setCurrentPage((prev) => Math.max(1, prev - 1))
 									}
@@ -2369,6 +2391,7 @@ export default function CRMPage() {
 								<Button
 									variant="outline"
 									size="sm"
+									className="h-9 rounded-full border-border/70 px-4 shadow-card"
 									onClick={() =>
 										setCurrentPage((prev) => Math.min(totalPages, prev + 1))
 									}

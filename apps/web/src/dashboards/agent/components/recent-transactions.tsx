@@ -1,10 +1,18 @@
 "use client";
 
 import { Avatar } from "@/components/avatar";
-import { Badge } from "@/components/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+	Table,
+	TableBody,
+	TableCell,
+	TableHead,
+	TableHeader,
+	TableRow,
+} from "@/components/table";
 import { useAgentDashboard } from "@/contexts/agent-dashboard-context";
+import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
@@ -39,14 +47,17 @@ const useRelativeTime = (date: Date): string => {
 	return rel || "Loading...";
 };
 
-const STATUS_COLORS: Record<string, string> = {
-	draft: "bg-gray-100 text-gray-800",
-	submitted: "bg-blue-100 text-blue-800",
-	under_review: "bg-yellow-100 text-yellow-800",
-	approved: "bg-green-100 text-green-800",
-	rejected: "bg-red-100 text-red-800",
-	completed: "bg-emerald-100 text-emerald-800",
+const STATUS_PILL: Record<string, string> = {
+	draft: "bg-slate-100 text-slate-700 dark:bg-slate-800/50 dark:text-slate-300",
+	submitted: "bg-sky-100 text-sky-800 dark:bg-sky-900/35 dark:text-sky-300",
+	under_review:
+		"bg-amber-100 text-amber-800 dark:bg-amber-900/35 dark:text-amber-300",
+	approved: "bg-primary/12 text-primary",
+	rejected: "bg-rose-100 text-rose-800 dark:bg-rose-900/35 dark:text-rose-300",
+	completed:
+		"bg-emerald-100 text-emerald-800 dark:bg-emerald-900/35 dark:text-emerald-300",
 };
+
 const STATUS_LABELS: Record<string, string> = {
 	draft: "Draft",
 	submitted: "Submitted",
@@ -56,68 +67,35 @@ const STATUS_LABELS: Record<string, string> = {
 	completed: "Completed",
 };
 
-function TransactionItem({
-	transaction,
+const thClass =
+	"h-10 bg-muted/40 px-3 font-semibold text-foreground/70 text-[11px] tracking-wide uppercase";
+
+function StatusPill({ status }: { status: string | null }) {
+	return (
+		<span
+			className={cn(
+				"inline-flex rounded-full px-2.5 py-0.5 font-medium text-[11px]",
+				STATUS_PILL[status ?? ""] ?? "bg-muted text-muted-foreground",
+			)}
+		>
+			{STATUS_LABELS[status ?? ""] ?? "Unknown"}
+		</span>
+	);
+}
+
+function RelativeCell({
+	updatedAt,
 }: {
-	transaction: {
-		id: string;
-		agentId: string | null;
-		agentName: string | null;
-		propertyAddress: string;
-		propertyPrice: number;
-		clientName: string;
-		status: string | null;
-		transactionDate: string | Date | null;
-		updatedAt: string | Date | null;
-	};
+	updatedAt: string | Date | null;
 }) {
 	const rel = useRelativeTime(
-		transaction.updatedAt == null
+		updatedAt == null
 			? new Date()
-			: typeof transaction.updatedAt === "string"
-				? new Date(transaction.updatedAt)
-				: transaction.updatedAt,
+			: typeof updatedAt === "string"
+				? new Date(updatedAt)
+				: updatedAt,
 	);
-
-	return (
-		<Link
-			href={`/dashboard/transactions/${transaction.id}`}
-			className="flex items-center gap-3 rounded-lg p-1 transition-colors hover:bg-muted/50"
-		>
-			<Avatar className="size-10">
-				<div className="flex size-full items-center justify-center bg-primary/10 font-medium text-primary text-sm">
-					{(transaction.agentName ?? "?").charAt(0).toUpperCase()}
-				</div>
-			</Avatar>
-			<div className="min-w-0 flex-1">
-				<div className="mb-1 flex items-center gap-2">
-					<span className="truncate font-medium text-sm">
-						{transaction.agentName}
-					</span>
-					<Badge
-						variant="secondary"
-						className={`${STATUS_COLORS[transaction.status ?? ""] ?? "bg-gray-100 text-gray-800"} text-xs`}
-					>
-						{STATUS_LABELS[transaction.status ?? ""] ?? "Unknown"}
-					</Badge>
-				</div>
-				<div className="truncate text-muted-foreground text-xs">
-					{transaction.propertyAddress || "Property address not set"}
-				</div>
-				<div className="text-muted-foreground text-xs">
-					Client: {transaction.clientName || "Not specified"}
-				</div>
-			</div>
-			<div className="space-y-1 text-right">
-				<div className="font-medium text-sm">
-					{transaction.propertyPrice
-						? formatCurrency(transaction.propertyPrice)
-						: "Price TBD"}
-				</div>
-				<div className="text-muted-foreground text-xs">{rel}</div>
-			</div>
-		</Link>
-	);
+	return <span className="text-muted-foreground text-xs">{rel}</span>;
 }
 
 interface RecentTransactionsProps {
@@ -129,28 +107,21 @@ export function RecentTransactions({ limit = 10 }: RecentTransactionsProps) {
 
 	if (isLoading) {
 		return (
-			<Card>
-				<CardHeader>
-					<CardTitle>Team Activity</CardTitle>
+			<Card className="gap-0 overflow-hidden rounded-3xl border-border/60 py-0 shadow-card">
+				<CardHeader className="border-border/50 border-b px-5 py-4">
+					<CardTitle className="text-base">Team Activity</CardTitle>
 				</CardHeader>
-				<CardContent>
-					<div className="space-y-4">
-						{["sk-rt-1", "sk-rt-2", "sk-rt-3", "sk-rt-4", "sk-rt-5"].map(
-							(id) => (
-								<div key={id} className="flex items-center gap-3">
-									<Skeleton className="size-10 rounded-full" />
-									<div className="flex-1 space-y-1">
-										<Skeleton className="h-4 w-48" />
-										<Skeleton className="h-3 w-32" />
-									</div>
-									<div className="space-y-1 text-right">
-										<Skeleton className="h-4 w-20" />
-										<Skeleton className="h-3 w-16" />
-									</div>
-								</div>
-							),
-						)}
-					</div>
+				<CardContent className="space-y-3 p-5">
+					{["sk-rt-1", "sk-rt-2", "sk-rt-3", "sk-rt-4"].map((id) => (
+						<div key={id} className="flex items-center gap-3">
+							<Skeleton className="size-9 rounded-full" />
+							<div className="flex-1 space-y-1.5">
+								<Skeleton className="h-4 w-40" />
+								<Skeleton className="h-3 w-28" />
+							</div>
+							<Skeleton className="h-4 w-16" />
+						</div>
+					))}
 				</CardContent>
 			</Card>
 		);
@@ -162,12 +133,12 @@ export function RecentTransactions({ limit = 10 }: RecentTransactionsProps) {
 
 	if (transactions.length === 0) {
 		return (
-			<Card>
-				<CardHeader>
-					<CardTitle>Team Activity</CardTitle>
+			<Card className="gap-0 overflow-hidden rounded-3xl border-border/60 py-0 shadow-card">
+				<CardHeader className="border-border/50 border-b px-5 py-4">
+					<CardTitle className="text-base">Team Activity</CardTitle>
 				</CardHeader>
-				<CardContent>
-					<p className="text-muted-foreground text-sm">
+				<CardContent className="p-5">
+					<p className="py-6 text-center text-muted-foreground text-sm">
 						No recent transactions found.
 					</p>
 				</CardContent>
@@ -178,21 +149,85 @@ export function RecentTransactions({ limit = 10 }: RecentTransactionsProps) {
 	const displayed = transactions.slice(0, limit);
 
 	return (
-		<Card>
-			<CardHeader>
-				<CardTitle>Team Activity</CardTitle>
+		<Card className="gap-0 overflow-hidden rounded-3xl border-border/60 py-0 shadow-card">
+			<CardHeader className="border-border/50 border-b px-5 py-4">
+				<div className="flex items-center justify-between gap-2">
+					<div>
+						<CardTitle className="text-base">Team Activity</CardTitle>
+						<p className="mt-0.5 text-muted-foreground text-xs">
+							Latest team transactions
+						</p>
+					</div>
+					<span className="rounded-full bg-primary/10 px-2.5 py-1 font-semibold text-[11px] text-primary">
+						{displayed.length} recent
+					</span>
+				</div>
 			</CardHeader>
-			<CardContent>
-				<div className="space-y-4">
-					{displayed.map((t) => (
-						<TransactionItem key={t.id} transaction={t} />
-					))}
+			<CardContent className="p-0">
+				<div className="overflow-x-auto">
+					<Table>
+						<TableHeader>
+							<TableRow className="hover:bg-transparent">
+								<TableHead className={thClass}>Agent</TableHead>
+								<TableHead className={thClass}>Property / Client</TableHead>
+								<TableHead className={thClass}>Status</TableHead>
+								<TableHead className={cn(thClass, "text-right")}>
+									Value
+								</TableHead>
+							</TableRow>
+						</TableHeader>
+						<TableBody>
+							{displayed.map((t) => (
+								<TableRow
+									key={t.id}
+									className="border-border/40 transition-colors hover:bg-muted/35"
+								>
+									<TableCell className="px-3 py-3">
+										<Link
+											href={`/dashboard/transactions/${t.id}`}
+											className="flex items-center gap-2.5"
+										>
+											<Avatar className="size-9 shrink-0">
+												<div className="flex size-full items-center justify-center bg-primary/12 font-semibold text-primary text-sm">
+													{(t.agentName ?? "?").charAt(0).toUpperCase()}
+												</div>
+											</Avatar>
+											<span className="truncate font-medium text-sm">
+												{t.agentName}
+											</span>
+										</Link>
+									</TableCell>
+									<TableCell className="px-3 py-3">
+										<div className="max-w-[200px]">
+											<div className="truncate text-sm">
+												{t.propertyAddress || "Property address not set"}
+											</div>
+											<div className="truncate text-muted-foreground text-xs">
+												Client: {t.clientName || "Not specified"}
+											</div>
+										</div>
+									</TableCell>
+									<TableCell className="px-3 py-3">
+										<StatusPill status={t.status} />
+									</TableCell>
+									<TableCell className="px-3 py-3 text-right">
+										<div className="font-semibold text-sm tabular-nums">
+											{t.propertyPrice
+												? formatCurrency(t.propertyPrice)
+												: "TBD"}
+										</div>
+										<RelativeCell updatedAt={t.updatedAt} />
+									</TableCell>
+								</TableRow>
+							))}
+						</TableBody>
+					</Table>
 				</div>
 				{transactions.length >= limit && (
-					<div className="mt-4 border-t pt-4">
+					<div className="border-border/50 border-t px-5 py-3">
 						<Link
 							href="/dashboard/transactions"
-							className="text-primary text-sm hover:underline"
+							className="inline-flex items-center gap-1 font-medium text-primary text-sm hover:underline"
 						>
 							View all transactions →
 						</Link>

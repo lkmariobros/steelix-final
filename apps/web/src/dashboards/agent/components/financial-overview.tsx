@@ -1,9 +1,9 @@
 "use client";
 
-import { StatsGrid } from "@/components/stats-grid";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAgentDashboard } from "@/contexts/agent-dashboard-context";
+import { MetricCard } from "@/dashboards/admin/widgets/metric-card";
 import {
 	RiBarChartLine,
 	RiMoneyDollarCircleLine,
@@ -25,18 +25,22 @@ export function FinancialOverview() {
 	if (isLoading) {
 		return (
 			<div className="space-y-4">
-				<h2 className="font-semibold text-lg">Financial Overview</h2>
-				<div className="grid grid-cols-2 rounded-xl border border-border bg-gradient-to-br from-sidebar/60 to-sidebar min-[1200px]:grid-cols-4">
+				<div className="flex items-center justify-between">
+					<Skeleton className="h-6 w-40" />
+					<Skeleton className="h-4 w-20" />
+				</div>
+				<div className="grid items-stretch gap-4 sm:grid-cols-2 lg:grid-cols-4">
 					{["fin-sk-1", "fin-sk-2", "fin-sk-3", "fin-sk-4"].map((id) => (
-						<div key={id} className="p-4 lg:p-5">
-							<div className="flex items-center gap-4">
-								<Skeleton className="size-10 rounded-full" />
-								<div className="space-y-2">
-									<Skeleton className="h-3 w-20" />
-									<Skeleton className="h-6 w-16" />
-									<Skeleton className="h-3 w-24" />
-								</div>
+						<div
+							key={id}
+							className="overflow-hidden rounded-3xl border border-border/40 bg-card p-5 shadow-card"
+						>
+							<div className="mb-3 flex items-start justify-between">
+								<Skeleton className="h-3.5 w-24" />
+								<Skeleton className="size-11 rounded-2xl" />
 							</div>
+							<Skeleton className="mb-2 h-8 w-24" />
+							<Skeleton className="h-5 w-28 rounded-full" />
 						</div>
 					))}
 				</div>
@@ -46,11 +50,11 @@ export function FinancialOverview() {
 
 	if (!financialOverview?.overview) {
 		return (
-			<Card>
-				<CardHeader>
-					<CardTitle>Financial Overview</CardTitle>
+			<Card className="gap-0 overflow-hidden border-border/70 py-0 shadow-card">
+				<CardHeader className="border-border/60 border-b px-5 py-4">
+					<CardTitle className="text-base">Financial Overview</CardTitle>
 				</CardHeader>
-				<CardContent>
+				<CardContent className="p-5">
 					<p className="py-8 text-center text-muted-foreground text-sm">
 						No transaction data found for the selected period.
 					</p>
@@ -61,44 +65,54 @@ export function FinancialOverview() {
 
 	const { overview } = financialOverview;
 
-	const stats = [
-		{
-			title: "Total Commission",
-			value: formatCurrency(overview.totalCommission),
-			change: { value: "+12%", trend: "up" as const },
-			icon: <RiMoneyDollarCircleLine size={20} />,
-		},
-		{
-			title: "Completed Deals",
-			value: overview.completedDeals.toString(),
-			change: { value: "+8%", trend: "up" as const },
-			icon: <RiTrophyLine size={20} />,
-		},
-		{
-			title: "Pending Commission",
-			value: formatCurrency(overview.pendingCommission),
-			change: { value: "+15%", trend: "up" as const },
-			icon: <RiTimeLine size={20} />,
-		},
-		{
-			title: "Avg Deal Value",
-			value: formatCurrency(overview.averageDealValue),
-			change: { value: "+5%", trend: "up" as const },
-			icon: <RiBarChartLine size={20} />,
-		},
-	];
-
 	return (
 		<div className="space-y-4">
-			<div className="flex items-center justify-between">
-				<h2 className="font-semibold text-lg">Financial Overview</h2>
-				<div className="text-muted-foreground text-sm">
+			<div className="flex items-center justify-between gap-3">
+				<h2 className="font-semibold text-lg tracking-tight">
+					Financial Overview
+				</h2>
+				<span className="inline-flex items-center rounded-full bg-muted/60 px-2.5 py-1 font-medium text-[11px] text-muted-foreground">
 					{dateRange.startDate && dateRange.endDate
 						? `${dateRange.startDate.toLocaleDateString("en-US")} – ${dateRange.endDate.toLocaleDateString("en-US")}`
 						: "All time"}
-				</div>
+				</span>
 			</div>
-			<StatsGrid stats={stats} />
+
+			<div className="grid items-stretch gap-4 sm:grid-cols-2 lg:grid-cols-4">
+				<MetricCard
+					title="Total Commission"
+					value={formatCurrency(overview.totalCommission)}
+					changeLabel="+12% vs last week"
+					trend="up"
+					icon={<RiMoneyDollarCircleLine size={20} />}
+					sparkline={[40, 48, 42, 55, 50, 62, 58, 70, 64, 72, 68, 80]}
+					variant="gradient"
+				/>
+				<MetricCard
+					title="Completed Deals"
+					value={overview.completedDeals.toString()}
+					changeLabel="+8% vs last week"
+					trend="up"
+					icon={<RiTrophyLine size={20} />}
+					sparkline={[28, 35, 32, 40, 38, 48, 45, 52, 50, 58, 55, 62]}
+				/>
+				<MetricCard
+					title="Pending Commission"
+					value={formatCurrency(overview.pendingCommission)}
+					changeLabel="+15% vs last week"
+					trend="up"
+					icon={<RiTimeLine size={20} />}
+					sparkline={[35, 42, 38, 50, 45, 55, 52, 60, 58, 65, 62, 70]}
+				/>
+				<MetricCard
+					title="Avg Deal Value"
+					value={formatCurrency(overview.averageDealValue)}
+					changeLabel="+5% vs last week"
+					trend="up"
+					icon={<RiBarChartLine size={20} />}
+					sparkline={[30, 32, 36, 40, 38, 44, 48, 46, 52, 55, 58, 60]}
+				/>
+			</div>
 		</div>
 	);
 }

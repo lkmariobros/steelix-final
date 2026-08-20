@@ -384,7 +384,7 @@ export default function CommissionSchemesAdminPage() {
 																	e.stopPropagation();
 																	setDeleteTarget({
 																		id: s.id,
-																		name: s.name,
+																		name: s.schemeName,
 																	});
 																}}
 																title="Delete"

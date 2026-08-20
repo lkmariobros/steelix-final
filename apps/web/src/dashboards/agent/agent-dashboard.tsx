@@ -2,7 +2,6 @@
 
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
-import { Badge } from "@/components/ui/badge";
 import {
 	Card,
 	CardContent,
@@ -27,14 +26,15 @@ import {
 	useAgentDashboard,
 } from "@/contexts/agent-dashboard-context";
 import { useTransactionModalActions } from "@/contexts/transaction-modal-context";
+import { cn } from "@/lib/utils";
 import { trpc } from "@/utils/trpc";
 import {
-	RiCheckboxCircleLine,
+	RiArrowRightLine,
 	RiCalendarLine,
+	RiCheckboxCircleLine,
 	RiFileList3Line,
 	RiLoader4Line,
 	RiRefreshLine,
-	RiArrowRightLine,
 } from "@remixicon/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -44,8 +44,6 @@ import { LeadershipBonusWidget } from "./components/leadership-bonus-widget";
 import { RecentTransactions } from "./components/recent-transactions";
 import { TeamLeaderboard } from "./components/team-leaderboard";
 import { TransactionOverview } from "./components/transaction-overview";
-
-// ─── Inner component (consumes context) ──────────────────────────────────────
 
 function DashboardContent() {
 	const router = useRouter();
@@ -58,17 +56,16 @@ function DashboardContent() {
 		refetch,
 		recentTransactions,
 		salesPipeline,
-	} =
-		useAgentDashboard();
+	} = useAgentDashboard();
 
 	const [timeFilter, setTimeFilter] = useState<string>("all");
 	const [isCalendarOpen, setIsCalendarOpen] = useState(false);
 	const [currentTime, setCurrentTime] = useState<string>("");
 	const hasAnyTransaction = (recentTransactions?.length ?? 0) > 0;
 	const hasActivePipeline =
-		(salesPipeline?.pipeline?.reduce((sum, item) => sum + item.count, 0) ?? 0) > 0;
+		(salesPipeline?.pipeline?.reduce((sum, item) => sum + item.count, 0) ?? 0) >
+		0;
 
-	// Avoid hydration mismatch for time display
 	useEffect(() => {
 		setCurrentTime(new Date().toLocaleTimeString());
 	}, []);
@@ -95,14 +92,15 @@ function DashboardContent() {
 
 	return (
 		<div>
-			{/* Header */}
-			<div className="mb-6 flex items-center justify-between gap-4">
-				<div className="space-y-1">
-					<div className="flex flex-wrap items-center gap-2">
-						<h1 className="font-semibold text-2xl">Agent Dashboard</h1>
-						<Badge variant="secondary" className="mt-0.5">
+			<div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+				<div className="min-w-0 space-y-1.5">
+					<div className="flex flex-wrap items-center gap-2.5">
+						<h1 className="font-bold text-2xl tracking-tight">
+							Agent Dashboard
+						</h1>
+						<span className="inline-flex items-center rounded-full bg-primary/12 px-2.5 py-1 font-medium text-[11px] text-primary">
 							Branch: {profileData?.agent?.branch || "—"}
-						</Badge>
+						</span>
 					</div>
 					<p className="text-muted-foreground text-sm">
 						Track your performance, manage your pipeline, and stay connected
@@ -110,10 +108,9 @@ function DashboardContent() {
 					</p>
 				</div>
 
-				{/* Controls */}
-				<div className="flex items-center gap-2">
+				<div className="flex flex-wrap items-center gap-2">
 					<Select value={timeFilter} onValueChange={handleTimeFilterChange}>
-						<SelectTrigger className="w-32">
+						<SelectTrigger className="h-9 w-[138px] rounded-full border-border/70 bg-card shadow-card">
 							<SelectValue placeholder="Time range" />
 						</SelectTrigger>
 						<SelectContent>
@@ -127,14 +124,24 @@ function DashboardContent() {
 
 					<Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
 						<PopoverTrigger asChild>
-							<Button variant="outline" size="sm">
+							<Button
+								variant="outline"
+								size="sm"
+								className={cn(
+									"h-9 gap-1.5 rounded-full border-border/70 bg-card px-3.5 shadow-card",
+									!dateRange.startDate && "text-muted-foreground",
+								)}
+							>
 								<RiCalendarLine className="size-4" />
 								{dateRange.startDate && dateRange.endDate
 									? `${dateRange.startDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${dateRange.endDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
 									: "Custom range"}
 							</Button>
 						</PopoverTrigger>
-						<PopoverContent className="w-auto p-0" align="end">
+						<PopoverContent
+							className="w-auto border-border/70 p-0 shadow-card"
+							align="end"
+						>
 							<Calendar
 								mode="range"
 								selected={{ from: dateRange.startDate, to: dateRange.endDate }}
@@ -158,87 +165,103 @@ function DashboardContent() {
 						size="sm"
 						onClick={refetch}
 						disabled={isRefetching}
+						className="h-9 gap-1.5 rounded-full border-border/70 bg-card px-3.5 shadow-card"
 					>
 						<RiRefreshLine
-							className={`size-4 ${isRefetching ? "animate-spin" : ""}`}
+							className={cn("size-4", isRefetching && "animate-spin")}
 						/>
 						{isRefetching ? "Refreshing" : "Refresh"}
 					</Button>
 				</div>
 			</div>
 
-			{/* Grid */}
-			<div className="grid gap-6">
+			<div className="grid gap-5 lg:gap-6">
 				{!hasAnyTransaction && !hasActivePipeline && (
-					<Card className="col-span-full border-dashed">
-						<CardHeader>
-							<CardTitle>Getting Started Checklist</CardTitle>
+					<Card className="col-span-full gap-0 overflow-hidden border-border/70 border-dashed py-0 shadow-card">
+						<CardHeader className="border-border/60 border-b px-5 py-4">
+							<CardTitle className="text-base">Getting Started</CardTitle>
 							<CardDescription>
 								Follow these steps to populate your dashboard and start tracking
 								commission performance.
 							</CardDescription>
 						</CardHeader>
-						<CardContent className="grid gap-3 md:grid-cols-3">
-							<div className="rounded-md border p-3">
-								<div className="mb-2 flex items-center gap-2 font-medium text-sm">
-									<RiFileList3Line className="size-4" />
-									1. Add listing / project
-								</div>
-								<p className="mb-3 text-muted-foreground text-xs">
-									Create internal listings so agents can select projects with preset
-									details and referral commission defaults.
-								</p>
-								<Button
-									variant="outline"
-									size="sm"
-									onClick={() => router.push("/dashboard/listings")}
+						<CardContent className="grid gap-3 p-5 md:grid-cols-3">
+							{[
+								{
+									icon: <RiFileList3Line className="size-4" />,
+									title: "1. Add listing / project",
+									body: "Create internal listings so agents can select projects with preset details and referral commission defaults.",
+									action: (
+										<Button
+											variant="outline"
+											size="sm"
+											className="h-8 gap-1.5 rounded-full px-3"
+											onClick={() => router.push("/dashboard/listings")}
+										>
+											Open Listings
+											<RiArrowRightLine className="size-3.5" />
+										</Button>
+									),
+								},
+								{
+									icon: <RiCheckboxCircleLine className="size-4" />,
+									title: "2. Create transaction",
+									body: "Record a sale/lease, select a project in Step 1, and verify commission breakdown in Step 3.",
+									action: (
+										<Button
+											size="sm"
+											className="h-8 gap-1.5 rounded-full px-3"
+											onClick={() => openCreateModal()}
+										>
+											New Transaction
+											<RiArrowRightLine className="size-3.5" />
+										</Button>
+									),
+								},
+								{
+									icon: <RiCalendarLine className="size-4" />,
+									title: "3. Monitor pipeline",
+									body: "After at least one transaction, use date filters and widgets to track pipeline health and pending commissions.",
+									action: (
+										<Button
+											variant="outline"
+											size="sm"
+											className="h-8 gap-1.5 rounded-full px-3"
+											onClick={() => router.push("/dashboard/transactions")}
+										>
+											View Transactions
+											<RiArrowRightLine className="size-3.5" />
+										</Button>
+									),
+								},
+							].map((step) => (
+								<div
+									key={step.title}
+									className="rounded-2xl border border-border/60 bg-card p-4 shadow-card"
 								>
-									Open Listings
-									<RiArrowRightLine className="ml-2 size-4" />
-								</Button>
-							</div>
-							<div className="rounded-md border p-3">
-								<div className="mb-2 flex items-center gap-2 font-medium text-sm">
-									<RiCheckboxCircleLine className="size-4" />
-									2. Create transaction
+									<div className="mb-2 flex items-center gap-2 font-medium text-sm">
+										<span className="flex size-7 items-center justify-center rounded-lg bg-primary/12 text-primary">
+											{step.icon}
+										</span>
+										{step.title}
+									</div>
+									<p className="mb-3 text-muted-foreground text-xs leading-relaxed">
+										{step.body}
+									</p>
+									{step.action}
 								</div>
-								<p className="mb-3 text-muted-foreground text-xs">
-									Record a sale/lease, select a project in Step 1, and verify
-									commission breakdown in Step 3.
-								</p>
-								<Button size="sm" onClick={() => openCreateModal()}>
-									New Transaction
-									<RiArrowRightLine className="ml-2 size-4" />
-								</Button>
-							</div>
-							<div className="rounded-md border p-3">
-								<div className="mb-2 flex items-center gap-2 font-medium text-sm">
-									<RiCalendarLine className="size-4" />
-									3. Monitor pipeline
-								</div>
-								<p className="mb-3 text-muted-foreground text-xs">
-									After at least one transaction, use date filters and widgets to
-									track pipeline health and pending commissions.
-								</p>
-								<Button
-									variant="outline"
-									size="sm"
-									onClick={() => router.push("/dashboard/transactions")}
-								>
-									View Transactions
-									<RiArrowRightLine className="ml-2 size-4" />
-								</Button>
-							</div>
+							))}
 						</CardContent>
 					</Card>
 				)}
+
 				<div className="col-span-full">
 					<FinancialOverview />
 				</div>
 				<div className="col-span-full">
 					<TransactionOverview />
 				</div>
-				<div className="grid gap-6 md:grid-cols-2">
+				<div className="grid gap-5 md:grid-cols-2 lg:gap-6">
 					<RecentTransactions limit={8} />
 					<TeamLeaderboard />
 				</div>
@@ -247,20 +270,27 @@ function DashboardContent() {
 				</div>
 			</div>
 
-			{/* Footer */}
-			<div className="mt-8 border-t pt-6">
-				<div className="flex items-center justify-between">
+			<div className="mt-8 border-border/60 border-t pt-5">
+				<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 					<div className="flex items-center gap-2 text-muted-foreground text-sm">
 						{isRefetching && (
 							<RiLoader4Line className="size-3.5 animate-spin" />
 						)}
 						Last updated: {currentTime || "Loading..."}
 					</div>
-					<div className="flex items-center gap-2">
-						<Button variant="outline" size="sm">
+					<div className="flex flex-wrap items-center gap-2">
+						<Button
+							variant="outline"
+							size="sm"
+							className="h-9 rounded-full border-border/70 px-4 shadow-card"
+						>
 							Export Report
 						</Button>
-						<Button size="sm" onClick={() => openCreateModal()}>
+						<Button
+							size="sm"
+							className="h-9 rounded-full px-4"
+							onClick={() => openCreateModal()}
+						>
 							New Transaction
 						</Button>
 					</div>
@@ -269,8 +299,6 @@ function DashboardContent() {
 		</div>
 	);
 }
-
-// ─── Public export (wraps with provider) ─────────────────────────────────────
 
 interface AgentDashboardProps {
 	className?: string;
