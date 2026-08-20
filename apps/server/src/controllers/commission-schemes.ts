@@ -71,6 +71,11 @@ export const commissionSchemesRouter = router({
 					tierName: t.tierName,
 					commissionPercent: t.commissionPercent,
 					overridePercent: t.overridePercent ?? 0,
+					immediateUplineOverridePercent:
+						t.immediateUplineOverridePercent ?? t.overridePercent ?? 0,
+					teamManagerOverridePercent: t.teamManagerOverridePercent ?? 0,
+					groupManagerOverridePercent: t.groupManagerOverridePercent ?? 0,
+					directorOverridePercent: t.directorOverridePercent ?? 0,
 					effectiveFrom: t.effectiveFrom,
 					effectiveTo: t.effectiveTo ?? null,
 					isActive: t.isActive ?? true,

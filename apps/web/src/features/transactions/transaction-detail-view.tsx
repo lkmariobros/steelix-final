@@ -340,18 +340,61 @@ export function TransactionDetailView({
 							{typeof bd.sstAmount === "number" ? (
 								<DetailRow label="SST" value={formatRm(bd.sstAmount)} />
 							) : null}
-							{typeof bd.overridePercent === "number" ? (
-								<DetailRow
-									label="Upline override"
-									value={`${bd.overridePercent}%`}
-								/>
-							) : null}
-							{typeof bd.overrideGrossCommission === "number" &&
-							bd.overrideGrossCommission > 0 ? (
-								<DetailRow
-									label="Override gross"
-									value={formatRm(bd.overrideGrossCommission)}
-								/>
+							{Array.isArray(bd.overrideLayers) &&
+							bd.overrideLayers.length > 0 ? (
+								<div className="col-span-full space-y-2 rounded-md border bg-muted/20 p-3">
+									<p className="font-medium text-xs">
+										Upline override layers (paid separately; not deducted from
+										agent)
+									</p>
+									{(
+										bd.overrideLayers as Array<{
+											label?: string;
+											percent?: number;
+											payeeName?: string | null;
+											grossCommission?: number;
+											netCommission?: number;
+										}>
+									)
+										.filter(
+											(layer) =>
+												typeof layer.percent === "number" &&
+												layer.percent > 0,
+										)
+										.map((layer) => (
+											<div
+												key={`${layer.label}-${layer.percent}`}
+												className="grid gap-1 text-sm sm:grid-cols-3"
+											>
+												<span className="text-muted-foreground">
+													{layer.label}
+													{layer.payeeName ? ` · ${layer.payeeName}` : ""}
+												</span>
+												<span>{layer.percent}%</span>
+												<span className="tabular-nums">
+													{typeof layer.netCommission === "number"
+														? formatRm(layer.netCommission)
+														: typeof layer.grossCommission === "number"
+															? formatRm(layer.grossCommission)
+															: "—"}
+												</span>
+											</div>
+										))}
+								</div>
+							) : typeof bd.overridePercent === "number" ? (
+								<>
+									<DetailRow
+										label="Upline override"
+										value={`${bd.overridePercent}%`}
+									/>
+									{typeof bd.overrideGrossCommission === "number" &&
+									bd.overrideGrossCommission > 0 ? (
+										<DetailRow
+											label="Override gross"
+											value={formatRm(bd.overrideGrossCommission)}
+										/>
+									) : null}
+								</>
 							) : null}
 							{typeof bd.agentNetCommission === "number" ? (
 								<DetailRow

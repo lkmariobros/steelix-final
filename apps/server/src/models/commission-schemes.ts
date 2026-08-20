@@ -68,10 +68,44 @@ export const commissionSchemeTiers = pgTable(
 			precision: 6,
 			scale: 3,
 		}).notNull(),
+		/**
+		 * Legacy single override %. Kept for old rows; new writes also set
+		 * immediateUplineOverridePercent. Prefer the 4 layer columns below.
+		 */
 		overridePercent: decimal("override_percent", {
 			precision: 6,
 			scale: 3,
-		}).notNull().default("0.000"),
+		})
+			.notNull()
+			.default("0.000"),
+		/** Layer 1 — direct recruiter (or deal team leader if no recruiter). */
+		immediateUplineOverridePercent: decimal(
+			"immediate_upline_override_percent",
+			{ precision: 6, scale: 3 },
+		)
+			.notNull()
+			.default("0.000"),
+		/** Layer 2 — recruiter’s recruiter. */
+		teamManagerOverridePercent: decimal("team_manager_override_percent", {
+			precision: 6,
+			scale: 3,
+		})
+			.notNull()
+			.default("0.000"),
+		/** Layer 3. */
+		groupManagerOverridePercent: decimal("group_manager_override_percent", {
+			precision: 6,
+			scale: 3,
+		})
+			.notNull()
+			.default("0.000"),
+		/** Layer 4. */
+		directorOverridePercent: decimal("director_override_percent", {
+			precision: 6,
+			scale: 3,
+		})
+			.notNull()
+			.default("0.000"),
 		effectiveFrom: date("effective_from").notNull(),
 		effectiveTo: date("effective_to"),
 		isActive: boolean("is_active").notNull().default(true),
@@ -95,7 +129,32 @@ export const commissionSchemeTierInputSchema = z.object({
 	id: z.string().uuid().optional(),
 	tierName: z.string().min(1),
 	commissionPercent: z.coerce.number().min(0).max(100),
-	overridePercent: z.coerce.number().min(0).max(100).default(0),
+	/** @deprecated Prefer immediateUplineOverridePercent; kept for older clients. */
+	overridePercent: z.coerce.number().min(0).max(100).optional().default(0),
+	immediateUplineOverridePercent: z.coerce
+		.number()
+		.min(0)
+		.max(100)
+		.optional()
+		.default(0),
+	teamManagerOverridePercent: z.coerce
+		.number()
+		.min(0)
+		.max(100)
+		.optional()
+		.default(0),
+	groupManagerOverridePercent: z.coerce
+		.number()
+		.min(0)
+		.max(100)
+		.optional()
+		.default(0),
+	directorOverridePercent: z.coerce
+		.number()
+		.min(0)
+		.max(100)
+		.optional()
+		.default(0),
 	effectiveFrom: z.coerce.date(),
 	effectiveTo: z.coerce.date().optional().nullable(),
 	isActive: z.boolean().default(true),

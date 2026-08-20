@@ -11,11 +11,74 @@ export type CommissionTierResolved = {
 	id: string;
 	tierName: string;
 	commissionPercent: number;
+	/** Legacy total / layer-1 fallback when new columns were empty. */
 	overridePercent: number;
+	immediateUplineOverridePercent: number;
+	teamManagerOverridePercent: number;
+	groupManagerOverridePercent: number;
+	directorOverridePercent: number;
 	effectiveFrom: string;
 	effectiveTo: string | null;
 	isActive: boolean;
 };
+
+/** Normalize tier override rates; old rows may only have overridePercent. */
+export function resolveOverrideLayerRates(tier: {
+	overridePercent?: number | null;
+	immediateUplineOverridePercent?: number | null;
+	teamManagerOverridePercent?: number | null;
+	groupManagerOverridePercent?: number | null;
+	directorOverridePercent?: number | null;
+}): {
+	immediateUplineOverridePercent: number;
+	teamManagerOverridePercent: number;
+	groupManagerOverridePercent: number;
+	directorOverridePercent: number;
+	/** Sum of layers (handy for list previews). */
+	overridePercent: number;
+} {
+	const legacy = Number(tier.overridePercent ?? 0);
+	const immediate = Number(tier.immediateUplineOverridePercent ?? 0);
+	const teamManager = Number(tier.teamManagerOverridePercent ?? 0);
+	const groupManager = Number(tier.groupManagerOverridePercent ?? 0);
+	const director = Number(tier.directorOverridePercent ?? 0);
+	const hasNew =
+		immediate > 0 || teamManager > 0 || groupManager > 0 || director > 0;
+	const immediateResolved = hasNew ? immediate : legacy;
+	const rates = {
+		immediateUplineOverridePercent: immediateResolved,
+		teamManagerOverridePercent: teamManager,
+		groupManagerOverridePercent: groupManager,
+		directorOverridePercent: director,
+	};
+	return {
+		...rates,
+		overridePercent:
+			rates.immediateUplineOverridePercent +
+			rates.teamManagerOverridePercent +
+			rates.groupManagerOverridePercent +
+			rates.directorOverridePercent,
+	};
+}
+
+function mapTierRow(t: typeof commissionSchemeTiers.$inferSelect): CommissionTierResolved {
+	const rates = resolveOverrideLayerRates({
+		overridePercent: Number(t.overridePercent),
+		immediateUplineOverridePercent: Number(t.immediateUplineOverridePercent),
+		teamManagerOverridePercent: Number(t.teamManagerOverridePercent),
+		groupManagerOverridePercent: Number(t.groupManagerOverridePercent),
+		directorOverridePercent: Number(t.directorOverridePercent),
+	});
+	return {
+		id: t.id,
+		tierName: t.tierName,
+		commissionPercent: Number(t.commissionPercent),
+		...rates,
+		effectiveFrom: String(t.effectiveFrom),
+		effectiveTo: t.effectiveTo ? String(t.effectiveTo) : null,
+		isActive: t.isActive,
+	};
+}
 
 export type CommissionSchemeResolved = {
 	id: string;
@@ -38,6 +101,63 @@ function toPgDate(d: Date) {
 	// drizzle `date()` expects YYYY-MM-DD (string)
 	return d.toISOString().slice(0, 10);
 }
+
+function tierInsertValues(
+	schemeId: string,
+	t: {
+		tierName: string;
+		commissionPercent: number;
+		overridePercent?: number;
+		immediateUplineOverridePercent?: number;
+		teamManagerOverridePercent?: number;
+		groupManagerOverridePercent?: number;
+		directorOverridePercent?: number;
+		effectiveFrom: Date | string;
+		effectiveTo?: Date | string | null;
+		isActive: boolean;
+	},
+) {
+	const rates = resolveOverrideLayerRates(t);
+	const from =
+		typeof t.effectiveFrom === "string"
+			? t.effectiveFrom.slice(0, 10)
+			: toPgDate(t.effectiveFrom);
+	const to = t.effectiveTo
+		? typeof t.effectiveTo === "string"
+			? String(t.effectiveTo).slice(0, 10)
+			: toPgDate(t.effectiveTo)
+		: null;
+	return {
+		schemeId,
+		tierName: t.tierName,
+		commissionPercent: String(t.commissionPercent),
+		// Keep legacy column in sync with layer 1 for older readers.
+		overridePercent: String(rates.immediateUplineOverridePercent),
+		immediateUplineOverridePercent: String(
+			rates.immediateUplineOverridePercent,
+		),
+		teamManagerOverridePercent: String(rates.teamManagerOverridePercent),
+		groupManagerOverridePercent: String(rates.groupManagerOverridePercent),
+		directorOverridePercent: String(rates.directorOverridePercent),
+		effectiveFrom: from,
+		effectiveTo: to,
+		isActive: t.isActive,
+	};
+}
+
+export type CommissionSchemeTierWrite = {
+	tierName: string;
+	commissionPercent: number;
+	overridePercent?: number;
+	immediateUplineOverridePercent?: number;
+	teamManagerOverridePercent?: number;
+	groupManagerOverridePercent?: number;
+	directorOverridePercent?: number;
+	effectiveFrom: Date;
+	effectiveTo?: Date | null;
+	isActive: boolean;
+	id?: string;
+};
 
 export async function listCommissionSchemesAdmin(opts: {
 	search?: string;
@@ -108,15 +228,7 @@ export async function listCommissionSchemesAdmin(opts: {
 	const tiersByScheme: Record<string, CommissionTierResolved[]> = {};
 	for (const t of tiers) {
 		tiersByScheme[t.schemeId] ??= [];
-		tiersByScheme[t.schemeId].push({
-			id: t.id,
-			tierName: t.tierName,
-			commissionPercent: Number(t.commissionPercent),
-			overridePercent: Number(t.overridePercent),
-			effectiveFrom: String(t.effectiveFrom),
-			effectiveTo: t.effectiveTo ? String(t.effectiveTo) : null,
-			isActive: t.isActive,
-		});
+		tiersByScheme[t.schemeId].push(mapTierRow(t));
 	}
 
 	const schemes: CommissionSchemeResolved[] = rows.map((r) => ({
@@ -160,11 +272,7 @@ export async function getCommissionSchemeAdmin(id: string) {
 	return {
 		...row.scheme,
 		blockListingTitle: row.blockTitle ?? null,
-		tiers: tiers.map((t) => ({
-			...t,
-			commissionPercent: Number(t.commissionPercent),
-			overridePercent: Number(t.overridePercent),
-		})),
+		tiers: tiers.map((t) => mapTierRow(t)),
 	};
 }
 
@@ -179,14 +287,7 @@ export async function createCommissionSchemeAdmin(input: {
 	incSst: boolean;
 	sstPercent: number;
 	sstBorneBy: "client" | "agent";
-	tiers: Array<{
-		tierName: string;
-		commissionPercent: number;
-		overridePercent: number;
-		effectiveFrom: Date;
-		effectiveTo?: Date | null;
-		isActive: boolean;
-	}>;
+	tiers: CommissionSchemeTierWrite[];
 	actorId: string;
 }) {
 	const [created] = await db
@@ -207,17 +308,9 @@ export async function createCommissionSchemeAdmin(input: {
 		})
 		.returning();
 
-	await db.insert(commissionSchemeTiers).values(
-		input.tiers.map((t) => ({
-			schemeId: created.id,
-			tierName: t.tierName,
-			commissionPercent: String(t.commissionPercent),
-			overridePercent: String(t.overridePercent ?? 0),
-			effectiveFrom: toPgDate(t.effectiveFrom),
-			effectiveTo: t.effectiveTo ? toPgDate(t.effectiveTo) : null,
-			isActive: t.isActive,
-		})),
-	);
+	await db
+		.insert(commissionSchemeTiers)
+		.values(input.tiers.map((t) => tierInsertValues(created.id, t)));
 
 	return created;
 }
@@ -236,15 +329,7 @@ export async function updateCommissionSchemeAdmin(input: {
 		sstPercent: number;
 		sstBorneBy: "client" | "agent";
 	}>;
-	tiers?: Array<{
-		id?: string;
-		tierName: string;
-		commissionPercent: number;
-		overridePercent: number;
-		effectiveFrom: Date;
-		effectiveTo?: Date | null;
-		isActive: boolean;
-	}>;
+	tiers?: CommissionSchemeTierWrite[];
 	actorId: string;
 }) {
 	const [updated] = await db
@@ -273,21 +358,12 @@ export async function updateCommissionSchemeAdmin(input: {
 	if (!updated) throw new Error("Scheme not found");
 
 	if (input.tiers) {
-		// Replace tiers (simple + safe; avoids tricky partial updates)
 		await db
 			.delete(commissionSchemeTiers)
 			.where(eq(commissionSchemeTiers.schemeId, input.id));
-		await db.insert(commissionSchemeTiers).values(
-			input.tiers.map((t) => ({
-				schemeId: input.id,
-				tierName: t.tierName,
-				commissionPercent: String(t.commissionPercent),
-				overridePercent: String(t.overridePercent ?? 0),
-				effectiveFrom: toPgDate(t.effectiveFrom),
-				effectiveTo: t.effectiveTo ? toPgDate(t.effectiveTo) : null,
-				isActive: t.isActive,
-			})),
-		);
+		await db
+			.insert(commissionSchemeTiers)
+			.values(input.tiers.map((t) => tierInsertValues(input.id, t)));
 	}
 
 	return updated;
@@ -319,15 +395,24 @@ export async function duplicateCommissionSchemeAdmin(opts: {
 		.returning();
 
 	await db.insert(commissionSchemeTiers).values(
-		existing.tiers.map((t: any) => ({
-			schemeId: dup.id,
-			tierName: t.tierName,
-			commissionPercent: String(t.commissionPercent),
-			overridePercent: String(t.overridePercent ?? 0),
-			effectiveFrom: t.effectiveFrom,
-			effectiveTo: t.effectiveTo ?? null,
-			isActive: t.isActive ?? true,
-		})),
+		existing.tiers.map((t) =>
+			tierInsertValues(dup.id, {
+				tierName: t.tierName,
+				commissionPercent: Number(t.commissionPercent),
+				overridePercent: Number(t.overridePercent ?? 0),
+				immediateUplineOverridePercent: Number(
+					t.immediateUplineOverridePercent ?? 0,
+				),
+				teamManagerOverridePercent: Number(t.teamManagerOverridePercent ?? 0),
+				groupManagerOverridePercent: Number(
+					t.groupManagerOverridePercent ?? 0,
+				),
+				directorOverridePercent: Number(t.directorOverridePercent ?? 0),
+				effectiveFrom: t.effectiveFrom,
+				effectiveTo: t.effectiveTo ?? null,
+				isActive: t.isActive ?? true,
+			}),
+		),
 	);
 
 	return dup;

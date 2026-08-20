@@ -141,7 +141,8 @@ export default function CommissionSchemesAdminPage() {
 							</h1>
 							<p className="text-muted-foreground text-sm">
 								Agent receives 100% of announced commission; uplines receive
-								override % from scheme tiers.
+								4-layer override % from scheme tiers (paid separately; not
+								deducted from agent).
 							</p>
 						</div>
 						<Button className="h-9" onClick={() => setIsCreateOpen(true)}>
@@ -226,7 +227,7 @@ export default function CommissionSchemesAdminPage() {
 											<th className="px-4 py-3 text-left">Shortform</th>
 											<th className="px-4 py-3 text-left">Project</th>
 											<th className="px-4 py-3 text-left">Commission %</th>
-											<th className="px-4 py-3 text-left">Upline override %</th>
+											<th className="px-4 py-3 text-left">Override layers %</th>
 											<th className="px-4 py-3 text-left">Description</th>
 											<th className="px-4 py-3 text-left">SST</th>
 											<th className="px-4 py-3 text-left">Updated</th>
@@ -275,14 +276,55 @@ export default function CommissionSchemesAdminPage() {
 																: "—";
 														})()}
 													</td>
-													<td className="px-4 py-3 font-medium text-primary tabular-nums">
+													<td className="px-4 py-3 font-medium text-primary text-xs tabular-nums">
 														{(() => {
 															const tier =
 																s.tiers?.find((t) => t.isActive) ??
 																s.tiers?.[0];
-															return tier
-																? `${tier.overridePercent.toFixed(2)}%`
-																: "—";
+															if (!tier) return "—";
+															const legacy = Number(tier.overridePercent ?? 0);
+															const immediate = Number(
+																(
+																	tier as {
+																		immediateUplineOverridePercent?: number;
+																	}
+																).immediateUplineOverridePercent ?? 0,
+															);
+															const team = Number(
+																(
+																	tier as {
+																		teamManagerOverridePercent?: number;
+																	}
+																).teamManagerOverridePercent ?? 0,
+															);
+															const group = Number(
+																(
+																	tier as {
+																		groupManagerOverridePercent?: number;
+																	}
+																).groupManagerOverridePercent ?? 0,
+															);
+															const director = Number(
+																(
+																	tier as {
+																		directorOverridePercent?: number;
+																	}
+																).directorOverridePercent ?? 0,
+															);
+															const hasNew =
+																immediate > 0 ||
+																team > 0 ||
+																group > 0 ||
+																director > 0;
+															const parts = [
+																hasNew ? immediate : legacy,
+																team,
+																group,
+																director,
+															]
+																.filter((n) => n > 0)
+																.map((n) => `${n.toFixed(2)}%`);
+															return parts.length ? parts.join(" · ") : "0%";
 														})()}
 													</td>
 													<td className="px-4 py-3">{s.description}</td>

@@ -204,21 +204,51 @@ export const transactions = pgTable("transactions", {
 		tierId: string;
 		tierName: string;
 		commissionPercent: number;
+		/** Sum of layer rates (or legacy single %). */
 		overridePercent: number;
+		immediateUplineOverridePercent?: number;
+		teamManagerOverridePercent?: number;
+		groupManagerOverridePercent?: number;
+		directorOverridePercent?: number;
+		overrideLayers?: Array<{
+			layer: string;
+			label: string;
+			percent: number;
+			payeeAgentId: string | null;
+			payeeName: string | null;
+			grossCommission: number;
+			netCommission: number;
+			sstAmount: number;
+		}>;
 		incSst: boolean;
 		sstPercent: number;
 		sstBorneBy: "client" | "agent";
 		lockedAt: string;
 	}>(),
 	commissionBreakdown: jsonb("commission_breakdown").$type<{
+		marketType?: "primary" | "secondary";
 		spaPrice: number;
 		nettPrice: number;
 		commissionRatePercent: number;
-		baseCommission: number;
+		baseCommission?: number;
 		grossCommission: number;
 		sstPercent: number;
 		sstAmount: number;
 		agentNetCommission: number;
+		agentSharePercent?: number;
+		overridePercent?: number;
+		overrideGrossCommission?: number;
+		overrideNetCommission?: number;
+		overrideLayers?: Array<{
+			layer: string;
+			label: string;
+			percent: number;
+			payeeAgentId: string | null;
+			payeeName: string | null;
+			grossCommission: number;
+			netCommission: number;
+			sstAmount: number;
+		}>;
 	}>(),
 	/** Admin override to agent net commission (optional) */
 	commissionOverrideAgentNet: decimal("commission_override_agent_net", {
@@ -490,6 +520,24 @@ export const selectTransactionSchema = z.object({
 			tierName: z.string(),
 			commissionPercent: z.number(),
 			overridePercent: z.number(),
+			immediateUplineOverridePercent: z.number().optional(),
+			teamManagerOverridePercent: z.number().optional(),
+			groupManagerOverridePercent: z.number().optional(),
+			directorOverridePercent: z.number().optional(),
+			overrideLayers: z
+				.array(
+					z.object({
+						layer: z.string(),
+						label: z.string(),
+						percent: z.number(),
+						payeeAgentId: z.string().nullable(),
+						payeeName: z.string().nullable(),
+						grossCommission: z.number(),
+						netCommission: z.number(),
+						sstAmount: z.number(),
+					}),
+				)
+				.optional(),
 			incSst: z.boolean(),
 			sstPercent: z.number(),
 			sstBorneBy: z.enum(["client", "agent"]),
@@ -499,14 +547,33 @@ export const selectTransactionSchema = z.object({
 		.optional(),
 	commissionBreakdown: z
 		.object({
+			marketType: z.enum(["primary", "secondary"]).optional(),
 			spaPrice: z.number(),
 			nettPrice: z.number(),
 			commissionRatePercent: z.number(),
-			baseCommission: z.number(),
+			baseCommission: z.number().optional(),
 			grossCommission: z.number(),
 			sstPercent: z.number(),
 			sstAmount: z.number(),
 			agentNetCommission: z.number(),
+			agentSharePercent: z.number().optional(),
+			overridePercent: z.number().optional(),
+			overrideGrossCommission: z.number().optional(),
+			overrideNetCommission: z.number().optional(),
+			overrideLayers: z
+				.array(
+					z.object({
+						layer: z.string(),
+						label: z.string(),
+						percent: z.number(),
+						payeeAgentId: z.string().nullable(),
+						payeeName: z.string().nullable(),
+						grossCommission: z.number(),
+						netCommission: z.number(),
+						sstAmount: z.number(),
+					}),
+				)
+				.optional(),
 		})
 		.nullable()
 		.optional(),

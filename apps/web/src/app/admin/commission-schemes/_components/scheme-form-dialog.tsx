@@ -31,7 +31,10 @@ import { RiAddLine, RiDeleteBinLine, RiLoader4Line } from "@remixicon/react";
 type TierDraft = {
 	tierName: string;
 	commissionPercent: string;
-	overridePercent: string;
+	immediateUplineOverridePercent: string;
+	teamManagerOverridePercent: string;
+	groupManagerOverridePercent: string;
+	directorOverridePercent: string;
 	effectiveFrom: string;
 	effectiveTo: string;
 	isActive: boolean;
@@ -40,7 +43,10 @@ type TierDraft = {
 const emptyTier = (): TierDraft => ({
 	tierName: "Standard",
 	commissionPercent: "2.50",
-	overridePercent: "0",
+	immediateUplineOverridePercent: "0",
+	teamManagerOverridePercent: "0",
+	groupManagerOverridePercent: "0",
+	directorOverridePercent: "0",
 	effectiveFrom: new Date().toISOString().slice(0, 10),
 	effectiveTo: "",
 	isActive: true,
@@ -100,14 +106,34 @@ export function SchemeFormDialog({
 				sstPercent: String(existing.sstPercent ?? "8.00"),
 				sstBorneBy: (existing.sstBorneBy as "client" | "agent") ?? "client",
 			});
-			const t = (existing.tiers ?? []).map((x: any) => ({
-				tierName: x.tierName ?? "",
-				commissionPercent: String(x.commissionPercent ?? "0"),
-				overridePercent: String(x.overridePercent ?? "0"),
-				effectiveFrom: String(x.effectiveFrom ?? "").slice(0, 10),
-				effectiveTo: x.effectiveTo ? String(x.effectiveTo).slice(0, 10) : "",
-				isActive: Boolean(x.isActive ?? true),
-			}));
+			const t = (existing.tiers ?? []).map((x: Record<string, unknown>) => {
+				const legacy = Number(x.overridePercent ?? 0);
+				const immediate = Number(x.immediateUplineOverridePercent ?? 0);
+				const hasNew =
+					immediate > 0 ||
+					Number(x.teamManagerOverridePercent ?? 0) > 0 ||
+					Number(x.groupManagerOverridePercent ?? 0) > 0 ||
+					Number(x.directorOverridePercent ?? 0) > 0;
+				return {
+					tierName: String(x.tierName ?? ""),
+					commissionPercent: String(x.commissionPercent ?? "0"),
+					immediateUplineOverridePercent: String(
+						hasNew ? immediate : legacy,
+					),
+					teamManagerOverridePercent: String(
+						x.teamManagerOverridePercent ?? "0",
+					),
+					groupManagerOverridePercent: String(
+						x.groupManagerOverridePercent ?? "0",
+					),
+					directorOverridePercent: String(x.directorOverridePercent ?? "0"),
+					effectiveFrom: String(x.effectiveFrom ?? "").slice(0, 10),
+					effectiveTo: x.effectiveTo
+						? String(x.effectiveTo).slice(0, 10)
+						: "",
+					isActive: Boolean(x.isActive ?? true),
+				};
+			});
 			setTiers(t.length ? t : [emptyTier()]);
 			return;
 		}
@@ -168,7 +194,22 @@ export function SchemeFormDialog({
 			tiers: tiers.map((t) => ({
 				tierName: t.tierName.trim(),
 				commissionPercent: Number.parseFloat(t.commissionPercent || "0"),
-				overridePercent: Number.parseFloat(t.overridePercent || "0"),
+				immediateUplineOverridePercent: Number.parseFloat(
+					t.immediateUplineOverridePercent || "0",
+				),
+				teamManagerOverridePercent: Number.parseFloat(
+					t.teamManagerOverridePercent || "0",
+				),
+				groupManagerOverridePercent: Number.parseFloat(
+					t.groupManagerOverridePercent || "0",
+				),
+				directorOverridePercent: Number.parseFloat(
+					t.directorOverridePercent || "0",
+				),
+				// Keep legacy field aligned with layer 1 for older API consumers.
+				overridePercent: Number.parseFloat(
+					t.immediateUplineOverridePercent || "0",
+				),
 				effectiveFrom: new Date(t.effectiveFrom),
 				effectiveTo: t.effectiveTo ? new Date(t.effectiveTo) : null,
 				isActive: t.isActive,
@@ -182,9 +223,9 @@ export function SchemeFormDialog({
 				<DialogHeader className="border-b px-6 py-4 text-left">
 					<DialogTitle>{isEdit ? "Edit scheme" : "New scheme"}</DialogTitle>
 					<DialogDescription>
-						Primary market: set <strong>Commission %</strong> (agent receives 100%
-						of scheme net) and <strong>Upline override %</strong> (paid separately
-						to recruiter / team leader).
+						Primary market: set <strong>Commission %</strong> (agent receives
+						100% of scheme net) and up to <strong>4 upline override %</strong>{" "}
+						layers (paid separately; not deducted from agent).
 					</DialogDescription>
 				</DialogHeader>
 
@@ -247,8 +288,9 @@ export function SchemeFormDialog({
 						<div>
 							<p className="font-medium text-sm">Commission rate tiers</p>
 							<p className="text-muted-foreground text-xs">
-								Commission % and upline override % are set here for primary market
-								deals.
+								Commission % plus 4 override layers (Immediate Upline, Team
+								Manager, Group Manager, Director) — paid separately, not deducted
+								from agent.
 							</p>
 						</div>
 						<Button
@@ -303,23 +345,6 @@ export function SchemeFormDialog({
 										/>
 									</div>
 									<div className="space-y-1.5">
-										<Label>Upline override %</Label>
-										<p className="text-muted-foreground text-xs">
-											Paid separately to recruiter upline (not deducted from
-											agent)
-										</p>
-										<Input
-											value={t.overridePercent}
-											onChange={(e) =>
-												setTiers((p) =>
-													p.map((x, i) =>
-														i === idx ? { ...x, overridePercent: e.target.value } : x,
-													),
-												)
-											}
-										/>
-									</div>
-									<div className="space-y-1.5">
 										<Label>Tier name</Label>
 										<Input
 											value={t.tierName}
@@ -331,6 +356,40 @@ export function SchemeFormDialog({
 												)
 											}
 										/>
+									</div>
+									<div className="col-span-2 rounded-md border bg-background/60 p-3">
+										<p className="mb-2 font-medium text-sm">
+											Upline override % (paid separately; not deducted from agent)
+										</p>
+										<div className="grid grid-cols-2 gap-3">
+											{(
+												[
+													[
+														"immediateUplineOverridePercent",
+														"1. Immediate Upline",
+													],
+													["teamManagerOverridePercent", "2. Team Manager"],
+													["groupManagerOverridePercent", "3. Group Manager"],
+													["directorOverridePercent", "4. Director"],
+												] as const
+											).map(([field, label]) => (
+												<div key={field} className="space-y-1.5">
+													<Label>{label}</Label>
+													<Input
+														value={t[field]}
+														onChange={(e) =>
+															setTiers((p) =>
+																p.map((x, i) =>
+																	i === idx
+																		? { ...x, [field]: e.target.value }
+																		: x,
+																),
+															)
+														}
+													/>
+												</div>
+											))}
+										</div>
 									</div>
 									<div className="space-y-1.5">
 										<Label>Active</Label>
@@ -361,7 +420,9 @@ export function SchemeFormDialog({
 											onChange={(e) =>
 												setTiers((p) =>
 													p.map((x, i) =>
-														i === idx ? { ...x, effectiveFrom: e.target.value } : x,
+														i === idx
+															? { ...x, effectiveFrom: e.target.value }
+															: x,
 													),
 												)
 											}
@@ -375,7 +436,9 @@ export function SchemeFormDialog({
 											onChange={(e) =>
 												setTiers((p) =>
 													p.map((x, i) =>
-														i === idx ? { ...x, effectiveTo: e.target.value } : x,
+														i === idx
+															? { ...x, effectiveTo: e.target.value }
+															: x,
 													),
 												)
 											}

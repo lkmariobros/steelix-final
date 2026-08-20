@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { leadershipBonusPayments, type AgentTier } from "../models/auth";
+import { leadershipBonusPayments, user, type AgentTier } from "../models/auth";
 import type { transactions } from "../models/transactions";
 import { db } from "../utils/db";
 import {
@@ -11,11 +11,108 @@ import {
 } from "./agent-tier";
 import {
 	calculateSchemeCommission,
+	resolveOverrideLayerRates,
 	resolveSchemeForBlockAtDate,
 } from "./commission-schemes";
 import { resolveTierConfig } from "./tier-config";
 
 type TxRow = typeof transactions.$inferSelect;
+
+export const PRIMARY_OVERRIDE_LAYERS = [
+	{
+		key: "immediateUpline",
+		label: "Immediate Upline",
+		rateKey: "immediateUplineOverridePercent",
+	},
+	{
+		key: "teamManager",
+		label: "Team Manager",
+		rateKey: "teamManagerOverridePercent",
+	},
+	{
+		key: "groupManager",
+		label: "Group Manager",
+		rateKey: "groupManagerOverridePercent",
+	},
+	{
+		key: "director",
+		label: "Director",
+		rateKey: "directorOverridePercent",
+	},
+] as const;
+
+export type PrimaryOverrideLayerKey =
+	(typeof PRIMARY_OVERRIDE_LAYERS)[number]["key"];
+
+export type PrimaryOverrideLayerSnapshot = {
+	layer: PrimaryOverrideLayerKey;
+	label: string;
+	percent: number;
+	payeeAgentId: string | null;
+	payeeName: string | null;
+	grossCommission: number;
+	netCommission: number;
+	sstAmount: number;
+};
+
+/**
+ * Walk `recruitedBy` upward up to 4 levels from the selling agent.
+ * Layer 1 falls back to deal teamLeaderAgentId only when no direct recruiter exists
+ * (does not stuff remaining layers onto the team leader).
+ */
+export async function resolvePrimaryOverridePayees(
+	agentId: string,
+	teamLeaderAgentId: string | null | undefined,
+): Promise<Array<{ agentId: string; name: string } | null>> {
+	const payees: Array<{ agentId: string; name: string } | null> = [
+		null,
+		null,
+		null,
+		null,
+	];
+	const seen = new Set<string>([agentId]);
+	let currentId: string | null = agentId;
+
+	for (let i = 0; i < 4; i++) {
+		if (!currentId) break;
+		const [row]: Array<{ recruitedBy: string | null } | undefined> = await db
+			.select({
+				recruitedBy: user.recruitedBy,
+			})
+			.from(user)
+			.where(eq(user.id, currentId))
+			.limit(1);
+
+		let nextId: string | null = row?.recruitedBy ?? null;
+
+		// Optional layer-1 fallback only — never used for layers 2–4.
+		if (i === 0 && !nextId && teamLeaderAgentId) {
+			nextId = teamLeaderAgentId;
+		}
+
+		if (!nextId || nextId === agentId || seen.has(nextId)) {
+			currentId = null;
+			continue;
+		}
+
+		const [payee]: Array<{ id: string; name: string } | undefined> = await db
+			.select({ id: user.id, name: user.name })
+			.from(user)
+			.where(eq(user.id, nextId))
+			.limit(1);
+
+		if (!payee) {
+			currentId = null;
+			continue;
+		}
+
+		seen.add(payee.id);
+		payees[i] = { agentId: payee.id, name: payee.name };
+		currentId = payee.id;
+	}
+
+	return payees;
+}
 
 function getRepresentationType(tx: TxRow): RepresentationType {
 	return tx.representationType === "co_broking" ? "co_broking" : "direct";
@@ -37,6 +134,7 @@ function getCoBrokerSplit(tx: TxRow): number {
 
 /**
  * Primary market: lock project commission scheme — agent receives 100% of scheme net.
+ * Upline override is paid separately across up to 4 recruitment-chain layers.
  */
 export async function buildPrimaryCommissionPatch(
 	tx: TxRow,
@@ -78,17 +176,60 @@ export async function buildPrimaryCommissionPatch(
 		sstBorneBy: scheme.sstBorneBy,
 	});
 
-	const overridePercent = tier.overridePercent ?? 0;
-	const overrideBreakdown =
-		overridePercent > 0
-			? calculateSchemeCommission({
-					nettPrice,
-					commissionPercent: overridePercent,
-					incSst: scheme.incSst,
-					sstPercent: scheme.sstPercent,
-					sstBorneBy: scheme.sstBorneBy,
-				})
-			: null;
+	const rates = resolveOverrideLayerRates(tier);
+	const payees = await resolvePrimaryOverridePayees(
+		tx.agentId,
+		tx.teamLeaderAgentId,
+	);
+
+	const overrideLayers: PrimaryOverrideLayerSnapshot[] = [];
+	for (let i = 0; i < PRIMARY_OVERRIDE_LAYERS.length; i++) {
+		const meta = PRIMARY_OVERRIDE_LAYERS[i];
+		const percent = rates[meta.rateKey];
+		const payee = payees[i];
+		if (percent <= 0 || !payee) {
+			overrideLayers.push({
+				layer: meta.key,
+				label: meta.label,
+				percent,
+				payeeAgentId: payee?.agentId ?? null,
+				payeeName: payee?.name ?? null,
+				grossCommission: 0,
+				netCommission: 0,
+				sstAmount: 0,
+			});
+			continue;
+		}
+		const layerCalc = calculateSchemeCommission({
+			nettPrice,
+			commissionPercent: percent,
+			incSst: scheme.incSst,
+			sstPercent: scheme.sstPercent,
+			sstBorneBy: scheme.sstBorneBy,
+		});
+		overrideLayers.push({
+			layer: meta.key,
+			label: meta.label,
+			percent,
+			payeeAgentId: payee.agentId,
+			payeeName: payee.name,
+			grossCommission: layerCalc.grossCommission,
+			netCommission: layerCalc.agentNetCommission,
+			sstAmount: layerCalc.sstAmount,
+		});
+	}
+
+	const payableLayers = overrideLayers.filter(
+		(l) => l.percent > 0 && l.payeeAgentId,
+	);
+	const overrideGrossCommission = payableLayers.reduce(
+		(sum, l) => sum + l.grossCommission,
+		0,
+	);
+	const overrideNetCommission = payableLayers.reduce(
+		(sum, l) => sum + l.netCommission,
+		0,
+	);
 
 	return {
 		commissionType: "percentage" as const,
@@ -104,7 +245,12 @@ export async function buildPrimaryCommissionPatch(
 			tierId: tier.id,
 			tierName: tier.tierName,
 			commissionPercent: tier.commissionPercent,
-			overridePercent: tier.overridePercent,
+			overridePercent: rates.overridePercent,
+			immediateUplineOverridePercent: rates.immediateUplineOverridePercent,
+			teamManagerOverridePercent: rates.teamManagerOverridePercent,
+			groupManagerOverridePercent: rates.groupManagerOverridePercent,
+			directorOverridePercent: rates.directorOverridePercent,
+			overrideLayers,
 			incSst: scheme.incSst,
 			sstPercent: scheme.sstPercent,
 			sstBorneBy: scheme.sstBorneBy,
@@ -121,9 +267,10 @@ export async function buildPrimaryCommissionPatch(
 			sstAmount: breakdown.sstAmount,
 			agentNetCommission: breakdown.agentNetCommission,
 			agentSharePercent: 100,
-			overridePercent,
-			overrideGrossCommission: overrideBreakdown?.grossCommission ?? 0,
-			overrideNetCommission: overrideBreakdown?.agentNetCommission ?? 0,
+			overridePercent: rates.overridePercent,
+			overrideGrossCommission,
+			overrideNetCommission,
+			overrideLayers,
 		},
 	};
 }
@@ -222,17 +369,18 @@ export async function lockCommissionOnSubmit(
 }
 
 /**
- * Primary market upline override payee: direct recruiter first, then team leader on the deal.
- * Override amount comes from commission scheme tiers — not secondary tier config.
+ * @deprecated Prefer resolvePrimaryOverridePayees (4-layer). Kept for callers
+ * that only need layer-1 payee id.
  */
 export async function resolvePrimaryOverridePayeeAgentId(
 	agentId: string,
 	teamLeaderAgentId: string | null | undefined,
 ): Promise<string | null> {
-	const upline = await getUplineInfo(agentId);
-	const payee = upline?.uplineId ?? teamLeaderAgentId ?? null;
-	if (!payee || payee === agentId) return null;
-	return payee;
+	const [layer1] = await resolvePrimaryOverridePayees(
+		agentId,
+		teamLeaderAgentId,
+	);
+	return layer1?.agentId ?? null;
 }
 
 /**

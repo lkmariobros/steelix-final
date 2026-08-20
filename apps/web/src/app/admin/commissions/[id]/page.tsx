@@ -171,7 +171,16 @@ export default function CommissionPayoutDetailPage() {
 								{p.caseNo ? `Case ${p.caseNo}` : "Commission payout"}
 							</h1>
 							<p className="text-muted-foreground text-sm">
-								{row.agentName} · {p.payoutType === "override" ? "Override" : "Negotiator"}
+								{row.agentName} ·{" "}
+								{p.payoutType === "override"
+									? (() => {
+											const note = p.auditLog?.[0]?.notes ?? "";
+											const layer = note.match(
+												/^(Immediate Upline|Team Manager|Group Manager|Director)/,
+											)?.[1];
+											return layer ? `Override · ${layer}` : "Override";
+										})()
+									: "Negotiator"}
 							</p>
 						</div>
 						<Badge variant="outline">{p.status}</Badge>

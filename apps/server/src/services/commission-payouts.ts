@@ -22,9 +22,12 @@ import type { AgentTier } from "../models/auth";
 import { transactions } from "../models/transactions";
 import { calculateSchemeCommission } from "./commission-schemes";
 import {
+	PRIMARY_OVERRIDE_LAYERS,
 	recordSecondaryLeadershipBonus,
-	resolvePrimaryOverridePayeeAgentId,
+	resolvePrimaryOverridePayees,
+	type PrimaryOverrideLayerSnapshot,
 } from "./commission-calculation";
+import { resolveOverrideLayerRates } from "./commission-schemes";
 import { db } from "../utils/db";
 
 type TxRow = typeof transactions.$inferSelect;
@@ -52,7 +55,7 @@ function appendAudit(
 }
 
 /**
- * Creates negotiator (+ optional override) payout rows when a transaction is approved.
+ * Creates negotiator (+ up to 4 primary override) payout rows when a transaction is approved.
  * Idempotent per transaction.
  */
 export async function ensurePayoutsForApprovedTransaction(tx: TxRow) {
@@ -88,6 +91,11 @@ export async function ensurePayoutsForApprovedTransaction(tx: TxRow) {
 		blockListingTitle?: string | null;
 		commissionPercent?: number;
 		overridePercent?: number;
+		immediateUplineOverridePercent?: number;
+		teamManagerOverridePercent?: number;
+		groupManagerOverridePercent?: number;
+		directorOverridePercent?: number;
+		overrideLayers?: PrimaryOverrideLayerSnapshot[];
 		incSst?: boolean;
 		sstPercent?: number;
 		sstBorneBy?: "client" | "agent";
@@ -185,46 +193,73 @@ export async function ensurePayoutsForApprovedTransaction(tx: TxRow) {
 
 	const created = [negotiator];
 
-	const overridePct = schemeSnap?.overridePercent ?? 0;
-	const overridePayeeId = !isSecondary
-		? await resolvePrimaryOverridePayeeAgentId(
-				tx.agentId,
-				tx.teamLeaderAgentId,
-			)
-		: null;
-	if (!isSecondary && overridePct > 0 && overridePayeeId) {
-		const oCalc = calculateSchemeCommission({
-			nettPrice: nett,
-			commissionPercent: overridePct,
-			incSst,
-			sstPercent: sstPct,
-			sstBorneBy: sstBorne,
+	if (!isSecondary) {
+		const rates = resolveOverrideLayerRates({
+			overridePercent: schemeSnap?.overridePercent,
+			immediateUplineOverridePercent:
+				schemeSnap?.immediateUplineOverridePercent,
+			teamManagerOverridePercent: schemeSnap?.teamManagerOverridePercent,
+			groupManagerOverridePercent: schemeSnap?.groupManagerOverridePercent,
+			directorOverridePercent: schemeSnap?.directorOverridePercent,
 		});
-		const [overrideRow] = await db
-			.insert(commissionPayouts)
-			.values({
-				transactionId: tx.id,
-				payeeAgentId: overridePayeeId,
-				payoutType: "override",
-				status: "pending_approval",
-				caseNo: tx.caseNo ?? null,
-				projectName: tx.projectName ?? schemeSnap?.projectName ?? null,
-				blockLabel,
-				unitNo: tx.unitNo ?? null,
-				bookingDate: tx.bookingDate ?? tx.transactionDate,
-				spaPrice: dec(spa),
-				nettPrice: dec(nett),
-				commissionPercent: dec(overridePct),
-				grossCommission: dec(oCalc.grossCommission),
-				sstAmount: dec(oCalc.sstAmount),
-				netCommission: dec(oCalc.agentNetCommission),
-				commissionSchemeSnapshot: schemeSnap,
-				claimStageLabel: claim?.claimStage ?? null,
-				claimStagePercent: claim ? dec(Number(claim.percentPayable)) : null,
-				auditLog: [baseAudit],
-			})
-			.returning();
-		created.push(overrideRow);
+
+		const snapLayers = schemeSnap?.overrideLayers;
+		const payees =
+			snapLayers && snapLayers.length > 0
+				? snapLayers.map((l) =>
+						l.payeeAgentId
+							? { agentId: l.payeeAgentId, name: l.payeeName ?? "" }
+							: null,
+					)
+				: await resolvePrimaryOverridePayees(
+						tx.agentId,
+						tx.teamLeaderAgentId,
+					);
+
+		for (let i = 0; i < PRIMARY_OVERRIDE_LAYERS.length; i++) {
+			const meta = PRIMARY_OVERRIDE_LAYERS[i];
+			const percent = rates[meta.rateKey];
+			const payee = payees[i] ?? null;
+			if (percent <= 0 || !payee?.agentId) continue;
+
+			const oCalc = calculateSchemeCommission({
+				nettPrice: nett,
+				commissionPercent: percent,
+				incSst,
+				sstPercent: sstPct,
+				sstBorneBy: sstBorne,
+			});
+			const [overrideRow] = await db
+				.insert(commissionPayouts)
+				.values({
+					transactionId: tx.id,
+					payeeAgentId: payee.agentId,
+					payoutType: "override",
+					status: "pending_approval",
+					caseNo: tx.caseNo ?? null,
+					projectName: tx.projectName ?? schemeSnap?.projectName ?? null,
+					blockLabel,
+					unitNo: tx.unitNo ?? null,
+					bookingDate: tx.bookingDate ?? tx.transactionDate,
+					spaPrice: dec(spa),
+					nettPrice: dec(nett),
+					commissionPercent: dec(percent),
+					grossCommission: dec(oCalc.grossCommission),
+					sstAmount: dec(oCalc.sstAmount),
+					netCommission: dec(oCalc.agentNetCommission),
+					commissionSchemeSnapshot: schemeSnap,
+					claimStageLabel: claim?.claimStage ?? null,
+					claimStagePercent: claim ? dec(Number(claim.percentPayable)) : null,
+					auditLog: [
+						{
+							...baseAudit,
+							notes: `${meta.label} override (${percent}%) — paid separately; not deducted from agent`,
+						},
+					],
+				})
+				.returning();
+			created.push(overrideRow);
+		}
 	}
 
 	try {

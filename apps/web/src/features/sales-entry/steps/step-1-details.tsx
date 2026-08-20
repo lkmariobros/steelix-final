@@ -61,10 +61,39 @@ import type { StepNavigationOptions } from "./step-nav";
 const NO_PROJECT = "__none__";
 
 function getActiveSchemeTier(
-	scheme: { tiers?: Array<{ isActive?: boolean; commissionPercent: number; overridePercent: number }> } | null,
+	scheme: {
+		tiers?: Array<{
+			isActive?: boolean;
+			commissionPercent: number;
+			overridePercent?: number;
+			immediateUplineOverridePercent?: number;
+			teamManagerOverridePercent?: number;
+			groupManagerOverridePercent?: number;
+			directorOverridePercent?: number;
+		}>;
+	} | null,
 ) {
 	if (!scheme?.tiers?.length) return null;
 	return scheme.tiers.find((t) => t.isActive) ?? scheme.tiers[0] ?? null;
+}
+
+function formatSchemeOverridePreview(tier: {
+	overridePercent?: number;
+	immediateUplineOverridePercent?: number;
+	teamManagerOverridePercent?: number;
+	groupManagerOverridePercent?: number;
+	directorOverridePercent?: number;
+}) {
+	const legacy = Number(tier.overridePercent ?? 0);
+	const immediate = Number(tier.immediateUplineOverridePercent ?? 0);
+	const team = Number(tier.teamManagerOverridePercent ?? 0);
+	const group = Number(tier.groupManagerOverridePercent ?? 0);
+	const director = Number(tier.directorOverridePercent ?? 0);
+	const hasNew = immediate > 0 || team > 0 || group > 0 || director > 0;
+	const parts = [hasNew ? immediate : legacy, team, group, director]
+		.filter((n) => n > 0)
+		.map((n) => `${n}%`);
+	return parts.length ? parts.join(" / ") : "0%";
 }
 
 type DetailsFormValues = z.infer<typeof detailsStepSchema>;
@@ -627,7 +656,7 @@ export function StepDetails({
 																<SelectItem key={s.id} value={s.id}>
 																	{s.schemeName}
 																	{tier
-																		? ` · ${tier.commissionPercent}% / override ${tier.overridePercent}%`
+																		? ` · ${tier.commissionPercent}% / override ${formatSchemeOverridePreview(tier)}`
 																		: ""}
 																</SelectItem>
 															);
@@ -656,27 +685,88 @@ export function StepDetails({
 												From project scheme — you receive 100% of scheme net
 											</p>
 										</FormItem>
-										<FormItem>
-											<FormLabel>Upline Override (%)</FormLabel>
-											<FormControl>
-												<Input
-													type="number"
-													readOnly
-													className="bg-muted/50"
-													value={activeSchemeTier.overridePercent}
-												/>
-											</FormControl>
-											<p className="text-muted-foreground text-xs">
-												Paid separately to recruiter upline (not deducted from
-												your share).{" "}
-												<Link
-													href="/admin/commission-schemes"
-													className="text-primary underline-offset-4 hover:underline"
-												>
-													Edit in Primary Commission Setting
-												</Link>
+										<div className="space-y-3 rounded-md border bg-muted/30 p-3">
+											<p className="font-medium text-sm">
+												Upline override % (read-only from scheme)
 											</p>
-										</FormItem>
+											<p className="text-muted-foreground text-xs">
+												Paid separately to up to 4 recruitment layers — not
+												deducted from your share.{" "}
+												{isAdminPortal ? (
+													<Link
+														href="/admin/commission-schemes"
+														className="text-primary underline-offset-4 hover:underline"
+													>
+														Edit in Primary Commission Setting
+													</Link>
+												) : null}
+											</p>
+											<div className="grid grid-cols-2 gap-3">
+												{(
+													[
+														[
+															"Immediate Upline",
+															(() => {
+																const legacy = Number(
+																	activeSchemeTier.overridePercent ?? 0,
+																);
+																const immediate = Number(
+																	activeSchemeTier.immediateUplineOverridePercent ??
+																		0,
+																);
+																const hasNew =
+																	immediate > 0 ||
+																	Number(
+																		activeSchemeTier.teamManagerOverridePercent ??
+																			0,
+																	) > 0 ||
+																	Number(
+																		activeSchemeTier.groupManagerOverridePercent ??
+																			0,
+																	) > 0 ||
+																	Number(
+																		activeSchemeTier.directorOverridePercent ??
+																			0,
+																	) > 0;
+																return hasNew ? immediate : legacy;
+															})(),
+														],
+														[
+															"Team Manager",
+															Number(
+																activeSchemeTier.teamManagerOverridePercent ??
+																	0,
+															),
+														],
+														[
+															"Group Manager",
+															Number(
+																activeSchemeTier.groupManagerOverridePercent ??
+																	0,
+															),
+														],
+														[
+															"Director",
+															Number(
+																activeSchemeTier.directorOverridePercent ?? 0,
+															),
+														],
+													] as const
+												).map(([label, value]) => (
+													<FormItem key={label}>
+														<FormLabel>{label} (%)</FormLabel>
+														<FormControl>
+															<Input
+																type="number"
+																readOnly
+																className="bg-muted/50"
+																value={value}
+															/>
+														</FormControl>
+													</FormItem>
+												))}
+											</div>
+										</div>
 									</>
 								) : null}
 
