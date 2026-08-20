@@ -230,6 +230,239 @@ body {
 	}
 }
 
+/* ── Full-site LoadingScreen: wind / speed motion ── */
+@keyframes loading-spin-fast {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+@keyframes loading-spin-reverse {
+	to {
+		transform: rotate(-360deg);
+	}
+}
+
+@keyframes loading-wind-sweep {
+	0% {
+		transform: translateX(-120%) scaleX(0.4);
+		opacity: 0;
+	}
+	18% {
+		opacity: 0.85;
+	}
+	55% {
+		opacity: 0.55;
+	}
+	100% {
+		transform: translateX(120%) scaleX(1.1);
+		opacity: 0;
+	}
+}
+
+@keyframes loading-dash-fly {
+	0% {
+		transform: translateX(-180%);
+		opacity: 0;
+	}
+	25% {
+		opacity: 1;
+	}
+	100% {
+		transform: translateX(220%);
+		opacity: 0;
+	}
+}
+
+@keyframes loading-logo-breathe {
+	0%,
+	100% {
+		transform: scale(1);
+		box-shadow: 0 0 28px color-mix(in oklab, var(--primary) 28%, transparent);
+	}
+	50% {
+		transform: scale(1.04);
+		box-shadow: 0 0 48px color-mix(in oklab, var(--primary) 48%, transparent);
+	}
+}
+
+@keyframes loading-wordmark-in {
+	0% {
+		opacity: 0;
+		letter-spacing: 0.45em;
+		transform: translateY(6px);
+	}
+	100% {
+		opacity: 1;
+		letter-spacing: 0.22em;
+		transform: translateY(0);
+	}
+}
+
+@keyframes loading-arc-sweep {
+	0% {
+		transform: rotate(0deg);
+		opacity: 0.35;
+	}
+	50% {
+		opacity: 1;
+	}
+	100% {
+		transform: rotate(360deg);
+		opacity: 0.35;
+	}
+}
+
+.loading-orbit {
+	pointer-events: none;
+	position: absolute;
+	inset: 0;
+	border-radius: 9999px;
+	border: 1.5px solid color-mix(in oklab, var(--primary) 22%, transparent);
+}
+
+.loading-orbit-outer {
+	inset: 0;
+	border-top-color: var(--primary);
+	border-right-color: color-mix(in oklab, var(--primary) 55%, transparent);
+	animation: loading-spin-fast 0.85s linear infinite;
+}
+
+.loading-orbit-mid {
+	inset: 10%;
+	border-bottom-color: var(--primary);
+	border-left-color: color-mix(in oklab, var(--primary) 45%, transparent);
+	animation: loading-spin-reverse 1.15s linear infinite;
+}
+
+.loading-orbit-inner {
+	inset: 22%;
+	border-style: dashed;
+	border-color: color-mix(in oklab, var(--primary) 35%, transparent);
+	border-top-color: var(--primary);
+	animation: loading-spin-fast 0.55s linear infinite;
+}
+
+.loading-wind-arc {
+	pointer-events: none;
+	position: absolute;
+	inset: -6%;
+	border-radius: 9999px;
+	background: conic-gradient(
+		from 0deg,
+		transparent 0deg,
+		transparent 250deg,
+		color-mix(in oklab, var(--primary) 80%, white) 300deg,
+		transparent 340deg,
+		transparent 360deg
+	);
+	mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2px));
+	animation: loading-arc-sweep 0.7s linear infinite;
+}
+
+.loading-logo-pulse {
+	animation: loading-logo-breathe 1.4s ease-in-out infinite;
+}
+
+.loading-wordmark {
+	animation: loading-wordmark-in 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.loading-wind-band {
+	position: absolute;
+	left: 0;
+	right: 0;
+	height: 2px;
+	background: linear-gradient(
+		90deg,
+		transparent,
+		color-mix(in oklab, var(--primary) 70%, transparent),
+		transparent
+	);
+	filter: blur(0.4px);
+	animation: loading-wind-sweep 1.05s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+.loading-wind-band-1 {
+	top: 28%;
+	animation-delay: 0s;
+	opacity: 0.9;
+}
+
+.loading-wind-band-2 {
+	top: 42%;
+	height: 1.5px;
+	animation-duration: 0.85s;
+	animation-delay: 0.18s;
+}
+
+.loading-wind-band-3 {
+	top: 58%;
+	animation-duration: 1.15s;
+	animation-delay: 0.35s;
+}
+
+.loading-wind-band-4 {
+	top: 72%;
+	height: 1px;
+	animation-duration: 0.95s;
+	animation-delay: 0.5s;
+}
+
+.loading-dash {
+	display: block;
+	height: 2px;
+	width: 18%;
+	border-radius: 9999px;
+	background: var(--primary);
+	animation: loading-dash-fly 0.75s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+.loading-dash-1 {
+	animation-delay: 0s;
+	opacity: 0.95;
+}
+
+.loading-dash-2 {
+	animation-delay: 0.08s;
+	width: 12%;
+	opacity: 0.7;
+}
+
+.loading-dash-3 {
+	animation-delay: 0.16s;
+	width: 22%;
+}
+
+.loading-dash-4 {
+	animation-delay: 0.24s;
+	width: 10%;
+	opacity: 0.55;
+}
+
+.loading-dash-5 {
+	animation-delay: 0.32s;
+	width: 16%;
+	opacity: 0.8;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.loading-orbit-outer,
+	.loading-orbit-mid,
+	.loading-orbit-inner,
+	.loading-wind-arc,
+	.loading-logo-pulse,
+	.loading-wordmark,
+	.loading-wind-band,
+	.loading-dash {
+		animation: none !important;
+	}
+
+	.loading-orbit-outer {
+		border-top-color: var(--primary);
+	}
+}
+
 @layer base {
 	* {
 		@apply border-border outline-ring/50;

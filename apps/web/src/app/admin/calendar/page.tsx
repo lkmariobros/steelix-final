@@ -33,6 +33,11 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import {
+	Popover,
+	PopoverContent,
+	PopoverTrigger,
+} from "@/components/ui/popover";
+import {
 	Select,
 	SelectContent,
 	SelectItem,
@@ -44,6 +49,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { authClient } from "@/lib/auth-client";
+import { cn } from "@/lib/utils";
 import { trpc } from "@/utils/trpc";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
@@ -63,7 +69,6 @@ import {
 	eachDayOfInterval,
 	endOfMonth,
 	format,
-	isSameDay,
 	isSameMonth,
 	isToday,
 	startOfMonth,
@@ -73,6 +78,95 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
+
+function parseYmd(value: string | null | undefined): Date | undefined {
+	if (!value) return undefined;
+	const d = new Date(`${value}T00:00:00`);
+	return Number.isNaN(d.getTime()) ? undefined : d;
+}
+
+function toYmd(date: Date | undefined): string {
+	if (!date) return "";
+	return format(date, "yyyy-MM-dd");
+}
+
+function FormDatePicker({
+	value,
+	onChange,
+	placeholder = "Select date",
+	optional = false,
+}: {
+	value: string | null | undefined;
+	onChange: (next: string | null) => void;
+	placeholder?: string;
+	optional?: boolean;
+}) {
+	const [open, setOpen] = useState(false);
+	const selected = parseYmd(value ?? undefined);
+
+	return (
+		<Popover open={open} onOpenChange={setOpen} modal={false}>
+			<PopoverTrigger asChild>
+				<Button
+					type="button"
+					variant="outline"
+					className={cn(
+						"h-10 w-full justify-start gap-2 rounded-xl border-border/70 bg-background font-normal shadow-none",
+						!selected && "text-muted-foreground",
+					)}
+				>
+					<RiCalendarLine className="size-4 shrink-0 text-muted-foreground" />
+					<span className="truncate">
+						{selected ? format(selected, "dd MMM yyyy") : placeholder}
+					</span>
+				</Button>
+			</PopoverTrigger>
+			<PopoverContent
+				className="z-[80] w-auto border-border/70 bg-popover p-0 text-popover-foreground shadow-card"
+				align="start"
+				sideOffset={6}
+			>
+				<Calendar
+					mode="single"
+					selected={selected}
+					onSelect={(date) => {
+						const next = toYmd(date);
+						onChange(optional ? next || null : next);
+						if (date) setOpen(false);
+					}}
+					initialFocus
+				/>
+				<div className="flex items-center justify-between border-border/60 border-t px-3 py-2">
+					<Button
+						type="button"
+						variant="ghost"
+						size="sm"
+						className="h-8 rounded-full px-2.5 text-xs"
+						onClick={() => {
+							onChange(optional ? null : "");
+							setOpen(false);
+						}}
+					>
+						Clear
+					</Button>
+					<Button
+						type="button"
+						variant="ghost"
+						size="sm"
+						className="h-8 rounded-full px-2.5 text-xs"
+						onClick={() => {
+							const today = toYmd(new Date());
+							onChange(optional ? today : today);
+							setOpen(false);
+						}}
+					>
+						Today
+					</Button>
+				</div>
+			</PopoverContent>
+		</Popover>
+	);
+}
 
 // Type definitions
 type EventType =
@@ -583,41 +677,43 @@ export default function AdminCalendarPage() {
 
 	return (
 		<>
-				<header className="flex h-16 shrink-0 items-center gap-2 border-b">
-					<div className="flex flex-1 items-center gap-2 px-3">
-						<SidebarTrigger className="-ms-4" />
-						<Separator
-							orientation="vertical"
-							className="mr-2 data-[orientation=vertical]:h-4"
-						/>
-						<Breadcrumb>
-							<BreadcrumbList>
-								<BreadcrumbItem className="hidden md:block">
-									<BreadcrumbLink href="/admin">
-										<RiDashboardLine size={22} aria-hidden="true" />
-										<span className="sr-only">Admin Dashboard</span>
-									</BreadcrumbLink>
-								</BreadcrumbItem>
-								<BreadcrumbSeparator className="hidden md:block" />
-								<BreadcrumbItem>
-									<BreadcrumbPage className="flex items-center gap-2">
-										<RiCalendarLine size={18} />
-										Office Calendar
-									</BreadcrumbPage>
-								</BreadcrumbItem>
-							</BreadcrumbList>
-						</Breadcrumb>
-					</div>
-					<div className="ml-auto flex gap-3">
-						<HeaderActions />
-					</div>
-				</header>
+			<header className="sticky top-0 z-40 -mx-4 flex h-16 shrink-0 items-center gap-2 border-border/60 border-b bg-background px-4 backdrop-blur-md supports-backdrop-filter:bg-background/95 md:-mx-6 md:px-6 lg:-mx-8 lg:px-8">
+				<div className="flex flex-1 items-center gap-2 px-1 sm:px-0">
+					<SidebarTrigger className="-ms-1 rounded-xl" />
+					<Separator
+						orientation="vertical"
+						className="mr-2 data-[orientation=vertical]:h-4"
+					/>
+					<Breadcrumb>
+						<BreadcrumbList>
+							<BreadcrumbItem className="hidden md:block">
+								<BreadcrumbLink href="/admin">
+									<RiDashboardLine size={22} aria-hidden="true" />
+									<span className="sr-only">Admin Dashboard</span>
+								</BreadcrumbLink>
+							</BreadcrumbItem>
+							<BreadcrumbSeparator className="hidden md:block" />
+							<BreadcrumbItem>
+								<BreadcrumbPage className="flex items-center gap-2 font-medium">
+									<span className="flex size-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
+										<RiCalendarLine size={16} />
+									</span>
+									Office Calendar
+								</BreadcrumbPage>
+							</BreadcrumbItem>
+						</BreadcrumbList>
+					</Breadcrumb>
+				</div>
+				<div className="ml-auto flex gap-2">
+					<HeaderActions />
+				</div>
+			</header>
 
-				<div className="flex flex-1 flex-col gap-4 py-4 lg:gap-6 lg:py-6">
+			<div className="flex flex-1 flex-col gap-5 py-5 lg:gap-6 lg:py-7">
 					{/* Header */}
-					<div className="flex items-center justify-between">
-						<div>
-							<h1 className="font-semibold text-2xl">
+					<div className="flex flex-wrap items-start justify-between gap-4">
+						<div className="min-w-0 space-y-1">
+							<h1 className="font-bold text-2xl tracking-tight">
 								Office Calendar & Announcements
 							</h1>
 							<p className="text-muted-foreground text-sm">
@@ -625,13 +721,20 @@ export default function AdminCalendarPage() {
 							</p>
 						</div>
 						{isAdmin && (
-							<div className="flex gap-2">
-								<Button onClick={() => handleCreateEvent()} variant="default">
-									<RiAddLine className="mr-2 size-4" />
+							<div className="flex flex-wrap gap-2">
+								<Button
+									onClick={() => handleCreateEvent()}
+									className="h-9 gap-1.5 rounded-full px-4"
+								>
+									<RiAddLine className="size-4" />
 									New Event
 								</Button>
-								<Button onClick={handleCreateAnnouncement} variant="outline">
-									<RiAddLine className="mr-2 size-4" />
+								<Button
+									onClick={handleCreateAnnouncement}
+									variant="outline"
+									className="h-9 gap-1.5 rounded-full border-border/70 bg-card px-4 shadow-card"
+								>
+									<RiAddLine className="size-4" />
 									New Announcement
 								</Button>
 							</div>
@@ -639,33 +742,39 @@ export default function AdminCalendarPage() {
 					</div>
 
 					{/* View Toggle */}
-					<div className="flex items-center gap-4">
-						<div className="flex w-fit items-center gap-1 rounded-md border bg-muted/50 p-1">
-							<Button
-								variant={viewMode === "calendar" ? "default" : "ghost"}
-								size="sm"
-								onClick={() => setViewMode("calendar")}
-								className="h-8"
-							>
-								<RiCalendarLine className="mr-2 size-4" />
-								Calendar Events
-							</Button>
-							<Button
-								variant={viewMode === "announcements" ? "default" : "ghost"}
-								size="sm"
-								onClick={() => setViewMode("announcements")}
-								className="h-8"
-							>
-								<RiNotificationLine className="mr-2 size-4" />
-								Announcements
-							</Button>
-						</div>
+					<div className="flex w-fit items-center gap-1 rounded-full border border-border/60 bg-muted/40 p-1 shadow-sm">
+						<button
+							type="button"
+							onClick={() => setViewMode("calendar")}
+							className={cn(
+								"inline-flex h-8 items-center gap-1.5 rounded-full px-3.5 font-medium text-xs transition-colors",
+								viewMode === "calendar"
+									? "bg-primary text-primary-foreground shadow-sm"
+									: "text-muted-foreground hover:bg-muted hover:text-foreground",
+							)}
+						>
+							<RiCalendarLine className="size-3.5" />
+							Calendar Events
+						</button>
+						<button
+							type="button"
+							onClick={() => setViewMode("announcements")}
+							className={cn(
+								"inline-flex h-8 items-center gap-1.5 rounded-full px-3.5 font-medium text-xs transition-colors",
+								viewMode === "announcements"
+									? "bg-primary text-primary-foreground shadow-sm"
+									: "text-muted-foreground hover:bg-muted hover:text-foreground",
+							)}
+						>
+							<RiNotificationLine className="size-3.5" />
+							Announcements
+						</button>
 					</div>
 
 					{/* Calendar Events View - Monthly Grid */}
 					{viewMode === "calendar" && (
-						<Card className="w-full">
-							<CardContent className="p-6">
+						<Card className="w-full gap-0 overflow-hidden rounded-3xl border-border/50 py-0 shadow-card">
+							<CardContent className="p-5 sm:p-6">
 								{isLoadingEvents ? (
 									<>
 										{/* Skeleton header */}
@@ -684,13 +793,13 @@ export default function AdminCalendarPage() {
 											</div>
 										</div>
 										{/* Skeleton calendar grid */}
-										<div className="overflow-hidden rounded-lg border">
-											<div className="grid grid-cols-7 border-b bg-muted/50">
+										<div className="overflow-hidden rounded-2xl border border-border/60">
+											<div className="grid grid-cols-7 border-border/60 border-b bg-muted/40">
 												{["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(
 													(d) => (
 														<div
 															key={d}
-															className="border-r p-3 text-center font-medium text-muted-foreground text-sm last:border-r-0"
+															className="border-border/50 border-r p-3 text-center font-semibold text-foreground/75 text-xs uppercase tracking-wide last:border-r-0"
 														>
 															{d}
 														</div>
@@ -746,52 +855,41 @@ export default function AdminCalendarPage() {
 											{/* Navigation Controls */}
 											<div className="flex items-center gap-2">
 												<Button
-													variant="ghost"
+													variant="outline"
 													size="icon"
 													onClick={() => navigateMonth("prev")}
-													className="h-9 w-9"
+													className="size-9 rounded-full border-border/70 shadow-card"
 												>
-													<RiArrowLeftLine className="size-5" />
+													<RiArrowLeftLine className="size-4" />
 												</Button>
 												<Button
 													variant="outline"
 													size="sm"
 													onClick={() => navigateMonth("today")}
-													className="h-9"
+													className="h-9 rounded-full border-border/70 px-4 shadow-card"
 												>
 													Today
 												</Button>
 												<Button
-													variant="ghost"
+													variant="outline"
 													size="icon"
 													onClick={() => navigateMonth("next")}
-													className="h-9 w-9"
+													className="size-9 rounded-full border-border/70 shadow-card"
 												>
-													<RiArrowRightLine className="size-5" />
+													<RiArrowRightLine className="size-4" />
 												</Button>
-												{isAdmin && (
-													<Button
-														variant="default"
-														size="sm"
-														onClick={() => handleCreateEvent()}
-														className="ml-2 h-9"
-													>
-														<RiAddLine className="mr-2 size-4" />
-														New Event
-													</Button>
-												)}
 											</div>
 										</div>
 
 										{/* Calendar Grid */}
-										<div className="overflow-hidden rounded-lg border">
+										<div className="overflow-hidden rounded-2xl border border-border/60">
 											{/* Days of Week Header */}
-											<div className="grid grid-cols-7 border-b bg-muted/50">
+											<div className="grid grid-cols-7 border-border/60 border-b bg-muted/40">
 												{["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(
 													(day) => (
 														<div
 															key={day}
-															className="border-r p-3 text-center font-medium text-muted-foreground text-sm last:border-r-0"
+															className="border-border/50 border-r p-3 text-center font-semibold text-foreground/75 text-xs uppercase tracking-wide last:border-r-0"
 														>
 															{day}
 														</div>
@@ -1031,9 +1129,9 @@ export default function AdminCalendarPage() {
 
 				{/* Create/Edit Event Dialog */}
 				<Dialog open={isEventDialogOpen} onOpenChange={setIsEventDialogOpen}>
-					<DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
-						<DialogHeader>
-							<DialogTitle>
+					<DialogContent className="max-h-[min(90vh,880px)] gap-0 overflow-visible rounded-3xl border-border/60 p-0 sm:max-w-2xl">
+						<DialogHeader className="border-border/50 border-b px-6 py-5">
+							<DialogTitle className="text-base">
 								{editingEvent ? "Edit Event" : "Create New Event"}
 							</DialogTitle>
 							<DialogDescription>
@@ -1045,8 +1143,9 @@ export default function AdminCalendarPage() {
 						<Form {...eventForm}>
 							<form
 								onSubmit={eventForm.handleSubmit(onSubmitEvent)}
-								className="space-y-4"
+								className="flex max-h-[min(70vh,640px)] flex-col"
 							>
+								<div className="space-y-4 overflow-y-auto px-6 py-5">
 								<FormField
 									control={eventForm.control}
 									name="title"
@@ -1054,7 +1153,11 @@ export default function AdminCalendarPage() {
 										<FormItem>
 											<FormLabel>Title *</FormLabel>
 											<FormControl>
-												<Input placeholder="e.g., Team Meeting" {...field} />
+												<Input
+													placeholder="e.g., Team Meeting"
+													className="h-10 rounded-xl border-border/70"
+													{...field}
+												/>
 											</FormControl>
 											<FormMessage />
 										</FormItem>
@@ -1072,7 +1175,7 @@ export default function AdminCalendarPage() {
 												defaultValue={field.value}
 											>
 												<FormControl>
-													<SelectTrigger>
+													<SelectTrigger className="h-10 rounded-xl border-border/70">
 														<SelectValue placeholder="Select event type" />
 													</SelectTrigger>
 												</FormControl>
@@ -1101,7 +1204,7 @@ export default function AdminCalendarPage() {
 											<FormControl>
 												<Textarea
 													placeholder="Add event details..."
-													className="resize-none"
+													className="resize-none rounded-xl border-border/70"
 													{...field}
 												/>
 											</FormControl>
@@ -1110,67 +1213,88 @@ export default function AdminCalendarPage() {
 									)}
 								/>
 
-								<div className="grid grid-cols-2 gap-4">
+								<div className="grid gap-4 sm:grid-cols-2">
 									<FormField
 										control={eventForm.control}
 										name="startDate"
 										render={({ field }) => (
-											<FormItem>
+											<FormItem className="flex flex-col">
 												<FormLabel>Start Date *</FormLabel>
 												<FormControl>
-													<Input type="date" {...field} />
+													<FormDatePicker
+														value={field.value}
+														onChange={(next) => field.onChange(next ?? "")}
+														placeholder="Select start date"
+													/>
 												</FormControl>
 												<FormMessage />
 											</FormItem>
 										)}
 									/>
 
-									{!eventForm.watch("isAllDay") && (
+									{!eventForm.watch("isAllDay") ? (
 										<FormField
 											control={eventForm.control}
 											name="startTime"
 											render={({ field }) => (
-												<FormItem>
+												<FormItem className="flex flex-col">
 													<FormLabel>Start Time</FormLabel>
 													<FormControl>
-														<Input type="time" {...field} />
+														<Input
+															type="time"
+															className="h-10 rounded-xl border-border/70"
+															{...field}
+														/>
 													</FormControl>
 													<FormMessage />
 												</FormItem>
 											)}
 										/>
+									) : (
+										<div className="hidden sm:block" />
 									)}
 								</div>
 
-								<div className="grid grid-cols-2 gap-4">
+								<div className="grid gap-4 sm:grid-cols-2">
 									<FormField
 										control={eventForm.control}
 										name="endDate"
 										render={({ field }) => (
-											<FormItem>
+											<FormItem className="flex flex-col">
 												<FormLabel>End Date</FormLabel>
 												<FormControl>
-													<Input type="date" {...field} />
+													<FormDatePicker
+														value={field.value}
+														onChange={(next) => field.onChange(next ?? "")}
+														placeholder="Select end date"
+														optional
+													/>
 												</FormControl>
 												<FormMessage />
 											</FormItem>
 										)}
 									/>
 
-									{!eventForm.watch("isAllDay") && (
+									{!eventForm.watch("isAllDay") ? (
 										<FormField
 											control={eventForm.control}
 											name="endTime"
 											render={({ field }) => (
-												<FormItem>
+												<FormItem className="flex flex-col">
 													<FormLabel>End Time</FormLabel>
 													<FormControl>
-														<Input type="time" {...field} />
+														<Input
+															type="time"
+															className="h-10 rounded-xl border-border/70"
+															{...field}
+														/>
 													</FormControl>
 													<FormMessage />
 												</FormItem>
 											)}
 										/>
+									) : (
+										<div className="hidden sm:block" />
 									)}
 								</div>
 
@@ -1178,7 +1302,7 @@ export default function AdminCalendarPage() {
 									control={eventForm.control}
 									name="isAllDay"
 									render={({ field }) => (
-										<FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+										<FormItem className="flex flex-row items-center justify-between rounded-2xl border border-border/60 p-4">
 											<div className="space-y-0.5">
 												<FormLabel className="text-base">
 													All Day Event
@@ -1206,6 +1330,7 @@ export default function AdminCalendarPage() {
 											<FormControl>
 												<Input
 													placeholder="e.g., Conference Room A, Online"
+													className="h-10 rounded-xl border-border/70"
 													{...field}
 												/>
 											</FormControl>
@@ -1225,7 +1350,7 @@ export default function AdminCalendarPage() {
 												defaultValue={field.value}
 											>
 												<FormControl>
-													<SelectTrigger>
+													<SelectTrigger className="h-10 rounded-xl border-border/70">
 														<SelectValue placeholder="Select priority" />
 													</SelectTrigger>
 												</FormControl>
@@ -1240,8 +1365,9 @@ export default function AdminCalendarPage() {
 										</FormItem>
 									)}
 								/>
+								</div>
 
-								<DialogFooter className="flex items-center justify-between sm:justify-between">
+								<DialogFooter className="flex items-center justify-between border-border/50 border-t bg-muted/20 px-6 py-4 sm:justify-between">
 									{editingEvent && (
 										<Button
 											type="button"
@@ -1252,7 +1378,7 @@ export default function AdminCalendarPage() {
 												createEventMutation.isPending ||
 												updateEventMutation.isPending
 											}
-											className="mr-auto"
+											className="mr-auto rounded-full"
 										>
 											<RiDeleteBinLine className="mr-2 size-4" />
 											Delete Event
@@ -1262,6 +1388,7 @@ export default function AdminCalendarPage() {
 										<Button
 											type="button"
 											variant="outline"
+											className="rounded-full"
 											onClick={() => {
 												setIsEventDialogOpen(false);
 												eventForm.reset();
@@ -1273,6 +1400,7 @@ export default function AdminCalendarPage() {
 										</Button>
 										<Button
 											type="submit"
+											className="rounded-full px-5"
 											disabled={
 												createEventMutation.isPending ||
 												updateEventMutation.isPending ||
@@ -1293,9 +1421,9 @@ export default function AdminCalendarPage() {
 					open={isAnnouncementDialogOpen}
 					onOpenChange={setIsAnnouncementDialogOpen}
 				>
-					<DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
-						<DialogHeader>
-							<DialogTitle>
+					<DialogContent className="max-h-[min(90vh,880px)] gap-0 overflow-visible rounded-3xl border-border/60 p-0 sm:max-w-2xl">
+						<DialogHeader className="border-border/50 border-b px-6 py-5">
+							<DialogTitle className="text-base">
 								{editingAnnouncement
 									? "Edit Announcement"
 									: "Create New Announcement"}
@@ -1309,8 +1437,9 @@ export default function AdminCalendarPage() {
 						<Form {...announcementForm}>
 							<form
 								onSubmit={announcementForm.handleSubmit(onSubmitAnnouncement)}
-								className="space-y-4"
+								className="flex max-h-[min(70vh,640px)] flex-col"
 							>
+								<div className="space-y-4 overflow-y-auto px-6 py-5">
 								<FormField
 									control={announcementForm.control}
 									name="title"
@@ -1320,6 +1449,7 @@ export default function AdminCalendarPage() {
 											<FormControl>
 												<Input
 													placeholder="e.g., Office Policy Update"
+													className="h-10 rounded-xl border-border/70"
 													{...field}
 												/>
 											</FormControl>
@@ -1337,7 +1467,7 @@ export default function AdminCalendarPage() {
 											<FormControl>
 												<Textarea
 													placeholder="Enter announcement details..."
-													className="min-h-[120px] resize-none"
+													className="min-h-[120px] resize-none rounded-xl border-border/70"
 													{...field}
 												/>
 											</FormControl>
@@ -1346,19 +1476,19 @@ export default function AdminCalendarPage() {
 									)}
 								/>
 
-								<div className="grid grid-cols-2 gap-4">
+								<div className="grid items-start gap-4 sm:grid-cols-2">
 									<FormField
 										control={announcementForm.control}
 										name="priority"
 										render={({ field }) => (
-											<FormItem>
+											<FormItem className="flex flex-col gap-2">
 												<FormLabel>Priority</FormLabel>
 												<Select
 													onValueChange={field.onChange}
 													defaultValue={field.value}
 												>
 													<FormControl>
-														<SelectTrigger>
+														<SelectTrigger className="h-10 w-full rounded-xl border-border/70">
 															<SelectValue placeholder="Select priority" />
 														</SelectTrigger>
 													</FormControl>
@@ -1378,15 +1508,14 @@ export default function AdminCalendarPage() {
 										control={announcementForm.control}
 										name="expiresAt"
 										render={({ field }) => (
-											<FormItem>
+											<FormItem className="flex flex-col gap-2">
 												<FormLabel>Expiration Date (Optional)</FormLabel>
 												<FormControl>
-													<Input
-														type="date"
-														value={field.value || ""}
-														onChange={(e) =>
-															field.onChange(e.target.value || null)
-														}
+													<FormDatePicker
+														value={field.value}
+														onChange={(next) => field.onChange(next)}
+														placeholder="Select expiration date"
+														optional
 													/>
 												</FormControl>
 												<FormDescription>
@@ -1402,7 +1531,7 @@ export default function AdminCalendarPage() {
 									control={announcementForm.control}
 									name="isPinned"
 									render={({ field }) => (
-										<FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+										<FormItem className="flex flex-row items-center justify-between rounded-2xl border border-border/60 p-4">
 											<div className="space-y-0.5">
 												<FormLabel className="text-base">Pin to Top</FormLabel>
 												<FormDescription>
@@ -1418,11 +1547,13 @@ export default function AdminCalendarPage() {
 										</FormItem>
 									)}
 								/>
+								</div>
 
-								<DialogFooter>
+								<DialogFooter className="border-border/50 border-t bg-muted/20 px-6 py-4">
 									<Button
 										type="button"
 										variant="outline"
+										className="rounded-full"
 										onClick={() => {
 											setIsAnnouncementDialogOpen(false);
 											announcementForm.reset();
@@ -1433,6 +1564,7 @@ export default function AdminCalendarPage() {
 									</Button>
 									<Button
 										type="submit"
+										className="rounded-full px-5"
 										disabled={
 											createAnnouncementMutation.isPending ||
 											updateAnnouncementMutation.isPending

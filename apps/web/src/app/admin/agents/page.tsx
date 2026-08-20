@@ -5,6 +5,7 @@ import { Separator } from "@/components/separator";
 import {
 	SidebarTrigger,
 } from "@/components/sidebar";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/tooltip";
 import {
 	Breadcrumb,
 	BreadcrumbItem,
@@ -39,6 +40,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { MetricCard } from "@/dashboards/admin/widgets/metric-card";
 import { useUserRole } from "@/hooks/use-user-role";
 import { accountRoleBadgeClass, formatAccountRole } from "@/lib/user-role";
 import {
@@ -47,14 +49,19 @@ import {
 	isPendingAgentStatus,
 } from "@/lib/agent-status";
 import { formatDateDMY } from "@/lib/date-format";
+import { cn } from "@/lib/utils";
 import { trpc } from "@/utils/trpc";
 import {
 	RiAddLine,
+	RiBuilding2Line,
 	RiDashboardLine,
+	RiEyeLine,
 	RiRefreshLine,
 	RiSettings3Line,
+	RiShieldUserLine,
 	RiTeamLine,
 	RiUserLine,
+	RiUserStarLine,
 } from "@remixicon/react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -69,6 +76,18 @@ import {
 } from "@/components/agent-tier";
 import type { AgentTier } from "@/lib/agent-tier-config";
 import { CreateAgentAccountDialog } from "@/features/erecruitment/create-agent-account-dialog";
+
+const actionBtnClass =
+	"size-8 shrink-0 rounded-full border-0 bg-primary/12 p-0 text-primary shadow-none hover:bg-primary/20 hover:text-primary";
+
+function agentInitials(name: string | null | undefined, email: string) {
+	const source = (name?.trim() || email || "?").trim();
+	const parts = source.split(/\s+/).filter(Boolean);
+	if (parts.length >= 2) {
+		return `${parts[0]![0] ?? ""}${parts[1]![0] ?? ""}`.toUpperCase();
+	}
+	return source.slice(0, 2).toUpperCase();
+}
 
 // Type for agent data from the API
 interface AgentData {
@@ -237,41 +256,42 @@ export default function AdminAgentsPage() {
 
 	return (
 		<>
-				<header className="flex h-16 shrink-0 items-center gap-2 border-b">
-					<div className="flex flex-1 items-center gap-2 px-3">
-						<SidebarTrigger className="-ms-4" />
-						<Separator
-							orientation="vertical"
-							className="mr-2 data-[orientation=vertical]:h-4"
-						/>
-						<Breadcrumb>
-							<BreadcrumbList>
-								<BreadcrumbItem className="hidden md:block">
-									<BreadcrumbLink href="/admin">
-										<RiDashboardLine size={22} aria-hidden="true" />
-										<span className="sr-only">Admin Dashboard</span>
-									</BreadcrumbLink>
-								</BreadcrumbItem>
-								<BreadcrumbSeparator className="hidden md:block" />
-								<BreadcrumbItem>
-									<BreadcrumbPage className="flex items-center gap-2">
-										<RiTeamLine size={20} aria-hidden="true" />
-										Agent Management
-									</BreadcrumbPage>
-								</BreadcrumbItem>
-							</BreadcrumbList>
-						</Breadcrumb>
-					</div>
-					<div className="ml-auto flex gap-3">
-						<HeaderActions />
-					</div>
-				</header>
-				<div className="flex flex-1 flex-col gap-4 py-4 lg:gap-6 lg:py-6">
+			<header className="sticky top-0 z-40 -mx-4 flex h-16 shrink-0 items-center gap-2 border-border/60 border-b bg-background px-4 backdrop-blur-md supports-backdrop-filter:bg-background/95 md:-mx-6 md:px-6 lg:-mx-8 lg:px-8">
+				<div className="flex flex-1 items-center gap-2 px-1 sm:px-0">
+					<SidebarTrigger className="-ms-1 rounded-xl" />
+					<Separator
+						orientation="vertical"
+						className="mr-2 data-[orientation=vertical]:h-4"
+					/>
+					<Breadcrumb>
+						<BreadcrumbList>
+							<BreadcrumbItem className="hidden md:block">
+								<BreadcrumbLink href="/admin">
+									<RiDashboardLine size={22} aria-hidden="true" />
+									<span className="sr-only">Admin Dashboard</span>
+								</BreadcrumbLink>
+							</BreadcrumbItem>
+							<BreadcrumbSeparator className="hidden md:block" />
+							<BreadcrumbItem>
+								<BreadcrumbPage className="flex items-center gap-2 font-medium">
+									<span className="flex size-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
+										<RiTeamLine size={16} aria-hidden="true" />
+									</span>
+									Agent Management
+								</BreadcrumbPage>
+							</BreadcrumbItem>
+						</BreadcrumbList>
+					</Breadcrumb>
+				</div>
+				<div className="ml-auto flex gap-2">
+					<HeaderActions />
+				</div>
+			</header>
+			<div className="flex flex-1 flex-col gap-5 py-5 lg:gap-6 lg:py-7">
 					{/* Agents Page Header */}
-					<div className="flex items-center justify-between gap-4">
-						<div className="space-y-1">
-							<h1 className="flex items-center gap-2 font-semibold text-2xl">
-								<RiTeamLine className="size-6" />
+					<div className="flex flex-wrap items-start justify-between gap-4">
+						<div className="min-w-0 space-y-1">
+							<h1 className="font-bold text-2xl tracking-tight">
 								{isSuperAdmin ? "Account Management" : "Agent Management"}
 							</h1>
 							<p className="text-muted-foreground text-sm">
@@ -282,14 +302,14 @@ export default function AdminAgentsPage() {
 						</div>
 
 						{/* Agent Controls */}
-						<div className="flex items-center gap-2">
+						<div className="flex flex-wrap items-center gap-2">
 							<Select
 								value={roleFilter}
 								onValueChange={(value) =>
 									setRoleFilter(value as AccountRoleFilter)
 								}
 							>
-								<SelectTrigger className="w-44">
+								<SelectTrigger className="h-9 w-44 rounded-full border-border/70 bg-card shadow-card">
 									<SelectValue placeholder="Account role" />
 								</SelectTrigger>
 								<SelectContent>
@@ -309,7 +329,7 @@ export default function AdminAgentsPage() {
 									setApprovalFilter(value as "all" | "pending_approval")
 								}
 							>
-								<SelectTrigger className="w-44">
+								<SelectTrigger className="h-9 w-44 rounded-full border-border/70 bg-card shadow-card">
 									<SelectValue placeholder="Approval" />
 								</SelectTrigger>
 								<SelectContent>
@@ -329,7 +349,7 @@ export default function AdminAgentsPage() {
 									setActiveFilter(value as "all" | "active" | "inactive")
 								}
 							>
-								<SelectTrigger className="w-36">
+								<SelectTrigger className="h-9 w-36 rounded-full border-border/70 bg-card shadow-card">
 									<SelectValue placeholder="Status" />
 								</SelectTrigger>
 								<SelectContent>
@@ -339,17 +359,22 @@ export default function AdminAgentsPage() {
 								</SelectContent>
 							</Select>
 
-							{/* Refresh Button */}
-							<Button variant="outline" size="sm" onClick={handleRefresh}>
+							<Button
+								variant="outline"
+								size="icon"
+								className="size-9 rounded-full border-border/70 bg-card shadow-card"
+								onClick={handleRefresh}
+								aria-label="Refresh"
+							>
 								<RiRefreshLine className="size-4" />
 							</Button>
 
 							<Button
 								size="sm"
 								onClick={() => setIsCreateDialogOpen(true)}
-								className="bg-green-600 hover:bg-green-700"
+								className="h-9 gap-1.5 rounded-full px-4"
 							>
-								<RiAddLine className="mr-2 h-4 w-4" />
+								<RiAddLine className="size-4" />
 								Add agent
 							</Button>
 						</div>
@@ -358,342 +383,351 @@ export default function AdminAgentsPage() {
 					{/* Agent Summary Cards */}
 					{isLoadingStats ? (
 						<div className="space-y-4">
-							<div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+							<div className="grid items-stretch gap-4 sm:grid-cols-2 lg:grid-cols-4">
 								{["sk-a1", "sk-a2", "sk-a3", "sk-a4"].map((id) => (
-									<Card key={id} className="overflow-hidden">
-										<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-											<Skeleton className="h-3.5 w-24" />
-											<Skeleton className="h-4 w-4 rounded" />
-										</CardHeader>
-										<CardContent className="space-y-2">
-											<Skeleton className="h-8 w-16" />
-											<Skeleton className="h-3 w-28" />
-										</CardContent>
-									</Card>
+									<div
+										key={id}
+										className="rounded-3xl border border-border/40 bg-card p-5 shadow-card"
+									>
+										<div className="flex justify-between gap-3">
+											<div className="space-y-2">
+												<Skeleton className="h-3 w-24" />
+												<Skeleton className="h-8 w-16" />
+											</div>
+											<Skeleton className="size-10 rounded-xl" />
+										</div>
+										<div className="mt-4 flex items-center justify-between">
+											<Skeleton className="h-5 w-24 rounded-full" />
+											<Skeleton className="h-9 w-20" />
+										</div>
+									</div>
 								))}
 							</div>
-							<div className="grid gap-4 md:grid-cols-2 lg:grid-cols-2">
+							<div className="grid items-stretch gap-4 sm:grid-cols-2">
 								{["sk-branch-1", "sk-branch-2"].map((id) => (
-									<Card key={id} className="overflow-hidden">
-										<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-											<Skeleton className="h-3.5 w-32" />
-											<Skeleton className="h-4 w-4 rounded" />
-										</CardHeader>
-										<CardContent className="space-y-2">
-											<Skeleton className="h-8 w-16" />
-											<Skeleton className="h-3 w-32" />
-										</CardContent>
-									</Card>
+									<div
+										key={id}
+										className="rounded-3xl border border-border/40 bg-card p-5 shadow-card"
+									>
+										<div className="flex justify-between gap-3">
+											<div className="space-y-2">
+												<Skeleton className="h-3 w-28" />
+												<Skeleton className="h-8 w-16" />
+											</div>
+											<Skeleton className="size-10 rounded-xl" />
+										</div>
+										<div className="mt-4">
+											<Skeleton className="h-5 w-28 rounded-full" />
+										</div>
+									</div>
 								))}
 							</div>
 						</div>
 					) : (
-						<div className="space-y-4">
-							<div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-								<Card>
-									<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-										<CardTitle className="font-medium text-sm">
-											Total Agents
-										</CardTitle>
-										<RiUserLine className="h-4 w-4 text-muted-foreground" />
-									</CardHeader>
-									<CardContent>
-										<div className="font-bold text-2xl">
-											{agentStats?.totalAgents || 0}
-										</div>
-										<p className="text-muted-foreground text-xs">
-											Total registered
-										</p>
-									</CardContent>
-								</Card>
-								<Card>
-									<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-										<CardTitle className="font-medium text-sm">
-											Active Agents
-										</CardTitle>
-										<RiTeamLine className="h-4 w-4 text-muted-foreground" />
-									</CardHeader>
-									<CardContent>
-										<div className="font-bold text-2xl">
-											{agentStats?.activeAgents || 0}
-										</div>
-										<p className="text-muted-foreground text-xs">
-											{agentStats?.totalAgents
-												? `${Math.round((agentStats.activeAgents / agentStats.totalAgents) * 100)}% active rate`
-												: "Active agents"}
-										</p>
-									</CardContent>
-								</Card>
-								<Card>
-									<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-										<CardTitle className="font-medium text-sm">
-											Team Leads
-										</CardTitle>
-										<RiUserLine className="h-4 w-4 text-muted-foreground" />
-									</CardHeader>
-									<CardContent>
-										<div className="font-bold text-2xl">
-											{agentStats?.teamLeads || 0}
-										</div>
-										<p className="text-muted-foreground text-xs">
-											Leadership roles
-										</p>
-									</CardContent>
-								</Card>
-								<Card>
-									<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-										<CardTitle className="font-medium text-sm">Admins</CardTitle>
-										<RiTeamLine className="h-4 w-4 text-muted-foreground" />
-									</CardHeader>
-									<CardContent>
-										<div className="font-bold text-2xl">
-											{(agentStats?.admins || 0) +
-												(agentStats?.superAdmins || 0)}
-										</div>
-										<p className="text-muted-foreground text-xs">
-											{agentStats?.superAdmins
-												? `${agentStats.admins} admin · ${agentStats.superAdmins} super`
-												: "Admin users"}
-										</p>
-									</CardContent>
-								</Card>
-							</div>
+						(() => {
+							const total = agentStats?.totalAgents || 0;
+							const active = agentStats?.activeAgents || 0;
+							const activeRate = total
+								? Math.round((active / total) * 100)
+								: 0;
+							const teamLeads = agentStats?.teamLeads || 0;
+							const admins =
+								(agentStats?.admins || 0) + (agentStats?.superAdmins || 0);
+							const genting =
+								(agentStats as unknown as { gentingAgents?: number })
+									?.gentingAgents || 0;
+							const puchong =
+								(agentStats as unknown as { puchongAgents?: number })
+									?.puchongAgents || 0;
 
-							<div className="grid gap-4 md:grid-cols-2 lg:grid-cols-2">
-								<Card>
-									<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-										<CardTitle className="font-medium text-sm">
-											Branch GENTING
-										</CardTitle>
-										<RiTeamLine className="h-4 w-4 text-muted-foreground" />
-									</CardHeader>
-									<CardContent>
-										<div className="font-bold text-2xl">
-											{(agentStats as unknown as { gentingAgents?: number })
-												?.gentingAgents || 0}
-										</div>
-										<p className="text-muted-foreground text-xs">
-											Agents in GENTING
-										</p>
-									</CardContent>
-								</Card>
-								<Card>
-									<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-										<CardTitle className="font-medium text-sm">
-											Branch PUCHONG
-										</CardTitle>
-										<RiTeamLine className="h-4 w-4 text-muted-foreground" />
-									</CardHeader>
-									<CardContent>
-										<div className="font-bold text-2xl">
-											{(agentStats as unknown as { puchongAgents?: number })
-												?.puchongAgents || 0}
-										</div>
-										<p className="text-muted-foreground text-xs">
-											Agents in PUCHONG
-										</p>
-									</CardContent>
-								</Card>
-							</div>
-						</div>
+							return (
+								<div className="space-y-4">
+									<div className="grid items-stretch gap-4 sm:grid-cols-2 lg:grid-cols-4">
+										<MetricCard
+											title="Total Agents"
+											value={String(total)}
+											changeLabel="Total registered"
+											trend={total > 0 ? "up" : "neutral"}
+											icon={<RiUserLine size={20} />}
+											sparkline={[32, 40, 38, 50, 48, 55, 52, 60, 58, 65, 70, 72]}
+										/>
+										<MetricCard
+											title="Active Agents"
+											value={String(active)}
+											changeLabel={`${activeRate}% active rate`}
+											trend={
+												activeRate >= 50
+													? "up"
+													: activeRate > 0
+														? "neutral"
+														: "down"
+											}
+											icon={<RiTeamLine size={20} />}
+											sparkline={[28, 35, 42, 40, 48, 55, 50, 62, 58, 68, 72, 78]}
+										/>
+										<MetricCard
+											title="Team Leads"
+											value={String(teamLeads)}
+											changeLabel="Leadership roles"
+											trend={teamLeads > 0 ? "up" : "neutral"}
+											icon={<RiUserStarLine size={20} />}
+											sparkline={[20, 25, 22, 30, 28, 35, 40, 38, 45, 42, 50, 48]}
+										/>
+										<MetricCard
+											title="Admins"
+											value={String(admins)}
+											changeLabel={
+												agentStats?.superAdmins
+													? `${agentStats.admins} admin · ${agentStats.superAdmins} super`
+													: "Admin users"
+											}
+											trend="neutral"
+											icon={<RiShieldUserLine size={20} />}
+											variant="gradient"
+										/>
+									</div>
+
+									<div className="grid items-stretch gap-4 sm:grid-cols-2">
+										<MetricCard
+											title="Branch Genting"
+											value={String(genting)}
+											changeLabel="Agents in Genting"
+											trend={genting > 0 ? "up" : "neutral"}
+											icon={<RiBuilding2Line size={20} />}
+											sparkline={[30, 34, 40, 38, 45, 42, 50, 48, 55, 52, 60, 58]}
+										/>
+										<MetricCard
+											title="Branch Puchong"
+											value={String(puchong)}
+											changeLabel="Agents in Puchong"
+											trend={puchong > 0 ? "up" : "neutral"}
+											icon={<RiBuilding2Line size={20} />}
+											sparkline={[25, 30, 28, 36, 40, 38, 45, 50, 48, 55, 52, 60]}
+										/>
+									</div>
+								</div>
+							);
+						})()
 					)}
 
-					{/* Tier Distribution Dashboard */}
-					<div className="grid gap-4 lg:grid-cols-3">
-						<TierDashboardWidget className="lg:col-span-1" />
+					{/* Tier Distribution + Account Directory */}
+					<div className="grid items-start gap-4 lg:grid-cols-3 lg:gap-5">
+						<TierDashboardWidget className="w-full lg:col-span-1" />
 
-						{/* Agent Management Interface */}
-						<Card className="lg:col-span-2">
-							<CardHeader>
-								<CardTitle>
-									{isSuperAdmin ? "Account Directory" : "Agent Directory"}
-								</CardTitle>
-								<CardDescription>
-									{isSuperAdmin
-										? "View and manage agents, team leads, and admins. Use Role to change account access."
-										: "Manage agent accounts, tiers, and performance tracking"}
-								</CardDescription>
+						<Card className="gap-0 overflow-hidden rounded-3xl border-border/50 bg-card py-0 shadow-card lg:col-span-2">
+							<CardHeader className="border-border/40 border-b bg-muted/20 px-5 py-4 sm:px-6">
+								<div className="flex flex-wrap items-start justify-between gap-2">
+									<div className="space-y-1">
+										<CardTitle className="text-base font-semibold">
+											{isSuperAdmin ? "Account Directory" : "Agent Directory"}
+										</CardTitle>
+										<CardDescription>
+											{isSuperAdmin
+												? "View and manage agents, team leads, and admins."
+												: "Manage agent accounts, tiers, and performance"}
+										</CardDescription>
+									</div>
+									{agentsData?.agents ? (
+										<span className="inline-flex items-center rounded-full bg-primary/12 px-2.5 py-1 font-medium text-[11px] text-primary">
+											{agentsData.agents.length} shown
+										</span>
+									) : null}
+								</div>
 							</CardHeader>
-							<CardContent>
+							<CardContent className="p-4 sm:p-5">
 								{isLoadingAgents ? (
 									<div className="space-y-3">
 										{["sk-b1", "sk-b2", "sk-b3", "sk-b4", "sk-b5"].map((id) => (
 											<div
 												key={id}
-												className="flex items-center justify-between rounded-lg border p-4"
+												className="flex items-center justify-between rounded-2xl border border-border/40 bg-background p-4 shadow-sm"
 											>
 												<div className="flex items-center gap-3">
-													<Skeleton className="h-10 w-10 rounded-full" />
+													<Skeleton className="size-11 rounded-full" />
 													<div className="space-y-2">
 														<Skeleton className="h-4 w-32" />
 														<Skeleton className="h-3 w-52" />
 													</div>
 												</div>
 												<div className="flex gap-2">
-													<Skeleton className="h-8 w-20 rounded-md" />
-													<Skeleton className="h-8 w-16 rounded-md" />
+													<Skeleton className="size-8 rounded-full" />
+													<Skeleton className="size-8 rounded-full" />
+													<Skeleton className="h-8 w-20 rounded-full" />
 												</div>
 											</div>
 										))}
 									</div>
 								) : agentsData?.agents && agentsData.agents.length > 0 ? (
-									<div className="space-y-4">
-										{agentsData.agents.map((agentItem) => (
-											<div
-												key={agentItem.agent.id}
-												className="flex items-center justify-between rounded-lg border p-4 transition-colors hover:bg-muted/50"
-											>
-												<div className="flex items-center gap-3">
-													<div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
-														<RiUserLine className="h-5 w-5 text-primary" />
-													</div>
-													<div className="space-y-1">
-														<div className="flex flex-wrap items-center gap-2">
-															<span className="font-medium">
-																{agentItem.agent.name}
-															</span>
-															<span
-																className={`rounded-full px-2 py-1 text-xs ${accountRoleBadgeClass(agentItem.agent.role)}`}
-															>
-																{formatAccountRole(agentItem.agent.role)}
-															</span>
-															{agentItem.agent.agentTier && (
-																<TierBadge
-																	tier={agentItem.agent.agentTier as AgentTier}
-																	size="sm"
-																	showIcon={true}
-																/>
-															)}
-															<span
-																className={`rounded-full px-2 py-1 text-xs ${agentStatusBadgeClass(
-																	(agentItem.agent as AgentData).agentStatus,
-																)}`}
-															>
-																{formatAgentStatus(
-																	(agentItem.agent as AgentData).agentStatus,
+									<div className="space-y-2.5">
+										{agentsData.agents.map((agentItem) => {
+											const agent = agentItem.agent as AgentData;
+											const isActive = agent.isActive ?? true;
+
+											return (
+												<div
+													key={agent.id}
+													className="flex flex-col gap-3 rounded-2xl border border-border/40 bg-background p-4 shadow-sm transition-all hover:border-primary/25 hover:shadow-card sm:flex-row sm:items-center sm:justify-between"
+												>
+													<div className="flex min-w-0 items-start gap-3 sm:items-center">
+														<span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 font-semibold text-primary text-sm">
+															{agentInitials(agent.name, agent.email)}
+														</span>
+														<div className="min-w-0 space-y-1.5">
+															<div className="flex flex-wrap items-center gap-1.5">
+																<span className="truncate font-semibold text-sm">
+																	{agent.name || agent.email}
+																</span>
+																<span
+																	className={cn(
+																		"rounded-full px-2.5 py-0.5 font-medium text-[11px]",
+																		accountRoleBadgeClass(agent.role),
+																	)}
+																>
+																	{formatAccountRole(agent.role)}
+																</span>
+																{agent.agentTier && (
+																	<TierBadge
+																		tier={agent.agentTier as AgentTier}
+																		size="sm"
+																		showIcon={true}
+																	/>
 																)}
-															</span>
+																<span
+																	className={cn(
+																		"rounded-full px-2.5 py-0.5 font-medium text-[11px]",
+																		agentStatusBadgeClass(agent.agentStatus),
+																	)}
+																>
+																	{formatAgentStatus(agent.agentStatus)}
+																</span>
+															</div>
+															<p className="truncate text-muted-foreground text-xs sm:text-sm">
+																{agent.agentCode ? (
+																	<>
+																		<span className="font-mono">
+																			Code {agent.agentCode}
+																		</span>
+																		<span>{" · "}</span>
+																	</>
+																) : null}
+																{agent.email}
+																{agent.createdAt
+																	? ` · Joined ${formatDateDMY(agent.createdAt)}`
+																	: ""}
+															</p>
 														</div>
-														<p className="text-muted-foreground text-sm">
-															{(agentItem.agent as AgentData).agentCode ? (
-																<>
-																	<span className="font-mono">
-																		Code {(agentItem.agent as AgentData).agentCode}
-																	</span>
-																	<span>{" • "}</span>
-																</>
-															) : null}
-															{agentItem.agent.email}
-															{agentItem.agent.createdAt
-																? ` • Joined ${formatDateDMY(agentItem.agent.createdAt)}`
-																: ""}
-														</p>
 													</div>
-												</div>
-												<div className="flex flex-nowrap items-center justify-end gap-2">
-													{isPendingAgentStatus(
-														(agentItem.agent as AgentData).agentStatus,
-													) && (
-														<Button
-															size="sm"
-															variant="secondary"
-															onClick={() => {
-																setApproveAgentId(agentItem.agent.id);
-																setIsApproveDialogOpen(true);
-															}}
-															disabled={approveAgentMutation.isPending}
-														>
-															Approve
-														</Button>
-													)}
-													{isSuperAdmin &&
-														agentItem.agent.role !== "super_admin" && (
-														<Button
-															size="sm"
-															variant="secondary"
-															onClick={() =>
-																handleChangeRole(agentItem.agent as AgentData)
-															}
-														>
-															Role
-														</Button>
-													)}
-													{(agentItem.agent.role === "agent" ||
-														agentItem.agent.role === "team_lead" ||
-														!agentItem.agent.role) && (
+
+													<div className="flex flex-wrap items-center justify-end gap-1.5 sm:shrink-0">
+														{isPendingAgentStatus(agent.agentStatus) && (
+															<Button
+																size="sm"
+																className="h-8 rounded-full px-3"
+																onClick={() => {
+																	setApproveAgentId(agent.id);
+																	setIsApproveDialogOpen(true);
+																}}
+																disabled={approveAgentMutation.isPending}
+															>
+																Approve
+															</Button>
+														)}
+														{isSuperAdmin && agent.role !== "super_admin" && (
+															<Button
+																size="sm"
+																variant="outline"
+																className="h-8 rounded-full border-border/60 bg-muted/40 px-3 shadow-none"
+																onClick={() => handleChangeRole(agent)}
+															>
+																Role
+															</Button>
+														)}
+														{(agent.role === "agent" ||
+															agent.role === "team_lead" ||
+															!agent.role) && (
+															<Tooltip>
+																<TooltipTrigger asChild>
+																	<Button
+																		variant="ghost"
+																		size="icon"
+																		className={actionBtnClass}
+																		title="Manage"
+																		onClick={() => handleManageAgent(agent)}
+																	>
+																		<RiSettings3Line size={15} />
+																		<span className="sr-only">Manage</span>
+																	</Button>
+																</TooltipTrigger>
+																<TooltipContent>Manage</TooltipContent>
+															</Tooltip>
+														)}
+														<Tooltip>
+															<TooltipTrigger asChild>
+																<Button
+																	variant="ghost"
+																	size="icon"
+																	className={actionBtnClass}
+																	title="View details"
+																	onClick={() => handleViewAgent(agent)}
+																>
+																	<RiEyeLine size={15} />
+																	<span className="sr-only">View</span>
+																</Button>
+															</TooltipTrigger>
+															<TooltipContent>View details</TooltipContent>
+														</Tooltip>
 														<Button
 															size="sm"
 															variant="outline"
-															onClick={() =>
-																handleManageAgent(agentItem.agent as AgentData)
-															}
+															className="h-8 rounded-full border-border/60 bg-muted/40 px-3 shadow-none"
+															onClick={() => {
+																setResetAgentId(agent.id);
+																setIsResetPasswordOpen(true);
+															}}
 														>
-															<RiSettings3Line className="mr-1 h-4 w-4" />
-															Manage
+															Reset
 														</Button>
-													)}
-													<Button
-														size="sm"
-														variant="outline"
-														onClick={() =>
-															handleViewAgent(agentItem.agent as AgentData)
-														}
-													>
-														<RiUserLine className="mr-1 h-4 w-4" />
-														View
-													</Button>
-													<Button
-														size="sm"
-														variant="outline"
-														onClick={() => {
-															setResetAgentId(agentItem.agent.id);
-															setIsResetPasswordOpen(true);
-														}}
-													>
-														Reset
-													</Button>
-													<Button
-														size="sm"
-														variant="outline"
-														onClick={() => {
-															const active =
-																(agentItem.agent as AgentData).isActive ?? true;
-															setActiveMutation.mutate({
-																agentId: agentItem.agent.id,
-																isActive: !active,
-															});
-														}}
-													>
-														{(agentItem.agent as AgentData).isActive === false
-															? "Activate"
-															: "Deactivate"}
-													</Button>
-													{((isAdmin && agentItem.agent.role !== "super_admin") ||
-														(isSuperAdmin &&
-															agentItem.agent.role === "super_admin")) &&
-														agentItem.agent.id !== session?.user?.id && (
-															<Button
-																size="sm"
-																variant="destructive"
-																className="shrink-0"
-																onClick={() => {
-																	setDeleteAgent(agentItem.agent as AgentData);
-																	setDeleteStep(1);
-																	setDeleteConfirmText("");
-																	setIsDeleteDialogOpen(true);
-																}}
-																disabled={deleteAgentMutation.isPending}
-															>
-																Delete
-															</Button>
-														)}
+														<Button
+															size="sm"
+															variant="outline"
+															className="h-8 rounded-full border-border/60 bg-muted/40 px-3 shadow-none"
+															onClick={() => {
+																setActiveMutation.mutate({
+																	agentId: agent.id,
+																	isActive: !isActive,
+																});
+															}}
+														>
+															{isActive ? "Deactivate" : "Activate"}
+														</Button>
+														{((isAdmin && agent.role !== "super_admin") ||
+															(isSuperAdmin &&
+																agent.role === "super_admin")) &&
+															agent.id !== session?.user?.id && (
+																<Button
+																	size="sm"
+																	variant="destructive"
+																	className="h-8 shrink-0 rounded-full px-3"
+																	onClick={() => {
+																		setDeleteAgent(agent);
+																		setDeleteStep(1);
+																		setDeleteConfirmText("");
+																		setIsDeleteDialogOpen(true);
+																	}}
+																	disabled={deleteAgentMutation.isPending}
+																>
+																	Delete
+																</Button>
+															)}
+													</div>
 												</div>
-											</div>
-										))}
+											);
+										})}
 										{agentsData.hasMore && (
-											<div className="pt-4 text-center">
+											<div className="pt-2 text-center">
 												<Button
 													variant="outline"
+													className="rounded-full"
 													onClick={() => {
 														// TODO: Implement pagination
 													}}
@@ -704,25 +738,31 @@ export default function AdminAgentsPage() {
 										)}
 									</div>
 								) : (
-									<div className="py-8 text-center">
-										<RiTeamLine
-											size={48}
-											className="mx-auto mb-4 text-muted-foreground"
-										/>
+									<div className="py-12 text-center">
+										<span className="mx-auto mb-4 flex size-14 items-center justify-center rounded-3xl bg-primary/10 text-primary">
+											<RiTeamLine size={28} />
+										</span>
 										<h3 className="mb-2 font-semibold text-lg">
 											No Agents Found
 										</h3>
-										<p className="mb-4 text-muted-foreground">
+										<p className="mx-auto mb-5 max-w-sm text-muted-foreground text-sm">
 											No agents match the current filter criteria. Try adjusting
 											your filters.
 										</p>
 										<div className="flex justify-center gap-2">
-											<Button variant="outline" onClick={handleRefresh}>
-												<RiRefreshLine className="mr-2 h-4 w-4" />
+											<Button
+												variant="outline"
+												className="rounded-full"
+												onClick={handleRefresh}
+											>
+												<RiRefreshLine className="mr-2 size-4" />
 												Refresh
 											</Button>
-											<Button onClick={() => setIsCreateDialogOpen(true)}>
-												<RiAddLine className="mr-2 h-4 w-4" />
+											<Button
+												className="rounded-full"
+												onClick={() => setIsCreateDialogOpen(true)}
+											>
+												<RiAddLine className="mr-2 size-4" />
 												Add New Agent
 											</Button>
 										</div>

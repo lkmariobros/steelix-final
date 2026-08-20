@@ -32,7 +32,7 @@ function MiniSparkline({
 			{values.map((h, i) => (
 				<span
 					key={`${h}-${i}`}
-					className="w-1 flex-1 rounded-full bg-primary/25 last:bg-primary/80 dark:bg-primary/35 dark:last:bg-primary"
+					className="w-1.5 flex-1 rounded-t-md bg-gradient-to-t from-primary/20 to-primary/70 last:to-primary dark:from-primary/25 dark:to-primary/80"
 					style={{ height: `${Math.max(12, Math.min(100, h))}%` }}
 				/>
 			))}
@@ -61,18 +61,18 @@ export function MetricCard({
 	return (
 		<div
 			className={cn(
-				"relative flex h-full flex-col overflow-hidden rounded-2xl border p-5 shadow-card transition-shadow hover:shadow-md",
+				"relative flex h-full flex-col overflow-hidden rounded-3xl border p-5 shadow-card transition-shadow hover:shadow-md",
 				isGradient
 					? "border-transparent bg-gradient-to-br from-[#1a4d54] via-primary to-[#3d8f8a] text-primary-foreground"
-					: "border-border/70 bg-card text-card-foreground",
+					: "border-border/40 bg-card text-card-foreground",
 				className,
 			)}
 		>
 			<div className="flex items-start justify-between gap-3">
-				<div className="min-w-0 space-y-1">
+				<div className="min-w-0 space-y-1.5">
 					<p
 						className={cn(
-							"font-medium text-xs uppercase tracking-wide",
+							"font-medium text-xs tracking-wide",
 							isGradient ? "text-white/75" : "text-muted-foreground",
 						)}
 					>
@@ -80,7 +80,7 @@ export function MetricCard({
 					</p>
 					<p
 						className={cn(
-							"font-semibold text-2xl tracking-tight tabular-nums sm:text-[1.75rem]",
+							"font-bold text-[1.75rem] tracking-tight tabular-nums leading-none sm:text-3xl",
 							isGradient ? "text-white" : "text-foreground",
 						)}
 					>
@@ -90,10 +90,10 @@ export function MetricCard({
 				{icon && (
 					<div
 						className={cn(
-							"flex size-10 shrink-0 items-center justify-center rounded-xl",
+							"flex size-11 shrink-0 items-center justify-center rounded-2xl",
 							isGradient
 								? "bg-white/15 text-white"
-								: "bg-primary/10 text-primary",
+								: "bg-primary/12 text-primary",
 						)}
 					>
 						{icon}
@@ -102,10 +102,10 @@ export function MetricCard({
 			</div>
 
 			{/* Shared footer height so all cards align on one baseline */}
-			<div className="mt-auto flex h-9 items-center justify-between gap-3 pt-4">
+			<div className="mt-auto flex h-9 items-center justify-between gap-3 pt-5">
 				<span
 					className={cn(
-						"inline-flex max-w-full items-center truncate rounded-full px-2 py-0.5 font-medium text-[11px]",
+						"inline-flex max-w-full items-center truncate rounded-full px-2.5 py-1 font-medium text-[11px]",
 						isGradient ? "bg-white/20 text-white" : trendBadge,
 					)}
 				>

@@ -224,7 +224,7 @@ export function ImportTagsDialog({
 				</div>
 
 				<DialogFooter>
-					<Button variant="outline" onClick={handleClose}>
+					<Button variant="outline" className="rounded-full" onClick={handleClose}>
 						<RiCloseLine className="mr-1 size-4" />
 						{importResult ? "Close" : "Cancel"}
 					</Button>
@@ -232,7 +232,7 @@ export function ImportTagsDialog({
 						<Button
 							onClick={handleImport}
 							disabled={rows.length === 0 || importMutation.isPending}
-							className="bg-green-600 hover:bg-green-700"
+							className="rounded-full px-5"
 						>
 							{importMutation.isPending ? (
 								<>

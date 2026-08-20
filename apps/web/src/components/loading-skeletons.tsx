@@ -54,6 +54,19 @@ export function StatsCardsSkeleton({
 	);
 }
 
+/** Storage used label + progress bar — Files page. */
+export function StorageUsageSkeleton({ className }: { className?: string }) {
+	return (
+		<div className={cn("space-y-1.5", className)}>
+			<div className="flex justify-between gap-3">
+				<Skeleton className="h-4 w-24" />
+				<Skeleton className="h-4 w-32" />
+			</div>
+			<Skeleton className="h-2 w-full rounded-full" />
+		</div>
+	);
+}
+
 /** Folder / card tile grid — matches Files folder layout. */
 export function FolderGridSkeleton({
 	count = 4,
@@ -73,12 +86,82 @@ export function FolderGridSkeleton({
 			{ids.map((id) => (
 				<div
 					key={id}
-					className="flex items-center gap-2 rounded-lg border bg-card p-3"
+					className="flex items-center justify-between gap-2 rounded-xl border border-border/60 bg-card p-3 shadow-sm"
 				>
-					<Skeleton className="size-5 shrink-0 rounded" />
-					<Skeleton className="h-4 flex-1" />
+					<div className="flex min-w-0 flex-1 items-center gap-2">
+						<Skeleton className="size-5 shrink-0 rounded-md" />
+						<Skeleton className="h-4 w-24" />
+					</div>
+					<Skeleton className="size-8 shrink-0 rounded-full" />
 				</div>
 			))}
+		</div>
+	);
+}
+
+/** Full files table skeleton (header + rows) matching File drive columns. */
+export function FilesTableSkeleton({
+	rows = 6,
+	className,
+}: {
+	rows?: number;
+	className?: string;
+}) {
+	const ids = ROW_IDS.slice(0, Math.max(1, Math.min(rows, ROW_IDS.length)));
+	return (
+		<div
+			className={cn(
+				"overflow-hidden rounded-xl border border-border/60",
+				className,
+			)}
+		>
+			<Table>
+				<TableHeader>
+					<TableRow className="hover:bg-transparent">
+						{(["Name", "Source", "Type", "Size", "Uploaded", "Actions"] as const).map(
+							(label) => (
+								<TableHead
+									key={label}
+									className={cn(
+										"bg-muted/50 font-semibold text-foreground/80 text-xs",
+										label === "Actions" && "text-right",
+									)}
+								>
+									{label}
+								</TableHead>
+							),
+						)}
+					</TableRow>
+				</TableHeader>
+				<TableBody>
+					{ids.map((id) => (
+						<TableRow key={id} className="hover:bg-transparent">
+							<TableCell>
+								<Skeleton className="h-4 w-36" />
+							</TableCell>
+							<TableCell>
+								<Skeleton className="h-5 w-16 rounded-full" />
+							</TableCell>
+							<TableCell>
+								<Skeleton className="h-5 w-14 rounded-full" />
+							</TableCell>
+							<TableCell>
+								<Skeleton className="h-4 w-14" />
+							</TableCell>
+							<TableCell>
+								<Skeleton className="h-4 w-28" />
+							</TableCell>
+							<TableCell className="text-right">
+								<div className="flex justify-end gap-1">
+									<Skeleton className="size-8 rounded-full" />
+									<Skeleton className="size-8 rounded-full" />
+									<Skeleton className="size-8 rounded-full" />
+								</div>
+							</TableCell>
+						</TableRow>
+					))}
+				</TableBody>
+			</Table>
 		</div>
 	);
 }
@@ -89,7 +172,8 @@ type TableColumnSkeleton =
 	| "double"
 	| "badge"
 	| "amount"
-	| "actions";
+	| "actions"
+	| "actions-3";
 
 const COLUMN_RENDER: Record<TableColumnSkeleton, () => ReactNode> = {
 	text: () => <Skeleton className="h-4 w-28" />,
@@ -104,8 +188,15 @@ const COLUMN_RENDER: Record<TableColumnSkeleton, () => ReactNode> = {
 	amount: () => <Skeleton className="ml-auto h-4 w-20" />,
 	actions: () => (
 		<div className="flex justify-end gap-1">
-			<Skeleton className="h-7 w-7 rounded-md" />
-			<Skeleton className="h-7 w-7 rounded-md" />
+			<Skeleton className="size-8 rounded-full" />
+			<Skeleton className="size-8 rounded-full" />
+		</div>
+	),
+	"actions-3": () => (
+		<div className="flex justify-end gap-1">
+			<Skeleton className="size-8 rounded-full" />
+			<Skeleton className="size-8 rounded-full" />
+			<Skeleton className="size-8 rounded-full" />
 		</div>
 	),
 };
@@ -131,7 +222,9 @@ export function TableRowsSkeleton({
 				<TableCell
 					key={`${id}-${col}-${i}`}
 					className={
-						col === "amount" || col === "actions" ? "text-right" : undefined
+						col === "amount" || col === "actions" || col === "actions-3"
+							? "text-right"
+							: undefined
 					}
 				>
 					{COLUMN_RENDER[col]()}

@@ -37,7 +37,8 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/table";
-import { FolderGridSkeleton, TableRowsSkeleton } from "@/components/loading-skeletons";
+import { FolderGridSkeleton, FilesTableSkeleton, StorageUsageSkeleton } from "@/components/loading-skeletons";
+import { Skeleton } from "@/components/ui/skeleton";
 import { trpc } from "@/utils/trpc";
 import {
 	RiDeleteBinLine,
@@ -223,6 +224,7 @@ export function PortalFilesBrowser({ mode }: { mode: PortalFilesMode }) {
 	const folders = foldersQuery.data ?? [];
 	const files = filesQuery.data ?? [];
 	const isContentLoading = foldersQuery.isLoading || filesQuery.isLoading;
+	const isUsageLoading = canUpload && usageQuery.isLoading;
 	const usage = usageQuery.data;
 	const agents = agentsQuery.data?.agents ?? [];
 
@@ -232,30 +234,32 @@ export function PortalFilesBrowser({ mode }: { mode: PortalFilesMode }) {
 				<div className="flex flex-wrap items-end gap-3">
 					<div className="min-w-[240px] flex-1 space-y-1.5">
 						<Label>Manage files for</Label>
-						<Select
-							value={ownerUserId ?? "__me__"}
-							onValueChange={(v) => {
-								setOwnerUserId(
-									v === "__me__" ? undefined : v,
-								);
-								setFolderId(null);
-							}}
-						>
-							<SelectTrigger>
-								<SelectValue placeholder="Select location" />
-							</SelectTrigger>
-							<SelectContent>
-								<SelectItem value={PORTAL_SHARED_OWNER_SELECT_VALUE}>
-									Company files (all agents)
-								</SelectItem>
-								<SelectItem value="__me__">My files (admin)</SelectItem>
-								{agents.map((row) => (
-									<SelectItem key={row.agent.id} value={row.agent.id}>
-										{row.agent.name ?? row.agent.email ?? row.agent.id}
+						{agentsQuery.isLoading ? (
+							<Skeleton className="h-10 w-full max-w-sm rounded-xl" />
+						) : (
+							<Select
+								value={ownerUserId ?? "__me__"}
+								onValueChange={(v) => {
+									setOwnerUserId(v === "__me__" ? undefined : v);
+									setFolderId(null);
+								}}
+							>
+								<SelectTrigger>
+									<SelectValue placeholder="Select location" />
+								</SelectTrigger>
+								<SelectContent>
+									<SelectItem value={PORTAL_SHARED_OWNER_SELECT_VALUE}>
+										Company files (all agents)
 									</SelectItem>
-								))}
-							</SelectContent>
-						</Select>
+									<SelectItem value="__me__">My files (admin)</SelectItem>
+									{agents.map((row) => (
+										<SelectItem key={row.agent.id} value={row.agent.id}>
+											{row.agent.name ?? row.agent.email ?? row.agent.id}
+										</SelectItem>
+									))}
+								</SelectContent>
+							</Select>
+						)}
 					</div>
 				</div>
 			) : (
@@ -265,7 +269,9 @@ export function PortalFilesBrowser({ mode }: { mode: PortalFilesMode }) {
 				</p>
 			)}
 
-			{usage && canUpload ? (
+			{isUsageLoading ? (
+				<StorageUsageSkeleton />
+			) : usage && canUpload ? (
 				<div className="space-y-1.5">
 					<div className="flex justify-between text-muted-foreground text-sm">
 						<span>Storage used</span>
@@ -372,8 +378,13 @@ export function PortalFilesBrowser({ mode }: { mode: PortalFilesMode }) {
 			) : null}
 
 			{isContentLoading ? (
-				<FolderGridSkeleton count={4} />
-			) : folders.length > 0 ? (
+				<div className="space-y-4">
+					<FolderGridSkeleton count={4} />
+					<FilesTableSkeleton rows={6} />
+				</div>
+			) : (
+				<>
+			{folders.length > 0 ? (
 				<div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
 					{folders.map((folder) => (
 						<div
@@ -427,22 +438,7 @@ export function PortalFilesBrowser({ mode }: { mode: PortalFilesMode }) {
 							<TableHead className="text-right">Actions</TableHead>
 						</TableRow>
 					</TableHeader>
-					{isContentLoading ? (
-						<TableBody>
-							<TableRowsSkeleton
-								rows={5}
-								columns={[
-									"double",
-									"badge",
-									"badge",
-									"text-sm",
-									"text-sm",
-									"actions",
-								]}
-							/>
-						</TableBody>
-					) : (
-						<TableBody>
+					<TableBody>
 							{files.map((file) => (
 								<TableRow key={file.id}>
 									<TableCell className="max-w-[240px] truncate font-medium">
@@ -539,9 +535,10 @@ export function PortalFilesBrowser({ mode }: { mode: PortalFilesMode }) {
 								</TableRow>
 							) : null}
 						</TableBody>
-					)}
 				</Table>
 			</div>
+				</>
+			)}
 
 			<AlertDialog
 				open={deleteTarget !== null}
