@@ -23,11 +23,11 @@ export function useAdminPrefetch(enabled: boolean) {
 			const dateRange = {};
 			void utils.admin.getDashboardSummary.prefetch(dateRange);
 			void utils.admin.getCommissionApprovalQueue.prefetch({
-				limit: 10,
+				limit: 100,
 				offset: 0,
 				status: "pending",
 			});
-			void utils.admin.getUrgentTasks.prefetch();
+			void utils.admin.getDashboardInsights.prefetch(dateRange);
 			void utils.admin.getAgentPerformance.prefetch({ dateRange });
 		}, PREFETCH_DELAY_MS);
 

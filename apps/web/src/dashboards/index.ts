@@ -8,7 +8,7 @@ export {
 	DashboardSummary,
 	CommissionApprovalQueue,
 	AgentPerformanceGrid,
-	UrgentTasksPanel,
+	DealMixPanel,
 	// Admin-specific utility functions with prefixes to avoid conflicts
 	getPriorityColor,
 	calculateApprovalRate,

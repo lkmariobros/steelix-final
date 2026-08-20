@@ -498,6 +498,187 @@ export const adminRouter = router({
 		return urgentTasks;
 	}),
 
+	/**
+	 * Dashboard right-rail insights: pending approval aging + deal mix.
+	 * Aging is always based on current pending queue (not date-filtered).
+	 * Deal mix respects the optional dashboard date range.
+	 */
+	getDashboardInsights: adminProcedure
+		.input(dateRangeInput.optional())
+		.query(async ({ ctx, input }) => {
+			const { userRole } = ctx;
+			const userId = ctx.session.user.id;
+
+			let teamMemberIds: string[] | null = null;
+			if (userRole === "team_lead") {
+				const [userRecord] = await db
+					.select({ teamId: user.teamId })
+					.from(user)
+					.where(eq(user.id, userId))
+					.limit(1);
+
+				if (userRecord?.teamId) {
+					const teamMembers = await db
+						.select({ id: user.id })
+						.from(user)
+						.where(eq(user.teamId, userRecord.teamId));
+					teamMemberIds = teamMembers.map((m) => m.id);
+				}
+			}
+
+			const pendingStatusCondition = inArray(transactions.status, [
+				...ADMIN_QUEUE_DB_STATUSES,
+			]);
+
+			const roleCondition =
+				teamMemberIds && teamMemberIds.length > 0
+					? inArray(transactions.agentId, teamMemberIds)
+					: undefined;
+
+			const pendingRows = await db
+				.select({
+					id: transactions.id,
+					commissionAmount: transactions.commissionAmount,
+					submittedAt: transactions.submittedAt,
+					createdAt: transactions.createdAt,
+				})
+				.from(transactions)
+				.where(
+					roleCondition
+						? and(pendingStatusCondition, roleCondition)
+						: pendingStatusCondition,
+				);
+
+			const now = Date.now();
+			const buckets = {
+				fresh: { key: "fresh" as const, label: "0–2 days", count: 0, amount: 0 },
+				attention: {
+					key: "attention" as const,
+					label: "3–7 days",
+					count: 0,
+					amount: 0,
+				},
+				overdue: {
+					key: "overdue" as const,
+					label: "7+ days",
+					count: 0,
+					amount: 0,
+				},
+			};
+
+			let oldestDays: number | null = null;
+
+			for (const row of pendingRows) {
+				const anchor = row.submittedAt ?? row.createdAt;
+				const ageMs = anchor ? now - new Date(anchor).getTime() : 0;
+				const ageDays = Math.max(0, ageMs / 86_400_000);
+				const amount = Number(row.commissionAmount) || 0;
+
+				if (oldestDays === null || ageDays > oldestDays) {
+					oldestDays = ageDays;
+				}
+
+				if (ageDays <= 2) {
+					buckets.fresh.count += 1;
+					buckets.fresh.amount += amount;
+				} else if (ageDays <= 7) {
+					buckets.attention.count += 1;
+					buckets.attention.amount += amount;
+				} else {
+					buckets.overdue.count += 1;
+					buckets.overdue.amount += amount;
+				}
+			}
+
+			const totalPending = pendingRows.length;
+			const totalPendingAmount =
+				buckets.fresh.amount +
+				buckets.attention.amount +
+				buckets.overdue.amount;
+
+			// Deal mix — filtered by dashboard date range when provided
+			const mixConditions = [];
+			if (input?.startDate) {
+				mixConditions.push(
+					sql`${transactions.createdAt} >= ${input.startDate}`,
+				);
+			}
+			if (input?.endDate) {
+				mixConditions.push(sql`${transactions.createdAt} <= ${input.endDate}`);
+			}
+			if (roleCondition) {
+				mixConditions.push(roleCondition);
+			}
+
+			const mixRows = await db
+				.select({
+					transactionType: transactions.transactionType,
+					marketType: transactions.marketType,
+					commissionAmount: transactions.commissionAmount,
+				})
+				.from(transactions)
+				.where(mixConditions.length > 0 ? and(...mixConditions) : undefined);
+
+			const mix = {
+				newProject: {
+					key: "newProject" as const,
+					label: "New Project",
+					count: 0,
+					amount: 0,
+				},
+				subsale: {
+					key: "subsale" as const,
+					label: "Subsale",
+					count: 0,
+					amount: 0,
+				},
+				rental: {
+					key: "rental" as const,
+					label: "Rental",
+					count: 0,
+					amount: 0,
+				},
+			};
+
+			for (const row of mixRows) {
+				const amount = Number(row.commissionAmount) || 0;
+				const type = (row.transactionType || "").toLowerCase();
+				const market = (row.marketType || "").toLowerCase();
+
+				if (type === "rental" || type === "lease") {
+					mix.rental.count += 1;
+					mix.rental.amount += amount;
+				} else if (market === "primary") {
+					mix.newProject.count += 1;
+					mix.newProject.amount += amount;
+				} else {
+					// secondary / unknown sale → subsale bucket
+					mix.subsale.count += 1;
+					mix.subsale.amount += amount;
+				}
+			}
+
+			const mixTotalCount =
+				mix.newProject.count + mix.subsale.count + mix.rental.count;
+			const mixTotalAmount =
+				mix.newProject.amount + mix.subsale.amount + mix.rental.amount;
+
+			return {
+				aging: {
+					buckets: [buckets.fresh, buckets.attention, buckets.overdue],
+					totalPending,
+					totalPendingAmount,
+					oldestDays:
+						oldestDays === null ? null : Math.floor(oldestDays * 10) / 10,
+				},
+				dealMix: {
+					segments: [mix.newProject, mix.subsale, mix.rental],
+					totalCount: mixTotalCount,
+					totalAmount: mixTotalAmount,
+				},
+			};
+		}),
+
 	// Get admin dashboard summary stats
 	getDashboardSummary: adminProcedure
 		.input(dateRangeInput.optional())

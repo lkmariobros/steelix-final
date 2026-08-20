@@ -37,6 +37,9 @@ export function invalidateTransactionQueries(queryClient: QueryClient) {
 	queryClient.invalidateQueries({
 		queryKey: ["admin", "getUrgentTasks"],
 	});
+	queryClient.invalidateQueries({
+		queryKey: ["admin", "getDashboardInsights"],
+	});
 
 	// Transaction-specific queries
 	queryClient.invalidateQueries({
@@ -61,6 +64,9 @@ export function invalidateAdminQueries(queryClient: QueryClient) {
 	});
 	queryClient.invalidateQueries({
 		queryKey: ["admin", "getUrgentTasks"],
+	});
+	queryClient.invalidateQueries({
+		queryKey: ["admin", "getDashboardInsights"],
 	});
 
 	// Also update agent dashboards as their transaction status changed

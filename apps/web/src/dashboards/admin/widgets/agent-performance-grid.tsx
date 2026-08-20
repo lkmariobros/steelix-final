@@ -1,6 +1,6 @@
 "use client";
 
-import { Avatar } from "@/components/avatar";
+import { Avatar, AvatarFallback } from "@/components/avatar";
 import { Badge } from "@/components/badge";
 import {
 	Table,
@@ -10,17 +10,20 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/table";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAdminDashboard } from "@/contexts/admin-dashboard-context";
+import { cn } from "@/lib/utils";
 import {
 	RiArrowDownLine,
+	RiArrowUpDownLine,
 	RiArrowUpLine,
 	RiBarChartLine,
+	RiSearchLine,
 	RiTrophyLine,
 } from "@remixicon/react";
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 
 import {
 	calculateApprovalRate,
@@ -28,6 +31,8 @@ import {
 	formatCurrency,
 	formatPercentage,
 } from "../admin-schema";
+import { StripedProgress } from "./striped-progress";
+import { TablePagination } from "./table-pagination";
 
 interface AgentPerformanceGridProps {
 	className?: string;
@@ -41,6 +46,8 @@ type SortField =
 	| "grade";
 type SortDirection = "asc" | "desc";
 
+const PAGE_SIZE = 6;
+
 export function AgentPerformanceGrid({ className }: AgentPerformanceGridProps) {
 	const {
 		agentPerformance: rawPerformanceData,
@@ -49,8 +56,10 @@ export function AgentPerformanceGrid({ className }: AgentPerformanceGridProps) {
 	} = useAdminDashboard();
 	const [sortField, setSortField] = useState<SortField>("transactions");
 	const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
+	const [search, setSearch] = useState("");
+	const [page, setPage] = useState(0);
 
-	const performanceData = React.useMemo(() => {
+	const performanceData = useMemo(() => {
 		if (!rawPerformanceData) return [];
 		return rawPerformanceData.map((agent) => ({
 			...agent,
@@ -70,8 +79,20 @@ export function AgentPerformanceGrid({ className }: AgentPerformanceGridProps) {
 		}
 	};
 
-	const sortedData = React.useMemo(() => {
-		return [...performanceData].sort((a, b) => {
+	const filteredData = useMemo(() => {
+		const q = search.trim().toLowerCase();
+		if (!q) return performanceData;
+		return performanceData.filter((agent) => {
+			const haystack = [agent.agentName, agent.agentEmail]
+				.filter(Boolean)
+				.join(" ")
+				.toLowerCase();
+			return haystack.includes(q);
+		});
+	}, [performanceData, search]);
+
+	const sortedData = useMemo(() => {
+		return [...filteredData].sort((a, b) => {
 			let aVal: number | string;
 			let bVal: number | string;
 			switch (sortField) {
@@ -127,47 +148,62 @@ export function AgentPerformanceGrid({ className }: AgentPerformanceGridProps) {
 				? (aVal as number) - (bVal as number)
 				: (bVal as number) - (aVal as number);
 		});
-	}, [performanceData, sortField, sortDirection]);
+	}, [filteredData, sortField, sortDirection]);
+
+	const pageCount = Math.max(1, Math.ceil(sortedData.length / PAGE_SIZE));
+	const safePage = Math.min(page, pageCount - 1);
+	const pageData = sortedData.slice(
+		safePage * PAGE_SIZE,
+		(safePage + 1) * PAGE_SIZE,
+	);
+
+	const handleSearchChange = (value: string) => {
+		setSearch(value);
+		setPage(0);
+	};
 
 	const getSortIcon = (field: SortField) => {
-		if (sortField !== field) return null;
+		if (sortField !== field) {
+			return (
+				<RiArrowUpDownLine size={12} className="text-muted-foreground/60" />
+			);
+		}
 		return sortDirection === "asc" ? (
-			<RiArrowUpLine size={14} />
+			<RiArrowUpLine size={14} className="text-primary" />
 		) : (
-			<RiArrowDownLine size={14} />
+			<RiArrowDownLine size={14} className="text-primary" />
 		);
 	};
 
 	const getGradeColor = (grade: string) => {
 		const colors: Record<string, string> = {
-			A: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
-			B: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
-			C: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200",
-			D: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200",
-			F: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
+			A: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
+			B: "bg-sky-500/15 text-sky-700 dark:text-sky-300",
+			C: "bg-amber-500/15 text-amber-700 dark:text-amber-300",
+			D: "bg-orange-500/15 text-orange-700 dark:text-orange-300",
+			F: "bg-rose-500/15 text-rose-700 dark:text-rose-300",
 		};
-		return (
-			colors[grade] ??
-			"bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200"
-		);
+		return colors[grade] ?? "bg-muted text-muted-foreground";
 	};
 
 	if (performanceLoading) {
 		return (
 			<Card className={className}>
-				<CardHeader>
-					<CardTitle className="flex items-center gap-2">
-						<RiBarChartLine size={20} />
-						Agent Performance Grid
+				<CardHeader className="border-b border-border/60 pb-4">
+					<CardTitle className="flex items-center gap-2 text-base">
+						<span className="flex size-8 items-center justify-center rounded-xl bg-primary/10 text-primary">
+							<RiBarChartLine size={16} />
+						</span>
+						Agent Performance
 					</CardTitle>
 				</CardHeader>
-				<CardContent>
-					<div className="space-y-4">
+				<CardContent className="pt-4">
+					<div className="space-y-3">
 						{["sk-ag-1", "sk-ag-2", "sk-ag-3", "sk-ag-4", "sk-ag-5"].map(
 							(id) => (
 								<div
 									key={id}
-									className="flex items-center justify-between rounded-lg border p-4"
+									className="flex items-center justify-between rounded-xl bg-muted/40 p-4"
 								>
 									<div className="flex items-center gap-3">
 										<Skeleton className="h-10 w-10 rounded-full" />
@@ -193,10 +229,12 @@ export function AgentPerformanceGrid({ className }: AgentPerformanceGridProps) {
 	if (hasError) {
 		return (
 			<Card className={className}>
-				<CardHeader>
-					<CardTitle className="flex items-center gap-2">
-						<RiBarChartLine size={20} />
-						Agent Performance Grid
+				<CardHeader className="border-b border-border/60 pb-4">
+					<CardTitle className="flex items-center gap-2 text-base">
+						<span className="flex size-8 items-center justify-center rounded-xl bg-primary/10 text-primary">
+							<RiBarChartLine size={16} />
+						</span>
+						Agent Performance
 					</CardTitle>
 				</CardHeader>
 				<CardContent>
@@ -212,164 +250,218 @@ export function AgentPerformanceGrid({ className }: AgentPerformanceGridProps) {
 
 	return (
 		<Card className={className}>
-			<CardHeader>
-				<div className="flex items-center justify-between">
-					<CardTitle className="flex items-center gap-2">
-						<RiBarChartLine size={20} />
-						Agent Performance Grid
-					</CardTitle>
-					<Badge variant="secondary">{sortedData.length} agents</Badge>
+			<CardHeader className="pb-3">
+				<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+					<div className="flex items-center gap-2.5">
+						<CardTitle className="flex items-center gap-2.5 text-base">
+							<span className="flex size-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
+								<RiBarChartLine size={18} />
+							</span>
+							Agent Performance
+						</CardTitle>
+						<Badge
+							variant="secondary"
+							className="rounded-full bg-primary/12 text-primary"
+						>
+							{performanceData.length} agents
+						</Badge>
+					</div>
+					<div className="relative w-full sm:max-w-[220px]">
+						<RiSearchLine
+							size={16}
+							className="-translate-y-1/2 absolute top-1/2 left-3 text-muted-foreground"
+						/>
+						<Input
+							value={search}
+							onChange={(e) => handleSearchChange(e.target.value)}
+							placeholder="Search"
+							className="h-9 rounded-xl border-border/70 bg-muted/30 pl-9"
+						/>
+					</div>
 				</div>
 			</CardHeader>
-			<CardContent>
-				{sortedData.length === 0 ? (
-					<div className="flex items-center justify-center py-8">
+			<CardContent className="pt-0">
+				{performanceData.length === 0 ? (
+					<div className="flex items-center justify-center py-10">
 						<p className="text-muted-foreground text-sm">
 							No agent performance data available.
 						</p>
 					</div>
+				) : sortedData.length === 0 ? (
+					<div className="flex items-center justify-center py-10">
+						<p className="text-muted-foreground text-sm">
+							No matches for “{search.trim()}”.
+						</p>
+					</div>
 				) : (
-					<div className="rounded-md border">
-						<Table>
-							<TableHeader>
-								<TableRow>
-									{(
-										[
-											"name",
-											"transactions",
-											"commission",
-											"approvalRate",
-											"grade",
-										] as SortField[]
-									).map((field) => (
-										<TableHead key={field}>
-											<Button
-												variant="ghost"
-												size="sm"
-												onClick={() => handleSort(field)}
-												className="h-auto p-0 font-medium capitalize hover:bg-transparent"
+					<>
+						<div className="overflow-x-auto rounded-xl border border-border/60">
+							<Table className="w-full table-fixed min-w-[760px]">
+								<TableHeader>
+									<TableRow className="border-border/50 hover:bg-transparent">
+										{(
+											[
+												["name", "Name", "w-[28%]"],
+												["transactions", "Transactions", "w-[12%]"],
+												["commission", "Commission", "w-[16%]"],
+												["approvalRate", "Approval Rate", "w-[16%]"],
+												["grade", "Grade", "w-[10%]"],
+											] as [SortField, string, string][]
+										).map(([field, label, width]) => (
+											<TableHead
+												key={field}
+												className={cn(
+													"h-11 bg-muted/50 font-semibold text-foreground text-xs",
+													width,
+												)}
 											>
-												{field === "approvalRate"
-													? "Approval Rate"
-													: field.charAt(0).toUpperCase() + field.slice(1)}
-												{getSortIcon(field)}
-											</Button>
+												<button
+													type="button"
+													onClick={() => handleSort(field)}
+													className="inline-flex items-center gap-1.5 font-semibold text-foreground text-xs hover:text-primary"
+												>
+													{label}
+													{getSortIcon(field)}
+												</button>
+											</TableHead>
+										))}
+										<TableHead className="h-11 w-[18%] bg-muted/50 font-semibold text-foreground text-xs">
+											Status
 										</TableHead>
-									))}
-									<TableHead>Status</TableHead>
-								</TableRow>
-							</TableHeader>
-							<TableBody>
-								{sortedData.map((agent, index) => {
-									const approvalRate = calculateApprovalRate(
-										agent.approvedCount,
-										agent.totalTransactions,
-									);
-									const grade = calculatePerformanceGrade(
-										agent.totalTransactions,
-										approvalRate,
-										agent.avgCommission || 0,
-									);
-									return (
-										<TableRow key={agent.agentId}>
-											<TableCell>
-												<div className="flex items-center gap-3">
-													<div className="relative">
-														<Avatar className="h-10 w-10">
-															<span className="font-medium text-sm">
-																{(agent.agentName || "?")
-																	.charAt(0)
-																	.toUpperCase()}
-															</span>
-														</Avatar>
-														{index < 3 && (
-															<div className="-top-1 -right-1 absolute">
-																<RiTrophyLine
-																	size={16}
-																	className={
-																		index === 0
-																			? "text-yellow-500"
-																			: index === 1
-																				? "text-gray-400"
-																				: "text-amber-600"
-																	}
-																/>
-															</div>
-														)}
-													</div>
-													<div>
-														<div className="font-medium">
-															{agent.agentName || "Unknown Agent"}
+									</TableRow>
+								</TableHeader>
+								<TableBody>
+									{pageData.map((agent, index) => {
+										const globalIndex = safePage * PAGE_SIZE + index;
+										const approvalRate = calculateApprovalRate(
+											agent.approvedCount,
+											agent.totalTransactions,
+										);
+										const grade = calculatePerformanceGrade(
+											agent.totalTransactions,
+											approvalRate,
+											agent.avgCommission || 0,
+										);
+										const initial = (agent.agentName || "?")
+											.charAt(0)
+											.toUpperCase();
+										const name = agent.agentName || "Unknown Agent";
+
+										return (
+											<TableRow
+												key={agent.agentId}
+												className="border-border/40 hover:bg-muted/20"
+											>
+												<TableCell className="max-w-0 py-3">
+													<div className="flex min-w-0 items-center gap-2.5">
+														<div className="relative shrink-0">
+															<Avatar className="size-8 border border-border/50">
+																<AvatarFallback className="bg-primary/10 font-semibold text-primary text-xs">
+																	{initial}
+																</AvatarFallback>
+															</Avatar>
+															{globalIndex < 3 && (
+																<span className="-bottom-0.5 -right-0.5 absolute flex size-3.5 items-center justify-center rounded-full bg-card shadow-sm">
+																	<RiTrophyLine
+																		size={9}
+																		className={
+																			globalIndex === 0
+																				? "text-amber-500"
+																				: globalIndex === 1
+																					? "text-slate-400"
+																					: "text-amber-700"
+																		}
+																	/>
+																</span>
+															)}
 														</div>
-														<div className="text-muted-foreground text-sm">
-															{agent.agentEmail}
+														<div className="min-w-0 flex-1 overflow-hidden">
+															<p
+																className="truncate font-medium text-foreground text-sm leading-snug"
+																title={name}
+															>
+																{name}
+															</p>
+															<p
+																className="mt-0.5 truncate text-muted-foreground text-xs leading-snug"
+																title={agent.agentEmail || undefined}
+															>
+																{agent.agentEmail}
+															</p>
 														</div>
 													</div>
-												</div>
-											</TableCell>
-											<TableCell>
-												<div className="space-y-1">
-													<div className="font-medium">
+												</TableCell>
+												<TableCell className="py-3">
+													<p className="font-semibold tabular-nums text-foreground text-sm">
 														{agent.totalTransactions}
-													</div>
-													<div className="text-muted-foreground text-xs">
+													</p>
+													<p className="mt-0.5 text-muted-foreground text-xs">
 														{agent.pendingCount} pending
-													</div>
-												</div>
-											</TableCell>
-											<TableCell>
-												<div className="space-y-1">
-													<div className="font-medium">
+													</p>
+												</TableCell>
+												<TableCell className="py-3">
+													<p className="truncate font-semibold tabular-nums text-foreground text-sm">
 														{formatCurrency(agent.totalCommission || 0)}
-													</div>
-													<div className="text-muted-foreground text-xs">
+													</p>
+													<p className="mt-0.5 truncate text-muted-foreground text-xs">
 														{formatCurrency(agent.avgCommission || 0)} avg
+													</p>
+												</TableCell>
+												<TableCell className="py-3">
+													<div className="max-w-[7rem] space-y-1.5">
+														<p className="font-semibold tabular-nums text-foreground text-sm">
+															{formatPercentage(approvalRate)}
+														</p>
+														<StripedProgress
+															value={approvalRate}
+															tone="primary"
+															height="sm"
+														/>
 													</div>
-												</div>
-											</TableCell>
-											<TableCell>
-												<div className="space-y-1">
-													<div className="font-medium">
-														{formatPercentage(approvalRate)}
-													</div>
-													<div className="text-muted-foreground text-xs">
-														{agent.approvedCount}/{agent.totalTransactions}{" "}
-														approved
-													</div>
-												</div>
-											</TableCell>
-											<TableCell>
-												<Badge className={getGradeColor(grade)}>{grade}</Badge>
-											</TableCell>
-											<TableCell>
-												<div className="flex flex-col gap-1">
-													{agent.pendingCount > 0 && (
-														<Badge variant="secondary" className="text-xs">
+												</TableCell>
+												<TableCell className="py-3">
+													<Badge
+														className={cn(
+															"size-7 justify-center rounded-lg border-0 p-0 font-semibold",
+															getGradeColor(grade),
+														)}
+													>
+														{grade}
+													</Badge>
+												</TableCell>
+												<TableCell className="py-3">
+													{agent.pendingCount > 0 ? (
+														<Badge className="rounded-full border-0 bg-amber-500/15 font-medium text-amber-700 text-xs dark:text-amber-300">
 															{agent.pendingCount} pending
 														</Badge>
-													)}
-													{agent.totalTransactions === 0 && (
-														<Badge variant="outline" className="text-xs">
+													) : agent.totalTransactions === 0 ? (
+														<Badge
+															variant="outline"
+															className="rounded-full text-xs"
+														>
 															No activity
 														</Badge>
+													) : (
+														<Badge className="rounded-full border-0 bg-primary/12 font-medium text-primary text-xs">
+															Up to date
+														</Badge>
 													)}
-													{agent.totalTransactions > 0 &&
-														agent.pendingCount === 0 && (
-															<Badge
-																variant="secondary"
-																className="text-green-600 text-xs"
-															>
-																Up to date
-															</Badge>
-														)}
-												</div>
-											</TableCell>
-										</TableRow>
-									);
-								})}
-							</TableBody>
-						</Table>
-					</div>
+												</TableCell>
+											</TableRow>
+										);
+									})}
+								</TableBody>
+							</Table>
+						</div>
+
+						<TablePagination
+							className="mt-4"
+							page={safePage}
+							pageSize={PAGE_SIZE}
+							total={sortedData.length}
+							onPageChange={setPage}
+						/>
+					</>
 				)}
 			</CardContent>
 		</Card>

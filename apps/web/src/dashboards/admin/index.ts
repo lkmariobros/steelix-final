@@ -5,7 +5,7 @@ export { AdminDashboard } from "./admin-dashboard";
 export { DashboardSummary } from "./widgets/dashboard-summary";
 export { CommissionApprovalQueue } from "./widgets/commission-approval-queue";
 export { AgentPerformanceGrid } from "./widgets/agent-performance-grid";
-export { UrgentTasksPanel } from "./widgets/urgent-tasks-panel";
+export { DealMixPanel } from "./widgets/deal-mix-panel";
 
 // Schema and types
 export * from "./admin-schema";

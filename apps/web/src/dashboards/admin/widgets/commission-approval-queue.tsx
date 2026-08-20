@@ -1,5 +1,6 @@
 "use client";
 
+import { Avatar, AvatarFallback } from "@/components/avatar";
 import { Badge } from "@/components/badge";
 import {
 	Dialog,
@@ -19,6 +20,7 @@ import {
 } from "@/components/table";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -29,25 +31,27 @@ import {
 	invalidateAdminQueries,
 	optimisticUpdateTransaction,
 } from "@/lib/query-invalidation";
+import { cn } from "@/lib/utils";
 import { trpc } from "@/utils/trpc";
-import { RiCheckLine, RiCloseLine, RiEyeLine, RiTimeLine } from "@remixicon/react";
+import {
+	RiCheckLine,
+	RiCloseLine,
+	RiEyeLine,
+	RiSearchLine,
+	RiTimeLine,
+} from "@remixicon/react";
 import Link from "next/link";
 import { useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
+import { format } from "date-fns";
 
-// CommissionApproval from admin-schema uses agentId:string (non-null) which
-// conflicts with the actual DB shape. We use CommissionApprovalItem from the
-// context (agentId: string | null) everywhere in this component.
-import {
-	formatCurrency,
-	formatDateTime,
-	getRelativeTime,
-} from "../admin-schema";
+import { formatCurrency } from "../admin-schema";
 import {
 	formatStatusLabel,
 	getStatusBadgeClass,
 } from "@/features/transactions/transaction-detail-utils";
+import { TablePagination } from "./table-pagination";
 
 interface CommissionApprovalQueueProps {
 	className?: string;
@@ -61,13 +65,14 @@ interface ApprovalDialogState {
 	isSubmitting: boolean;
 }
 
-const PAGE_SIZE = 10;
+const PAGE_SIZE = 5;
 
 export function CommissionApprovalQueue({
 	className,
 }: CommissionApprovalQueueProps) {
 	const queryClient = useQueryClient();
 	const [page, setPage] = useState(0);
+	const [search, setSearch] = useState("");
 	const [dialogState, setDialogState] = useState<ApprovalDialogState>({
 		isOpen: false,
 		transaction: null,
@@ -76,24 +81,8 @@ export function CommissionApprovalQueue({
 		isSubmitting: false,
 	});
 
-	// Page 0 comes from the shared context (already batched on mount).
-	// Subsequent pages use their own query (user interaction).
-	const { commissionQueue: contextQueueData, queueLoading: contextLoading } =
+	const { commissionQueue: queueData, queueLoading: isLoading } =
 		useAdminDashboard();
-
-	const paginatedQuery = trpc.admin.getCommissionApprovalQueue.useQuery(
-		{ limit: PAGE_SIZE, offset: page * PAGE_SIZE, status: "pending" },
-		{
-			enabled: page > 0, // only run when user navigates beyond page 0
-			staleTime: 30_000,
-		},
-	);
-
-	const queueData = page === 0 ? contextQueueData : paginatedQuery.data;
-	const isLoading = page === 0 ? contextLoading : paginatedQuery.isLoading;
-	const error = page === 0 ? null : paginatedQuery.error;
-
-	// ── Mutation ──────────────────────────────────────────────────────────────
 
 	const processApprovalMutation =
 		trpc.admin.processCommissionApproval.useMutation({
@@ -116,8 +105,6 @@ export function CommissionApprovalQueue({
 				setDialogState((prev) => ({ ...prev, isSubmitting: false }));
 			},
 		});
-
-	// ── Handlers ──────────────────────────────────────────────────────────────
 
 	const handleApprovalAction = (
 		transaction: CommissionApprovalItem,
@@ -154,227 +141,309 @@ export function CommissionApprovalQueue({
 		});
 	};
 
-	// ── Render ────────────────────────────────────────────────────────────────
+	const allTransactions = useMemo(() => {
+		return (queueData?.transactions || []).map((t) => ({
+			...t,
+			status: (t.status || "submitted") as
+				| "submitted"
+				| "under_review"
+				| "approved"
+				| "rejected",
+		}));
+	}, [queueData?.transactions]);
+
+	const filteredTransactions = useMemo(() => {
+		const q = search.trim().toLowerCase();
+		if (!q) return allTransactions;
+		return allTransactions.filter((t) => {
+			const haystack = [
+				t.agentName,
+				t.clientData?.name,
+				t.propertyData?.address,
+				t.transactionType,
+				String(t.commissionAmount ?? ""),
+			]
+				.filter(Boolean)
+				.join(" ")
+				.toLowerCase();
+			return haystack.includes(q);
+		});
+	}, [allTransactions, search]);
+
+	const pageCount = Math.max(1, Math.ceil(filteredTransactions.length / PAGE_SIZE));
+	const safePage = Math.min(page, pageCount - 1);
+	const pageTransactions = filteredTransactions.slice(
+		safePage * PAGE_SIZE,
+		(safePage + 1) * PAGE_SIZE,
+	);
+
+	const handleSearchChange = (value: string) => {
+		setSearch(value);
+		setPage(0);
+	};
 
 	if (isLoading) {
 		return (
-			<Card className={className}>
-				<CardHeader>
-					<CardTitle className="flex items-center gap-2">
-						<RiTimeLine size={20} />
+			<Card className={cn("flex h-full flex-col", className)}>
+				<CardHeader className="pb-2">
+					<CardTitle className="flex items-center gap-2.5 text-base">
+						<span className="flex size-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
+							<RiTimeLine size={18} />
+						</span>
 						Commission Approval Queue
 					</CardTitle>
 				</CardHeader>
-				<CardContent>
-					<div className="space-y-4">
-						{["sk-ca-1", "sk-ca-2", "sk-ca-3", "sk-ca-4", "sk-ca-5"].map(
-							(id) => (
-								<div
-									key={id}
-									className="flex items-center justify-between rounded-lg border p-4"
-								>
-									<div className="space-y-2">
-										<Skeleton className="h-4 w-48" />
-										<Skeleton className="h-3 w-32" />
-									</div>
-									<div className="flex gap-2">
-										<Skeleton className="h-8 w-20" />
-										<Skeleton className="h-8 w-20" />
-									</div>
+				<CardContent className="flex-1 space-y-3 pt-2">
+					<Skeleton className="h-9 w-full max-w-xs rounded-xl" />
+					{["sk-ca-1", "sk-ca-2", "sk-ca-3", "sk-ca-4", "sk-ca-5"].map((id) => (
+						<div
+							key={id}
+							className="flex items-center justify-between rounded-xl bg-muted/40 p-4"
+						>
+							<div className="flex items-center gap-3">
+								<Skeleton className="size-8 rounded-full" />
+								<div className="space-y-2">
+									<Skeleton className="h-4 w-32" />
+									<Skeleton className="h-3 w-24" />
 								</div>
-							),
-						)}
-					</div>
+							</div>
+							<Skeleton className="h-8 w-40 rounded-lg" />
+						</div>
+					))}
 				</CardContent>
 			</Card>
 		);
 	}
-
-	if (error) {
-		return (
-			<Card className={className}>
-				<CardHeader>
-					<CardTitle className="flex items-center gap-2">
-						<RiTimeLine size={20} />
-						Commission Approval Queue
-					</CardTitle>
-				</CardHeader>
-				<CardContent>
-					<div className="flex items-center justify-center py-8">
-						<p className="text-muted-foreground text-sm">
-							Failed to load approval queue.
-						</p>
-					</div>
-				</CardContent>
-			</Card>
-		);
-	}
-
-	const transactions = (queueData?.transactions || []).map((t) => ({
-		...t,
-		status: (t.status || "submitted") as
-			| "submitted"
-			| "under_review"
-			| "approved"
-			| "rejected",
-	}));
 
 	return (
 		<>
-			<Card className={className}>
-				<CardHeader>
-					<div className="flex items-center justify-between">
-						<CardTitle className="flex items-center gap-2">
-							<RiTimeLine size={20} />
-							Commission Approval Queue
-						</CardTitle>
-						<Badge variant="secondary">
-							{queueData?.totalCount || 0} pending
-						</Badge>
+			<Card className={cn("flex h-full flex-col", className)}>
+				<CardHeader className="pb-3">
+					<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+						<div className="flex items-center gap-2.5">
+							<CardTitle className="flex items-center gap-2.5 text-base">
+								<span className="flex size-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
+									<RiTimeLine size={18} />
+								</span>
+								Commission Approval Queue
+							</CardTitle>
+							<Badge
+								variant="secondary"
+								className="rounded-full bg-primary/12 text-primary"
+							>
+								{queueData?.totalCount || allTransactions.length} pending
+							</Badge>
+						</div>
+						<div className="relative w-full sm:max-w-[220px]">
+							<RiSearchLine
+								size={16}
+								className="-translate-y-1/2 absolute top-1/2 left-3 text-muted-foreground"
+							/>
+							<Input
+								value={search}
+								onChange={(e) => handleSearchChange(e.target.value)}
+								placeholder="Search"
+								className="h-9 rounded-xl border-border/70 bg-muted/30 pl-9"
+							/>
+						</div>
 					</div>
 				</CardHeader>
-				<CardContent>
-					{transactions.length === 0 ? (
-						<div className="flex items-center justify-center py-8">
-							<p className="text-muted-foreground text-sm">
+				<CardContent className="flex flex-1 flex-col pt-0">
+					{allTransactions.length === 0 ? (
+						<div className="flex flex-1 flex-col items-center justify-center py-12 text-center">
+							<div className="mb-3 flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+								<RiCheckLine size={22} />
+							</div>
+							<p className="font-medium text-sm">Queue is clear</p>
+							<p className="mt-1 text-muted-foreground text-sm">
 								No transactions pending approval.
+							</p>
+						</div>
+					) : filteredTransactions.length === 0 ? (
+						<div className="flex flex-1 items-center justify-center py-10">
+							<p className="text-muted-foreground text-sm">
+								No matches for “{search.trim()}”.
 							</p>
 						</div>
 					) : (
 						<>
-							<div className="rounded-md border">
-								<Table>
+							<div className="min-h-0 flex-1 overflow-x-auto rounded-xl border border-border/60">
+								<Table className="w-full table-fixed min-w-[720px]">
 									<TableHeader>
-										<TableRow>
-											<TableHead>Agent & Client</TableHead>
-											<TableHead>Property</TableHead>
-											<TableHead>Commission</TableHead>
-											<TableHead>Submitted</TableHead>
-											<TableHead>Status</TableHead>
-											<TableHead className="text-right">Actions</TableHead>
+										<TableRow className="border-border/50 hover:bg-transparent">
+											<TableHead className="h-11 w-[22%] bg-muted/50 font-semibold text-foreground text-xs">
+												Agent & Client
+											</TableHead>
+											<TableHead className="h-11 w-[16%] bg-muted/50 font-semibold text-foreground text-xs">
+												Property
+											</TableHead>
+											<TableHead className="h-11 w-[12%] bg-muted/50 font-semibold text-foreground text-xs">
+												Commission
+											</TableHead>
+											<TableHead className="h-11 w-[14%] bg-muted/50 font-semibold text-foreground text-xs">
+												Submitted
+											</TableHead>
+											<TableHead className="h-11 w-[10%] bg-muted/50 font-semibold text-foreground text-xs">
+												Status
+											</TableHead>
+											<TableHead className="h-11 w-[26%] bg-muted/50 text-right font-semibold text-foreground text-xs">
+												Actions
+											</TableHead>
 										</TableRow>
 									</TableHeader>
 									<TableBody>
-										{transactions.map((transaction) => (
-											<TableRow key={transaction.id}>
-												<TableCell>
-													<div className="space-y-1">
-														<div className="font-medium">
-															{transaction.agentName || "Unknown Agent"}
+										{pageTransactions.map((transaction) => {
+											const agentName =
+												transaction.agentName || "Unknown Agent";
+											const initials = agentName
+												.split(/\s+/)
+												.filter(Boolean)
+												.map((p) => p[0])
+												.join("")
+												.slice(0, 2)
+												.toUpperCase();
+											const submitted = transaction.submittedAt
+												? new Date(transaction.submittedAt)
+												: null;
+											const clientName = (
+												transaction.clientData?.name || "Unknown Client"
+											).toLowerCase();
+
+											return (
+												<TableRow
+													key={transaction.id}
+													className="border-border/40 hover:bg-muted/20"
+												>
+													<TableCell className="max-w-0 py-3">
+														<div className="flex min-w-0 items-center gap-2">
+															<Avatar className="size-8 shrink-0 border border-border/60">
+																<AvatarFallback className="bg-primary/10 font-semibold text-primary text-[10px]">
+																	{initials || "?"}
+																</AvatarFallback>
+															</Avatar>
+															<div className="min-w-0 flex-1 overflow-hidden">
+																<p
+																	className="truncate font-medium text-foreground text-sm leading-snug"
+																	title={agentName}
+																>
+																	{agentName}
+																</p>
+																<p
+																	className="mt-0.5 truncate text-muted-foreground text-xs capitalize leading-snug"
+																	title={clientName}
+																>
+																	{clientName}
+																</p>
+															</div>
 														</div>
-														<div className="text-muted-foreground text-sm">
-															{transaction.clientData?.name || "Unknown Client"}
-														</div>
-													</div>
-												</TableCell>
-												<TableCell>
-													<div className="max-w-48 truncate">
-														{transaction.propertyData?.address ||
-															"Unknown Property"}
-													</div>
-												</TableCell>
-												<TableCell>
-													<div className="space-y-1">
-														<div className="font-medium">
+													</TableCell>
+													<TableCell className="max-w-0 py-3">
+														<p
+															className="truncate text-muted-foreground text-sm"
+															title={
+																transaction.propertyData?.address ||
+																"Unknown Property"
+															}
+														>
+															{transaction.propertyData?.address ||
+																"Unknown Property"}
+														</p>
+													</TableCell>
+													<TableCell className="py-3">
+														<p className="truncate font-semibold tabular-nums text-foreground text-sm">
 															{formatCurrency(transaction.commissionAmount)}
-														</div>
-														<div className="text-muted-foreground text-xs">
+														</p>
+														<p className="mt-0.5 truncate text-muted-foreground text-xs capitalize">
 															{transaction.transactionType}
-														</div>
-													</div>
-												</TableCell>
-												<TableCell>
-													<div className="space-y-1">
-														<div className="text-sm">
-															{formatDateTime(transaction.submittedAt)}
-														</div>
-														<div className="text-muted-foreground text-xs">
-															{getRelativeTime(transaction.submittedAt)}
-														</div>
-													</div>
-												</TableCell>
-												<TableCell>
-													<Badge className={getStatusBadgeClass(transaction.status)}>
-														{formatStatusLabel(transaction.status)}
-													</Badge>
-												</TableCell>
-												<TableCell className="text-right">
-													<div className="flex justify-end gap-2">
-														<Button size="sm" variant="secondary" asChild>
-															<Link
-																href={`/admin/transactions/case/${transaction.id}`}
+														</p>
+													</TableCell>
+													<TableCell className="py-3">
+														{submitted ? (
+															<>
+																<p className="truncate text-foreground text-sm">
+																	{format(submitted, "MMM d, yyyy")}
+																</p>
+																<p className="mt-0.5 truncate text-muted-foreground text-xs">
+																	{format(submitted, "h:mm a")}
+																</p>
+															</>
+														) : (
+															<span className="text-muted-foreground text-sm">
+																—
+															</span>
+														)}
+													</TableCell>
+													<TableCell className="py-3">
+														<Badge
+															className={cn(
+																"rounded-full border-0 px-2 py-0.5 font-medium text-[11px]",
+																transaction.status === "submitted" ||
+																	transaction.status === "under_review"
+																	? "bg-amber-500/15 text-amber-700 dark:text-amber-300"
+																	: getStatusBadgeClass(transaction.status),
+															)}
+														>
+															{formatStatusLabel(transaction.status)}
+														</Badge>
+													</TableCell>
+													<TableCell className="py-3 text-right">
+														<div className="flex flex-nowrap items-center justify-end gap-1">
+															<Button
+																size="sm"
+																variant="secondary"
+																asChild
+																className="h-7 shrink-0 gap-1 rounded-lg border-0 bg-sky-500/15 px-2 text-sky-700 text-xs hover:bg-sky-500/25 dark:text-sky-300"
 															>
-																<RiEyeLine size={14} className="mr-1" />
-																View
-															</Link>
-														</Button>
-														<Button
-															size="sm"
-															variant="outline"
-															onClick={() =>
-																handleApprovalAction(transaction, "approve")
-															}
-															className="h-8 gap-1 text-green-600 hover:text-green-700"
-														>
-															<RiCheckLine size={14} />
-															Approve
-														</Button>
-														<Button
-															size="sm"
-															variant="outline"
-															onClick={() =>
-																handleApprovalAction(transaction, "reject")
-															}
-															className="h-8 gap-1 text-red-600 hover:text-red-700"
-														>
-															<RiCloseLine size={14} />
-															Reject
-														</Button>
-													</div>
-												</TableCell>
-											</TableRow>
-										))}
+																<Link
+																	href={`/admin/transactions/case/${transaction.id}`}
+																>
+																	<RiEyeLine size={13} />
+																	View
+																</Link>
+															</Button>
+															<Button
+																size="sm"
+																variant="secondary"
+																onClick={() =>
+																	handleApprovalAction(transaction, "approve")
+																}
+																className="h-7 shrink-0 gap-1 rounded-lg border-0 bg-emerald-500/15 px-2 text-emerald-700 text-xs hover:bg-emerald-500/25 dark:text-emerald-300"
+															>
+																<RiCheckLine size={13} />
+																Approve
+															</Button>
+															<Button
+																size="sm"
+																variant="secondary"
+																onClick={() =>
+																	handleApprovalAction(transaction, "reject")
+																}
+																className="h-7 shrink-0 gap-1 rounded-lg border-0 bg-rose-500/15 px-2 text-rose-700 text-xs hover:bg-rose-500/25 dark:text-rose-300"
+															>
+																<RiCloseLine size={13} />
+																Reject
+															</Button>
+														</div>
+													</TableCell>
+												</TableRow>
+											);
+										})}
 									</TableBody>
 								</Table>
 							</div>
 
-							{/* Pagination */}
-							{(queueData?.totalCount || 0) > PAGE_SIZE && (
-								<div className="mt-4 flex items-center justify-between">
-									<p className="text-muted-foreground text-sm">
-										Showing {page * PAGE_SIZE + 1} to{" "}
-										{Math.min(
-											(page + 1) * PAGE_SIZE,
-											queueData?.totalCount || 0,
-										)}{" "}
-										of {queueData?.totalCount || 0} transactions
-									</p>
-									<div className="flex gap-2">
-										<Button
-											size="sm"
-											variant="outline"
-											onClick={() => setPage((p) => Math.max(0, p - 1))}
-											disabled={page === 0}
-										>
-											Previous
-										</Button>
-										<Button
-											size="sm"
-											variant="outline"
-											onClick={() => setPage((p) => p + 1)}
-											disabled={!queueData?.hasMore}
-										>
-											Next
-										</Button>
-									</div>
-								</div>
-							)}
+							<TablePagination
+								className="mt-auto pt-4"
+								page={safePage}
+								pageSize={PAGE_SIZE}
+								total={filteredTransactions.length}
+								onPageChange={setPage}
+							/>
 						</>
 					)}
 				</CardContent>
 			</Card>
 
-			{/* Approval Dialog */}
 			<Dialog
 				open={dialogState.isOpen}
 				onOpenChange={(open) => {
@@ -445,8 +514,8 @@ export function CommissionApprovalQueue({
 							}
 							className={
 								dialogState.action === "approve"
-									? "bg-green-600 hover:bg-green-700"
-									: "bg-red-600 hover:bg-red-700"
+									? "bg-primary hover:bg-primary/90"
+									: "bg-rose-600 hover:bg-rose-700"
 							}
 						>
 							{dialogState.isSubmitting
