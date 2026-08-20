@@ -194,7 +194,7 @@ export function ApprovalQueueItem({
 	const isCo = transaction.isCoBroking === true;
 
 	return (
-		<div className="flex flex-col gap-4 rounded-lg border p-4 transition-colors hover:bg-muted/50 lg:flex-row lg:items-start lg:justify-between">
+		<div className="flex flex-col gap-4 rounded-xl border border-border/70 bg-card p-4 shadow-sm transition-colors hover:bg-muted/30 lg:flex-row lg:items-center lg:justify-between">
 			<div className="min-w-0 flex-1 space-y-3">
 				<div className="flex flex-wrap items-center gap-x-3 gap-y-1">
 					{transaction.caseNo ? (
@@ -228,8 +228,8 @@ export function ApprovalQueueItem({
 				</div>
 				<ApprovalDetails tx={transaction} />
 			</div>
-			<div className="flex shrink-0 flex-wrap gap-2">
-				<Button size="sm" variant="secondary" asChild>
+			<div className="flex shrink-0 flex-wrap items-center justify-start gap-2 lg:justify-center">
+				<Button size="sm" variant="secondary" className="rounded-lg" asChild>
 					<Link href={`/admin/transactions/case/${transaction.id}`}>
 						<RiFileList3Line className="mr-1 h-4 w-4" />
 						View details
@@ -238,7 +238,7 @@ export function ApprovalQueueItem({
 				<Button
 					size="sm"
 					variant="outline"
-					className="text-green-600 hover:bg-green-50 hover:text-green-700 dark:hover:bg-green-950/30"
+					className="rounded-lg text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800 dark:text-emerald-400 dark:hover:bg-emerald-950/30"
 					onClick={() => onApprove(transaction)}
 				>
 					<RiCheckLine className="mr-1 h-4 w-4" />
@@ -247,7 +247,7 @@ export function ApprovalQueueItem({
 				<Button
 					size="sm"
 					variant="outline"
-					className="text-red-600 hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-950/30"
+					className="rounded-lg text-rose-700 hover:bg-rose-50 hover:text-rose-800 dark:text-rose-400 dark:hover:bg-rose-950/30"
 					onClick={() => onReject(transaction)}
 				>
 					<RiCloseLine className="mr-1 h-4 w-4" />

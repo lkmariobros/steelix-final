@@ -197,7 +197,6 @@ function DistributionDonut({
 							<Cell key={entry.name} fill={entry.color} />
 						))}
 					</Pie>
-					{/* @ts-expect-error recharts custom tooltip */}
 					<Tooltip content={<PieTooltip />} />
 				</PieChart>
 			</ResponsiveContainer>
@@ -360,7 +359,6 @@ export function LeadsCharts({
 								allowDecimals={false}
 								width={34}
 							/>
-							{/* @ts-expect-error recharts custom tooltip */}
 							<Tooltip
 								content={<AreaTooltip />}
 								cursor={{

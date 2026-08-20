@@ -122,10 +122,10 @@ function AgentCell({
 }) {
 	if (!name && !code) return <span className="text-muted-foreground">—</span>;
 	return (
-		<div className="min-w-0">
-			<p className="truncate">{name ?? "—"}</p>
+		<div className="min-w-0 max-w-full">
+			<p className="truncate font-medium text-sm leading-snug">{name ?? "—"}</p>
 			{code ? (
-				<p className="truncate font-mono text-muted-foreground text-xs">
+				<p className="truncate font-mono text-muted-foreground text-[11px]">
 					{code}
 				</p>
 			) : null}
@@ -135,7 +135,7 @@ function AgentCell({
 
 function AgentsCell({ row }: { row: ApprovalRequestQueueTransaction }) {
 	return (
-		<div className="min-w-0 space-y-1">
+		<div className="min-w-0 max-w-full space-y-1">
 			<AgentCell name={row.agentName} code={row.agentCode} />
 			{row.isCoBroking ? (
 				<AgentCell name={row.coAgentName} code={row.coAgentCode} />
@@ -154,34 +154,44 @@ function RequestActions({
 	onReject: (tx: ApprovalRequestQueueTransaction) => void;
 }) {
 	return (
-		<div className="flex flex-wrap items-center justify-end gap-1">
-			<Button size="sm" variant="secondary" asChild className="h-8 px-2 text-xs">
+		<div className="inline-flex flex-nowrap items-center justify-center gap-1">
+			<Button
+				size="sm"
+				variant="secondary"
+				asChild
+				className="h-8 shrink-0 rounded-lg px-2 text-xs"
+			>
 				<Link href={`/admin/transactions/case/${row.id}`}>
-					<RiFileList3Line className="mr-1 size-3.5" />
+					<RiFileList3Line className="mr-0.5 size-3.5" />
 					View
 				</Link>
 			</Button>
 			<Button
 				size="sm"
 				variant="outline"
-				className="h-8 px-2 text-green-600 text-xs hover:bg-green-50 hover:text-green-700 dark:hover:bg-green-950/30"
+				className="h-8 shrink-0 rounded-lg px-2 text-emerald-700 text-xs hover:bg-emerald-50 hover:text-emerald-800 dark:text-emerald-400 dark:hover:bg-emerald-950/30"
 				onClick={() => onApprove(row)}
 			>
-				<RiCheckLine className="mr-1 size-3.5" />
+				<RiCheckLine className="mr-0.5 size-3.5" />
 				Approve
 			</Button>
 			<Button
 				size="sm"
 				variant="outline"
-				className="h-8 px-2 text-red-600 text-xs hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-950/30"
+				className="h-8 shrink-0 rounded-lg px-2 text-rose-700 text-xs hover:bg-rose-50 hover:text-rose-800 dark:text-rose-400 dark:hover:bg-rose-950/30"
 				onClick={() => onReject(row)}
 			>
-				<RiCloseLine className="mr-1 size-3.5" />
+				<RiCloseLine className="mr-0.5 size-3.5" />
 				Reject
 			</Button>
 		</div>
 	);
 }
+
+const thClass =
+	"truncate border-b border-border/60 bg-muted px-2 py-2.5 text-left font-semibold text-foreground/80 text-[11px] tracking-wide";
+const tdClass =
+	"max-w-0 truncate border-b border-border/50 px-2 py-3 align-middle text-sm";
 
 function RequestTable({
 	segment,
@@ -195,50 +205,69 @@ function RequestTable({
 	onReject: (tx: ApprovalRequestQueueTransaction) => void;
 }) {
 	return (
-		<div className="w-full overflow-hidden rounded-md border">
-			<table className="w-full table-fixed text-xs sm:text-sm">
-				<thead className="border-b bg-muted/30 text-left">
+		<div className="w-full overflow-x-auto rounded-xl border border-border/70">
+			<table className="w-full min-w-[1100px] table-fixed border-collapse text-sm">
+				{segment === "new-project" ? (
+					<colgroup>
+						{/* Case No / Booking / Project / Unit — compact */}
+						<col style={{ width: "72px" }} />
+						<col style={{ width: "88px" }} />
+						<col style={{ width: "96px" }} />
+						<col style={{ width: "80px" }} />
+						{/* Prices & cash */}
+						<col style={{ width: "108px" }} />
+						<col style={{ width: "108px" }} />
+						<col style={{ width: "64px" }} />
+						<col style={{ width: "100px" }} />
+						{/* Request / Status / Agent */}
+						<col style={{ width: "100px" }} />
+						<col style={{ width: "78px" }} />
+						<col style={{ width: "110px" }} />
+						{/* Actions — room for View + Approve + Reject */}
+						<col style={{ width: "268px" }} />
+					</colgroup>
+				) : (
+					<colgroup>
+						<col style={{ width: "80px" }} />
+						<col style={{ width: "96px" }} />
+						<col />
+						<col style={{ width: "108px" }} />
+						<col style={{ width: "120px" }} />
+						<col style={{ width: "78px" }} />
+						<col style={{ width: "120px" }} />
+						<col style={{ width: "268px" }} />
+					</colgroup>
+				)}
+				<thead>
 					{segment === "new-project" ? (
 						<tr>
-							<th className="px-2 py-2 font-medium">Case No</th>
-							<th className="px-2 py-2 font-medium">Booking Date</th>
-							<th className="hidden px-2 py-2 font-medium md:table-cell">
-								Project
+							<th className={thClass}>Case No</th>
+							<th className={thClass}>Booking Date</th>
+							<th className={thClass}>Project</th>
+							<th className={thClass}>Unit No</th>
+							<th className={thClass}>SPA Price</th>
+							<th className={thClass}>Nett Price</th>
+							<th className={thClass}>Cash/Loan</th>
+							<th className={thClass}>Commission</th>
+							<th className={thClass}>Request Item</th>
+							<th className={thClass}>Status</th>
+							<th className={thClass}>Agent</th>
+							<th className={`${thClass} whitespace-nowrap text-center`}>
+								Actions
 							</th>
-							<th className="hidden px-2 py-2 font-medium lg:table-cell">
-								Unit No
-							</th>
-							<th className="hidden px-2 py-2 font-medium xl:table-cell">
-								SPA Price
-							</th>
-							<th className="px-2 py-2 font-medium">Nett Price</th>
-							<th className="hidden px-2 py-2 font-medium lg:table-cell">
-								Cash/Loan
-							</th>
-							<th className="hidden px-2 py-2 font-medium md:table-cell">
-								Commission
-							</th>
-							<th className="px-2 py-2 font-medium">Request Item</th>
-							<th className="px-2 py-2 font-medium">Status</th>
-							<th className="hidden px-2 py-2 font-medium sm:table-cell">
-								Agent
-							</th>
-							<th className="px-2 py-2 text-right font-medium">Actions</th>
 						</tr>
 					) : (
 						<tr>
-							<th className="px-2 py-2 font-medium">Case No</th>
-							<th className="px-2 py-2 font-medium">Request Date</th>
-							<th className="px-2 py-2 font-medium">Address</th>
-							<th className="hidden px-2 py-2 font-medium sm:table-cell">
-								Commission
+							<th className={thClass}>Case No</th>
+							<th className={thClass}>Request Date</th>
+							<th className={thClass}>Address</th>
+							<th className={thClass}>Commission</th>
+							<th className={thClass}>Request Item</th>
+							<th className={thClass}>Status</th>
+							<th className={thClass}>Agent</th>
+							<th className={`${thClass} whitespace-nowrap text-center`}>
+								Actions
 							</th>
-							<th className="px-2 py-2 font-medium">Request Item</th>
-							<th className="px-2 py-2 font-medium">Status</th>
-							<th className="hidden px-2 py-2 font-medium md:table-cell">
-								Agent
-							</th>
-							<th className="px-2 py-2 text-right font-medium">Actions</th>
 						</tr>
 					)}
 				</thead>
@@ -253,44 +282,56 @@ function RequestTable({
 							return (
 								<tr
 									key={row.id}
-									className="border-b last:border-b-0 hover:bg-muted/40"
+									className="transition-colors hover:bg-muted/35"
 								>
-									<td className="truncate px-2 py-2 font-mono text-xs">
+									<td
+										className={`${tdClass} font-mono text-xs`}
+										title={row.caseNo ?? undefined}
+									>
 										{row.caseNo ?? "—"}
 									</td>
-									<td className="truncate px-2 py-2">
+									<td className={`${tdClass} text-muted-foreground`}>
 										{formatDate(row.bookingDate ?? row.transactionDate)}
 									</td>
-									<td className="hidden truncate px-2 py-2 md:table-cell">
+									<td
+										className={tdClass}
+										title={row.projectName?.trim() || undefined}
+									>
 										{row.projectName?.trim() || "—"}
 									</td>
-									<td className="hidden truncate px-2 py-2 lg:table-cell">
+									<td
+										className={tdClass}
+										title={row.unitNo?.trim() || undefined}
+									>
 										{row.unitNo?.trim() || "—"}
 									</td>
-									<td className="hidden truncate px-2 py-2 xl:table-cell">
-										{formatRm(spa)}
+									<td className={`${tdClass} tabular-nums`}>{formatRm(spa)}</td>
+									<td className={`${tdClass} tabular-nums`}>
+										{formatRm(nett)}
 									</td>
-									<td className="truncate px-2 py-2">{formatRm(nett)}</td>
-									<td className="hidden truncate px-2 py-2 lg:table-cell">
+									<td className={tdClass}>
 										{formatCashLoan(prop?.purchasingMethod)}
 									</td>
-									<td className="hidden truncate px-2 py-2 md:table-cell">
+									<td className={`${tdClass} tabular-nums`}>
 										{formatRm(row.commissionAmount)}
 									</td>
-									<td className="truncate px-2 py-2" title={formatRequestItemLabel(row.requestItem)}>
+									<td
+										className={tdClass}
+										title={formatRequestItemLabel(row.requestItem)}
+									>
 										{formatRequestItemLabel(row.requestItem)}
 									</td>
-									<td className="px-2 py-2">
+									<td className={`${tdClass} overflow-visible`}>
 										<span
-											className={`inline-block max-w-full truncate rounded-full px-2 py-0.5 text-xs ${getStatusBadgeClass(row.status)}`}
+											className={`inline-flex max-w-full truncate rounded-full px-2 py-0.5 text-[11px] ${getStatusBadgeClass(row.status)}`}
 										>
 											{formatStatusLabel(row.status)}
 										</span>
 									</td>
-									<td className="hidden px-2 py-2 sm:table-cell">
+									<td className={`${tdClass} overflow-visible`}>
 										<AgentsCell row={row} />
 									</td>
-									<td className="px-2 py-2">
+									<td className="whitespace-nowrap border-b border-border/50 px-2 py-3 align-middle">
 										<RequestActions
 											row={row}
 											onApprove={onApprove}
@@ -304,38 +345,43 @@ function RequestTable({
 						return (
 							<tr
 								key={row.id}
-								className="border-b last:border-b-0 hover:bg-muted/40"
+								className="transition-colors hover:bg-muted/35"
 							>
-								<td className="truncate px-2 py-2 font-mono text-xs">
+								<td
+									className={`${tdClass} font-mono text-xs`}
+									title={row.caseNo ?? undefined}
+								>
 									{row.caseNo ?? "—"}
 								</td>
-								<td className="truncate px-2 py-2">{formatDate(requestDate)}</td>
+								<td className={`${tdClass} text-muted-foreground`}>
+									{formatDate(requestDate)}
+								</td>
 								<td
-									className="truncate px-2 py-2"
+									className={tdClass}
 									title={prop?.address?.trim() || undefined}
 								>
 									{prop?.address?.trim() || "—"}
 								</td>
-								<td className="hidden truncate px-2 py-2 sm:table-cell">
+								<td className={`${tdClass} tabular-nums`}>
 									{formatRm(row.commissionAmount)}
 								</td>
 								<td
-									className="truncate px-2 py-2"
+									className={tdClass}
 									title={formatRequestItemLabel(row.requestItem)}
 								>
 									{formatRequestItemLabel(row.requestItem)}
 								</td>
-								<td className="px-2 py-2">
+								<td className={`${tdClass} overflow-visible`}>
 									<span
-										className={`inline-block max-w-full truncate rounded-full px-2 py-0.5 text-xs ${getStatusBadgeClass(row.status)}`}
+										className={`inline-flex max-w-full truncate rounded-full px-2 py-0.5 text-[11px] ${getStatusBadgeClass(row.status)}`}
 									>
 										{formatStatusLabel(row.status)}
 									</span>
 								</td>
-								<td className="hidden px-2 py-2 md:table-cell">
+								<td className={`${tdClass} overflow-visible`}>
 									<AgentsCell row={row} />
 								</td>
-								<td className="px-2 py-2">
+								<td className="whitespace-nowrap border-b border-border/50 px-2 py-3 align-middle">
 									<RequestActions
 										row={row}
 										onApprove={onApprove}
@@ -467,9 +513,9 @@ export default function AdminApprovalRequestsPage() {
 
 	return (
 		<>
-			<header className="flex h-16 shrink-0 items-center gap-2 border-b">
-				<div className="flex flex-1 items-center gap-2 px-3">
-					<SidebarTrigger className="-ms-4" />
+			<header className="sticky top-0 z-30 -mx-4 flex h-16 shrink-0 items-center gap-2 border-border/60 border-b bg-background/95 px-4 backdrop-blur-md supports-backdrop-filter:bg-background/80 md:-mx-6 md:px-6 lg:-mx-8 lg:px-8">
+				<div className="flex flex-1 items-center gap-2 px-1 sm:px-0">
+					<SidebarTrigger className="-ms-1 rounded-xl" />
 					<Separator
 						orientation="vertical"
 						className="mr-2 data-[orientation=vertical]:h-4"
@@ -484,36 +530,35 @@ export default function AdminApprovalRequestsPage() {
 							</BreadcrumbItem>
 							<BreadcrumbSeparator className="hidden md:block" />
 							<BreadcrumbItem>
-								<BreadcrumbPage className="flex items-center gap-2">
-									<RiFileList3Line size={20} aria-hidden="true" />
+								<BreadcrumbPage className="flex items-center gap-2 font-medium">
+									<span className="flex size-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
+										<RiFileList3Line size={16} aria-hidden="true" />
+									</span>
 									Requests
 								</BreadcrumbPage>
 							</BreadcrumbItem>
 						</BreadcrumbList>
 					</Breadcrumb>
 				</div>
-				<div className="ml-auto flex gap-3">
+				<div className="ml-auto flex gap-2">
 					<HeaderActions />
 				</div>
 			</header>
 
-			<div className="flex flex-1 flex-col gap-4 py-4 lg:gap-6 lg:py-6">
-				<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-					<div className="space-y-1">
-						<h1 className="flex items-center gap-2 font-semibold text-2xl">
-							<RiFileList3Line className="size-6" />
-							Requests
-						</h1>
+			<div className="flex flex-1 flex-col gap-5 py-5 lg:gap-6 lg:py-7">
+				<div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+					<div className="min-w-0 space-y-1">
+						<h1 className="font-bold text-2xl tracking-tight">Requests</h1>
 						<p className="text-muted-foreground text-sm">
 							Agent change requests awaiting your review — only pending
 							requests are shown.
 						</p>
 					</div>
-					<div className="flex items-center gap-2">
+					<div className="flex flex-wrap items-center gap-2.5">
 						<div className="relative w-full sm:w-64">
-							<RiSearchLine className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+							<RiSearchLine className="-translate-y-1/2 pointer-events-none absolute top-1/2 left-3 size-4 text-muted-foreground" />
 							<Input
-								className="h-9 pl-8"
+								className="h-10 rounded-xl border-border/70 bg-muted/30 pl-9 shadow-none focus-visible:bg-background"
 								placeholder="Search case, unit, agent…"
 								value={search}
 								onChange={(e) => {
@@ -525,32 +570,36 @@ export default function AdminApprovalRequestsPage() {
 						<Button
 							variant="outline"
 							size="sm"
+							className="h-10 gap-1.5 rounded-xl"
 							onClick={() => void refetch()}
 						>
-							<RiRefreshLine className="size-4" />
+							<RiRefreshLine className="size-4" aria-hidden />
+							<span>Refresh</span>
 						</Button>
 					</div>
 				</div>
 
 				{isLoading ? (
-					<Card className="max-w-sm">
-						<CardHeader className="pb-2">
+					<Card className="max-w-sm gap-0 border-border/70 py-0 shadow-card">
+						<CardHeader className="px-5 pt-4 pb-2">
 							<Skeleton className="h-3.5 w-28" />
 						</CardHeader>
-						<CardContent>
+						<CardContent className="px-5 pb-4">
 							<Skeleton className="h-8 w-16" />
 						</CardContent>
 					</Card>
 				) : (
-					<Card className="max-w-sm">
-						<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+					<Card className="max-w-sm gap-0 border-border/70 py-0 shadow-card">
+						<CardHeader className="flex flex-row items-center justify-between space-y-0 px-5 pt-4 pb-2">
 							<CardTitle className="font-medium text-sm">
 								Pending Requests
 							</CardTitle>
 							<RiFileList3Line className="h-4 w-4 text-muted-foreground" />
 						</CardHeader>
-						<CardContent>
-							<div className="font-bold text-2xl">{pendingCount}</div>
+						<CardContent className="px-5 pb-4">
+							<div className="font-bold text-2xl tabular-nums">
+								{pendingCount}
+							</div>
 							<p className="text-muted-foreground text-xs">
 								Awaiting your review ({segmentConfig.label})
 							</p>
@@ -559,27 +608,33 @@ export default function AdminApprovalRequestsPage() {
 				)}
 
 				<Tabs value={segment} onValueChange={handleSegmentChange}>
-					<TabsList>
+					<TabsList className="h-11 rounded-full bg-muted/80 p-1 shadow-none">
 						{SEGMENT_TABS.map((tab) => (
-							<TabsTrigger key={tab.value} value={tab.value}>
+							<TabsTrigger
+								key={tab.value}
+								value={tab.value}
+								className="rounded-full px-4 text-sm data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
+							>
 								{tab.label}
 							</TabsTrigger>
 						))}
 					</TabsList>
 				</Tabs>
 
-				<Card>
-					<CardHeader>
-						<CardTitle>{segmentConfig.label} Requests</CardTitle>
+				<Card className="gap-0 overflow-hidden border-border/70 py-0 shadow-card">
+					<CardHeader className="border-border/60 border-b px-5 py-4">
+						<CardTitle className="font-semibold text-base">
+							{segmentConfig.label} Requests
+						</CardTitle>
 						<CardDescription>
 							{segment === "new-project"
 								? "Booking date, project, unit, pricing, commission, and request item"
 								: "Request date, address, commission, and request item"}
 						</CardDescription>
 					</CardHeader>
-					<CardContent>
+					<CardContent className="p-5">
 						{isLoading ? (
-							<Skeleton className="h-48 w-full rounded-md" />
+							<Skeleton className="h-48 w-full rounded-xl" />
 						) : rows.length > 0 ? (
 							<div className="space-y-4">
 								<RequestTable

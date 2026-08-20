@@ -235,9 +235,9 @@ export default function AdminApprovalsPage() {
 
 	return (
 		<>
-			<header className="flex h-16 shrink-0 items-center gap-2 border-b">
-				<div className="flex flex-1 items-center gap-2 px-3">
-					<SidebarTrigger className="-ms-4" />
+			<header className="sticky top-0 z-30 -mx-4 flex h-16 shrink-0 items-center gap-2 border-border/60 border-b bg-background/95 px-4 backdrop-blur-md supports-backdrop-filter:bg-background/80 md:-mx-6 md:px-6 lg:-mx-8 lg:px-8">
+				<div className="flex flex-1 items-center gap-2 px-1 sm:px-0">
+					<SidebarTrigger className="-ms-1 rounded-xl" />
 					<Separator
 						orientation="vertical"
 						className="mr-2 data-[orientation=vertical]:h-4"
@@ -252,25 +252,24 @@ export default function AdminApprovalsPage() {
 							</BreadcrumbItem>
 							<BreadcrumbSeparator className="hidden md:block" />
 							<BreadcrumbItem>
-								<BreadcrumbPage className="flex items-center gap-2">
-									<RiCheckboxCircleLine size={20} aria-hidden="true" />
+								<BreadcrumbPage className="flex items-center gap-2 font-medium">
+									<span className="flex size-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
+										<RiCheckboxCircleLine size={16} aria-hidden="true" />
+									</span>
 									Approvals
 								</BreadcrumbPage>
 							</BreadcrumbItem>
 						</BreadcrumbList>
 					</Breadcrumb>
 				</div>
-				<div className="ml-auto flex gap-3">
+				<div className="ml-auto flex gap-2">
 					<HeaderActions />
 				</div>
 			</header>
-			<div className="flex flex-1 flex-col gap-4 py-4 lg:gap-6 lg:py-6">
-				<div className="flex items-center justify-between gap-4">
-					<div className="space-y-1">
-						<h1 className="flex items-center gap-2 font-semibold text-2xl">
-							<RiCheckboxCircleLine className="size-6" />
-							Approvals
-						</h1>
+			<div className="flex flex-1 flex-col gap-5 py-5 lg:gap-6 lg:py-7">
+				<div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+					<div className="min-w-0 space-y-1">
+						<h1 className="font-bold text-2xl tracking-tight">Approvals</h1>
 						<p className="text-muted-foreground text-sm">
 							Review and approve agent transaction submissions awaiting your
 							decision. For agent <strong>change requests</strong> on locked
@@ -284,32 +283,40 @@ export default function AdminApprovalsPage() {
 							.
 						</p>
 					</div>
-					<Button variant="outline" size="sm" onClick={() => void handleRefresh()}>
-						<RiRefreshLine className="size-4" />
+					<Button
+						variant="outline"
+						size="sm"
+						className="h-9 shrink-0 gap-1.5 rounded-xl"
+						onClick={() => void handleRefresh()}
+					>
+						<RiRefreshLine className="size-4" aria-hidden />
+						<span>Refresh</span>
 					</Button>
 				</div>
 
 				{isLoadingApprovals ? (
-					<Card className="max-w-sm">
-						<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+					<Card className="max-w-sm gap-0 border-border/70 py-0 shadow-card">
+						<CardHeader className="flex flex-row items-center justify-between space-y-0 px-5 pt-4 pb-2">
 							<Skeleton className="h-3.5 w-28" />
 							<Skeleton className="h-4 w-4 rounded" />
 						</CardHeader>
-						<CardContent className="space-y-2">
+						<CardContent className="space-y-2 px-5 pb-4">
 							<Skeleton className="h-8 w-16" />
 							<Skeleton className="h-3 w-28" />
 						</CardContent>
 					</Card>
 				) : (
-					<Card className="max-w-sm">
-						<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+					<Card className="max-w-sm gap-0 border-border/70 py-0 shadow-card">
+						<CardHeader className="flex flex-row items-center justify-between space-y-0 px-5 pt-4 pb-2">
 							<CardTitle className="font-medium text-sm">
 								Pending Approvals
 							</CardTitle>
 							<RiCheckboxCircleLine className="h-4 w-4 text-muted-foreground" />
 						</CardHeader>
-						<CardContent>
-							<div className="font-bold text-2xl">{pendingCount}</div>
+						<CardContent className="px-5 pb-4">
+							<div className="font-bold text-2xl tabular-nums">
+								{pendingCount}
+							</div>
 							<p className="text-muted-foreground text-xs">
 								Awaiting your review ({segmentConfig.label})
 							</p>
@@ -318,23 +325,29 @@ export default function AdminApprovalsPage() {
 				)}
 
 				<Tabs value={segment} onValueChange={handleSegmentChange}>
-					<TabsList>
+					<TabsList className="h-11 rounded-full bg-muted/80 p-1 shadow-none">
 						{SEGMENT_TABS.map((tab) => (
-							<TabsTrigger key={tab.value} value={tab.value}>
+							<TabsTrigger
+								key={tab.value}
+								value={tab.value}
+								className="rounded-full px-4 text-sm data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
+							>
 								{tab.label}
 							</TabsTrigger>
 						))}
 					</TabsList>
 				</Tabs>
 
-				<Card>
-					<CardHeader>
-						<CardTitle>Approval Queue</CardTitle>
+				<Card className="gap-0 overflow-hidden border-border/70 py-0 shadow-card">
+					<CardHeader className="border-border/60 border-b px-5 py-4">
+						<CardTitle className="font-semibold text-base">
+							Approval Queue
+						</CardTitle>
 						<CardDescription>
 							Transactions awaiting approval — new project, subsale, and rental
 						</CardDescription>
 					</CardHeader>
-					<CardContent>
+					<CardContent className="p-5">
 						{isLoadingApprovals ? (
 							<div className="space-y-3">
 								{["sk-b1", "sk-b2", "sk-b3", "sk-b4"].map((id) => (

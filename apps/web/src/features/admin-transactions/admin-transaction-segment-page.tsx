@@ -10,7 +10,6 @@ import {
 	BreadcrumbPage,
 	BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -38,8 +37,15 @@ import {
 	formatTransactionDate,
 	getStatusBadgeClass,
 } from "@/features/transactions/transaction-detail-utils";
+import { cn } from "@/lib/utils";
 import { trpc } from "@/utils/trpc";
-import { RiAddLine, RiDashboardLine, RiFileList3Line } from "@remixicon/react";
+import {
+	RiAddLine,
+	RiDashboardLine,
+	RiFileList3Line,
+	RiSearchLine,
+	RiUserLine,
+} from "@remixicon/react";
 import Link from "next/link";
 import { Fragment, useMemo, useState } from "react";
 
@@ -79,13 +85,32 @@ function AgentCell({
 	name?: string | null;
 	code?: string | null;
 }) {
-	if (!name && !code) return <span className="text-muted-foreground">—</span>;
+	if (!name && !code) {
+		return <span className="text-muted-foreground text-sm">—</span>;
+	}
+	const initials = (name ?? "?")
+		.trim()
+		.split(/\s+/)
+		.filter(Boolean)
+		.slice(0, 2)
+		.map((p) => p[0]?.toUpperCase() ?? "")
+		.join("");
+
 	return (
-		<div className="text-sm">
-			<p>{name ?? "—"}</p>
-			{code ? (
-				<p className="font-mono text-muted-foreground text-xs">Code {code}</p>
-			) : null}
+		<div className="flex min-w-0 items-center gap-2.5">
+			<span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/12 font-semibold text-primary text-[11px]">
+				{initials || <RiUserLine size={14} />}
+			</span>
+			<div className="min-w-0">
+				<p className="truncate font-medium text-foreground text-sm leading-snug">
+					{name ?? "—"}
+				</p>
+				{code ? (
+					<p className="truncate font-mono text-muted-foreground text-[11px]">
+						Code {code}
+					</p>
+				) : null}
+			</div>
 		</div>
 	);
 }
@@ -93,7 +118,7 @@ function AgentCell({
 function AgentsCell({ row }: { row: AdminTxRow }) {
 	const isCo = row.isCoBroking;
 	return (
-		<div className="space-y-2">
+		<div className="flex min-w-[160px] flex-col gap-2.5 py-0.5">
 			<AgentCell name={row.agentName} code={row.agentCode} />
 			{isCo ? (
 				<AgentCell name={row.coAgentName} code={row.coAgentCode} />
@@ -101,6 +126,11 @@ function AgentsCell({ row }: { row: AdminTxRow }) {
 		</div>
 	);
 }
+
+const thClass =
+	"h-11 whitespace-nowrap border-b border-border/60 bg-muted px-4 text-left font-semibold text-foreground/80 text-xs tracking-wide";
+const tdClass =
+	"border-b border-border/50 px-4 py-3.5 align-middle text-sm text-foreground/90";
 
 export function AdminTransactionSegmentPage({
 	config,
@@ -127,7 +157,9 @@ export function AdminTransactionSegmentPage({
 	const { data, isLoading } = trpc.transactions.adminList.useQuery(queryInput);
 	const rows = (data?.transactions ?? []) as AdminTxRow[];
 	const total = data?.total ?? 0;
-	const isPrimaryUnits = config.segment === "new-project" && config.view === "units";
+	const isPrimaryUnits =
+		config.segment === "new-project" && config.view === "units";
+	const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
 	const handleNewTransaction = () => {
 		stashTransactionPrefillOnce({
@@ -140,9 +172,9 @@ export function AdminTransactionSegmentPage({
 
 	return (
 		<>
-			<header className="flex h-16 shrink-0 items-center gap-2 border-b">
-				<div className="flex flex-1 items-center gap-2 px-3">
-					<SidebarTrigger className="-ms-4" />
+			<header className="sticky top-0 z-30 -mx-4 flex h-16 shrink-0 items-center gap-2 border-border/60 border-b bg-background/95 px-4 backdrop-blur-md supports-backdrop-filter:bg-background/80 md:-mx-6 md:px-6 lg:-mx-8 lg:px-8">
+				<div className="flex flex-1 items-center gap-2 px-1 sm:px-0">
+					<SidebarTrigger className="-ms-1 rounded-xl" />
 					<Separator
 						orientation="vertical"
 						className="mr-2 data-[orientation=vertical]:h-4"
@@ -177,198 +209,282 @@ export function AdminTransactionSegmentPage({
 						</BreadcrumbList>
 					</Breadcrumb>
 				</div>
-				<div className="ml-auto flex gap-3">
+				<div className="ml-auto flex gap-2">
 					<HeaderActions />
 				</div>
 			</header>
 
-			<div className="flex flex-1 flex-col gap-4 py-4 lg:gap-6 lg:py-6">
-				<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-					<div>
-						<h1 className="font-semibold text-2xl">{config.title}</h1>
-						<p className="text-muted-foreground text-sm">{config.description}</p>
+			<div className="flex flex-1 flex-col gap-5 py-5 lg:gap-6 lg:py-7">
+				<div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+					<div className="min-w-0">
+						<h1 className="font-bold text-2xl tracking-tight">{config.title}</h1>
+						<p className="mt-0.5 text-muted-foreground text-sm">
+							{config.description}
+						</p>
 					</div>
-					<div className="flex flex-wrap items-center gap-2">
-						<Input
-							className="w-full sm:w-56"
-							placeholder="Search case, unit, agent…"
-							value={search}
-							onChange={(e) => {
-								setSearch(e.target.value);
-								setPage(0);
-							}}
-						/>
+					<div className="flex flex-wrap items-center gap-2.5">
+						<div className="relative w-full sm:w-64">
+							<RiSearchLine className="-translate-y-1/2 absolute top-1/2 left-3 size-4 text-muted-foreground" />
+							<Input
+								className="h-10 rounded-xl border-border/70 bg-muted/30 pl-9 shadow-none focus-visible:bg-background"
+								placeholder="Search case, unit, agent…"
+								value={search}
+								onChange={(e) => {
+									setSearch(e.target.value);
+									setPage(0);
+								}}
+							/>
+						</div>
 						{config.showNewTransaction ? (
 							<Button
-								className="bg-green-600 hover:bg-green-700"
+								size="lg"
+								className="h-10 gap-1.5"
 								onClick={handleNewTransaction}
 							>
-								<RiAddLine className="mr-1.5 size-4" />
+								<RiAddLine className="size-4" />
 								New Transaction
 							</Button>
 						) : null}
 					</div>
 				</div>
 
-				<Card>
-					<CardHeader>
-						<CardTitle className="text-base">
+				<Card className="gap-0 overflow-hidden border-border/70 py-0 shadow-card">
+					<CardHeader className="border-border/60 border-b bg-card px-5 py-4">
+						<CardTitle className="font-semibold text-base">
 							{total} case{total === 1 ? "" : "s"}
 						</CardTitle>
 					</CardHeader>
-					<CardContent>
+					<CardContent className="p-0">
 						{isLoading ? (
-							<Skeleton className="h-40 w-full" />
+							<div className="space-y-3 p-5">
+								{[1, 2, 3, 4, 5].map((i) => (
+									<Skeleton key={i} className="h-12 w-full rounded-xl" />
+								))}
+							</div>
 						) : rows.length === 0 ? (
-							<p className="py-8 text-center text-muted-foreground text-sm">
+							<p className="py-14 text-center text-muted-foreground text-sm">
 								No cases match this view.
 							</p>
 						) : (
-							<div className="max-h-[min(70vh,720px)] w-full overflow-auto rounded-md border [scrollbar-gutter:stable] [scrollbar-width:thin] [scrollbar-color:hsl(var(--border))_transparent] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-muted/30 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border hover:[&::-webkit-scrollbar-thumb]:bg-muted-foreground/50">
-								<table className="w-full caption-bottom text-sm">
-								<TableHeader>
-									<TableRow>
-										<TableHead>Case No</TableHead>
-										<TableHead>
-											{isPrimaryUnits ? "Booking Date" : "Offer Date"}
-										</TableHead>
-										{isPrimaryUnits ? (
-											<>
-												<TableHead>Project</TableHead>
-												<TableHead>Unit No</TableHead>
-											</>
-										) : (
-											<TableHead>Address</TableHead>
-										)}
-										<TableHead>Status</TableHead>
-										{isPrimaryUnits ? <TableHead>Aging</TableHead> : null}
-										{isPrimaryUnits ? (
-											<>
-												<TableHead>SPA Price</TableHead>
-												<TableHead>Nett Price</TableHead>
-											</>
-										) : config.segment === "rental" ? (
-											<>
-												<TableHead>Rental Amount</TableHead>
-												<TableHead>Case Commission</TableHead>
-											</>
-										) : (
-											<>
-												<TableHead>Nett Price</TableHead>
-												<TableHead>Commission Amount</TableHead>
-											</>
-										)}
-										<TableHead>
-											{paymentMethodColumnLabel(undefined, config.segment)}
-										</TableHead>
-										<TableHead>Agent(s)</TableHead>
-									</TableRow>
-								</TableHeader>
-								<TableBody>
-									{rows.map((row) => {
-										const prop = row.propertyData;
-										const offerOrBooking =
-											row.bookingDate ?? row.transactionDate;
-										const spa = prop?.spaPrice ?? prop?.price;
-										const nett = prop?.nettPrice ?? prop?.price;
-										return (
-											<TableRow key={row.id}>
-												<TableCell>
-													<Link
-														href={`/admin/transactions/case/${row.id}`}
-														className="font-medium font-mono text-primary hover:underline"
-													>
-														{row.caseNo ?? row.id.slice(0, 8)}
-													</Link>
-												</TableCell>
-												<TableCell>
-													{formatTransactionDate(offerOrBooking)}
-												</TableCell>
+							<div className="w-full overflow-x-auto">
+								<div className="max-h-[min(70vh,720px)] overflow-y-auto [scrollbar-gutter:stable] [scrollbar-width:thin]">
+									<table className="w-full min-w-[960px] caption-bottom border-collapse text-sm">
+										<TableHeader>
+											<TableRow className="border-0 hover:bg-transparent">
+												<TableHead className={thClass}>Case No</TableHead>
+												<TableHead className={thClass}>
+													{isPrimaryUnits ? "Booking Date" : "Offer Date"}
+												</TableHead>
 												{isPrimaryUnits ? (
 													<>
-														<TableCell>{row.projectName ?? "—"}</TableCell>
-														<TableCell>{row.unitNo ?? "—"}</TableCell>
+														<TableHead className={thClass}>Project</TableHead>
+														<TableHead className={thClass}>Unit No</TableHead>
 													</>
 												) : (
-													<TableCell className="max-w-[200px] truncate">
-														{prop?.address ?? "—"}
-													</TableCell>
+													<TableHead className={thClass}>Address</TableHead>
 												)}
-												<TableCell>
-													<Badge className={getStatusBadgeClass(row.status)}>
-														{formatStatusLabel(row.status)}
-													</Badge>
-												</TableCell>
+												<TableHead className={thClass}>Status</TableHead>
 												{isPrimaryUnits ? (
-													<TableCell>
-														{formatTransactionAging(
-															offerOrBooking,
-															row.status,
-															row.convertedAt,
-															row.reviewedAt,
-														)}
-													</TableCell>
+													<TableHead className={thClass}>Aging</TableHead>
 												) : null}
 												{isPrimaryUnits ? (
 													<>
-														<TableCell>{formatRm(spa)}</TableCell>
-														<TableCell>{formatRm(nett)}</TableCell>
+														<TableHead className={thClass}>SPA Price</TableHead>
+														<TableHead className={thClass}>Nett Price</TableHead>
 													</>
 												) : config.segment === "rental" ? (
 													<>
-														<TableCell>{formatRm(prop?.price)}</TableCell>
-														<TableCell>
-															{formatRm(row.commissionAmount)}
-														</TableCell>
+														<TableHead className={thClass}>
+															Rental Amount
+														</TableHead>
+														<TableHead className={thClass}>
+															Case Commission
+														</TableHead>
 													</>
 												) : (
 													<>
-														<TableCell>{formatRm(nett)}</TableCell>
-														<TableCell>
-															{formatRm(row.commissionAmount)}
-														</TableCell>
+														<TableHead className={thClass}>Nett Price</TableHead>
+														<TableHead className={thClass}>
+															Commission Amount
+														</TableHead>
 													</>
 												)}
-												<TableCell className="truncate">
-													{formatPaymentMethodField(
-														row.transactionType,
-														prop,
-													)}
-												</TableCell>
-												<TableCell>
-													<AgentsCell row={row} />
-												</TableCell>
+												<TableHead className={thClass}>
+													{paymentMethodColumnLabel(undefined, config.segment)}
+												</TableHead>
+												<TableHead className={cn(thClass, "pr-5")}>
+													Agent(s)
+												</TableHead>
 											</TableRow>
-										);
-									})}
-								</TableBody>
-							</table>
+										</TableHeader>
+										<TableBody>
+											{rows.map((row) => {
+												const prop = row.propertyData;
+												const offerOrBooking =
+													row.bookingDate ?? row.transactionDate;
+												const spa = prop?.spaPrice ?? prop?.price;
+												const nett = prop?.nettPrice ?? prop?.price;
+												return (
+													<TableRow
+														key={row.id}
+														className="border-border/50 transition-colors hover:bg-muted/35"
+													>
+														<TableCell className={tdClass}>
+															<Link
+																href={`/admin/transactions/case/${row.id}`}
+																className="font-medium font-mono text-primary hover:underline"
+															>
+																{row.caseNo ?? row.id.slice(0, 8)}
+															</Link>
+														</TableCell>
+														<TableCell
+															className={cn(tdClass, "whitespace-nowrap text-muted-foreground")}
+														>
+															{formatTransactionDate(offerOrBooking)}
+														</TableCell>
+														{isPrimaryUnits ? (
+															<>
+																<TableCell className={tdClass}>
+																	<span className="line-clamp-2 max-w-[180px]">
+																		{row.projectName ?? "—"}
+																	</span>
+																</TableCell>
+																<TableCell className={tdClass}>
+																	{row.unitNo ?? "—"}
+																</TableCell>
+															</>
+														) : (
+															<TableCell className={tdClass}>
+																<span className="line-clamp-2 max-w-[220px]">
+																	{prop?.address ?? "—"}
+																</span>
+															</TableCell>
+														)}
+														<TableCell className={tdClass}>
+															<span
+																className={cn(
+																	"inline-flex w-fit items-center",
+																	getStatusBadgeClass(row.status),
+																)}
+															>
+																{formatStatusLabel(row.status)}
+															</span>
+														</TableCell>
+														{isPrimaryUnits ? (
+															<TableCell
+																className={cn(
+																	tdClass,
+																	"tabular-nums text-muted-foreground",
+																)}
+															>
+																{formatTransactionAging(
+																	offerOrBooking,
+																	row.status,
+																	row.convertedAt,
+																	row.reviewedAt,
+																)}
+															</TableCell>
+														) : null}
+														{isPrimaryUnits ? (
+															<>
+																<TableCell
+																	className={cn(tdClass, "font-medium tabular-nums")}
+																>
+																	{formatRm(spa)}
+																</TableCell>
+																<TableCell
+																	className={cn(tdClass, "font-medium tabular-nums")}
+																>
+																	{formatRm(nett)}
+																</TableCell>
+															</>
+														) : config.segment === "rental" ? (
+															<>
+																<TableCell
+																	className={cn(tdClass, "font-medium tabular-nums")}
+																>
+																	{formatRm(prop?.price)}
+																</TableCell>
+																<TableCell
+																	className={cn(tdClass, "font-medium tabular-nums")}
+																>
+																	{formatRm(row.commissionAmount)}
+																</TableCell>
+															</>
+														) : (
+															<>
+																<TableCell
+																	className={cn(tdClass, "font-medium tabular-nums")}
+																>
+																	{formatRm(nett)}
+																</TableCell>
+																<TableCell
+																	className={cn(tdClass, "font-medium tabular-nums")}
+																>
+																	{formatRm(row.commissionAmount)}
+																</TableCell>
+															</>
+														)}
+														<TableCell className={tdClass}>
+															<span className="whitespace-nowrap">
+																{formatPaymentMethodField(
+																	row.transactionType,
+																	prop,
+																)}
+															</span>
+														</TableCell>
+														<TableCell className={cn(tdClass, "pr-5")}>
+															<AgentsCell row={row} />
+														</TableCell>
+													</TableRow>
+												);
+											})}
+										</TableBody>
+									</table>
+								</div>
 							</div>
 						)}
 
-						{total > PAGE_SIZE ? (
-							<div className="mt-4 flex items-center justify-between">
-								<p className="text-muted-foreground text-sm">
-									Page {page + 1} of {Math.ceil(total / PAGE_SIZE)}
+						{total > 0 ? (
+							<div className="flex flex-wrap items-center justify-between gap-3 border-border/60 border-t bg-muted/20 px-5 py-3.5">
+								<p className="text-muted-foreground text-xs">
+									Showing{" "}
+									<span className="font-medium text-foreground">
+										{page * PAGE_SIZE + 1}
+									</span>{" "}
+									to{" "}
+									<span className="font-medium text-foreground">
+										{Math.min((page + 1) * PAGE_SIZE, total)}
+									</span>{" "}
+									of{" "}
+									<span className="font-medium text-foreground">{total}</span>{" "}
+									entries
 								</p>
-								<div className="flex gap-2">
-									<Button
-										variant="outline"
-										size="sm"
-										disabled={page === 0}
-										onClick={() => setPage((p) => p - 1)}
-									>
-										Previous
-									</Button>
-									<Button
-										variant="outline"
-										size="sm"
-										disabled={!data?.hasMore}
-										onClick={() => setPage((p) => p + 1)}
-									>
-										Next
-									</Button>
-								</div>
+								{total > PAGE_SIZE ? (
+									<div className="flex items-center gap-1.5">
+										<Button
+											variant="outline"
+											size="sm"
+											className="h-8 rounded-lg"
+											disabled={page === 0}
+											onClick={() => setPage((p) => p - 1)}
+										>
+											Previous
+										</Button>
+										<span className="px-2 text-muted-foreground text-xs tabular-nums">
+											{page + 1} / {totalPages}
+										</span>
+										<Button
+											variant="outline"
+											size="sm"
+											className="h-8 rounded-lg"
+											disabled={!data?.hasMore}
+											onClick={() => setPage((p) => p + 1)}
+										>
+											Next
+										</Button>
+									</div>
+								) : null}
 							</div>
 						) : null}
 					</CardContent>

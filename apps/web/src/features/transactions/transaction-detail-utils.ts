@@ -108,21 +108,23 @@ export function formatStatusLabel(status: string | null | undefined): string {
 /** Tailwind classes for status badges (canonical + legacy-safe). */
 export function getStatusBadgeClass(status: string | null | undefined): string {
 	const n = normalizeTransactionStatus(status);
+	const base =
+		"rounded-full border-0 px-2.5 py-0.5 font-medium text-[11px] shadow-none";
 	switch (n) {
 		case "draft":
-			return "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200";
+			return `${base} bg-slate-100 text-slate-700 dark:bg-slate-800/80 dark:text-slate-200`;
 		case "pending":
-			return "bg-amber-500/15 text-amber-800 dark:text-amber-300";
+			return `${base} bg-amber-100 text-amber-800 dark:bg-amber-900/35 dark:text-amber-300`;
 		case "verified":
-			return "bg-sky-500/15 text-sky-800 dark:text-sky-300";
+			return `${base} bg-sky-100 text-sky-800 dark:bg-sky-900/35 dark:text-sky-300`;
 		case "converted":
-			return "bg-emerald-500/15 text-emerald-800 dark:text-emerald-300";
+			return `${base} bg-emerald-100 text-emerald-800 dark:bg-emerald-900/35 dark:text-emerald-300`;
 		case "cancelled":
-			return "bg-red-500/15 text-red-800 dark:text-red-300";
+			return `${base} bg-rose-100 text-rose-800 dark:bg-rose-900/35 dark:text-rose-300`;
 		case "revoke":
-			return "bg-orange-500/15 text-orange-800 dark:text-orange-300";
+			return `${base} bg-orange-100 text-orange-800 dark:bg-orange-900/35 dark:text-orange-300`;
 		default:
-			return "bg-muted text-muted-foreground";
+			return `${base} bg-muted text-muted-foreground`;
 	}
 }
 
