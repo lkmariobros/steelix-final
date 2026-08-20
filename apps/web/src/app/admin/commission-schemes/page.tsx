@@ -1,5 +1,15 @@
 "use client";
 
+import {
+	AlertDialog,
+	AlertDialogAction,
+	AlertDialogCancel,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle,
+} from "@/components/alert-dialog";
 import { HeaderActions } from "@/components/header-actions";
 import { Separator } from "@/components/separator";
 import { SidebarTrigger } from "@/components/sidebar";
@@ -21,6 +31,7 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
+import { formatSchemeBlockLabel } from "@/lib/commission-scheme-block-types";
 import { authClient } from "@/lib/auth-client";
 import { trpc } from "@/utils/trpc";
 import {
@@ -29,8 +40,8 @@ import {
 	RiDashboardLine,
 	RiDeleteBinLine,
 	RiEditLine,
-	RiFileList3Line,
 	RiFileCopyLine,
+	RiFileList3Line,
 	RiSearchLine,
 } from "@remixicon/react";
 import { Fragment, useMemo, useState } from "react";
@@ -39,7 +50,6 @@ import { toast } from "sonner";
 import { BulkUpdateDialog } from "./_components/bulk-update-dialog";
 import { SchemeFormDialog } from "./_components/scheme-form-dialog";
 import { SchemeTiersRow } from "./_components/scheme-tiers-row";
-import { formatSchemeBlockLabel } from "@/lib/commission-scheme-block-types";
 
 export default function CommissionSchemesAdminPage() {
 	const { data: session } = authClient.useSession();
@@ -48,6 +58,10 @@ export default function CommissionSchemesAdminPage() {
 	const [projectFilter, setProjectFilter] = useState("__all__");
 	const [includeInactive, setIncludeInactive] = useState(false);
 	const [selectedSchemeId, setSelectedSchemeId] = useState<string | null>(null);
+	const [deleteTarget, setDeleteTarget] = useState<{
+		id: string;
+		name: string;
+	} | null>(null);
 	const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 	const [isBulkOpen, setIsBulkOpen] = useState(false);
 	const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -75,6 +89,7 @@ export default function CommissionSchemesAdminPage() {
 	const deleteMutation = trpc.commissionSchemes.delete.useMutation({
 		onSuccess: () => {
 			toast.success("Scheme deleted");
+			setDeleteTarget(null);
 			void listQuery.refetch();
 		},
 		onError: (e) => toast.error(e.message),
@@ -367,7 +382,10 @@ export default function CommissionSchemesAdminPage() {
 																className="h-7 w-7 p-0 text-destructive"
 																onClick={(e) => {
 																	e.stopPropagation();
-																	deleteMutation.mutate({ id: s.id });
+																	setDeleteTarget({
+																		id: s.id,
+																		name: s.name,
+																	});
 																}}
 																title="Delete"
 															>
@@ -422,6 +440,53 @@ export default function CommissionSchemesAdminPage() {
 					schemeId={editId}
 					onSaved={() => void listQuery.refetch()}
 				/>
+
+				<AlertDialog
+					open={deleteTarget !== null}
+					onOpenChange={(open) => {
+						if (!open && !deleteMutation.isPending) {
+							setDeleteTarget(null);
+						}
+					}}
+				>
+					<AlertDialogContent className="gap-5 rounded-3xl border-border/60 sm:max-w-md">
+						<AlertDialogHeader className="gap-2">
+							<div className="mx-auto flex size-12 items-center justify-center rounded-full bg-destructive/15 sm:mx-0">
+								<RiDeleteBinLine
+									className="size-6 text-destructive"
+									aria-hidden
+								/>
+							</div>
+							<AlertDialogTitle>Delete this scheme?</AlertDialogTitle>
+							<AlertDialogDescription className="text-left">
+								This will permanently delete{" "}
+								<span className="font-medium text-foreground">
+									&ldquo;{deleteTarget?.name}&rdquo;
+								</span>
+								. This action cannot be undone.
+							</AlertDialogDescription>
+						</AlertDialogHeader>
+						<AlertDialogFooter>
+							<AlertDialogCancel
+								disabled={deleteMutation.isPending}
+								className="rounded-full"
+							>
+								Cancel
+							</AlertDialogCancel>
+							<AlertDialogAction
+								disabled={deleteMutation.isPending || !deleteTarget}
+								className="rounded-full bg-destructive text-destructive-foreground hover:bg-destructive/90"
+								onClick={(e) => {
+									e.preventDefault();
+									if (!deleteTarget) return;
+									deleteMutation.mutate({ id: deleteTarget.id });
+								}}
+							>
+								{deleteMutation.isPending ? "Deleting…" : "Yes"}
+							</AlertDialogAction>
+						</AlertDialogFooter>
+					</AlertDialogContent>
+				</AlertDialog>
 		</>
 	);
 }
