@@ -5,7 +5,6 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import type * as React from "react";
 
-import { SearchForm } from "@/components/search-form";
 import {
 	Sidebar,
 	SidebarContent,
@@ -529,8 +528,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 		<Sidebar collapsible="icon" {...props}>
 			<SidebarHeader>
 				<TeamSwitcher teams={data.teams} />
-				<hr className="-mt-px mx-2 border-border border-t group-data-[collapsible=icon]:hidden" />
-				<SearchForm className="mt-3 group-data-[collapsible=icon]:hidden" />
 			</SidebarHeader>
 			<SidebarContent>
 				{navigationItems.map((item) => (

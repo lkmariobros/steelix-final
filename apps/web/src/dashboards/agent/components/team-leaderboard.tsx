@@ -1,6 +1,6 @@
 "use client";
 
-import { Avatar } from "@/components/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/avatar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAgentDashboard } from "@/contexts/agent-dashboard-context";
@@ -138,18 +138,16 @@ export function TeamLeaderboard() {
 						<div className="flex items-center gap-3">
 							<Avatar className="size-11 shrink-0 ring-2 ring-primary/30">
 								{teamLeaderboard[0].agentImage ? (
-									<img
+									<AvatarImage
 										src={teamLeaderboard[0].agentImage}
 										alt={teamLeaderboard[0].agentName ?? undefined}
-										className="size-full object-cover"
 									/>
-								) : (
-									<div className="flex size-full items-center justify-center bg-primary/15 font-bold text-primary">
-										{(teamLeaderboard[0].agentName ?? "?")
-											.charAt(0)
-											.toUpperCase()}
-									</div>
-								)}
+								) : null}
+								<AvatarFallback className="bg-primary/15 font-bold text-primary">
+									{(teamLeaderboard[0].agentName ?? "?")
+										.charAt(0)
+										.toUpperCase()}
+								</AvatarFallback>
 							</Avatar>
 							<div className="min-w-0 flex-1">
 								<div className="truncate font-semibold text-sm">
@@ -201,16 +199,14 @@ export function TeamLeaderboard() {
 
 									<Avatar className="size-8 shrink-0">
 										{agent.agentImage ? (
-											<img
+											<AvatarImage
 												src={agent.agentImage}
 												alt={agent.agentName ?? undefined}
-												className="size-full object-cover"
 											/>
-										) : (
-											<div className="flex size-full items-center justify-center bg-primary/12 font-semibold text-primary text-sm">
-												{(agent.agentName ?? "?").charAt(0).toUpperCase()}
-											</div>
-										)}
+										) : null}
+										<AvatarFallback className="bg-primary/12 font-semibold text-primary text-sm">
+											{(agent.agentName ?? "?").charAt(0).toUpperCase()}
+										</AvatarFallback>
 									</Avatar>
 
 									<div className="min-w-0 flex-1">

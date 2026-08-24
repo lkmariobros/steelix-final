@@ -1,6 +1,6 @@
 "use client";
 
-import { Avatar, AvatarFallback } from "@/components/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/avatar";
 import { Badge } from "@/components/badge";
 import {
 	Table,
@@ -342,10 +342,8 @@ export function AgentPerformanceGrid({ className }: AgentPerformanceGridProps) {
 											approvalRate,
 											agent.avgCommission || 0,
 										);
-										const initial = (agent.agentName || "?")
-											.charAt(0)
-											.toUpperCase();
 										const name = agent.agentName || "Unknown Agent";
+										const initial = name.charAt(0).toUpperCase();
 
 										return (
 											<TableRow
@@ -356,6 +354,12 @@ export function AgentPerformanceGrid({ className }: AgentPerformanceGridProps) {
 													<div className="flex min-w-0 items-center gap-2.5">
 														<div className="relative shrink-0">
 															<Avatar className="size-8 border border-border/50">
+																{agent.agentImage ? (
+																	<AvatarImage
+																		src={agent.agentImage}
+																		alt={name}
+																	/>
+																) : null}
 																<AvatarFallback className="bg-primary/10 font-semibold text-primary text-xs">
 																	{initial}
 																</AvatarFallback>

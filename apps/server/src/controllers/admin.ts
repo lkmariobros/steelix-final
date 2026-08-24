@@ -178,6 +178,7 @@ export const adminRouter = router({
 					coBrokingData: transactions.coBrokingData,
 					agentName: user.name,
 					agentEmail: user.email,
+					agentImage: user.image,
 					agentCode: user.agentCode,
 				})
 				.from(transactions)
@@ -416,6 +417,7 @@ export const adminRouter = router({
 					agentId: user.id,
 					agentName: user.name,
 					agentEmail: user.email,
+					agentImage: user.image,
 					teamId: user.teamId,
 					totalTransactions: count(transactions.id),
 					totalCommission: sum(
@@ -434,7 +436,7 @@ export const adminRouter = router({
 				.from(user)
 				.leftJoin(transactions, eq(user.id, transactions.agentId))
 				.where(and(...agentWhereConditions))
-				.groupBy(user.id, user.name, user.email, user.teamId)
+				.groupBy(user.id, user.name, user.email, user.image, user.teamId)
 				.orderBy(desc(count(transactions.id)));
 
 			return agentPerformance;

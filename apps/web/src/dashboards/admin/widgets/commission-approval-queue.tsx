@@ -1,6 +1,6 @@
 "use client";
 
-import { Avatar, AvatarFallback } from "@/components/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/avatar";
 import { Badge } from "@/components/badge";
 import {
 	Dialog,
@@ -317,6 +317,12 @@ export function CommissionApprovalQueue({
 													<TableCell className="max-w-0 py-3">
 														<div className="flex min-w-0 items-center gap-2">
 															<Avatar className="size-8 shrink-0 border border-border/60">
+																{transaction.agentImage ? (
+																	<AvatarImage
+																		src={transaction.agentImage}
+																		alt={agentName}
+																	/>
+																) : null}
 																<AvatarFallback className="bg-primary/10 font-semibold text-primary text-[10px]">
 																	{initials || "?"}
 																</AvatarFallback>

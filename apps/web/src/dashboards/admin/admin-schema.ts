@@ -64,6 +64,7 @@ export const agentPerformanceSchema = z.object({
 	agentId: z.string(),
 	agentName: z.string().nullable(),
 	agentEmail: z.string().nullable(),
+	agentImage: z.string().nullable().optional(),
 	teamId: z.string().nullable(),
 	totalTransactions: z.number(),
 	totalCommission: z.number().nullable(),

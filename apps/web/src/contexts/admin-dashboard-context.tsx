@@ -28,6 +28,7 @@ export interface CommissionApprovalItem {
 	agentId: string | null;
 	agentName: string | null;
 	agentEmail: string | null;
+	agentImage?: string | null;
 	agentCode?: string | null;
 	coAgentName?: string | null;
 	coAgentCode?: string | null;
@@ -79,6 +80,7 @@ export interface AgentPerformanceItem {
 	agentId: string;
 	agentName: string | null;
 	agentEmail: string | null;
+	agentImage?: string | null;
 	teamId?: string | null;
 	totalTransactions: number;
 	totalCommission: string | number | null;
