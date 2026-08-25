@@ -256,7 +256,7 @@ export function TeamLeaderboard() {
 					})}
 				</div>
 
-				<div className="mt-4 grid grid-cols-3 gap-2 border-border/50 border-t pt-4">
+				<div className="mt-4 grid grid-cols-3 gap-2.5 border-border/50 border-t pt-4">
 					{[
 						{ label: "Team Total", value: formatCurrency(totalCommission) },
 						{ label: "Total Deals", value: `${totalCompleted}` },
@@ -264,12 +264,14 @@ export function TeamLeaderboard() {
 					].map(({ label, value }) => (
 						<div
 							key={label}
-							className="rounded-xl border border-border/50 bg-muted/25 px-2.5 py-2 text-center"
+							className="flex flex-col items-center justify-center gap-1 rounded-xl border border-border/50 bg-muted/25 px-3 py-3 text-center"
 						>
-							<div className="text-muted-foreground text-[10px] uppercase tracking-wide">
+							<div className="leading-none text-muted-foreground text-[10px] uppercase tracking-wide">
 								{label}
 							</div>
-							<div className="mt-0.5 font-bold text-sm tabular-nums">{value}</div>
+							<div className="font-bold text-sm tabular-nums leading-none">
+								{value}
+							</div>
 						</div>
 					))}
 				</div>

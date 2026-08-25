@@ -1,6 +1,6 @@
 "use client";
 
-import { Avatar } from "@/components/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/avatar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -188,9 +188,15 @@ export function RecentTransactions({ limit = 10 }: RecentTransactionsProps) {
 											className="flex items-center gap-2.5"
 										>
 											<Avatar className="size-9 shrink-0">
-												<div className="flex size-full items-center justify-center bg-primary/12 font-semibold text-primary text-sm">
+												{t.agentImage ? (
+													<AvatarImage
+														src={t.agentImage}
+														alt={t.agentName ?? undefined}
+													/>
+												) : null}
+												<AvatarFallback className="bg-primary/12 font-semibold text-primary text-sm">
 													{(t.agentName ?? "?").charAt(0).toUpperCase()}
-												</div>
+												</AvatarFallback>
 											</Avatar>
 											<span className="truncate font-medium text-sm">
 												{t.agentName}

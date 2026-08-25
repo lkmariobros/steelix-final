@@ -14,6 +14,7 @@ import { Label } from "./ui/label"
 
 interface SignInFormProps {
 	onForgotPassword: () => void
+	onRedirecting?: () => void
 }
 
 function formatFieldError(error: unknown): string {
@@ -45,11 +46,13 @@ function formatFieldError(error: unknown): string {
 	}
 }
 
-export default function SignInForm({ onForgotPassword }: SignInFormProps) {
+export default function SignInForm({
+	onForgotPassword,
+	onRedirecting,
+}: SignInFormProps) {
 	const router = useRouter()
 	const [isClient, setIsClient] = useState(false)
 	const [showPassword, setShowPassword] = useState(false)
-	const [isRedirecting, setIsRedirecting] = useState(false)
 	const redirectStarted = useRef(false)
 
 	useEffect(() => {
@@ -76,7 +79,7 @@ export default function SignInForm({ onForgotPassword }: SignInFormProps) {
 						onSuccess: (ctx) => {
 							if (redirectStarted.current) return
 							redirectStarted.current = true
-							setIsRedirecting(true)
+							onRedirecting?.()
 							toast.success("Sign in successful! Redirecting...")
 							redirectAfterFreshAuth(router.replace, ctx.data)
 						},
@@ -110,14 +113,6 @@ export default function SignInForm({ onForgotPassword }: SignInFormProps) {
 
 	if (!isClient) {
 		return null
-	}
-
-	if (isRedirecting) {
-		return (
-			<div className="flex items-center justify-center py-8">
-				<Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-			</div>
-		)
 	}
 
 	return (

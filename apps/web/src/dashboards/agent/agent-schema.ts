@@ -57,6 +57,7 @@ export const recentTransactionsSchema = z.array(
 		id: z.string(),
 		agentId: z.string(),
 		agentName: z.string(),
+		agentImage: z.string().nullable().optional(),
 		propertyAddress: z.string().nullable(),
 		propertyPrice: z.number().nullable(),
 		clientName: z.string().nullable(),

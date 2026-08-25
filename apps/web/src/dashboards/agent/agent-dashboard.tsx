@@ -110,7 +110,7 @@ function DashboardContent() {
 
 				<div className="flex flex-wrap items-center gap-2">
 					<Select value={timeFilter} onValueChange={handleTimeFilterChange}>
-						<SelectTrigger className="h-9 w-[138px] rounded-full border-border/70 bg-card shadow-card">
+						<SelectTrigger className="h-9 w-[148px] items-center justify-between rounded-full border-border/70 bg-card px-4 py-0 leading-none shadow-card">
 							<SelectValue placeholder="Time range" />
 						</SelectTrigger>
 						<SelectContent>
@@ -126,16 +126,17 @@ function DashboardContent() {
 						<PopoverTrigger asChild>
 							<Button
 								variant="outline"
-								size="sm"
 								className={cn(
-									"h-9 gap-1.5 rounded-full border-border/70 bg-card px-3.5 shadow-card",
+									"inline-flex h-9 items-center justify-center gap-2 rounded-full border-border/70 bg-card px-4 py-0 leading-none shadow-card",
 									!dateRange.startDate && "text-muted-foreground",
 								)}
 							>
-								<RiCalendarLine className="size-4" />
-								{dateRange.startDate && dateRange.endDate
-									? `${dateRange.startDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${dateRange.endDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
-									: "Custom range"}
+								<RiCalendarLine className="size-4 shrink-0" />
+								<span>
+									{dateRange.startDate && dateRange.endDate
+										? `${dateRange.startDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${dateRange.endDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
+										: "Custom range"}
+								</span>
 							</Button>
 						</PopoverTrigger>
 						<PopoverContent
@@ -162,15 +163,17 @@ function DashboardContent() {
 
 					<Button
 						variant="outline"
-						size="sm"
 						onClick={refetch}
 						disabled={isRefetching}
-						className="h-9 gap-1.5 rounded-full border-border/70 bg-card px-3.5 shadow-card"
+						className="inline-flex h-9 items-center justify-center gap-2 rounded-full border-border/70 bg-card px-4 py-0 leading-none shadow-card"
 					>
 						<RiRefreshLine
-							className={cn("size-4", isRefetching && "animate-spin")}
+							className={cn(
+								"size-4 shrink-0",
+								isRefetching && "animate-spin",
+							)}
 						/>
-						{isRefetching ? "Refreshing" : "Refresh"}
+						<span>{isRefetching ? "Refreshing" : "Refresh"}</span>
 					</Button>
 				</div>
 			</div>

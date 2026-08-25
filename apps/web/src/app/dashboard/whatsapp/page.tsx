@@ -38,7 +38,6 @@ import {
 	RiCheckDoubleLine,
 	RiDashboardLine,
 	RiDeleteBinLine,
-	RiInformationLine,
 	RiLoader4Line,
 	RiMessageLine,
 	RiPhoneLine,
@@ -443,20 +442,6 @@ export default function WhatsAppPage() {
 						<div className="flex items-center justify-between border-b p-4">
 							<h2 className="font-semibold text-lg">WhatsApp Inbox</h2>
 							<div className="flex items-center gap-2">
-								<Button
-									variant="ghost"
-									size="sm"
-									onClick={() => {
-										refetchConversations();
-										toast.success("Refreshing conversations...");
-									}}
-									disabled={isLoadingConversations}
-									title="Refresh conversations"
-								>
-									<RiLoader4Line
-										className={`h-4 w-4 ${isLoadingConversations ? "animate-spin" : ""}`}
-									/>
-								</Button>
 								<Button variant="ghost" size="sm">
 									<RiSettings3Line className="h-4 w-4" />
 								</Button>
@@ -658,9 +643,6 @@ export default function WhatsAppPage() {
 											title="Delete chat"
 										>
 											<RiDeleteBinLine className="h-4 w-4" />
-										</Button>
-										<Button variant="ghost" size="sm">
-											<RiInformationLine className="h-4 w-4" />
 										</Button>
 									</div>
 								</div>

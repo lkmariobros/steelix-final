@@ -40,6 +40,7 @@ export interface RecentTransactionItem {
 	id: string;
 	agentId: string | null;
 	agentName: string | null;
+	agentImage?: string | null;
 	propertyAddress: string;
 	propertyPrice: number;
 	clientName: string;

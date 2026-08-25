@@ -802,17 +802,6 @@ export default function CalendarPage() {
 												>
 													<RiArrowRightLine className="size-5" />
 												</Button>
-												{isAdmin && (
-													<Button
-														variant="default"
-														size="sm"
-														onClick={() => handleCreateEvent()}
-														className="ml-2 h-9"
-													>
-														<RiAddLine className="mr-2 size-4" />
-														New Event
-													</Button>
-												)}
 											</div>
 										</div>
 
