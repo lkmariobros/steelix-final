@@ -8,6 +8,7 @@ export const CANONICAL_TRANSACTION_STATUSES = [
 	"converted",
 	"cancelled",
 	"revoke",
+	"void",
 ] as const;
 
 export type CanonicalTransactionStatus =
@@ -41,6 +42,8 @@ export function dbStatusesForCanonicalFilter(
 			return ["draft"];
 		case "revoke":
 			return ["revoke"];
+		case "void":
+			return ["void"];
 		default:
 			return [status as TransactionStatusDb];
 	}
@@ -70,12 +73,11 @@ export function normalizeTransactionStatus(
 
 export function agentCanEditTransaction(
 	status: string | null | undefined,
-	agentEditAllowed: boolean | null | undefined,
+	_agentEditAllowed?: boolean | null,
 ): boolean {
-	const normalized = normalizeTransactionStatus(status);
-	if (normalized === "draft") return true;
-	if (normalized === "pending" && agentEditAllowed === true) return true;
-	return false;
+	// Agents may only edit case details while the case is Draft.
+	// Document upload / status requests remain available separately when locked.
+	return normalizeTransactionStatus(status) === "draft";
 }
 
 export function formatTransactionStatusLabel(
@@ -95,6 +97,8 @@ export function formatTransactionStatusLabel(
 			return "Cancel";
 		case "revoke":
 			return "Revoke";
+		case "void":
+			return "Void";
 		default:
 			return String(n).replace(/_/g, " ");
 	}

@@ -43,6 +43,7 @@ export const transactionStatusEnum = pgEnum("transaction_status", [
 	"rejected",
 	"converted",
 	"revoke",
+	"void",
 ]);
 
 // Document category enum for file uploads
@@ -432,6 +433,9 @@ export const insertTransactionSchema = z.object({
 			"rejected",
 			"completed",
 			"cancelled",
+			"converted",
+			"revoke",
+			"void",
 		])
 		.default("draft"),
 });
@@ -601,6 +605,9 @@ export const selectTransactionSchema = z.object({
 		"rejected",
 		"completed",
 		"cancelled",
+		"converted",
+		"revoke",
+		"void",
 	]),
 	submittedAt: z.date().nullable(),
 	reviewedAt: z.date().nullable(),

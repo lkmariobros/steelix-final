@@ -12,6 +12,7 @@ import {
 	TableRow,
 } from "@/components/table";
 import { useAgentDashboard } from "@/contexts/agent-dashboard-context";
+import { formatDateDMY } from "@/lib/date-format";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -33,11 +34,7 @@ const useRelativeTime = (date: Date): string => {
 			if (diffH < 1) return "Just now";
 			if (diffH < 24) return `${diffH}h ago`;
 			if (diffH < 168) return `${Math.floor(diffH / 24)}d ago`;
-			return date.toLocaleDateString("en-US", {
-				month: "short",
-				day: "numeric",
-				year: "numeric",
-			});
+			return formatDateDMY(date);
 		};
 		setRel(calc());
 		const id = setInterval(() => setRel(calc()), 3_600_000);

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { formatDateDMY } from "@/lib/date-format";
 
 // Financial overview data schema
 export const financialOverviewSchema = z.object({
@@ -222,11 +223,7 @@ export function formatPercentage(
 }
 
 export function formatDate(date: Date): string {
-	return new Intl.DateTimeFormat("en-US", {
-		month: "short",
-		day: "numeric",
-		year: "numeric",
-	}).format(date);
+	return formatDateDMY(date);
 }
 
 export function formatRelativeTime(date: Date): string {

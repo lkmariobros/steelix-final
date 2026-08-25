@@ -24,6 +24,7 @@ import {
 	listTransactionMessages,
 } from "../services/transaction-messages";
 import { generateSecondaryTransactionFormHtml } from "../services/secondary-transaction-form";
+import { writeRecordLog } from "../services/record-log";
 import {
 	transactionRequestItemSchema,
 } from "../utils/transaction-request-items";
@@ -37,8 +38,18 @@ import {
 	isTransactionsSchemaOutdatedError,
 	transactionsSchemaOutdatedMessage,
 } from "../utils/transactions-schema-hint";
-import { hasAdminAccess } from "../utils/user-roles";
+import { getPrimaryRole, hasAdminAccess } from "../utils/user-roles";
 import { adminProcedure, protectedProcedure, router } from "../utils/trpc";
+
+function actorRoleFromSession(ctx: {
+	session: { user: { role?: string | null; roles?: string[] | null } };
+}): string | undefined {
+	const u = ctx.session.user;
+	return getPrimaryRole({
+		role: u.role ?? undefined,
+		roles: u.roles ?? undefined,
+	});
+}
 
 // Base transaction input schema (without validation)
 // All fields are optional to support draft saving with partial data
@@ -234,6 +245,7 @@ const TRANSACTION_STATUS_VALUES = [
 	"converted",
 	"cancelled",
 	"revoke",
+	"void",
 	// legacy (mapped on write)
 	"submitted",
 	"under_review",
@@ -428,6 +440,28 @@ export const transactionsRouter = router({
 					.values(newTransaction)
 					.returning();
 
+				void writeRecordLog({
+					category: "transaction",
+					action: "create",
+					summary: "Created transaction draft",
+					actorId: ctx.session.user.id,
+					actorRole: actorRoleFromSession(ctx),
+					entityType: "transaction",
+					entityId: transaction.id,
+					caseNo: transaction.caseNo,
+					detail: [
+						transaction.projectName,
+						transaction.unitNo,
+					]
+						.filter(Boolean)
+						.join(" · ") || undefined,
+					metadata: {
+						marketType: transaction.marketType,
+						transactionType: transaction.transactionType,
+						status: transaction.status,
+					},
+				});
+
 				return transaction;
 			} catch (e) {
 				if (isTransactionsSchemaOutdatedError(e)) {
@@ -462,7 +496,10 @@ export const transactionsRouter = router({
 				agentEditAllowed?: boolean | null;
 			};
 
+			// Admins/super admins may update case details at any status.
+			// Agents may only update details while the case is Draft.
 			if (
+				!sessionIsAdmin(ctx) &&
 				!agentCanEditTransaction(existing.status, existing.agentEditAllowed)
 			) {
 				throw new TRPCError({
@@ -499,6 +536,31 @@ export const transactionsRouter = router({
 					.set(processedUpdateData)
 					.where(eq(transactions.id, id))
 					.returning();
+
+				const priorStatus = normalizeTransactionStatus(existing.status);
+				const isDraftSave = priorStatus === "draft";
+				const caseLabel =
+					updatedTransaction.caseNo?.trim() ||
+					existingTransaction[0]?.caseNo?.trim() ||
+					id.slice(0, 8);
+
+				void writeRecordLog({
+					category: "transaction",
+					action: isDraftSave ? "save_draft" : "update",
+					summary: isDraftSave
+						? "Saved transaction draft"
+						: "Updated transaction case",
+					actorId: ctx.session.user.id,
+					actorRole: actorRoleFromSession(ctx),
+					entityType: "transaction",
+					entityId: id,
+					caseNo: updatedTransaction.caseNo ?? existingTransaction[0]?.caseNo,
+					detail: `Case ${caseLabel}`,
+					metadata: {
+						status: updatedTransaction.status,
+						priorStatus: existing.status,
+					},
+				});
 
 				return updatedTransaction;
 			} catch (e) {
@@ -595,11 +657,16 @@ export const transactionsRouter = router({
 			}
 
 			try {
+				// Fixed Case No sequence (latest first). Do not sort by updatedAt —
+				// edits must not move a case from its creation/sequence position.
 				const transactionList = await db
 					.select()
 					.from(transactions)
 					.where(and(...conditions))
-					.orderBy(desc(transactions.updatedAt))
+					.orderBy(
+						sql`${transactions.caseNo} DESC NULLS LAST`,
+						desc(transactions.createdAt),
+					)
 					.limit(input.limit)
 					.offset(input.offset);
 
@@ -696,6 +763,8 @@ export const transactionsRouter = router({
 
 			const whereClause = conditions.length ? and(...conditions) : undefined;
 
+			// Fixed Case No sequence (latest first). Do not sort by updatedAt —
+			// edits must not move a case from its creation/sequence position.
 			const rows = await db
 				.select({
 					transaction: transactions,
@@ -705,7 +774,10 @@ export const transactionsRouter = router({
 				.from(transactions)
 				.leftJoin(user, eq(transactions.agentId, user.id))
 				.where(whereClause)
-				.orderBy(desc(transactions.updatedAt))
+				.orderBy(
+					sql`${transactions.caseNo} DESC NULLS LAST`,
+					desc(transactions.createdAt),
+				)
 				.limit(input.limit)
 				.offset(input.offset);
 
@@ -817,9 +889,8 @@ export const transactionsRouter = router({
 				agentEditAllowed?: boolean | null;
 			};
 			const normalizedStatus = normalizeTransactionStatus(txRow.status);
-			const canSubmit =
-				normalizedStatus === "draft" ||
-				(normalizedStatus === "pending" && txRow.agentEditAllowed === true);
+			// Agents may only submit from Draft. Admins update via admin flows.
+			const canSubmit = normalizedStatus === "draft";
 
 			if (!canSubmit) {
 				throw new Error(
@@ -859,6 +930,19 @@ export const transactionsRouter = router({
 				})
 				.where(eq(transactions.id, input.id))
 				.returning();
+
+			void writeRecordLog({
+				category: "transaction",
+				action: "submit",
+				summary: "Submitted transaction for review",
+				actorId: ctx.session.user.id,
+				actorRole: actorRoleFromSession(ctx),
+				entityType: "transaction",
+				entityId: input.id,
+				caseNo: updatedTransaction?.caseNo ?? caseNo,
+				detail: `Case ${caseNo}`,
+				metadata: { status: "pending" },
+			});
 
 			return updatedTransaction;
 		}),
@@ -990,7 +1074,7 @@ export const transactionsRouter = router({
 
 	adminUpdate: adminProcedure
 		.input(baseTransactionInput.partial().extend({ id: z.string().uuid() }))
-		.mutation(async ({ input }) => {
+		.mutation(async ({ ctx, input }) => {
 			const { id, ...updateData } = input;
 			if (updateData.caseNo) {
 				const [duplicate] = await db
@@ -1027,6 +1111,20 @@ export const transactionsRouter = router({
 				.where(eq(transactions.id, id))
 				.returning();
 			if (!updated) throw new TRPCError({ code: "NOT_FOUND", message: "Not found" });
+
+			void writeRecordLog({
+				category: "transaction",
+				action: "update",
+				summary: "Updated transaction case",
+				actorId: ctx.session.user.id,
+				actorRole: actorRoleFromSession(ctx),
+				entityType: "transaction",
+				entityId: id,
+				caseNo: updated.caseNo,
+				detail: updated.caseNo ? `Case ${updated.caseNo}` : undefined,
+				metadata: { status: updated.status, via: "adminUpdate" },
+			});
+
 			return updated;
 		}),
 

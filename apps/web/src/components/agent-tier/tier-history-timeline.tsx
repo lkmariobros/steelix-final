@@ -8,6 +8,7 @@ import {
   TIER_COLORS,
   TIER_ORDER,
 } from "@/lib/agent-tier-config"
+import { formatDateDMY } from "@/lib/date-format"
 import {
   RiArrowRightLine,
   RiArrowUpLine,
@@ -121,12 +122,8 @@ export function TierHistoryTimeline({ agentId }: TierHistoryTimelineProps) {
                   <div className="flex items-center gap-4 text-xs text-muted-foreground">
                     <span className="flex items-center gap-1">
                       <RiCalendarLine className="h-3 w-3" />
-                      {entry.effectiveDate 
-                        ? new Date(entry.effectiveDate).toLocaleDateString('en-US', {
-                            year: 'numeric',
-                            month: 'short',
-                            day: 'numeric',
-                          })
+                      {entry.effectiveDate
+                        ? formatDateDMY(entry.effectiveDate)
                         : 'N/A'}
                     </span>
                     {entry.promotedBy && (

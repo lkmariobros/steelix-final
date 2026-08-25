@@ -38,6 +38,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { authClient } from "@/lib/auth-client";
+import { formatDateDMY, formatDateTimeDMY } from "@/lib/date-format";
 import { cn } from "@/lib/utils";
 import { trpc } from "@/utils/trpc";
 import {
@@ -290,7 +291,7 @@ export default function CommissionPayoutDetailPage() {
 									<span className="text-muted-foreground">Payment date</span>
 									<span>
 										{p.paymentDate
-											? new Date(p.paymentDate).toLocaleDateString("en-MY")
+											? formatDateDMY(p.paymentDate)
 											: "—"}
 									</span>
 								</div>
@@ -324,7 +325,7 @@ export default function CommissionPayoutDetailPage() {
 									<div className="flex justify-between gap-2">
 										<span className="font-medium">{e.action}</span>
 										<span className="text-muted-foreground text-xs">
-											{new Date(e.at).toLocaleString("en-MY")}
+											{formatDateTimeDMY(e.at)}
 										</span>
 									</div>
 									{e.notes && <p className="text-muted-foreground text-xs">{e.notes}</p>}
@@ -427,7 +428,7 @@ export default function CommissionPayoutDetailPage() {
 										>
 											<RiCalendarLine className="size-3.5 text-muted-foreground" />
 											{payDate
-												? format(parseYmd(payDate) ?? new Date(), "dd MMM yyyy")
+												? formatDateDMY(parseYmd(payDate) ?? new Date())
 												: "Select payment date"}
 										</Button>
 									</PopoverTrigger>

@@ -55,6 +55,7 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/tooltip";
 import { authClient } from "@/lib/auth-client";
+import { formatDateDMY, formatDateTimeDMY } from "@/lib/date-format";
 import { cn } from "@/lib/utils";
 import { trpc } from "@/utils/trpc";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -231,7 +232,7 @@ const formatContactDate = (
 		return `In ${futureDays} days`;
 	}
 
-	return dateObj.toLocaleDateString();
+	return formatDateDMY(dateObj);
 };
 
 type ViewMode = "list" | "kanban";
@@ -1751,17 +1752,7 @@ export default function CRMPage() {
 													const noteDate = new Date(
 														note.updatedAt ?? note.createdAt,
 													);
-													const formattedDate = noteDate.toLocaleString(
-														"en-US",
-														{
-															month: "short",
-															day: "numeric",
-															year: "numeric",
-															hour: "2-digit",
-															minute: "2-digit",
-															hour12: true,
-														},
-													);
+													const formattedDate = formatDateTimeDMY(noteDate);
 													const gmtOffset = -noteDate.getTimezoneOffset() / 60;
 													const gmtSign = gmtOffset >= 0 ? "+" : "";
 													const gmtString = `(GMT ${gmtSign}${gmtOffset.toString().padStart(2, "0")})`;

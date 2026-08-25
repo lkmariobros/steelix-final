@@ -16,6 +16,7 @@ import { toast } from "sonner";
 
 import { useTransactionModal } from "@/contexts/transaction-modal-context";
 import { useClientSide } from "@/hooks/use-client-side";
+import { formatDateDMY } from "@/lib/date-format";
 // import { trpc } from "@/utils/trpc"; // Temporarily disabled for build
 
 interface Transaction {
@@ -150,13 +151,9 @@ function SalesPageContent() {
 		}
 	};
 
-	// Format date
+	// Format date as DD/MM/YYYY (portal standard)
 	const formatDate = (dateString: string) => {
-		return new Date(dateString).toLocaleDateString("en-US", {
-			year: "numeric",
-			month: "short",
-			day: "numeric",
-		});
+		return formatDateDMY(dateString);
 	};
 
 	// Show loading state during hydration to prevent mismatch

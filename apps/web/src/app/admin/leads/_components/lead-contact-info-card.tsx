@@ -8,6 +8,7 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@/components/ui/card";
+import { formatDateDMY } from "@/lib/date-format";
 import { cn } from "@/lib/utils";
 import { RiContactsLine } from "@remixicon/react";
 import { formatLeadTypeLabel } from "./lead-constants";
@@ -30,16 +31,7 @@ export type LeadContactInfoCardLead = {
 };
 
 function formatLeadDate(d: Date | string | null) {
-	if (!d) return "—";
-	try {
-		return new Date(d).toLocaleDateString("en-GB", {
-			day: "2-digit",
-			month: "2-digit",
-			year: "numeric",
-		});
-	} catch {
-		return "—";
-	}
+	return formatDateDMY(d);
 }
 
 function InfoField({

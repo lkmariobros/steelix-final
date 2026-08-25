@@ -1,6 +1,5 @@
 "use client";
 
-import { format } from "date-fns";
 import {
 	ArrowLeft,
 	Building,
@@ -27,6 +26,9 @@ import {
 	type ValidationError,
 	ValidationSummaryDialog,
 } from "@/components/validation-summary-dialog";
+import { isRentalTransactionType } from "@/features/transactions/payment-method-utils";
+import { loadTempTransactionDocuments } from "@/hooks/use-document-upload";
+import { formatDateDMY } from "@/lib/date-format";
 
 import {
 	type CompleteTransactionData,
@@ -37,8 +39,6 @@ import {
 	sstPayByOptions,
 	stepConfig,
 } from "../transaction-schema";
-import { isRentalTransactionType } from "@/features/transactions/payment-method-utils";
-import { loadTempTransactionDocuments } from "@/hooks/use-document-upload";
 
 function resolveTransactionDocuments(
 	formDocs: CompleteTransactionData["documents"] | undefined,
@@ -60,6 +60,8 @@ interface StepVerifyProps {
 	onPrevious: () => void;
 	onEditStep?: (step: FormStep) => void;
 	isLoading: boolean;
+	/** When true (non-draft admin edit), save details without submitting for review. */
+	saveOnly?: boolean;
 }
 
 export function StepVerify({
@@ -68,6 +70,7 @@ export function StepVerify({
 	onPrevious,
 	onEditStep,
 	isLoading,
+	saveOnly = false,
 }: StepVerifyProps) {
 	const [showValidationDialog, setShowValidationDialog] = useState(false);
 	const [validationErrors, setValidationErrors] = useState<ValidationError[]>(
@@ -165,9 +168,11 @@ export function StepVerify({
 		<div className="space-y-6">
 			<Card>
 				<CardHeader>
-					<CardTitle>Verify & Submit</CardTitle>
+					<CardTitle>{saveOnly ? "Verify & Save" : "Verify & Submit"}</CardTitle>
 					<CardDescription>
-						Review all details before submitting to admin for verification.
+						{saveOnly
+							? "Review details before saving changes to this case."
+							: "Review all details before submitting to admin for verification."}
 					</CardDescription>
 				</CardHeader>
 				<CardContent className="space-y-6">
@@ -368,7 +373,7 @@ export function StepVerify({
 								<dd className="flex items-center gap-1">
 									<Calendar className="h-3 w-3" />
 									{data.bookingDate
-										? format(data.bookingDate, "dd MMM yyyy")
+										? formatDateDMY(data.bookingDate)
 										: "—"}
 								</dd>
 							</div>
@@ -578,7 +583,12 @@ export function StepVerify({
 						</Button>
 						<Button onClick={handleSubmitClick} disabled={isLoading}>
 							{isLoading ? (
-								"Submitting…"
+								saveOnly ? "Saving…" : "Submitting…"
+							) : saveOnly ? (
+								<>
+									<CheckCircle className="mr-2 h-4 w-4" />
+									Save changes
+								</>
 							) : (
 								<>
 									<Send className="mr-2 h-4 w-4" />

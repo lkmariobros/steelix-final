@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAgentDashboard } from "@/contexts/agent-dashboard-context";
 import { MetricCard } from "@/dashboards/admin/widgets/metric-card";
+import { formatDateDMY } from "@/lib/date-format";
 import {
 	RiBarChartLine,
 	RiMoneyDollarCircleLine,
@@ -73,7 +74,7 @@ export function FinancialOverview() {
 				</h2>
 				<span className="inline-flex items-center rounded-full bg-muted/60 px-2.5 py-1 font-medium text-[11px] text-muted-foreground">
 					{dateRange.startDate && dateRange.endDate
-						? `${dateRange.startDate.toLocaleDateString("en-US")} – ${dateRange.endDate.toLocaleDateString("en-US")}`
+						? `${formatDateDMY(dateRange.startDate)} – ${formatDateDMY(dateRange.endDate)}`
 						: "All time"}
 				</span>
 			</div>

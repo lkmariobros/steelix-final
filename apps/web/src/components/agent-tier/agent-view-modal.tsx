@@ -15,6 +15,7 @@ import { TierProgress } from "./tier-progress";
 import { TierHistoryTimeline } from "./tier-history-timeline";
 import { AgentProfilePanel } from "./agent-profile-panel";
 import type { AgentTier } from "@/lib/agent-tier-config";
+import { isStaffAccountRole } from "@/lib/user-role";
 import {
 	RiUserLine,
 	RiLineChartLine,
@@ -49,10 +50,12 @@ export function AgentViewModal({
 				<DialogHeader className="shrink-0 border-b bg-muted/20 px-8 py-5">
 					<DialogTitle className="flex items-center gap-2 text-xl">
 						<RiUserLine className="h-5 w-5 text-primary" />
-						Agent Profile
+						{isStaffAccountRole(agent?.role) ? "Staff Profile" : "Agent Profile"}
 					</DialogTitle>
 					<DialogDescription>
-						View and edit detailed agent information and tier progression
+						{isStaffAccountRole(agent?.role)
+							? "View and edit staff account details"
+							: "View and edit detailed agent information and tier progression"}
 					</DialogDescription>
 				</DialogHeader>
 
@@ -60,6 +63,14 @@ export function AgentViewModal({
 					{isLoading ? (
 						<AgentViewSkeleton />
 					) : agent ? (
+						isStaffAccountRole(agent.role) ? (
+							<div className="w-full">
+								<AgentProfilePanel
+									agent={agent}
+									recruiter={agentData?.recruiter}
+								/>
+							</div>
+						) : (
 						<Tabs defaultValue="details" className="w-full">
 							<TabsList className="grid w-full grid-cols-4">
 								<TabsTrigger value="details">Details</TabsTrigger>
@@ -103,6 +114,7 @@ export function AgentViewModal({
 								/>
 							</TabsContent>
 						</Tabs>
+						)
 					) : (
 						<div className="py-8 text-center text-muted-foreground">
 							Agent not found

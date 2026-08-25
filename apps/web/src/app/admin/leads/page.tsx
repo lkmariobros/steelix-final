@@ -37,6 +37,7 @@ import {
 } from "@/components/ui/select";
 import { LoadingScreen } from "@/components/ui/loading-spinner";
 import { Skeleton } from "@/components/ui/skeleton";
+import { formatDateDMY } from "@/lib/date-format";
 import { trpc } from "@/utils/trpc";
 import {
 	RiCheckboxMultipleLine,
@@ -1330,7 +1331,7 @@ export default function AdminLeadsPage() {
 															</span>
 														</TableCell>
 														<TableCell className="whitespace-nowrap px-4 py-3.5 text-muted-foreground text-sm">
-															{new Date(lead.createdAt).toLocaleDateString()}
+															{formatDateDMY(lead.createdAt)}
 														</TableCell>
 														<TableCell className="w-[108px] pr-5">
 															<div className="flex items-center justify-center gap-1.5">

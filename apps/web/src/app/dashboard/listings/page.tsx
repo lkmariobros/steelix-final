@@ -35,6 +35,7 @@ import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { useRedirectUnauthenticated } from "@/hooks/use-redirect-unauthenticated";
 import { authClient } from "@/lib/auth-client";
+import { formatDateTimeDMY } from "@/lib/date-format";
 import { trpc } from "@/utils/trpc";
 import {
 	RiAddLine,
@@ -457,7 +458,7 @@ export default function ListingsPage() {
 										</Badge>
 									</div>
 									<p className="text-muted-foreground text-xs">
-										Client: {txn.clientData?.name || "N/A"} | Updated: {new Date(txn.updatedAt).toLocaleString()}
+										Client: {txn.clientData?.name || "N/A"} | Updated: {formatDateTimeDMY(txn.updatedAt)}
 									</p>
 								</div>
 							))}

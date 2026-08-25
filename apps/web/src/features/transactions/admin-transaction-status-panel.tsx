@@ -2,7 +2,6 @@
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -40,7 +39,6 @@ export function AdminTransactionStatusPanel({
 	transactionId,
 	currentStatus,
 	caseNo,
-	agentEditAllowed,
 	onUpdated,
 }: AdminTransactionStatusPanelProps) {
 	const queryClient = useQueryClient();
@@ -48,15 +46,11 @@ export function AdminTransactionStatusPanel({
 
 	const [status, setStatus] = useState<CanonicalStatus>(normalized);
 	const [reviewNotes, setReviewNotes] = useState("");
-	const [allowAgentEdit, setAllowAgentEdit] = useState(
-		agentEditAllowed === true,
-	);
 	const [caseNoValue, setCaseNoValue] = useState(caseNo ?? "");
 
 	useEffect(() => {
 		setStatus(normalizeTransactionStatus(currentStatus) as CanonicalStatus);
-		setAllowAgentEdit(agentEditAllowed === true);
-	}, [currentStatus, agentEditAllowed]);
+	}, [currentStatus]);
 
 	useEffect(() => {
 		setCaseNoValue(caseNo ?? "");
@@ -87,21 +81,17 @@ export function AdminTransactionStatusPanel({
 		onError: (e) => toast.error(e.message || "Failed to update case number"),
 	});
 
-	const applyStatus = (next: CanonicalStatus, opts?: { allowEdit?: boolean }) => {
+	const applyStatus = (next: CanonicalStatus) => {
 		changeStatus.mutate({
 			id: transactionId,
 			status: next,
 			reviewNotes: reviewNotes.trim() || undefined,
-			allowAgentEdit:
-				opts?.allowEdit ??
-				(next === "pending" ? allowAgentEdit : undefined),
 		});
 	};
 
 	const quickActions: {
 		label: string;
 		status: CanonicalStatus;
-		allowEdit?: boolean;
 		variant?: "default" | "outline" | "destructive" | "secondary";
 		show?: boolean;
 	}[] = [
@@ -122,17 +112,24 @@ export function AdminTransactionStatusPanel({
 			show: normalized === "verified",
 		},
 		{
-			label: "Reopen for agent",
+			label: "Set pending",
 			status: "pending",
-			allowEdit: true,
 			variant: "secondary",
-			show: ["pending", "verified", "cancelled"].includes(normalized),
+			show: ["verified", "cancelled", "revoke", "void"].includes(normalized),
 		},
 		{
 			label: "Revoke",
 			status: "revoke",
 			variant: "destructive",
 			show: ["verified", "converted"].includes(normalized),
+		},
+		{
+			label: "Void",
+			status: "void",
+			variant: "destructive",
+			show: ["pending", "verified", "converted", "cancelled"].includes(
+				normalized,
+			),
 		},
 	];
 
@@ -177,11 +174,6 @@ export function AdminTransactionStatusPanel({
 				<Badge className={getStatusBadgeClass(currentStatus)}>
 					{formatStatusLabel(currentStatus)}
 				</Badge>
-				{agentEditAllowed ? (
-					<Badge variant="outline" className="text-xs">
-						Agent edit allowed
-					</Badge>
-				) : null}
 			</div>
 
 			<div className="flex flex-wrap gap-2">
@@ -194,11 +186,7 @@ export function AdminTransactionStatusPanel({
 							size="sm"
 							variant={action.variant ?? "outline"}
 							disabled={changeStatus.isPending}
-							onClick={() =>
-								applyStatus(action.status, {
-									allowEdit: action.allowEdit,
-								})
-							}
+							onClick={() => applyStatus(action.status)}
 						>
 							{action.label}
 						</Button>
@@ -224,18 +212,6 @@ export function AdminTransactionStatusPanel({
 						</SelectContent>
 					</Select>
 				</div>
-				{status === "pending" && (
-					<div className="flex items-center gap-2 pt-6">
-						<Checkbox
-							id="allow-agent-edit"
-							checked={allowAgentEdit}
-							onCheckedChange={(v) => setAllowAgentEdit(v === true)}
-						/>
-						<Label htmlFor="allow-agent-edit" className="text-sm">
-							Allow agent to edit this case
-						</Label>
-					</div>
-				)}
 			</div>
 
 			<div className="space-y-2">

@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/dialog"
 import { TierBadge } from "@/components/agent-tier/tier-badge"
 import { TIER_ORDER, TIER_COLORS, type AgentTier } from "@/lib/agent-tier-config"
+import { formatDateDMY } from "@/lib/date-format"
 import { RiEditLine, RiLoader4Line, RiCheckLine, RiHistoryLine } from "@remixicon/react"
 import { toast } from "sonner"
 
@@ -185,7 +186,7 @@ export function TierConfigurationManager() {
                   </div>
                   <div className="text-right text-sm text-muted-foreground">
                     <p>{entry.changedByName}</p>
-                    <p>{new Date(entry.timestamp).toLocaleDateString()}</p>
+                    <p>{formatDateDMY(entry.timestamp)}</p>
                   </div>
                 </div>
               ))}

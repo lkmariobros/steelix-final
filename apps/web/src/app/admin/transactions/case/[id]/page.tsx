@@ -16,6 +16,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useTransactionModalActions } from "@/contexts/transaction-modal-context";
 import { TransactionDetailView } from "@/features/transactions/transaction-detail-view";
 import { AdminTransactionStatusPanel } from "@/features/transactions/admin-transaction-status-panel";
 import { TransactionMessagesPanel } from "@/features/transactions/transaction-messages-panel";
@@ -27,6 +28,7 @@ import { trpc } from "@/utils/trpc";
 import {
 	RiArrowLeftLine,
 	RiDashboardLine,
+	RiEditLine,
 	RiFileTextLine,
 } from "@remixicon/react";
 import Link from "next/link";
@@ -36,6 +38,7 @@ export default function AdminTransactionDetailPage() {
 	const params = useParams<{ id: string }>();
 	const router = useRouter();
 	const transactionId = params.id;
+	const { openEditModal } = useTransactionModalActions();
 
 	const { data: tx, isLoading, error } =
 		trpc.transactions.adminGetById.useQuery(
@@ -87,16 +90,26 @@ export default function AdminTransactionDetailPage() {
 			</header>
 
 			<div className="flex flex-1 flex-col gap-4 py-4 lg:gap-6 lg:py-6">
-				<div className="flex flex-wrap items-center gap-2">
-					<Button variant="outline" size="sm" asChild>
-						<Link href="/admin/approvals">
-							<RiArrowLeftLine className="mr-1 size-4" />
-							Back to approvals
-						</Link>
-					</Button>
-					<Button variant="outline" size="sm" asChild>
-						<Link href="/admin/transactions/new-project/sold-units">All transactions</Link>
-					</Button>
+				<div className="flex flex-wrap items-center justify-between gap-2">
+					<div className="flex flex-wrap items-center gap-2">
+						<Button variant="outline" size="sm" asChild>
+							<Link href="/admin/approvals">
+								<RiArrowLeftLine className="mr-1 size-4" />
+								Back to approvals
+							</Link>
+						</Button>
+						<Button variant="outline" size="sm" asChild>
+							<Link href="/admin/transactions/new-project/sold-units">
+								All transactions
+							</Link>
+						</Button>
+					</div>
+					{tx ? (
+						<Button size="sm" onClick={() => openEditModal(tx.id)}>
+							<RiEditLine className="mr-1 size-4" />
+							Edit case
+						</Button>
+					) : null}
 				</div>
 
 				{tx && !isLoading && !error ? (
@@ -149,6 +162,7 @@ export default function AdminTransactionDetailPage() {
 										tx={tx}
 										agentName={agentData?.agent?.name}
 										agentEmail={agentData?.agent?.email}
+										allowDocumentUpload
 									/>
 								</TabsContent>
 								<TabsContent value="messages" className="mt-4">

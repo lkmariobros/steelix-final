@@ -1,6 +1,5 @@
 "use client";
 
-import { format } from "date-fns";
 import {
 	ArrowLeft,
 	Building,
@@ -30,6 +29,7 @@ import {
 	type ValidationError,
 	ValidationSummaryDialog,
 } from "@/components/validation-summary-dialog";
+import { formatDateDMY } from "@/lib/date-format";
 
 import {
 	type CompleteTransactionData,
@@ -282,7 +282,7 @@ export function StepReview({
 								</p>
 								<p className="font-medium">
 									{data.transactionDate
-										? format(data.transactionDate, "PPP")
+										? formatDateDMY(data.transactionDate)
 										: "Not set"}
 								</p>
 							</div>

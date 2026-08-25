@@ -14,6 +14,9 @@ import {
 } from "@/components/ui/popover"
 import { cn } from "@/lib/utils"
 
+const DISPLAY_FORMAT = "dd/MM/yyyy"
+const DISPLAY_PLACEHOLDER = "DD/MM/YYYY"
+
 // Issue #8 Fix: Accessible date picker with manual input support
 interface AccessibleDatePickerProps {
   value?: Date
@@ -30,7 +33,7 @@ export function AccessibleDatePicker({
   value,
   onChange,
   disabled,
-  placeholder = "MM/DD/YYYY",
+  placeholder = DISPLAY_PLACEHOLDER,
   className,
   id,
   "aria-label": ariaLabel,
@@ -43,7 +46,7 @@ export function AccessibleDatePicker({
   // Sync input value with date value
   useEffect(() => {
     if (value && isValid(value)) {
-      setInputValue(format(value, "MM/dd/yyyy"))
+      setInputValue(format(value, DISPLAY_FORMAT))
       setError(null)
     } else {
       setInputValue("")
@@ -60,7 +63,7 @@ export function AccessibleDatePicker({
 
     // Try to parse the date
     if (newValue.length === 10) {
-      const parsedDate = parse(newValue, "MM/dd/yyyy", new Date())
+      const parsedDate = parse(newValue, DISPLAY_FORMAT, new Date())
       if (isValid(parsedDate)) {
         // Check if date is disabled
         if (disabled && disabled(parsedDate)) {
@@ -69,7 +72,7 @@ export function AccessibleDatePicker({
         }
         onChange(parsedDate)
       } else {
-        setError("Invalid date format. Use MM/DD/YYYY")
+        setError(`Invalid date format. Use ${DISPLAY_PLACEHOLDER}`)
       }
     } else if (newValue === "") {
       onChange(undefined)
@@ -79,7 +82,7 @@ export function AccessibleDatePicker({
   // Handle blur to validate
   const handleBlur = useCallback(() => {
     if (inputValue && inputValue.length > 0 && inputValue.length !== 10) {
-      setError("Please enter a complete date (MM/DD/YYYY)")
+      setError(`Please enter a complete date (${DISPLAY_PLACEHOLDER})`)
     }
   }, [inputValue])
 
@@ -154,4 +157,3 @@ export function AccessibleDatePicker({
     </div>
   )
 }
-

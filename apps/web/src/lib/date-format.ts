@@ -12,6 +12,23 @@ export function formatDateDMY(
 	}).format(dateObj);
 }
 
+/** Date + time as DD/MM/YYYY, HH:mm (e.g. 08/07/2026, 14:30). */
+export function formatDateTimeDMY(
+	date: Date | string | null | undefined,
+): string {
+	if (!date) return "—";
+	const dateObj = typeof date === "string" ? new Date(date) : date;
+	if (Number.isNaN(dateObj.getTime())) return "—";
+	return new Intl.DateTimeFormat("en-GB", {
+		day: "2-digit",
+		month: "2-digit",
+		year: "numeric",
+		hour: "2-digit",
+		minute: "2-digit",
+		hour12: false,
+	}).format(dateObj);
+}
+
 /** Value for `<input type="date" />` (YYYY-MM-DD). */
 export function toDateInputValue(
 	date: Date | string | null | undefined,

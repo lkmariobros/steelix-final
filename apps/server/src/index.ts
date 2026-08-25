@@ -12,6 +12,11 @@ import { startServer } from "./utils/server";
 import { getAllowedOrigins } from "./utils/allowed-origins";
 import { ensurePipelineStageEnumValues } from "./utils/pipeline-stage-schema";
 import { ensureDocumentCategoryEnumValues } from "./utils/document-category-schema";
+import { ensureTransactionStatusEnumValues } from "./utils/transaction-status-schema";
+import {
+	ensurePortalRecordLogTable,
+	purgeExpiredRecordLogs,
+} from "./services/record-log";
 
 const app = new Hono();
 
@@ -107,6 +112,43 @@ void ensureDocumentCategoryEnumValues()
 			e instanceof Error ? e.message : e,
 		),
 	);
+
+void ensureTransactionStatusEnumValues()
+	.then(() => console.log("✅ Transaction status enum values ready"))
+	.catch((e) =>
+		console.warn(
+			"⚠️ Transaction status enum bootstrap failed:",
+			e instanceof Error ? e.message : e,
+		),
+	);
+
+void ensurePortalRecordLogTable()
+	.then(() => purgeExpiredRecordLogs())
+	.then((result) => {
+		console.log("✅ Portal record log ready");
+		if (result.portalDeleted || result.tierConfigDeleted) {
+			console.log(
+				`🧹 Record log retention purge: portal=${result.portalDeleted}, tierConfig=${result.tierConfigDeleted}`,
+			);
+		}
+	})
+	.catch((e) =>
+		console.warn(
+			"⚠️ Portal record log bootstrap/purge failed:",
+			e instanceof Error ? e.message : e,
+		),
+	);
+
+// Daily retention sweep (365-day policy)
+const RECORD_LOG_PURGE_INTERVAL_MS = 24 * 60 * 60 * 1000;
+setInterval(() => {
+	void purgeExpiredRecordLogs().catch((e) =>
+		console.warn(
+			"[record-log] scheduled purge failed:",
+			e instanceof Error ? e.message : e,
+		),
+	);
+}, RECORD_LOG_PURGE_INTERVAL_MS).unref?.();
 
 startServer(app);
 

@@ -6,6 +6,7 @@ import {
 	getStatusBadgeClass,
 } from "@/features/transactions/transaction-detail-utils";
 import { formatRequestItemLabel } from "@/features/transactions/request-items";
+import { formatDateDMY } from "@/lib/date-format";
 import {
 	RiCheckLine,
 	RiCloseLine,
@@ -55,12 +56,7 @@ function formatRm(amount: string | number | null | undefined) {
 }
 
 function formatDate(date: Date | string | null | undefined) {
-	if (!date) return "—";
-	return new Date(date).toLocaleDateString("en-MY", {
-		day: "numeric",
-		month: "short",
-		year: "numeric",
-	});
+	return formatDateDMY(date);
 }
 
 function formatCashLoan(method?: string | null) {

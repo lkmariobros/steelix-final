@@ -18,7 +18,7 @@ import {
 	type TransactionRequestItemValue,
 } from "@/features/transactions/request-items";
 import { trpc } from "@/utils/trpc";
-import { format } from "date-fns";
+import { formatDateTimeDMY } from "@/lib/date-format";
 import { FileText, Loader2, Paperclip, Send, X } from "lucide-react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
@@ -227,7 +227,7 @@ export function TransactionMessagesPanel({
 										{m.messageType.replace(/_/g, " ")}
 									</Badge>
 									<span className="text-muted-foreground text-xs">
-										{format(new Date(m.createdAt), "dd MMM yyyy HH:mm")}
+										{formatDateTimeDMY(m.createdAt)}
 									</span>
 								</div>
 								<p className="whitespace-pre-wrap">{m.body}</p>
@@ -271,8 +271,9 @@ export function TransactionMessagesPanel({
 			<div className="space-y-2 rounded-lg border p-4">
 				{!isAdmin && locked && (
 					<p className="text-muted-foreground text-xs">
-						This case is locked. Select a request item and describe the change
-						you need. You can also upload supporting documents.
+						Case details are locked (only Draft can be fully edited). Use a
+						request item for status updates or other amendments. You can also
+						upload documents on the Details tab anytime.
 					</p>
 				)}
 				{isAdmin && (

@@ -26,6 +26,7 @@ import {
 	useAgentDashboard,
 } from "@/contexts/agent-dashboard-context";
 import { useTransactionModalActions } from "@/contexts/transaction-modal-context";
+import { formatDateDMY } from "@/lib/date-format";
 import { cn } from "@/lib/utils";
 import { trpc } from "@/utils/trpc";
 import {
@@ -134,7 +135,7 @@ function DashboardContent() {
 								<RiCalendarLine className="size-4 shrink-0" />
 								<span>
 									{dateRange.startDate && dateRange.endDate
-										? `${dateRange.startDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${dateRange.endDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
+										? `${formatDateDMY(dateRange.startDate)} – ${formatDateDMY(dateRange.endDate)}`
 										: "Custom range"}
 								</span>
 							</Button>

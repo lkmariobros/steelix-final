@@ -3,6 +3,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
+import { formatDateDMY, formatDateTimeDMY } from "@/lib/date-format";
 import { trpc } from "@/utils/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -34,13 +35,7 @@ function formatDue(d: Date | string) {
 		return `Today ${dt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
 	if (taskDay.getTime() === tomorrow.getTime())
 		return `Tomorrow ${dt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
-	return dt.toLocaleDateString(undefined, {
-		month: "short",
-		day: "numeric",
-		year: dt.getFullYear() !== now.getFullYear() ? "numeric" : undefined,
-		hour: "2-digit",
-		minute: "2-digit",
-	});
+	return formatDateTimeDMY(dt);
 }
 
 export function LeadTasksCard({ leadId }: { leadId: string }) {
@@ -603,7 +598,7 @@ export function LeadTasksCard({ leadId }: { leadId: string }) {
 												<p className="text-muted-foreground text-xs">
 													{TASK_TYPE_LABELS[task.taskType as TaskType]} ·{" "}
 													{task.completedAt
-														? `Done ${new Date(task.completedAt).toLocaleDateString()}`
+														? `Done ${formatDateDMY(task.completedAt)}`
 														: ""}
 												</p>
 											</div>

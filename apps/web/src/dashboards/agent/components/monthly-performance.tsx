@@ -2,6 +2,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { formatDateDMY } from "@/lib/date-format";
 
 // Simple utility function to avoid import issues
 const formatCurrency = (amount: number): string => {
@@ -103,8 +104,8 @@ export function MonthlyPerformance({ dateRange }: MonthlyPerformanceProps) {
 				<CardTitle className="text-base">Monthly Performance</CardTitle>
 				{dateRange?.startDate && dateRange?.endDate && (
 					<p className="text-muted-foreground text-sm">
-						{dateRange.startDate.toLocaleDateString("en-US")} -{" "}
-						{dateRange.endDate.toLocaleDateString("en-US")}
+						{formatDateDMY(dateRange.startDate)} -{" "}
+						{formatDateDMY(dateRange.endDate)}
 					</p>
 				)}
 			</CardHeader>

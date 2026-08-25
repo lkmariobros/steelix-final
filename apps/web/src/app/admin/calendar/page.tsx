@@ -49,6 +49,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { authClient } from "@/lib/auth-client";
+import { formatDateDMY } from "@/lib/date-format";
 import { cn } from "@/lib/utils";
 import { trpc } from "@/utils/trpc";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -117,7 +118,7 @@ function FormDatePicker({
 				>
 					<RiCalendarLine className="size-4 shrink-0 text-muted-foreground" />
 					<span className="truncate">
-						{selected ? format(selected, "dd MMM yyyy") : placeholder}
+						{selected ? formatDateDMY(selected) : placeholder}
 					</span>
 				</Button>
 			</PopoverTrigger>
@@ -433,14 +434,7 @@ export default function AdminCalendarPage() {
 		});
 
 	// Helper functions
-	const formatDate = (date: Date | string): string => {
-		const d = typeof date === "string" ? new Date(date) : date;
-		return d.toLocaleDateString("en-US", {
-			month: "short",
-			day: "numeric",
-			year: "numeric",
-		});
-	};
+	const formatDate = (date: Date | string): string => formatDateDMY(date);
 
 	const formatTime = (date: Date | string): string => {
 		const d = typeof date === "string" ? new Date(date) : date;
@@ -846,8 +840,8 @@ export default function AdminCalendarPage() {
 														{format(currentMonth, "MMMM, yyyy")}
 													</h2>
 													<p className="text-muted-foreground text-sm">
-														{format(startOfMonth(currentMonth), "MMM d, yyyy")}{" "}
-														- {format(endOfMonth(currentMonth), "MMM d, yyyy")}
+														{formatDateDMY(startOfMonth(currentMonth))}{" "}
+														- {formatDateDMY(endOfMonth(currentMonth))}
 													</p>
 												</div>
 											</div>

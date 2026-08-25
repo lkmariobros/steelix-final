@@ -96,8 +96,9 @@ export function CurrencyInput({
   const prefix = currency === "MYR" || currency === "RM" ? "RM" : currency
 
   return (
-    <div className="relative">
-      <span className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground text-sm">
+    // Fixed height so a stretched FormControl/grid cell cannot pull the RM prefix off-center
+    <div className="relative h-9 w-full self-start">
+      <span className="pointer-events-none absolute inset-y-0 left-3 z-10 flex items-center text-muted-foreground text-sm">
         {prefix}
       </span>
       <Input
@@ -112,7 +113,7 @@ export function CurrencyInput({
         disabled={disabled}
         aria-label={ariaLabel}
         aria-describedby={ariaDescribedBy}
-        className={cn("pl-11", className)}
+        className={cn("h-9 pl-11", className)}
       />
     </div>
   )

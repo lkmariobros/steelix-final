@@ -1,4 +1,4 @@
-import { and, avg, count, desc, eq, inArray, isNull, sql, sum } from "drizzle-orm";
+import { and, avg, count, desc, eq, gte, inArray, isNull, sql, sum } from "drizzle-orm";
 import { z } from "zod";
 import {
 	AGENT_TIER_CONFIG,
@@ -14,6 +14,15 @@ import {
 import { transactions } from "../models/transactions";
 import { ensurePayoutsForApprovedTransaction } from "../services/commission-payouts";
 import { addTransactionMessage } from "../services/transaction-messages";
+import {
+	ensurePortalRecordLogTable,
+	purgeExpiredRecordLogs,
+	RECORD_LOG_RETENTION_DAYS,
+	recordLogRetentionCutoff,
+	withinRecordLogRetention,
+	writeRecordLog,
+} from "../services/record-log";
+import { portalRecordLog } from "../models/portal-record-log";
 import { db } from "../utils/db";
 import { resolveUserRole } from "../utils/rbac";
 import {
@@ -363,8 +372,9 @@ export const adminRouter = router({
 			};
 
 			if (input.action === "approve") {
+				// Acknowledge the request without unlocking full case-detail editing.
+				// Agents may only edit details in Draft; docs/status go through requests.
 				patch.status = "pending";
-				patch.agentEditAllowed = true;
 			}
 
 			const [updatedTransaction] = await db
@@ -860,7 +870,73 @@ export const adminRouter = router({
 				changeReason,
 			});
 
+			void writeRecordLog({
+				category: "configuration",
+				action: existingConfig ? "tier_config_update" : "tier_config_create",
+				summary: existingConfig
+					? "Updated tier configuration"
+					: "Created tier configuration",
+				actorId: ctx.session.user.id,
+				actorRole: getPrimaryRole({
+					role: (ctx.session.user as { role?: string }).role,
+					roles: (ctx.session.user as { roles?: string[] }).roles,
+				}),
+				entityType: "tier_config",
+				entityId: configId,
+				detail: changeReason,
+				metadata: {
+					tier,
+					displayName: configData.displayName,
+				},
+			});
+
 			return { success: true, configId };
+		}),
+
+	// Unified Record Log (configuration + transaction actions, last 365 days)
+	getRecordLog: adminProcedure
+		.input(
+			z.object({
+				category: z.enum(["all", "configuration", "transaction"]).default("all"),
+				limit: z.number().min(1).max(200).default(100),
+			}),
+		)
+		.query(async ({ input }) => {
+			await ensurePortalRecordLogTable();
+			void purgeExpiredRecordLogs().catch(() => undefined);
+
+			const conditions = [withinRecordLogRetention()];
+			if (input.category !== "all") {
+				conditions.push(eq(portalRecordLog.category, input.category));
+			}
+
+			const rows = await db
+				.select({
+					id: portalRecordLog.id,
+					category: portalRecordLog.category,
+					action: portalRecordLog.action,
+					summary: portalRecordLog.summary,
+					actorId: portalRecordLog.actorId,
+					actorRole: portalRecordLog.actorRole,
+					entityType: portalRecordLog.entityType,
+					entityId: portalRecordLog.entityId,
+					caseNo: portalRecordLog.caseNo,
+					detail: portalRecordLog.detail,
+					metadata: portalRecordLog.metadata,
+					createdAt: portalRecordLog.createdAt,
+					actorName: user.name,
+				})
+				.from(portalRecordLog)
+				.leftJoin(user, eq(portalRecordLog.actorId, user.id))
+				.where(and(...conditions))
+				.orderBy(desc(portalRecordLog.createdAt))
+				.limit(input.limit);
+
+			return {
+				retentionDays: RECORD_LOG_RETENTION_DAYS,
+				cutoff: recordLogRetentionCutoff().toISOString(),
+				entries: rows,
+			};
 		}),
 
 	// Get tier configuration change history
@@ -872,7 +948,9 @@ export const adminRouter = router({
 			}),
 		)
 		.query(async ({ input }) => {
-			const conditions = [];
+			const conditions = [
+				gte(tierConfigChangeLog.timestamp, recordLogRetentionCutoff()),
+			];
 			if (input.tier) {
 				conditions.push(eq(tierConfigChangeLog.tier, input.tier));
 			}
@@ -891,7 +969,7 @@ export const adminRouter = router({
 				})
 				.from(tierConfigChangeLog)
 				.leftJoin(user, eq(tierConfigChangeLog.changedBy, user.id))
-				.where(conditions.length > 0 ? and(...conditions) : undefined)
+				.where(and(...conditions))
 				.orderBy(desc(tierConfigChangeLog.timestamp))
 				.limit(input.limit);
 

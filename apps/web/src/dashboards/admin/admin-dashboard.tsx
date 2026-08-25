@@ -12,8 +12,8 @@ import {
 	useAdminDashboard,
 } from "@/contexts/admin-dashboard-context";
 import { cn } from "@/lib/utils";
+import { formatDateDMY } from "@/lib/date-format";
 import { RiCalendarLine, RiLoader4Line, RiRefreshLine } from "@remixicon/react";
-import { format } from "date-fns";
 import { useState } from "react";
 
 import { AgentPerformanceGrid } from "./widgets/agent-performance-grid";
@@ -63,7 +63,7 @@ function AdminDashboardContent({ className }: { className?: string }) {
 
 	const formatDateRange = () => {
 		if (dateRange.startDate && dateRange.endDate) {
-			return `${format(dateRange.startDate, "MMM d")} – ${format(dateRange.endDate, "MMM d, yyyy")}`;
+			return `${formatDateDMY(dateRange.startDate)} – ${formatDateDMY(dateRange.endDate)}`;
 		}
 		return "All time";
 	};

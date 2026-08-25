@@ -32,6 +32,7 @@ import {
 	optimisticUpdateTransaction,
 } from "@/lib/query-invalidation";
 import { cn } from "@/lib/utils";
+import { formatDateDMY, formatDateTimeDMY } from "@/lib/date-format";
 import { trpc } from "@/utils/trpc";
 import {
 	RiCheckLine,
@@ -44,7 +45,6 @@ import Link from "next/link";
 import { useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { format } from "date-fns";
 
 import { formatCurrency } from "../admin-schema";
 import {
@@ -367,10 +367,11 @@ export function CommissionApprovalQueue({
 														{submitted ? (
 															<>
 																<p className="truncate text-foreground text-sm">
-																	{format(submitted, "MMM d, yyyy")}
+																	{formatDateDMY(submitted)}
 																</p>
 																<p className="mt-0.5 truncate text-muted-foreground text-xs">
-																	{format(submitted, "h:mm a")}
+																	{formatDateTimeDMY(submitted).split(", ")[1] ??
+																		""}
 																</p>
 															</>
 														) : (

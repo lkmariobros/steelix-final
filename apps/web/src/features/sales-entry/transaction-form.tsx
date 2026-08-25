@@ -69,6 +69,7 @@ export function TransactionForm({
 		isLoading,
 		hasUnsavedChanges,
 		isHydratingTransaction,
+		serverTransactionStatus,
 		updateStepData,
 		updateFormData,
 		goToStep,
@@ -404,7 +405,24 @@ export function TransactionForm({
 				await migrateDocuments(finalTransactionId);
 			}
 
-			// Submit for review
+			const normalizedServerStatus = (
+				serverTransactionStatus ?? "draft"
+			).toLowerCase();
+			const isDraftLike =
+				!serverTransactionStatus ||
+				normalizedServerStatus === "draft";
+
+			// Non-draft edits (admin anytime / locked agent blocked by API): save only.
+			if (!isDraftLike) {
+				clearRememberedTransactionDraftId(finalTransactionId);
+				toast.success("Case details updated successfully!");
+				clearAutoSave();
+				clearTempDocuments();
+				onSubmit?.();
+				return;
+			}
+
+			// Submit for review (Draft only)
 			if (finalTransactionId) {
 				await submitTransaction.mutateAsync({ id: finalTransactionId });
 				clearRememberedTransactionDraftId(finalTransactionId);
@@ -432,6 +450,7 @@ export function TransactionForm({
 		setIsLoading,
 		goToStep,
 		prepareFormDataForSubmission,
+		serverTransactionStatus,
 	]);
 
 	// Handle cancel
@@ -495,6 +514,10 @@ export function TransactionForm({
 						onPrevious={goToPreviousStep}
 						onEditStep={goToStep}
 						isLoading={isLoading}
+						saveOnly={
+							Boolean(serverTransactionStatus) &&
+							serverTransactionStatus.toLowerCase() !== "draft"
+						}
 					/>
 				);
 			default:

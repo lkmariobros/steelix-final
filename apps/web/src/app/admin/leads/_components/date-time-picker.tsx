@@ -1,6 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
+import { formatDateDMY } from "@/lib/date-format";
 import {
 	Popover,
 	PopoverContent,
@@ -49,13 +50,7 @@ export function DateTimePicker({
 	const currentMinute = String(rawM).padStart(2, "0");
 
 	const displayValue = isValid
-		? dateObj.toLocaleDateString(undefined, {
-				month: "short",
-				day: "numeric",
-				year: "numeric",
-			}) +
-			" · " +
-			dateObj.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+		? `${formatDateDMY(dateObj)} · ${dateObj.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
 		: null;
 
 	const handleDaySelect = (day: Date | undefined) => {

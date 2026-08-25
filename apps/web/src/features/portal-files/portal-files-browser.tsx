@@ -49,9 +49,9 @@ import {
 	RiRefreshLine,
 	RiUploadCloud2Line,
 } from "@remixicon/react";
-import { format } from "date-fns";
 import { useCallback, useRef, useState } from "react";
 import { toast } from "sonner";
+import { formatDateTimeDMY } from "@/lib/date-format";
 import { formatFileSize, isPreviewableType } from "./portal-files-utils";
 import { usePortalFileUpload } from "./use-portal-file-upload";
 
@@ -464,7 +464,7 @@ export function PortalFilesBrowser({ mode }: { mode: PortalFilesMode }) {
 										{formatFileSize(file.fileSize)}
 									</TableCell>
 									<TableCell className="text-muted-foreground text-sm">
-										{format(new Date(file.createdAt), "dd MMM yyyy HH:mm")}
+										{formatDateTimeDMY(file.createdAt)}
 									</TableCell>
 									<TableCell className="text-right">
 										<div className="flex justify-end gap-1">

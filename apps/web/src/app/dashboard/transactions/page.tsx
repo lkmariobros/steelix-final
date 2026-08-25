@@ -51,6 +51,7 @@ import {
 } from "@/features/transactions/transaction-detail-utils";
 import { useRedirectUnauthenticated } from "@/hooks/use-redirect-unauthenticated";
 import { authClient } from "@/lib/auth-client";
+import { formatDateDMY } from "@/lib/date-format";
 import { trpc } from "@/utils/trpc";
 import {
 	RiAddLine,
@@ -232,52 +233,11 @@ export default function TransactionsPage() {
 		}).format(num);
 	};
 
-	// Format date with proper validation and debugging
+	// Format date as DD/MM/YYYY (portal standard)
 	const formatDate = (date: Date | string | null | undefined) => {
-		console.log("formatDate called with:", date, "type:", typeof date);
-
-		if (!date) {
-			console.log("formatDate: No date provided, returning N/A");
-			return "N/A";
-		}
-
-		try {
-			let dateObj: Date;
-
-			if (typeof date === "string") {
-				console.log("formatDate: Converting string to Date:", date);
-				dateObj = new Date(date);
-			} else if (date instanceof Date) {
-				console.log("formatDate: Already a Date object");
-				dateObj = date;
-			} else {
-				console.warn("formatDate: Unexpected date type:", typeof date, date);
-				return "Invalid Date";
-			}
-
-			// Check if the date is valid
-			if (Number.isNaN(dateObj.getTime())) {
-				console.warn(
-					"formatDate: Invalid date after parsing:",
-					dateObj,
-					"from:",
-					date,
-				);
-				return "Invalid Date";
-			}
-
-			const formatted = new Intl.DateTimeFormat("en-US", {
-				year: "numeric",
-				month: "short",
-				day: "numeric",
-			}).format(dateObj);
-
-			console.log("formatDate: Successfully formatted:", formatted);
-			return formatted;
-		} catch (error) {
-			console.error("Date formatting error:", error, "for date:", date);
-			return "Invalid Date";
-		}
+		if (!date) return "N/A";
+		const formatted = formatDateDMY(date);
+		return formatted === "—" ? "Invalid Date" : formatted;
 	};
 
 	return (

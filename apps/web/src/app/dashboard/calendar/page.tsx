@@ -52,6 +52,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useRedirectUnauthenticated } from "@/hooks/use-redirect-unauthenticated";
 import { authClient } from "@/lib/auth-client";
+import { formatDateDMY } from "@/lib/date-format";
 import { useUserRole } from "@/hooks/use-user-role";
 import { trpc } from "@/utils/trpc";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -350,14 +351,7 @@ export default function CalendarPage() {
 		});
 
 	// Helper functions
-	const formatDate = (date: Date | string): string => {
-		const d = typeof date === "string" ? new Date(date) : date;
-		return d.toLocaleDateString("en-US", {
-			month: "short",
-			day: "numeric",
-			year: "numeric",
-		});
-	};
+	const formatDate = (date: Date | string): string => formatDateDMY(date);
 
 	const formatTime = (date: Date | string): string => {
 		const d = typeof date === "string" ? new Date(date) : date;
@@ -770,8 +764,8 @@ export default function CalendarPage() {
 														{format(currentMonth, "MMMM, yyyy")}
 													</h2>
 													<p className="text-muted-foreground text-sm">
-														{format(startOfMonth(currentMonth), "MMM d, yyyy")}{" "}
-														- {format(endOfMonth(currentMonth), "MMM d, yyyy")}
+														{formatDateDMY(startOfMonth(currentMonth))}{" "}
+														- {formatDateDMY(endOfMonth(currentMonth))}
 													</p>
 												</div>
 											</div>

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { getStatusBadgeClass } from "@/features/transactions/transaction-detail-utils";
+import { formatDateDMY, formatDateTimeDMY } from "@/lib/date-format";
 
 // Admin dashboard widget configuration
 export const adminWidgetConfigSchema = z.object({
@@ -224,34 +225,14 @@ export function formatPercentage(
 
 export function formatDate(date: Date | string | null): string {
 	if (!date) return "N/A";
-
-	try {
-		const dateObj = typeof date === "string" ? new Date(date) : date;
-		return dateObj.toLocaleDateString("en-US", {
-			year: "numeric",
-			month: "short",
-			day: "numeric",
-		});
-	} catch {
-		return "Invalid Date";
-	}
+	const formatted = formatDateDMY(date);
+	return formatted === "—" ? "Invalid Date" : formatted;
 }
 
 export function formatDateTime(date: Date | string | null): string {
 	if (!date) return "N/A";
-
-	try {
-		const dateObj = typeof date === "string" ? new Date(date) : date;
-		return dateObj.toLocaleString("en-US", {
-			year: "numeric",
-			month: "short",
-			day: "numeric",
-			hour: "2-digit",
-			minute: "2-digit",
-		});
-	} catch {
-		return "Invalid Date";
-	}
+	const formatted = formatDateTimeDMY(date);
+	return formatted === "—" ? "Invalid Date" : formatted;
 }
 
 export function getDaysAgo(date: Date | string | null): number {

@@ -48,6 +48,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/tooltip";
 import { MetricCard } from "@/dashboards/admin/widgets/metric-card";
 import { authClient } from "@/lib/auth-client";
+import { formatDateDMY } from "@/lib/date-format";
 import { cn } from "@/lib/utils";
 import { trpc } from "@/utils/trpc";
 import {
@@ -158,7 +159,7 @@ function FilterDatePicker({
 				>
 					<RiCalendarLine className="size-3.5 shrink-0" />
 					<span className="truncate text-xs">
-						{selected ? format(selected, "dd MMM yyyy") : label}
+						{selected ? formatDateDMY(selected) : label}
 					</span>
 				</Button>
 			</PopoverTrigger>
@@ -893,7 +894,7 @@ export default function AdminCommissionsPage() {
 										>
 											<RiCalendarLine className="size-3.5 text-muted-foreground" />
 											{releaseDate
-												? format(parseYmd(releaseDate) ?? new Date(), "dd MMM yyyy")
+												? formatDateDMY(parseYmd(releaseDate) ?? new Date())
 												: "Select payment date"}
 										</Button>
 									</PopoverTrigger>

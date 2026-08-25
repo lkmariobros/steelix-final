@@ -22,6 +22,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { formatDateDMY, parseDateInputValue, toDateInputValue } from "@/lib/date-format";
 import { formatAgentPickerLabel } from "@/lib/agent-display";
+import { isStaffAccountRole } from "@/lib/user-role";
 import { BRANCH_OPTIONS } from "@/features/erecruitment/constants";
 import { trpc } from "@/utils/trpc";
 import {
@@ -63,6 +64,7 @@ type AgentProfile = {
 	incomeTaxNo?: string | null;
 	agentCode?: string | null;
 	agentTier?: string | null;
+	role?: string | null;
 	companyCommissionSplit?: number | null;
 	createdAt?: string | Date | null;
 	recruitedBy?: string | null;
@@ -228,28 +230,41 @@ export function AgentProfilePanel({
 
 	const currentTier = (agent.agentTier || "advisor") as AgentTier;
 	const tierColors = TIER_COLORS[currentTier];
+	const isStaff = isStaffAccountRole(agent.role);
 
 	return (
 		<div className="space-y-4">
-			<Card className={`border-2 ${tierColors.border}`}>
+			<Card className={isStaff ? "border" : `border-2 ${tierColors.border}`}>
 				<CardContent className="pt-5">
 					<div className="flex flex-wrap items-start justify-between gap-4">
 						<div className="flex items-start gap-4">
 							<div
-								className={`flex h-14 w-14 items-center justify-center rounded-full ${tierColors.bg}`}
+								className={`flex h-14 w-14 items-center justify-center rounded-full ${
+									isStaff ? "bg-slate-100 dark:bg-slate-800" : tierColors.bg
+								}`}
 							>
-								<span className="text-2xl">{tierColors.icon}</span>
+								{isStaff ? (
+									<span className="font-semibold text-lg text-slate-600 dark:text-slate-200">
+										{(agent.name || "?").slice(0, 1).toUpperCase()}
+									</span>
+								) : (
+									<span className="text-2xl">{tierColors.icon}</span>
+								)}
 							</div>
 							<div>
 								<div className="mb-2 flex flex-wrap items-center gap-2">
 									<h2 className="font-bold text-xl">{agent.name}</h2>
-									<TierBadge tier={currentTier} animated />
+									{isStaff ? (
+										<Badge variant="secondary">Staff</Badge>
+									) : (
+										<TierBadge tier={currentTier} animated />
+									)}
 								</div>
 								<p className="text-muted-foreground text-sm">{agent.email}</p>
 							</div>
 						</div>
 						<div className="flex flex-wrap gap-2">
-							{onManage ? (
+							{onManage && !isStaff ? (
 								<Button onClick={onManage} variant="outline" size="sm">
 									Manage Tier
 								</Button>
@@ -293,13 +308,15 @@ export function AgentProfilePanel({
 			<div className="grid gap-4 xl:grid-cols-2">
 				<Section title="General info">
 					<InfoGrid>
-						<InfoField
-							label="Agent code"
-							value={displayValue(agent.agentCode)}
-							editValue={form.agentCode}
-							isEditing={isEditing}
-							onChange={(v) => setField("agentCode", v)}
-						/>
+						{!isStaff ? (
+							<InfoField
+								label="Agent code"
+								value={displayValue(agent.agentCode)}
+								editValue={form.agentCode}
+								isEditing={isEditing}
+								onChange={(v) => setField("agentCode", v)}
+							/>
+						) : null}
 						{isEditing ? (
 							<div className="space-y-2 sm:col-span-2">
 								<Label>Recruit by</Label>
@@ -417,31 +434,33 @@ export function AgentProfilePanel({
 								}
 							/>
 						)}
-						{isEditing ? (
-							<div className="space-y-2">
-								<Label>Commission tier</Label>
-								<Select
-									value={form.agentTier}
-									onValueChange={(v) => setField("agentTier", v)}
-								>
-									<SelectTrigger>
-										<SelectValue />
-									</SelectTrigger>
-									<SelectContent>
-										{Object.entries(AGENT_TIER_CONFIG).map(([tier, cfg]) => (
-											<SelectItem key={tier} value={tier}>
-												{cfg.displayName} ({cfg.commissionSplit}%)
-											</SelectItem>
-										))}
-									</SelectContent>
-								</Select>
-							</div>
-						) : (
-							<InfoField
-								label="Commission tier"
-								value={`${AGENT_TIER_CONFIG[currentTier].displayName} (${AGENT_TIER_CONFIG[currentTier].commissionSplit}%)`}
-							/>
-						)}
+						{!isStaff ? (
+							isEditing ? (
+								<div className="space-y-2">
+									<Label>Commission tier</Label>
+									<Select
+										value={form.agentTier}
+										onValueChange={(v) => setField("agentTier", v)}
+									>
+										<SelectTrigger>
+											<SelectValue />
+										</SelectTrigger>
+										<SelectContent>
+											{Object.entries(AGENT_TIER_CONFIG).map(([tier, cfg]) => (
+												<SelectItem key={tier} value={tier}>
+													{cfg.displayName} ({cfg.commissionSplit}%)
+												</SelectItem>
+											))}
+										</SelectContent>
+									</Select>
+								</div>
+							) : (
+								<InfoField
+									label="Commission tier"
+									value={`${AGENT_TIER_CONFIG[currentTier].displayName} (${AGENT_TIER_CONFIG[currentTier].commissionSplit}%)`}
+								/>
+							)
+						) : null}
 						{isEditing ? (
 							<div className="space-y-2">
 								<Label>Branch</Label>

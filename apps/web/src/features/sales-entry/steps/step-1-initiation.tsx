@@ -1,7 +1,6 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { format } from "date-fns";
 import { ArrowRight } from "lucide-react";
 import { useCallback, useEffect } from "react";
 import { useForm } from "react-hook-form";
@@ -34,6 +33,7 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
+import { formatDateDMY } from "@/lib/date-format";
 import { cn } from "@/lib/utils";
 
 import {
@@ -289,7 +289,7 @@ export function StepInitiation({
 											<div className="flex justify-between">
 												<span className="text-muted-foreground">Date:</span>
 												<span className="font-medium">
-													{format(watchedValues.transactionDate, "PPP")}
+													{formatDateDMY(watchedValues.transactionDate)}
 												</span>
 											</div>
 										)}

@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/select";
 import { formatSchemeBlockLabel } from "@/lib/commission-scheme-block-types";
 import { authClient } from "@/lib/auth-client";
+import { formatDateDMY } from "@/lib/date-format";
 import { trpc } from "@/utils/trpc";
 import {
 	RiAddLine,
@@ -348,7 +349,7 @@ export default function CommissionSchemesAdminPage() {
 														{s.sstBorneBy === "client" ? "Client" : "Agent"}
 													</td>
 													<td className="px-4 py-3 text-xs text-muted-foreground">
-														{new Date(s.updatedAt).toLocaleDateString()}
+														{formatDateDMY(s.updatedAt)}
 													</td>
 													<td className="px-4 py-3">
 														<div className="flex items-center justify-center gap-1">

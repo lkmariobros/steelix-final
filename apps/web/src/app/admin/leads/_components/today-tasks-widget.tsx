@@ -3,6 +3,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
+import { formatDateDMY } from "@/lib/date-format";
 import { trpc } from "@/utils/trpc";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -42,7 +43,7 @@ function categorizeTasks(tasks: LeadTask[]) {
 function formatTaskWhen(task: LeadTask, isUpcoming: boolean) {
 	const d = new Date(task.dueDate);
 	if (task.isOverdue || isUpcoming) {
-		return d.toLocaleDateString([], { month: "short", day: "numeric" });
+		return formatDateDMY(d);
 	}
 	return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }

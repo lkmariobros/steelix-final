@@ -3,6 +3,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState, useEffect } from "react";
 import { toast } from "sonner";
+import { formatDateTimeDMY } from "@/lib/date-format";
 import { trpc } from "@/utils/trpc";
 import { FollowerSelector } from "@/components/follower-selector";
 import { useTransactionModalActions } from "@/contexts/transaction-modal-context";
@@ -236,20 +237,7 @@ export function LeadDetailSheet({
 		detail?.notes?.[0]?.content?.trim() ||
 		null;
 
-	const formatDateTime = (d: Date | string) => {
-		try {
-			const dt = new Date(d);
-			return dt.toLocaleString(undefined, {
-				month: "short",
-				day: "numeric",
-				year: "numeric",
-				hour: "2-digit",
-				minute: "2-digit",
-			});
-		} catch {
-			return "—";
-		}
-	};
+	const formatDateTime = (d: Date | string) => formatDateTimeDMY(d);
 
 	const handleSubmitNote = () => {
 		if (!inputContent.trim() || !lead) return;

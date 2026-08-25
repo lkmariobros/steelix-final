@@ -2,9 +2,10 @@ import { TRPCError } from "@trpc/server";
 import { and, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { transactionDocuments, transactions } from "../models/transactions";
+import { writeRecordLog } from "../services/record-log";
 import { db } from "../utils/db";
 import { supabaseAdmin } from "../utils/supabase";
-import { hasAdminAccess } from "../utils/user-roles";
+import { getPrimaryRole, hasAdminAccess } from "../utils/user-roles";
 import { protectedProcedure, router } from "../utils/trpc";
 
 const DOCUMENT_CATEGORIES = [
@@ -222,6 +223,33 @@ export const documentsRouter = router({
 					.returning();
 
 				await syncTransactionDocumentsJsonb(transactionId);
+
+				const [txRow] = await db
+					.select({ caseNo: transactions.caseNo })
+					.from(transactions)
+					.where(eq(transactions.id, transactionId))
+					.limit(1);
+
+				void writeRecordLog({
+					category: "transaction",
+					action: "upload_document",
+					summary: "Uploaded transaction document",
+					actorId: userId,
+					actorRole: getPrimaryRole({
+						role: sessionUser.role,
+						roles: sessionUser.roles,
+					}),
+					entityType: "transaction",
+					entityId: transactionId,
+					caseNo: txRow?.caseNo,
+					detail: fileName,
+					metadata: {
+						documentCategory,
+						fileType,
+						fileSize,
+						documentId: documentRecord.id,
+					},
+				});
 
 				const viewUrl = await resolveDocumentViewUrl({
 					storagePath,

@@ -35,6 +35,7 @@ import {
 	loadTempTransactionDocuments,
 	useDocumentUpload,
 } from "@/hooks/use-document-upload";
+import { formatDateDMY } from "@/lib/date-format";
 import { type DocumentsData, documentsSchema } from "../transaction-schema";
 import type { StepNavigationOptions } from "./step-nav";
 
@@ -391,7 +392,7 @@ export function StepDocuments({
 															<p className="font-medium text-sm">{file.name}</p>
 															<p className="text-muted-foreground text-xs">
 																{formatFileSize()} • Uploaded{" "}
-																{new Date(file.uploadedAt).toLocaleDateString()}
+																{formatDateDMY(file.uploadedAt)}
 															</p>
 														</div>
 													</div>

@@ -38,6 +38,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MetricCard } from "@/dashboards/admin/widgets/metric-card";
+import { formatDateDMY } from "@/lib/date-format";
 import { authClient } from "@/lib/auth-client";
 import { formatCurrency } from "@/lib/format-currency";
 import { cn } from "@/lib/utils";
@@ -505,9 +506,7 @@ export default function AdminReportsPage() {
 																		</span>
 																		<span className="text-muted-foreground text-xs">
 																			{metric.periodStart
-																				? new Date(
-																						metric.periodStart,
-																					).toLocaleDateString()
+																				? formatDateDMY(metric.periodStart)
 																				: (metric.period ?? "N/A")}
 																		</span>
 																	</div>
@@ -603,13 +602,9 @@ export default function AdminReportsPage() {
 																					)}
 																				>
 																					{txn.transactionDate
-																						? new Date(
-																								txn.transactionDate,
-																							).toLocaleDateString()
+																						? formatDateDMY(txn.transactionDate)
 																						: txn.createdAt
-																							? new Date(
-																									txn.createdAt,
-																								).toLocaleDateString()
+																							? formatDateDMY(txn.createdAt)
 																							: "—"}
 																				</TableCell>
 																			</TableRow>

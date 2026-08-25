@@ -59,7 +59,7 @@ export default function AgentTransactionDetailPage() {
 			tx.status,
 			(tx as { agentEditAllowed?: boolean }).agentEditAllowed,
 		);
-	const isLocked = tx != null && !canEdit && tx.status !== "draft";
+	const isLocked = tx != null && !canEdit;
 
 	return (
 		<SidebarProvider>
@@ -117,7 +117,7 @@ export default function AgentTransactionDetailPage() {
 								onClick={() => openEditModal(tx.id)}
 							>
 								<RiEditLine className="mr-1 size-4" />
-								Edit {tx.status === "draft" ? "draft" : "case"}
+								Edit draft
 							</Button>
 						) : null}
 					</div>
@@ -152,7 +152,10 @@ export default function AgentTransactionDetailPage() {
 										</TabsTrigger>
 									</TabsList>
 									<TabsContent value="details" className="mt-4">
-										<TransactionDetailView tx={tx} />
+										<TransactionDetailView
+											tx={tx}
+											allowDocumentUpload
+										/>
 									</TabsContent>
 									<TabsContent value="messages" className="mt-4">
 										<TransactionMessagesPanel

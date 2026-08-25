@@ -41,6 +41,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { authClient } from "@/lib/auth-client";
+import { formatDateDMY } from "@/lib/date-format";
 import { cn } from "@/lib/utils";
 import { trpc } from "@/utils/trpc";
 import {
@@ -196,12 +197,7 @@ export default function AdminTagsPage() {
 	};
 
 	const formatDate = (date: Date | string) => {
-		const d = typeof date === "string" ? new Date(date) : date;
-		return d.toLocaleDateString("en-US", {
-			day: "numeric",
-			month: "short",
-			year: "numeric",
-		});
+		return formatDateDMY(date);
 	};
 
 	return (

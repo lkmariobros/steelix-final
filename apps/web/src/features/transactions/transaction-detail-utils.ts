@@ -1,4 +1,5 @@
 import { differenceInCalendarDays } from "date-fns";
+import { formatDateDMY, formatDateTimeDMY } from "@/lib/date-format";
 
 export function formatRm(amount: string | number | null | undefined) {
 	if (amount === null || amount === undefined || amount === "") return "—";
@@ -14,37 +15,13 @@ export function formatRm(amount: string | number | null | undefined) {
 export function formatTransactionDate(
 	date: Date | string | null | undefined,
 ): string {
-	if (!date) return "—";
-	try {
-		const dateObj = typeof date === "string" ? new Date(date) : date;
-		if (Number.isNaN(dateObj.getTime())) return "—";
-		return new Intl.DateTimeFormat("en-MY", {
-			year: "numeric",
-			month: "short",
-			day: "numeric",
-		}).format(dateObj);
-	} catch {
-		return "—";
-	}
+	return formatDateDMY(date);
 }
 
 export function formatTransactionDateTime(
 	date: Date | string | null | undefined,
 ): string {
-	if (!date) return "—";
-	try {
-		const dateObj = typeof date === "string" ? new Date(date) : date;
-		if (Number.isNaN(dateObj.getTime())) return "—";
-		return new Intl.DateTimeFormat("en-MY", {
-			year: "numeric",
-			month: "short",
-			day: "numeric",
-			hour: "2-digit",
-			minute: "2-digit",
-		}).format(dateObj);
-	} catch {
-		return "—";
-	}
+	return formatDateTimeDMY(date);
 }
 
 export const CANONICAL_TRANSACTION_STATUSES = [
@@ -54,6 +31,7 @@ export const CANONICAL_TRANSACTION_STATUSES = [
 	"converted",
 	"cancelled",
 	"revoke",
+	"void",
 ] as const;
 
 export type CanonicalTransactionStatus =
@@ -77,12 +55,11 @@ export function normalizeTransactionStatus(
 
 export function agentCanEditTransaction(
 	status: string | null | undefined,
-	agentEditAllowed?: boolean | null,
+	_agentEditAllowed?: boolean | null,
 ): boolean {
-	const n = normalizeTransactionStatus(status);
-	if (n === "draft") return true;
-	if (n === "pending" && agentEditAllowed === true) return true;
-	return false;
+	// Agents may only edit case details while the case is Draft.
+	// Document upload / status requests remain available separately when locked.
+	return normalizeTransactionStatus(status) === "draft";
 }
 
 export function formatStatusLabel(status: string | null | undefined): string {
@@ -100,6 +77,8 @@ export function formatStatusLabel(status: string | null | undefined): string {
 			return "Cancelled";
 		case "revoke":
 			return "Revoke";
+		case "void":
+			return "Void";
 		default:
 			return n.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 	}
@@ -123,6 +102,8 @@ export function getStatusBadgeClass(status: string | null | undefined): string {
 			return `${base} bg-rose-100 text-rose-800 dark:bg-rose-900/35 dark:text-rose-300`;
 		case "revoke":
 			return `${base} bg-orange-100 text-orange-800 dark:bg-orange-900/35 dark:text-orange-300`;
+		case "void":
+			return `${base} bg-zinc-200 text-zinc-800 dark:bg-zinc-800/80 dark:text-zinc-200`;
 		default:
 			return `${base} bg-muted text-muted-foreground`;
 	}

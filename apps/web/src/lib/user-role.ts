@@ -18,6 +18,11 @@ export function isAdministrator(role: AppRole | undefined): boolean {
 	return role === "admin" || role === "super_admin";
 }
 
+/** Staff accounts (admin / super admin) are not part of the agent tier/code structure. */
+export function isStaffAccountRole(role: string | null | undefined): boolean {
+	return role === "admin" || role === "super_admin";
+}
+
 export function isSuperAdmin(role: AppRole | undefined): boolean {
 	return role === "super_admin";
 }

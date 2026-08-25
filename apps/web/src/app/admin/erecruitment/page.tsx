@@ -28,6 +28,7 @@ import {
 	DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { formatDateTimeDMY } from "@/lib/date-format";
 import { Label } from "@/components/ui/label";
 import {
 	Select,
@@ -61,8 +62,7 @@ const STATUS_LABELS: Record<ApplicationStatus, string> = {
 };
 
 function formatDate(value: Date | string | null | undefined) {
-	if (!value) return "—";
-	return new Date(value).toLocaleString();
+	return formatDateTimeDMY(value);
 }
 
 export default function ERecruitmentAdminPage() {

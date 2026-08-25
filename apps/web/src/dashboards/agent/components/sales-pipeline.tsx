@@ -4,6 +4,7 @@ import { Badge } from "@/components/badge";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { formatDateDMY } from "@/lib/date-format";
 import { trpc } from "@/utils/trpc";
 
 // Simple utility functions to avoid import issues
@@ -185,9 +186,7 @@ export function SalesPipeline() {
 												{getStatusLabel(transaction.status)}
 											</Badge>
 											<span className="text-muted-foreground text-xs">
-												{new Date(
-													transaction.transactionDate,
-												).toLocaleDateString()}
+												{formatDateDMY(transaction.transactionDate)}
 											</span>
 										</div>
 									</div>

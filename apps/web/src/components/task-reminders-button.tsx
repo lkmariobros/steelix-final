@@ -16,6 +16,7 @@ import {
 	PopoverTrigger,
 } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
+import { formatDateDMY } from "@/lib/date-format";
 import { cn } from "@/lib/utils";
 import { trpc } from "@/utils/trpc";
 import type { LeadTask, TaskPriority, TaskType } from "@/app/admin/leads/_components/lead-models";
@@ -203,18 +204,12 @@ export function TaskRemindersButton() {
 													{task.isOverdue ? (
 														<span className="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 font-semibold text-[0.65rem] text-red-700 dark:bg-red-900/20 dark:text-red-400">
 															<RiAlarmWarningLine className="mr-1 size-2.5" />
-															{new Date(task.dueDate).toLocaleDateString([], {
-																month: "short",
-																day: "numeric",
-															})}
+															{formatDateDMY(task.dueDate)}
 														</span>
 													) : isUpcoming ? (
 														<span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 font-semibold text-[0.65rem] text-blue-700 dark:bg-blue-900/20 dark:text-blue-400">
 															<RiCalendar2Line className="mr-1 size-2.5" />
-															{new Date(task.dueDate).toLocaleDateString([], {
-																month: "short",
-																day: "numeric",
-															})}
+															{formatDateDMY(task.dueDate)}
 														</span>
 													) : (
 														<span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 font-semibold text-[0.65rem] text-amber-700 dark:bg-amber-900/20 dark:text-amber-400">

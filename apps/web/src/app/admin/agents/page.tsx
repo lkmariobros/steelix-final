@@ -42,7 +42,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MetricCard } from "@/dashboards/admin/widgets/metric-card";
 import { useUserRole } from "@/hooks/use-user-role";
-import { accountRoleBadgeClass, formatAccountRole } from "@/lib/user-role";
+import { accountRoleBadgeClass, formatAccountRole, isStaffAccountRole } from "@/lib/user-role";
 import {
 	agentStatusBadgeClass,
 	formatAgentStatus,
@@ -562,6 +562,7 @@ export default function AdminAgentsPage() {
 										{agentsData.agents.map((agentItem) => {
 											const agent = agentItem.agent as AgentData;
 											const isActive = agent.isActive ?? true;
+											const isStaff = isStaffAccountRole(agent.role);
 
 											return (
 												<div
@@ -585,13 +586,17 @@ export default function AdminAgentsPage() {
 																>
 																	{formatAccountRole(agent.role)}
 																</span>
-																{agent.agentTier && (
+																{isStaff ? (
+																	<span className="rounded-full bg-slate-100 px-2.5 py-0.5 font-medium text-[11px] text-slate-700 dark:bg-slate-800/80 dark:text-slate-200">
+																		Staff
+																	</span>
+																) : agent.agentTier ? (
 																	<TierBadge
 																		tier={agent.agentTier as AgentTier}
 																		size="sm"
 																		showIcon={true}
 																	/>
-																)}
+																) : null}
 																<span
 																	className={cn(
 																		"rounded-full px-2.5 py-0.5 font-medium text-[11px]",
@@ -602,7 +607,7 @@ export default function AdminAgentsPage() {
 																</span>
 															</div>
 															<p className="truncate text-muted-foreground text-xs sm:text-sm">
-																{agent.agentCode ? (
+																{!isStaff && agent.agentCode ? (
 																	<>
 																		<span className="font-mono">
 																			Code {agent.agentCode}

@@ -113,10 +113,13 @@ export function TransactionDetailView({
 	tx,
 	agentName,
 	agentEmail,
+	allowDocumentUpload = false,
 }: {
 	tx: TransactionDetailRecord;
 	agentName?: string | null;
 	agentEmail?: string | null;
+	/** When true, show upload controls (admin anytime; agent even when case details are locked). */
+	allowDocumentUpload?: boolean;
 }) {
 	const prop = tx.propertyData;
 	const client = tx.clientData;
@@ -416,6 +419,7 @@ export function TransactionDetailView({
 						<TransactionDocumentsPanel
 							transactionId={tx.id}
 							fallbackDocuments={tx.documents}
+							allowUpload={allowDocumentUpload}
 						/>
 					</div>
 					{tx.notes?.trim() ? (

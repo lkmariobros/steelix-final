@@ -18,6 +18,15 @@ EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
   ALTER TYPE transaction_status ADD VALUE IF NOT EXISTS 'cancelled';
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  ALTER TYPE transaction_status ADD VALUE IF NOT EXISTS 'void';
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  ALTER TYPE transaction_status ADD VALUE IF NOT EXISTS 'revoke';
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  ALTER TYPE transaction_status ADD VALUE IF NOT EXISTS 'converted';
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 ALTER TABLE public.transactions ADD COLUMN IF NOT EXISTS case_no text;
 CREATE UNIQUE INDEX IF NOT EXISTS transactions_case_no_key ON public.transactions (case_no) WHERE case_no IS NOT NULL;
