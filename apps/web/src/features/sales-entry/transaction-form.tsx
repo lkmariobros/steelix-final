@@ -515,8 +515,7 @@ export function TransactionForm({
 						onEditStep={goToStep}
 						isLoading={isLoading}
 						saveOnly={
-							Boolean(serverTransactionStatus) &&
-							serverTransactionStatus.toLowerCase() !== "draft"
+							(serverTransactionStatus?.toLowerCase() ?? "draft") !== "draft"
 						}
 					/>
 				);
