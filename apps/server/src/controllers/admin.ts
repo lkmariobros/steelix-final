@@ -1,4 +1,5 @@
 import { and, avg, count, desc, eq, gte, inArray, isNull, sql, sum } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
 import { z } from "zod";
 import {
 	AGENT_TIER_CONFIG,
@@ -68,6 +69,7 @@ const agentFilterInput = z.object({
 	teamId: z.string().uuid().optional(),
 	agencyId: z.string().uuid().optional(),
 	dateRange: dateRangeInput.optional(),
+	limit: z.number().min(1).max(100).default(24),
 });
 
 export const adminRouter = router({
@@ -162,40 +164,46 @@ export const adminRouter = router({
 			}
 			// Admins see all transactions (no additional filtering)
 
-			const pendingTransactions = await db
-				.select({
-					id: transactions.id,
-					agentId: transactions.agentId,
-					clientData: transactions.clientData,
-					propertyData: transactions.propertyData,
-					transactionType: transactions.transactionType,
-					marketType: transactions.marketType,
-					transactionDate: transactions.transactionDate,
-					commissionAmount: transactions.commissionAmount,
-					commissionValue: transactions.commissionValue,
-					commissionBreakdown: transactions.commissionBreakdown,
-					status: transactions.status,
-					submittedAt: transactions.submittedAt,
-					createdAt: transactions.createdAt,
-					caseNo: transactions.caseNo,
-					bookingDate: transactions.bookingDate,
-					projectName: transactions.projectName,
-					unitNo: transactions.unitNo,
-					blockListingId: transactions.blockListingId,
-					notes: transactions.notes,
-					isCoBroking: transactions.isCoBroking,
-					coBrokingData: transactions.coBrokingData,
-					agentName: user.name,
-					agentEmail: user.email,
-					agentImage: user.image,
-					agentCode: user.agentCode,
-				})
-				.from(transactions)
-				.leftJoin(user, eq(transactions.agentId, user.id))
-				.where(and(...whereConditions))
-				.orderBy(desc(transactions.submittedAt))
-				.limit(input.limit)
-				.offset(input.offset);
+			const pendingWhere = and(...whereConditions);
+
+			const [pendingTransactions, totalCountRow] = await Promise.all([
+				db
+					.select({
+						id: transactions.id,
+						agentId: transactions.agentId,
+						clientData: transactions.clientData,
+						propertyData: transactions.propertyData,
+						transactionType: transactions.transactionType,
+						marketType: transactions.marketType,
+						transactionDate: transactions.transactionDate,
+						commissionAmount: transactions.commissionAmount,
+						commissionValue: transactions.commissionValue,
+						status: transactions.status,
+						submittedAt: transactions.submittedAt,
+						createdAt: transactions.createdAt,
+						caseNo: transactions.caseNo,
+						bookingDate: transactions.bookingDate,
+						projectName: transactions.projectName,
+						unitNo: transactions.unitNo,
+						isCoBroking: transactions.isCoBroking,
+						coBrokingData: transactions.coBrokingData,
+						agentName: user.name,
+						agentEmail: user.email,
+						agentImage: user.image,
+						agentCode: user.agentCode,
+					})
+					.from(transactions)
+					.leftJoin(user, eq(transactions.agentId, user.id))
+					.where(pendingWhere)
+					.orderBy(desc(transactions.submittedAt))
+					.limit(input.limit)
+					.offset(input.offset),
+				db
+					.select({ count: count() })
+					.from(transactions)
+					.where(pendingWhere)
+					.then((rows) => rows[0]),
+			]);
 
 			const coAgentIds = [
 				...new Set(
@@ -238,16 +246,12 @@ export const adminRouter = router({
 				};
 			});
 
-			// Get total count for pagination
-			const [totalCount] = await db
-				.select({ count: count() })
-				.from(transactions)
-				.where(and(...whereConditions));
+			const totalCount = totalCountRow?.count ?? 0;
 
 			return {
 				transactions: enrichedTransactions,
-				totalCount: totalCount.count,
-				hasMore: input.offset + input.limit < totalCount.count,
+				totalCount,
+				hasMore: input.offset + input.limit < totalCount,
 			};
 		}),
 
@@ -421,7 +425,23 @@ export const adminRouter = router({
 				agentWhereConditions.push(eq(user.agencyId, input.agencyId));
 			}
 
-			// Get agents with their performance metrics
+			// Get agents with their performance metrics (date range applied on join)
+			const txJoinParts: SQL[] = [eq(user.id, transactions.agentId)];
+			if (input.dateRange?.startDate) {
+				txJoinParts.push(
+					sql`${transactions.createdAt} >= ${input.dateRange.startDate}`,
+				);
+			}
+			if (input.dateRange?.endDate) {
+				txJoinParts.push(
+					sql`${transactions.createdAt} <= ${input.dateRange.endDate}`,
+				);
+			}
+
+			agentWhereConditions.push(
+				inArray(user.role, ["agent", "team_lead"]),
+			);
+
 			const agentPerformance = await db
 				.select({
 					agentId: user.id,
@@ -444,10 +464,11 @@ export const adminRouter = router({
 					),
 				})
 				.from(user)
-				.leftJoin(transactions, eq(user.id, transactions.agentId))
+				.leftJoin(transactions, and(...txJoinParts))
 				.where(and(...agentWhereConditions))
 				.groupBy(user.id, user.name, user.email, user.image, user.teamId)
-				.orderBy(desc(count(transactions.id)));
+				.orderBy(desc(count(transactions.id)))
+				.limit(input.limit);
 
 			return agentPerformance;
 		}),
@@ -511,9 +532,8 @@ export const adminRouter = router({
 	}),
 
 	/**
-	 * Dashboard right-rail insights: pending approval aging + deal mix.
-	 * Aging is always based on current pending queue (not date-filtered).
-	 * Deal mix respects the optional dashboard date range.
+	 * Dashboard deal-mix insights (date-filtered).
+	 * Aging buckets were unused by the UI and skipped to keep this cheap.
 	 */
 	getDashboardInsights: adminProcedure
 		.input(dateRangeInput.optional())
@@ -538,77 +558,11 @@ export const adminRouter = router({
 				}
 			}
 
-			const pendingStatusCondition = inArray(transactions.status, [
-				...ADMIN_QUEUE_DB_STATUSES,
-			]);
-
 			const roleCondition =
 				teamMemberIds && teamMemberIds.length > 0
 					? inArray(transactions.agentId, teamMemberIds)
 					: undefined;
 
-			const pendingRows = await db
-				.select({
-					id: transactions.id,
-					commissionAmount: transactions.commissionAmount,
-					submittedAt: transactions.submittedAt,
-					createdAt: transactions.createdAt,
-				})
-				.from(transactions)
-				.where(
-					roleCondition
-						? and(pendingStatusCondition, roleCondition)
-						: pendingStatusCondition,
-				);
-
-			const now = Date.now();
-			const buckets = {
-				fresh: { key: "fresh" as const, label: "0–2 days", count: 0, amount: 0 },
-				attention: {
-					key: "attention" as const,
-					label: "3–7 days",
-					count: 0,
-					amount: 0,
-				},
-				overdue: {
-					key: "overdue" as const,
-					label: "7+ days",
-					count: 0,
-					amount: 0,
-				},
-			};
-
-			let oldestDays: number | null = null;
-
-			for (const row of pendingRows) {
-				const anchor = row.submittedAt ?? row.createdAt;
-				const ageMs = anchor ? now - new Date(anchor).getTime() : 0;
-				const ageDays = Math.max(0, ageMs / 86_400_000);
-				const amount = Number(row.commissionAmount) || 0;
-
-				if (oldestDays === null || ageDays > oldestDays) {
-					oldestDays = ageDays;
-				}
-
-				if (ageDays <= 2) {
-					buckets.fresh.count += 1;
-					buckets.fresh.amount += amount;
-				} else if (ageDays <= 7) {
-					buckets.attention.count += 1;
-					buckets.attention.amount += amount;
-				} else {
-					buckets.overdue.count += 1;
-					buckets.overdue.amount += amount;
-				}
-			}
-
-			const totalPending = pendingRows.length;
-			const totalPendingAmount =
-				buckets.fresh.amount +
-				buckets.attention.amount +
-				buckets.overdue.amount;
-
-			// Deal mix — filtered by dashboard date range when provided
 			const mixConditions = [];
 			if (input?.startDate) {
 				mixConditions.push(
@@ -621,15 +575,28 @@ export const adminRouter = router({
 			if (roleCondition) {
 				mixConditions.push(roleCondition);
 			}
+			// Exclude drafts from deal mix — keeps scan smaller and more meaningful
+			mixConditions.push(sql`${transactions.status} <> 'draft'`);
+
+			const mixWhere = and(...mixConditions);
 
 			const mixRows = await db
 				.select({
-					transactionType: transactions.transactionType,
-					marketType: transactions.marketType,
-					commissionAmount: transactions.commissionAmount,
+					segment: sql<string>`
+						CASE
+							WHEN lower(coalesce(${transactions.transactionType}::text, '')) IN ('rental', 'lease')
+								THEN 'rental'
+							WHEN lower(coalesce(${transactions.marketType}::text, '')) = 'primary'
+								THEN 'newProject'
+							ELSE 'subsale'
+						END
+					`.as("segment"),
+					count: count(transactions.id),
+					amount: sql<number>`coalesce(sum(CAST(${transactions.commissionAmount} AS DECIMAL)), 0)`,
 				})
 				.from(transactions)
-				.where(mixConditions.length > 0 ? and(...mixConditions) : undefined);
+				.where(mixWhere)
+				.groupBy(sql`1`);
 
 			const mix = {
 				newProject: {
@@ -653,20 +620,10 @@ export const adminRouter = router({
 			};
 
 			for (const row of mixRows) {
-				const amount = Number(row.commissionAmount) || 0;
-				const type = (row.transactionType || "").toLowerCase();
-				const market = (row.marketType || "").toLowerCase();
-
-				if (type === "rental" || type === "lease") {
-					mix.rental.count += 1;
-					mix.rental.amount += amount;
-				} else if (market === "primary") {
-					mix.newProject.count += 1;
-					mix.newProject.amount += amount;
-				} else {
-					// secondary / unknown sale → subsale bucket
-					mix.subsale.count += 1;
-					mix.subsale.amount += amount;
+				const key = row.segment as keyof typeof mix;
+				if (key in mix) {
+					mix[key].count = Number(row.count);
+					mix[key].amount = Number(row.amount) || 0;
 				}
 			}
 
@@ -677,11 +634,19 @@ export const adminRouter = router({
 
 			return {
 				aging: {
-					buckets: [buckets.fresh, buckets.attention, buckets.overdue],
-					totalPending,
-					totalPendingAmount,
-					oldestDays:
-						oldestDays === null ? null : Math.floor(oldestDays * 10) / 10,
+					buckets: [
+						{ key: "fresh" as const, label: "0–2 days", count: 0, amount: 0 },
+						{
+							key: "attention" as const,
+							label: "3–7 days",
+							count: 0,
+							amount: 0,
+						},
+						{ key: "overdue" as const, label: "7+ days", count: 0, amount: 0 },
+					],
+					totalPending: 0,
+					totalPendingAmount: 0,
+					oldestDays: null,
 				},
 				dealMix: {
 					segments: [mix.newProject, mix.subsale, mix.rental],

@@ -13,6 +13,8 @@ import { getAllowedOrigins } from "./utils/allowed-origins";
 import { ensurePipelineStageEnumValues } from "./utils/pipeline-stage-schema";
 import { ensureDocumentCategoryEnumValues } from "./utils/document-category-schema";
 import { ensureTransactionStatusEnumValues } from "./utils/transaction-status-schema";
+import { ensureTransactionListIndexes } from "./utils/transaction-indexes";
+import { ensureLeadListIndexes } from "./utils/lead-indexes";
 import {
 	ensurePortalRecordLogTable,
 	purgeExpiredRecordLogs,
@@ -118,6 +120,24 @@ void ensureTransactionStatusEnumValues()
 	.catch((e) =>
 		console.warn(
 			"⚠️ Transaction status enum bootstrap failed:",
+			e instanceof Error ? e.message : e,
+		),
+	);
+
+void ensureTransactionListIndexes()
+	.then(() => console.log("✅ Transaction list indexes ready"))
+	.catch((e) =>
+		console.warn(
+			"⚠️ Transaction list index bootstrap failed:",
+			e instanceof Error ? e.message : e,
+		),
+	);
+
+void ensureLeadListIndexes()
+	.then(() => console.log("✅ Lead/queue list indexes ready"))
+	.catch((e) =>
+		console.warn(
+			"⚠️ Lead/queue index bootstrap failed:",
 			e instanceof Error ? e.message : e,
 		),
 	);

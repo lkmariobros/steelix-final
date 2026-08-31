@@ -5,9 +5,7 @@ import { useTheme } from "next-themes";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import type { Lead } from "./lead-models";
 import { PIPELINE_STAGES } from "./lead-constants";
-import { getLeadDisplayTags } from "./lead-models";
 import {
 	Area,
 	AreaChart,
@@ -38,6 +36,13 @@ const CHART_COLORS = [
 
 const PRIMARY = "#2a6b73";
 const PRIMARY_SOFT = "#3d8f8a";
+
+export type LeadsChartData = {
+	total: number;
+	byStage: Record<string, number>;
+	monthlyTrend?: Array<{ key: string; label: string; count: number }>;
+	byCategory?: Array<{ name: string; count: number }>;
+};
 
 function AreaTooltip({
 	active,
@@ -78,12 +83,10 @@ function PieTooltip({
 					className="size-2.5 shrink-0 rounded-full"
 					style={{ backgroundColor: item.payload.color }}
 				/>
-				<p className="font-semibold text-foreground text-xs">{item.name}</p>
+				<span className="font-semibold text-foreground text-xs">{item.name}</span>
 			</div>
-			<p className="mt-0.5 text-muted-foreground text-xs">
-				<span className="font-bold tabular-nums text-foreground">
-					{item.value}
-				</span>{" "}
+			<p className="mt-1 text-muted-foreground text-xs">
+				<span className="font-bold tabular-nums text-primary">{item.value}</span>{" "}
 				leads
 			</p>
 		</div>
@@ -94,84 +97,36 @@ function ChartCardShell({
 	title,
 	description,
 	icon,
-	children,
 	className,
-	action,
-	compact,
+	children,
 }: {
 	title: string;
-	description: string;
+	description?: string;
 	icon: ReactNode;
-	children: ReactNode;
 	className?: string;
-	action?: ReactNode;
-	compact?: boolean;
+	children: ReactNode;
 }) {
 	return (
-		<Card className={cn("flex h-full flex-col gap-0 py-0", className)}>
-			<CardHeader className={cn(compact ? "shrink-0 px-4 pb-1 pt-3.5" : "shrink-0 px-4 pb-2 pt-4")}>
-				<div className="flex items-start justify-between gap-3">
+		<Card className={cn("flex h-full flex-col gap-0 overflow-hidden py-0", className)}>
+			<CardHeader className="space-y-1 border-border/50 border-b px-5 py-4">
+				<div className="flex items-center gap-2">
+					<span className="flex size-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
+						{icon}
+					</span>
 					<div className="min-w-0">
-						<div className="flex items-center gap-2.5">
-							<span className="flex size-8 items-center justify-center rounded-xl bg-primary/10 text-primary">
-								{icon}
-							</span>
-							<CardTitle className="font-semibold text-base">{title}</CardTitle>
-						</div>
-						<p className="mt-1 text-muted-foreground text-xs">{description}</p>
+						<CardTitle className="truncate text-sm">{title}</CardTitle>
+						{description ? (
+							<p className="truncate text-muted-foreground text-xs">{description}</p>
+						) : null}
 					</div>
-					{action}
 				</div>
 			</CardHeader>
-			<CardContent
-				className={cn(
-					"flex flex-1 flex-col px-4",
-					compact ? "pb-3.5 pt-0" : "pb-4 pt-1",
-				)}
-			>
-				{children}
-			</CardContent>
+			<CardContent className="flex flex-1 flex-col px-5 py-4">{children}</CardContent>
 		</Card>
 	);
 }
 
-function DistributionLegend({
-	items,
-	total,
-}: {
-	items: Array<{ name: string; value: number; color: string }>;
-	total: number;
-}) {
-	return (
-		<div className="mt-1 space-y-0.5">
-			{items.map((item) => {
-				const pct = total ? Math.round((item.value / total) * 100) : 0;
-				return (
-					<div key={item.name} className="flex items-center gap-1.5 leading-tight">
-						<span
-							className="size-2 shrink-0 rounded-sm"
-							style={{ backgroundColor: item.color }}
-						/>
-						<span
-							className="min-w-0 flex-1 truncate font-medium text-foreground/90 text-[11px]"
-							title={item.name}
-						>
-							{item.name}
-						</span>
-						<span className="shrink-0 text-muted-foreground text-[11px] tabular-nums">
-							{pct}%
-						</span>
-						<span className="w-5 shrink-0 text-right font-semibold text-foreground text-[11px] tabular-nums">
-							{item.value}
-						</span>
-					</div>
-				);
-			})}
-		</div>
-	);
-}
-
-function DistributionDonut({
+function DonutChart({
 	data,
 	total,
 }: {
@@ -179,18 +134,18 @@ function DistributionDonut({
 	total: number;
 }) {
 	return (
-		<div className="relative mx-auto w-full max-w-[130px] shrink-0">
-			<ResponsiveContainer width="100%" height={112}>
+		<div className="relative mx-auto size-[140px]">
+			<ResponsiveContainer width="100%" height="100%">
 				<PieChart>
 					<Pie
 						data={data}
+						dataKey="value"
+						nameKey="name"
 						cx="50%"
 						cy="50%"
-						innerRadius={34}
-						outerRadius={48}
+						innerRadius={42}
+						outerRadius={62}
 						paddingAngle={2}
-						cornerRadius={3}
-						dataKey="value"
 						strokeWidth={0}
 					>
 						{data.map((entry) => (
@@ -211,10 +166,10 @@ function DistributionDonut({
 }
 
 export function LeadsCharts({
-	leads,
+	chartData,
 	isLoading,
 }: {
-	leads: Lead[];
+	chartData: LeadsChartData | null | undefined;
 	isLoading: boolean;
 }) {
 	const { resolvedTheme } = useTheme();
@@ -224,65 +179,31 @@ export function LeadsCharts({
 	const dotStroke = isDark ? "#1a2a2c" : "#ffffff";
 
 	const { stageData, monthlyData, categoryData, totalLeads } = useMemo(() => {
-		const stageCounts: Record<string, number> = {};
-		for (const lead of leads) {
-			stageCounts[lead.stage] = (stageCounts[lead.stage] ?? 0) + 1;
-		}
-
+		const byStage = chartData?.byStage ?? {};
 		const stageData = PIPELINE_STAGES.map((s, i) => ({
 			name: s.label,
-			value: stageCounts[s.value] ?? 0,
+			value: byStage[s.value] ?? 0,
 			color: CHART_COLORS[i % CHART_COLORS.length],
 		})).filter((s) => s.value > 0);
 
-		const now = new Date();
-		const months: { key: string; label: string }[] = [];
-		for (let i = 5; i >= 0; i--) {
-			const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-			months.push({
-				key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`,
-				label: d.toLocaleDateString("en", { month: "short", year: "2-digit" }),
-			});
-		}
-
-		const monthlyCounts: Record<string, number> = {};
-		for (const lead of leads) {
-			const d = new Date(lead.createdAt);
-			const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-			monthlyCounts[key] = (monthlyCounts[key] ?? 0) + 1;
-		}
-
-		const monthlyData = months.map((m) => ({
+		const monthlyData = (chartData?.monthlyTrend ?? []).map((m) => ({
 			month: m.label,
-			leads: monthlyCounts[m.key] ?? 0,
+			leads: m.count,
 		}));
 
-		const totalLeads = leads.length;
+		const categoryData = (chartData?.byCategory ?? []).map((c, i) => ({
+			name: c.name,
+			value: c.count,
+			color: CHART_COLORS[i % CHART_COLORS.length],
+		}));
 
-		const categoryCounts: Record<string, number> = {};
-		for (const lead of leads) {
-			const tags = getLeadDisplayTags(lead);
-			if (tags.length === 0) {
-				categoryCounts.Uncategorized =
-					(categoryCounts.Uncategorized ?? 0) + 1;
-				continue;
-			}
-			for (const t of tags) {
-				categoryCounts[t] = (categoryCounts[t] ?? 0) + 1;
-			}
-		}
-
-		const categoryData = Object.entries(categoryCounts)
-			.map(([name, value], i) => ({
-				name,
-				value,
-				color: CHART_COLORS[i % CHART_COLORS.length],
-			}))
-			.sort((a, b) => b.value - a.value)
-			.slice(0, 10);
-
-		return { stageData, monthlyData, categoryData, totalLeads };
-	}, [leads]);
+		return {
+			stageData,
+			monthlyData,
+			categoryData,
+			totalLeads: chartData?.total ?? 0,
+		};
+	}, [chartData]);
 
 	if (isLoading) {
 		return (
@@ -316,7 +237,7 @@ export function LeadsCharts({
 		);
 	}
 
-	if (leads.length === 0) return null;
+	if (!chartData || totalLeads === 0) return null;
 
 	return (
 		<div className="grid items-stretch gap-4 lg:grid-cols-4">
@@ -333,87 +254,66 @@ export function LeadsCharts({
 								data={monthlyData}
 								margin={{ top: 8, right: 8, bottom: 0, left: 0 }}
 							>
-							<defs>
-								<linearGradient id="leadsAreaFill" x1="0" y1="0" x2="0" y2="1">
-									<stop offset="0%" stopColor={PRIMARY} stopOpacity={0.35} />
-									<stop offset="55%" stopColor={PRIMARY_SOFT} stopOpacity={0.12} />
-									<stop offset="100%" stopColor={PRIMARY} stopOpacity={0.02} />
-								</linearGradient>
-							</defs>
-							<CartesianGrid
-								strokeDasharray="3 6"
-								vertical={false}
-								stroke={gridStroke}
-							/>
-							<XAxis
-								dataKey="month"
-								tick={{ fontSize: 11, fill: tickColor, fontWeight: 500 }}
-								axisLine={false}
-								tickLine={false}
-								dy={8}
-							/>
-							<YAxis
-								tick={{ fontSize: 11, fill: tickColor, fontWeight: 500 }}
-								axisLine={false}
-								tickLine={false}
-								allowDecimals={false}
-								width={34}
-							/>
-							<Tooltip
-								content={<AreaTooltip />}
-								cursor={{
-									stroke: PRIMARY,
-									strokeWidth: 1,
-									strokeDasharray: "4 4",
-								}}
-							/>
-							<Area
-								type="monotone"
-								dataKey="leads"
-								stroke={PRIMARY}
-								strokeWidth={2.5}
-								fill="url(#leadsAreaFill)"
-								dot={{
-									r: 3.5,
-									fill: PRIMARY,
-									stroke: dotStroke,
-									strokeWidth: 2,
-								}}
-								activeDot={{
-									r: 6,
-									fill: PRIMARY,
-									stroke: isDark ? "#fff" : "#fff",
-									strokeWidth: 2,
-								}}
-							/>
-						</AreaChart>
+								<defs>
+									<linearGradient id="leadsAreaFill" x1="0" y1="0" x2="0" y2="1">
+										<stop offset="0%" stopColor={PRIMARY} stopOpacity={0.35} />
+										<stop
+											offset="55%"
+											stopColor={PRIMARY_SOFT}
+											stopOpacity={0.12}
+										/>
+										<stop offset="100%" stopColor={PRIMARY} stopOpacity={0.02} />
+									</linearGradient>
+								</defs>
+								<CartesianGrid
+									strokeDasharray="3 6"
+									vertical={false}
+									stroke={gridStroke}
+								/>
+								<XAxis
+									dataKey="month"
+									tick={{ fill: tickColor, fontSize: 11 }}
+									tickLine={false}
+									axisLine={false}
+								/>
+								<YAxis
+									allowDecimals={false}
+									tick={{ fill: tickColor, fontSize: 11 }}
+									tickLine={false}
+									axisLine={false}
+									width={28}
+								/>
+								<Tooltip content={<AreaTooltip />} />
+								<Area
+									type="monotone"
+									dataKey="leads"
+									stroke={PRIMARY}
+									strokeWidth={2}
+									fill="url(#leadsAreaFill)"
+									dot={{ r: 3, fill: PRIMARY, stroke: dotStroke, strokeWidth: 2 }}
+									activeDot={{ r: 5 }}
+								/>
+							</AreaChart>
 						</ResponsiveContainer>
 					</div>
 				</div>
 			</ChartCardShell>
 
-			<ChartCardShell
-				title="Stage Distribution"
-				description="Leads by pipeline stage"
-				icon={<RiPieChart2Line size={16} />}
-				compact
-			>
-				<div className="flex flex-1 flex-col">
-					<DistributionDonut data={stageData} total={totalLeads} />
-					<DistributionLegend items={stageData} total={totalLeads} />
-				</div>
+			<ChartCardShell title="By Pipeline Stage" icon={<RiPieChart2Line size={16} />}>
+				<DonutChart data={stageData} total={totalLeads} />
 			</ChartCardShell>
 
-			<ChartCardShell
-				title="Category Distribution"
-				description="Leads by category (top 10)"
-				icon={<RiPieChart2Line size={16} />}
-				compact
-			>
-				<div className="flex flex-1 flex-col">
-					<DistributionDonut data={categoryData} total={totalLeads} />
-					<DistributionLegend items={categoryData} total={totalLeads} />
-				</div>
+			<ChartCardShell title="By Category" icon={<RiPieChart2Line size={16} />}>
+				{categoryData.length > 0 ? (
+					<DonutChart
+						data={categoryData}
+						total={categoryData.reduce((s, c) => s + c.value, 0)}
+					/>
+				) : (
+					<p className="py-10 text-center text-muted-foreground text-xs">
+						No category data
+					</p>
+				)}
 			</ChartCardShell>
 		</div>
 	);

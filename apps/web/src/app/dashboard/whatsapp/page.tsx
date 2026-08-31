@@ -1,12 +1,7 @@
 "use client";
 
-import { AppSidebar } from "@/components/app-sidebar";
 import { HeaderActions } from "@/components/header-actions";
-import {
-	SidebarInset,
-	SidebarProvider,
-	SidebarTrigger,
-} from "@/components/sidebar";
+import { SidebarTrigger } from "@/components/sidebar";
 import { Badge } from "@/components/ui/badge";
 import {
 	Breadcrumb,
@@ -346,9 +341,8 @@ export default function WhatsAppPage() {
 	}
 
 	return (
-		<SidebarProvider>
-			<AppSidebar />
-			<SidebarInset className="flex h-screen flex-col overflow-hidden">
+		<>
+			<div className="flex h-screen flex-col">
 				<Dialog
 					open={deleteTarget !== null}
 					onOpenChange={(open) => {
@@ -402,7 +396,7 @@ export default function WhatsAppPage() {
 						</DialogFooter>
 					</DialogContent>
 				</Dialog>
-
+	
 				{/* Header */}
 				<header className="flex h-16 shrink-0 items-center gap-2 border-b px-4 md:px-6 lg:px-8">
 					<div className="flex flex-1 items-center gap-2 px-3">
@@ -433,7 +427,7 @@ export default function WhatsAppPage() {
 						<HeaderActions />
 					</div>
 				</header>
-
+	
 				{/* Main Content - Two Pane Layout */}
 				<div className="flex flex-1 overflow-hidden">
 					{/* Left Pane - Chat List */}
@@ -447,7 +441,7 @@ export default function WhatsAppPage() {
 								</Button>
 							</div>
 						</div>
-
+	
 						{/* Search Bar */}
 						<div className="border-b p-3">
 							<div className="relative">
@@ -460,7 +454,7 @@ export default function WhatsAppPage() {
 								/>
 							</div>
 						</div>
-
+	
 						{/* Filters */}
 						<div className="flex gap-2 border-b p-3">
 							<Button
@@ -480,7 +474,7 @@ export default function WhatsAppPage() {
 								Unread ({unreadCount})
 							</Button>
 						</div>
-
+	
 						{/* Conversation List */}
 						<ScrollArea className="flex-1">
 							<div className="flex flex-col">
@@ -578,7 +572,7 @@ export default function WhatsAppPage() {
 							</div>
 						</ScrollArea>
 					</div>
-
+	
 					{/* Right Pane - Conversation View */}
 					<div className="flex flex-1 flex-col">
 						{isLoadingConversation ? (
@@ -646,7 +640,7 @@ export default function WhatsAppPage() {
 										</Button>
 									</div>
 								</div>
-
+	
 								{/* Messages Area */}
 								<ScrollArea className="flex-1 p-4">
 									<div className="flex flex-col gap-4">
@@ -718,7 +712,7 @@ export default function WhatsAppPage() {
 										)}
 									</div>
 								</ScrollArea>
-
+	
 								{/* Message Input */}
 								<div className="border-t p-4">
 									<div className="flex items-center gap-2">
@@ -762,7 +756,7 @@ export default function WhatsAppPage() {
 						)}
 					</div>
 				</div>
-			</SidebarInset>
-		</SidebarProvider>
+			</div>
+		</>
 	);
 }

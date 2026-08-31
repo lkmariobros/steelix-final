@@ -12,11 +12,6 @@ import {
 	RiSparklingLine,
 } from "@remixicon/react";
 
-type AgentLeadStatRow = {
-	status: string;
-	stage: string;
-};
-
 type Trend = "up" | "down" | "neutral";
 type ProgressTone = "primary" | "success" | "warning" | "danger";
 
@@ -82,30 +77,30 @@ function LeadMetricCard({
 }
 
 export function AgentLeadStatsCards({
-	leads,
+	summary,
 	isLoading,
 }: {
-	leads: AgentLeadStatRow[];
+	summary: {
+		total: number;
+		active: number;
+		inactive: number;
+		potential: number;
+		appointmentsMade: number;
+	} | null | undefined;
 	isLoading: boolean;
 }) {
 	const stats = useMemo(() => {
-		const total = leads.length;
-		const active = leads.filter((l) => l.status === "active").length;
-		const inactive = leads.filter(
-			(l) => l.status === "inactive" || l.status === "pending",
-		).length;
-		const potential = leads.filter((l) => l.stage === "potential_lead").length;
-		const appointmentsMade = leads.filter(
-			(l) => l.stage === "appointment_made",
-		).length;
-		return {
-			total,
-			active,
-			inactive,
-			potential,
-			appointmentsMade,
-		};
-	}, [leads]);
+		if (!summary) {
+			return {
+				total: 0,
+				active: 0,
+				inactive: 0,
+				potential: 0,
+				appointmentsMade: 0,
+			};
+		}
+		return summary;
+	}, [summary]);
 
 	if (isLoading) {
 		return (

@@ -1,8 +1,7 @@
 "use client";
 
-import { AppSidebar } from "@/components/app-sidebar";
 import { HeaderActions } from "@/components/header-actions";
-import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/sidebar";
+import { SidebarTrigger } from "@/components/sidebar";
 import {
 	Breadcrumb,
 	BreadcrumbItem,
@@ -151,125 +150,122 @@ export default function ListingsPage() {
 	if (!session) return <LoadingScreen text="Redirecting..." />;
 
 	return (
-		<SidebarProvider>
-			<AppSidebar />
-			<SidebarInset className="overflow-hidden px-4 md:px-6 lg:px-8">
-				<header className="flex h-16 shrink-0 items-center gap-2 border-b">
-					<div className="flex flex-1 items-center gap-2 px-3">
-						<SidebarTrigger className="-ms-4" />
-						<Separator orientation="vertical" className="mr-2 data-[orientation=vertical]:h-4" />
-						<Breadcrumb>
-							<BreadcrumbList>
-								<BreadcrumbItem className="hidden md:block">
-									<BreadcrumbLink href="/dashboard">
-										<RiDashboardLine size={22} aria-hidden />
-										<span className="sr-only">Dashboard</span>
-									</BreadcrumbLink>
-								</BreadcrumbItem>
-								<BreadcrumbSeparator className="hidden md:block" />
-								<BreadcrumbItem>
-									<BreadcrumbPage className="flex items-center gap-2">
-										<RiBuildingLine size={18} />
-										Listings
-									</BreadcrumbPage>
-								</BreadcrumbItem>
-							</BreadcrumbList>
-						</Breadcrumb>
-					</div>
-					<div className="ml-auto flex gap-3">
-						<HeaderActions />
-					</div>
-				</header>
-
-				<div className="flex flex-1 flex-col gap-4 py-4 lg:gap-6 lg:py-6">
-					<div className="flex flex-wrap items-center gap-2">
-						<div className="relative min-w-[min(100%,240px)] w-full flex-1 basis-full sm:basis-0">
-							<RiSearchLine className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-							<Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search listings..." className="h-9 pl-9" />
-						</div>
-						<Select value={status} onValueChange={(v) => setStatus(v as typeof status)}>
-							<SelectTrigger className="h-9 w-full min-w-[140px] sm:w-40">
-								<SelectValue placeholder="Status" />
-							</SelectTrigger>
-							<SelectContent>
-								<SelectItem value="active">Active</SelectItem>
-								<SelectItem value="draft">Draft</SelectItem>
-								<SelectItem value="under_offer">Under Offer</SelectItem>
-								<SelectItem value="closed">Closed</SelectItem>
-								<SelectItem value="archived">Archived</SelectItem>
-								<SelectItem value="all">All</SelectItem>
-							</SelectContent>
-						</Select>
-						<Select value={listingType} onValueChange={(v) => setListingType(v as typeof listingType)}>
-							<SelectTrigger className="h-9 w-full min-w-[120px] sm:w-36">
-								<SelectValue placeholder="Type" />
-							</SelectTrigger>
-							<SelectContent>
-								<SelectItem value="sale">Sale</SelectItem>
-								<SelectItem value="rent">Rent</SelectItem>
-								<SelectItem value="all">All</SelectItem>
-							</SelectContent>
-						</Select>
-						<Button onClick={() => setIsCreateOpen(true)} className="w-full bg-green-600 hover:bg-green-700 sm:w-auto">
-							<RiAddLine className="mr-2 h-4 w-4" />
-							Add Listing
-						</Button>
-					</div>
-
-					<div className="rounded-lg border">
-						<div className="grid grid-cols-12 border-b px-4 py-2 text-muted-foreground text-xs uppercase tracking-wide">
-							<div className="col-span-4">Title</div>
-							<div className="col-span-2">Type</div>
-							<div className="col-span-2">Status</div>
-							<div className="col-span-2">City</div>
-							<div className="col-span-1 text-right">Price</div>
-							<div className="col-span-1 text-right">Actions</div>
-						</div>
-						{isLoading ? (
-							<ListGridRowsSkeleton rows={6} />
-						) : (data?.listings?.length || 0) === 0 ? (
-							<div className="p-6 text-sm text-muted-foreground">No listings found.</div>
-						) : (
-							data?.listings.map((row) => (
-								<div key={row.id} className="grid grid-cols-12 items-center border-b px-4 py-3 text-sm last:border-b-0">
-									<div className="col-span-4 font-medium">{row.title}</div>
-									<div className="col-span-2 capitalize">{row.listingType}</div>
-									<div className="col-span-2">
-										<Badge variant={row.status === "active" ? "default" : "secondary"} className="capitalize">
-											{row.status.replace("_", " ")}
-										</Badge>
-									</div>
-									<div className="col-span-2">{row.city || "-"}</div>
-									<div className="col-span-1 text-right">{Number(row.price).toLocaleString()}</div>
-									<div className="col-span-1 text-right">
-										<DropdownMenu>
-											<DropdownMenuTrigger asChild>
-												<Button variant="ghost" size="icon">
-													<RiMore2Line className="h-4 w-4" />
-												</Button>
-											</DropdownMenuTrigger>
-											<DropdownMenuContent align="end">
-												<DropdownMenuItem onClick={() => openEdit(row)}>Edit listing</DropdownMenuItem>
-												<DropdownMenuItem onClick={() => setDetailsId(row.id)}>View details</DropdownMenuItem>
-												<DropdownMenuItem
-													onClick={() =>
-														archiveMutation.mutate({
-															id: row.id,
-															archived: row.status !== "archived",
-														})
-													}
-												>
-													{row.status === "archived" ? "Unarchive" : "Archive"}
-												</DropdownMenuItem>
-											</DropdownMenuContent>
-										</DropdownMenu>
-									</div>
-								</div>
-							))
-						)}
-					</div>
+		<>
+			<header className="flex h-16 shrink-0 items-center gap-2 border-b">
+				<div className="flex flex-1 items-center gap-2 px-3">
+					<SidebarTrigger className="-ms-4" />
+					<Separator orientation="vertical" className="mr-2 data-[orientation=vertical]:h-4" />
+					<Breadcrumb>
+						<BreadcrumbList>
+							<BreadcrumbItem className="hidden md:block">
+								<BreadcrumbLink href="/dashboard">
+									<RiDashboardLine size={22} aria-hidden />
+									<span className="sr-only">Dashboard</span>
+								</BreadcrumbLink>
+							</BreadcrumbItem>
+							<BreadcrumbSeparator className="hidden md:block" />
+							<BreadcrumbItem>
+								<BreadcrumbPage className="flex items-center gap-2">
+									<RiBuildingLine size={18} />
+									Listings
+								</BreadcrumbPage>
+							</BreadcrumbItem>
+						</BreadcrumbList>
+					</Breadcrumb>
 				</div>
-			</SidebarInset>
+				<div className="ml-auto flex gap-3">
+					<HeaderActions />
+				</div>
+			</header>
+
+			<div className="flex flex-1 flex-col gap-4 py-4 lg:gap-6 lg:py-6">
+				<div className="flex flex-wrap items-center gap-2">
+					<div className="relative min-w-[min(100%,240px)] w-full flex-1 basis-full sm:basis-0">
+						<RiSearchLine className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+						<Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search listings..." className="h-9 pl-9" />
+					</div>
+					<Select value={status} onValueChange={(v) => setStatus(v as typeof status)}>
+						<SelectTrigger className="h-9 w-full min-w-[140px] sm:w-40">
+							<SelectValue placeholder="Status" />
+						</SelectTrigger>
+						<SelectContent>
+							<SelectItem value="active">Active</SelectItem>
+							<SelectItem value="draft">Draft</SelectItem>
+							<SelectItem value="under_offer">Under Offer</SelectItem>
+							<SelectItem value="closed">Closed</SelectItem>
+							<SelectItem value="archived">Archived</SelectItem>
+							<SelectItem value="all">All</SelectItem>
+						</SelectContent>
+					</Select>
+					<Select value={listingType} onValueChange={(v) => setListingType(v as typeof listingType)}>
+						<SelectTrigger className="h-9 w-full min-w-[120px] sm:w-36">
+							<SelectValue placeholder="Type" />
+						</SelectTrigger>
+						<SelectContent>
+							<SelectItem value="sale">Sale</SelectItem>
+							<SelectItem value="rent">Rent</SelectItem>
+							<SelectItem value="all">All</SelectItem>
+						</SelectContent>
+					</Select>
+					<Button onClick={() => setIsCreateOpen(true)} className="w-full bg-green-600 hover:bg-green-700 sm:w-auto">
+						<RiAddLine className="mr-2 h-4 w-4" />
+						Add Listing
+					</Button>
+				</div>
+
+				<div className="rounded-lg border">
+					<div className="grid grid-cols-12 border-b px-4 py-2 text-muted-foreground text-xs uppercase tracking-wide">
+						<div className="col-span-4">Title</div>
+						<div className="col-span-2">Type</div>
+						<div className="col-span-2">Status</div>
+						<div className="col-span-2">City</div>
+						<div className="col-span-1 text-right">Price</div>
+						<div className="col-span-1 text-right">Actions</div>
+					</div>
+					{isLoading ? (
+						<ListGridRowsSkeleton rows={6} />
+					) : (data?.listings?.length || 0) === 0 ? (
+						<div className="p-6 text-sm text-muted-foreground">No listings found.</div>
+					) : (
+						data?.listings.map((row) => (
+							<div key={row.id} className="grid grid-cols-12 items-center border-b px-4 py-3 text-sm last:border-b-0">
+								<div className="col-span-4 font-medium">{row.title}</div>
+								<div className="col-span-2 capitalize">{row.listingType}</div>
+								<div className="col-span-2">
+									<Badge variant={row.status === "active" ? "default" : "secondary"} className="capitalize">
+										{row.status.replace("_", " ")}
+									</Badge>
+								</div>
+								<div className="col-span-2">{row.city || "-"}</div>
+								<div className="col-span-1 text-right">{Number(row.price).toLocaleString()}</div>
+								<div className="col-span-1 text-right">
+									<DropdownMenu>
+										<DropdownMenuTrigger asChild>
+											<Button variant="ghost" size="icon">
+												<RiMore2Line className="h-4 w-4" />
+											</Button>
+										</DropdownMenuTrigger>
+										<DropdownMenuContent align="end">
+											<DropdownMenuItem onClick={() => openEdit(row)}>Edit listing</DropdownMenuItem>
+											<DropdownMenuItem onClick={() => setDetailsId(row.id)}>View details</DropdownMenuItem>
+											<DropdownMenuItem
+												onClick={() =>
+													archiveMutation.mutate({
+														id: row.id,
+														archived: row.status !== "archived",
+													})
+												}
+											>
+												{row.status === "archived" ? "Unarchive" : "Archive"}
+											</DropdownMenuItem>
+										</DropdownMenuContent>
+									</DropdownMenu>
+								</div>
+							</div>
+						))
+					)}
+				</div>
+			</div>
 
 			<Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
 				<DialogContent className="sm:max-w-[480px]">
@@ -466,7 +462,7 @@ export default function ListingsPage() {
 					)}
 				</DialogContent>
 			</Dialog>
-		</SidebarProvider>
+		</>
 	);
 }
 

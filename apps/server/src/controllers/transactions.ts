@@ -659,8 +659,34 @@ export const transactionsRouter = router({
 			try {
 				// Fixed Case No sequence (latest first). Do not sort by updatedAt —
 				// edits must not move a case from its creation/sequence position.
+				// Slim list DTO — exclude heavy JSONB (scheme snapshot, breakdown, documents).
 				const transactionList = await db
-					.select()
+					.select({
+						id: transactions.id,
+						caseNo: transactions.caseNo,
+						agentId: transactions.agentId,
+						marketType: transactions.marketType,
+						transactionType: transactions.transactionType,
+						transactionDate: transactions.transactionDate,
+						bookingDate: transactions.bookingDate,
+						projectName: transactions.projectName,
+						unitNo: transactions.unitNo,
+						propertyData: transactions.propertyData,
+						clientData: transactions.clientData,
+						isCoBroking: transactions.isCoBroking,
+						coBrokingData: transactions.coBrokingData,
+						commissionType: transactions.commissionType,
+						commissionValue: transactions.commissionValue,
+						commissionAmount: transactions.commissionAmount,
+						status: transactions.status,
+						agentEditAllowed: transactions.agentEditAllowed,
+						pendingEditRequest: transactions.pendingEditRequest,
+						submittedAt: transactions.submittedAt,
+						reviewedAt: transactions.reviewedAt,
+						convertedAt: transactions.convertedAt,
+						createdAt: transactions.createdAt,
+						updatedAt: transactions.updatedAt,
+					})
 					.from(transactions)
 					.where(and(...conditions))
 					.orderBy(
@@ -767,7 +793,30 @@ export const transactionsRouter = router({
 			// edits must not move a case from its creation/sequence position.
 			const rows = await db
 				.select({
-					transaction: transactions,
+					id: transactions.id,
+					caseNo: transactions.caseNo,
+					agentId: transactions.agentId,
+					marketType: transactions.marketType,
+					transactionType: transactions.transactionType,
+					transactionDate: transactions.transactionDate,
+					bookingDate: transactions.bookingDate,
+					projectName: transactions.projectName,
+					unitNo: transactions.unitNo,
+					propertyData: transactions.propertyData,
+					clientData: transactions.clientData,
+					isCoBroking: transactions.isCoBroking,
+					coBrokingData: transactions.coBrokingData,
+					commissionType: transactions.commissionType,
+					commissionValue: transactions.commissionValue,
+					commissionAmount: transactions.commissionAmount,
+					status: transactions.status,
+					agentEditAllowed: transactions.agentEditAllowed,
+					pendingEditRequest: transactions.pendingEditRequest,
+					submittedAt: transactions.submittedAt,
+					reviewedAt: transactions.reviewedAt,
+					convertedAt: transactions.convertedAt,
+					createdAt: transactions.createdAt,
+					updatedAt: transactions.updatedAt,
 					agentName: user.name,
 					agentCode: user.agentCode,
 				})
@@ -791,7 +840,7 @@ export const transactionsRouter = router({
 				...new Set(
 					rows
 						.map((r) => {
-							const co = r.transaction.coBrokingData as
+							const co = r.coBrokingData as
 								| { internalAgentId?: string }
 								| null;
 							return co?.internalAgentId;
@@ -816,17 +865,18 @@ export const transactionsRouter = router({
 
 			return {
 				transactions: rows.map((r) => {
-					const co = r.transaction.coBrokingData as
+					const co = r.coBrokingData as
 						| { internalAgentId?: string; agentName?: string }
 						| null;
 					const coAgent = co?.internalAgentId
 						? coAgentMap.get(co.internalAgentId)
 						: null;
+					const { agentName, agentCode, ...tx } = r;
 					return {
-						...r.transaction,
-						status: normalizeLegacyStatus(r.transaction.status),
-						agentName: r.agentName,
-						agentCode: r.agentCode,
+						...tx,
+						status: normalizeLegacyStatus(tx.status),
+						agentName,
+						agentCode,
 						coAgentName: coAgent?.name ?? co?.agentName ?? null,
 						coAgentCode: coAgent?.agentCode ?? null,
 					};

@@ -43,11 +43,17 @@ export interface AdminLeadsFilter {
 	search?: string;
 	type?: "tenant" | "buyer";
 	status?: "active" | "inactive" | "pending";
+	/** When true, status !== 'active' (inactive + pending). */
+	excludeActive?: boolean;
 	stage?: string;
 	leadType?: "personal" | "company";
 	agentId?: string; // filter by a specific agent
+	tagId?: string; // category filter; "__none__" = no tags
 	page?: number;
 	limit?: number;
+	forExport?: boolean;
+	/** Skip tags/followers enrichment — for kanban / fast first paint. */
+	slim?: boolean;
 	sortBy?: "createdAt" | "updatedAt" | "name" | "stage";
 	sortOrder?: "asc" | "desc";
 }
@@ -89,6 +95,10 @@ export interface LeadsStatsAdmin {
 	byStatus: { active: number; inactive: number; pending: number };
 	unclaimedCompanyLeads: number;
 	totalAgentsWithLeads: number;
+	/** Last 6 calendar months of lead creation counts. */
+	monthlyTrend: Array<{ key: string; label: string; count: number }>;
+	/** Top categories by tagged lead count. */
+	byCategory: Array<{ name: string; count: number }>;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -173,25 +183,44 @@ export async function logStageChanged(opts: {
 // ─── Service Functions ────────────────────────────────────────────────────────
 
 const LEAD_INACTIVITY_DAYS = 5;
+const INACTIVE_MARK_TTL_MS = 10 * 60 * 1000;
+let lastInactiveMarkAt = 0;
+let inactiveMarkInFlight: Promise<void> | null = null;
 
+/**
+ * Mark stale active leads inactive. Throttled so list+stats batches
+ * don't run two full-table UPDATEs on every page load.
+ * Does not bump updatedAt (that would defeat inactivity tracking).
+ */
 async function autoMarkInactiveLeads() {
-	// Default status is "active" on import/create.
-	// If there is no update to Notes/Stage for 5 days, mark lead as inactive.
-	// When Notes/Stage are updated again, mutations set status back to active.
-	const cutoff = new Date(Date.now() - LEAD_INACTIVITY_DAYS * 86_400_000);
-	try {
-		await db
-			.update(prospects)
-			.set({ status: "inactive", updatedAt: new Date() })
-			.where(
-				and(
-					eq(prospects.status, "active"),
-					sql`${prospects.updatedAt} <= ${cutoff}`,
-				),
-			);
-	} catch {
-		// never block UX
+	const now = Date.now();
+	if (now - lastInactiveMarkAt < INACTIVE_MARK_TTL_MS) return;
+	if (inactiveMarkInFlight) {
+		await inactiveMarkInFlight;
+		return;
 	}
+
+	const cutoff = new Date(now - LEAD_INACTIVITY_DAYS * 86_400_000);
+	inactiveMarkInFlight = (async () => {
+		try {
+			await db
+				.update(prospects)
+				.set({ status: "inactive" })
+				.where(
+					and(
+						eq(prospects.status, "active"),
+						sql`${prospects.updatedAt} <= ${cutoff}`,
+					),
+				);
+			lastInactiveMarkAt = Date.now();
+		} catch {
+			// never block UX
+		} finally {
+			inactiveMarkInFlight = null;
+		}
+	})();
+
+	await inactiveMarkInFlight;
 }
 
 /**
@@ -199,16 +228,20 @@ async function autoMarkInactiveLeads() {
  */
 export async function getAllLeadsAdmin(filter: AdminLeadsFilter = {}) {
 	try {
-		await autoMarkInactiveLeads();
+		// Fire-and-forget throttle: don't block list on inactivity sweep
+		void autoMarkInactiveLeads();
 	const {
 		search,
 		type,
 		status,
+		excludeActive,
 		stage,
 		leadType,
 		agentId,
+		tagId,
 		page = 1,
 		limit = 20,
+		slim = false,
 		sortBy = "createdAt",
 		sortOrder = "desc",
 	} = filter;
@@ -221,12 +254,18 @@ export async function getAllLeadsAdmin(filter: AdminLeadsFilter = {}) {
 			sql`coalesce(${prospects.email}, '') ilike ${`%${search}%`}`,
 			ilike(prospects.phone, `%${search}%`),
 			sql`coalesce(${prospects.whatsappUsername}, '') ilike ${`%${search}%`}`,
+			ilike(prospects.property, `%${search}%`),
+			ilike(prospects.source, `%${search}%`),
 		);
 		if (cond) conditions.push(cond);
 	}
 
 	if (type) conditions.push(eq(prospects.type, type));
-	if (status) conditions.push(eq(prospects.status, status));
+	if (excludeActive) {
+		conditions.push(sql`${prospects.status} <> 'active'`);
+	} else if (status) {
+		conditions.push(eq(prospects.status, status));
+	}
 	if (stage) {
 		const parsed = pipelineStageSchema.safeParse(stage);
 		if (parsed.success) conditions.push(eq(prospects.stage, parsed.data));
@@ -237,6 +276,24 @@ export async function getAllLeadsAdmin(filter: AdminLeadsFilter = {}) {
 			conditions.push(isNull(prospects.agentId));
 		} else {
 			conditions.push(eq(prospects.agentId, agentId));
+		}
+	}
+	if (tagId) {
+		if (tagId === "__none__") {
+			conditions.push(
+				sql`NOT EXISTS (
+					SELECT 1 FROM ${prospectTags}
+					WHERE ${prospectTags.prospectId} = ${prospects.id}
+				)`,
+			);
+		} else {
+			conditions.push(
+				sql`EXISTS (
+					SELECT 1 FROM ${prospectTags}
+					WHERE ${prospectTags.prospectId} = ${prospects.id}
+					AND ${prospectTags.tagId} = ${tagId}
+				)`,
+			);
 		}
 	}
 
@@ -278,11 +335,11 @@ export async function getAllLeadsAdmin(filter: AdminLeadsFilter = {}) {
 		.limit(limit)
 		.offset(offset);
 
-	// Tags
+	// Tags / followers — skip on slim (kanban) path for first-paint speed
 	const prospectIds = rows.map((r) => r.prospect.id);
 	let tagsData: Array<{ prospectId: string; tagId: string; tagName: string }> =
 		[];
-	if (prospectIds.length > 0) {
+	if (!slim && prospectIds.length > 0) {
 		try {
 			const rawTags = await db
 				.select({
@@ -315,26 +372,39 @@ export async function getAllLeadsAdmin(filter: AdminLeadsFilter = {}) {
 		tagsByProspect[t.prospectId].names.push(t.tagName);
 	}
 
-	const followersByProspect = await fetchFollowersByProspectIds(prospectIds);
+	const followersByProspect = slim
+		? ({} as Awaited<ReturnType<typeof fetchFollowersByProspectIds>>)
+		: await fetchFollowersByProspectIds(prospectIds);
 
 	const leads: LeadWithAgent[] = rows.map((r) => {
-		const parsed = selectProspectSchema.parse({
-			...r.prospect,
-			type: normaliseType(r.prospect.type),
-			stage: normalisePipelineStage(r.prospect.stage),
-			leadType: r.prospect.leadType ?? "personal",
-		});
+		const p = r.prospect;
 		return {
-			...parsed,
-			whatsappUsername: parsed.whatsappUsername ?? null,
-			notes: parsed.notes ?? null,
+			id: p.id,
+			name: p.name,
+			email: p.email ?? null,
+			phone: p.phone,
+			whatsappUsername: p.whatsappUsername ?? null,
+			source: p.source,
+			type: normaliseType(p.type),
+			property: p.property,
+			projectId: p.projectId ?? null,
 			projectName: r.projectName ?? null,
+			status: p.status as LeadWithAgent["status"],
+			stage: normalisePipelineStage(p.stage),
+			leadType: (p.leadType ?? "personal") as LeadWithAgent["leadType"],
+			tags: p.tags ?? null,
+			notes: slim ? null : (p.notes ?? null),
+			lastContact: p.lastContact ?? null,
+			nextContact: p.nextContact ?? null,
+			agentId: p.agentId ?? null,
 			agentName: r.agentName ?? null,
 			agentEmail: r.agentEmail ?? null,
-			tagIds: tagsByProspect[r.prospect.id]?.ids ?? [],
-			tagNames: tagsByProspect[r.prospect.id]?.names ?? [],
-			followerIds: followersByProspect[r.prospect.id]?.ids ?? [],
-			followerNames: followersByProspect[r.prospect.id]?.names ?? [],
+			tagIds: tagsByProspect[p.id]?.ids ?? [],
+			tagNames: tagsByProspect[p.id]?.names ?? [],
+			followerIds: followersByProspect[p.id]?.ids ?? [],
+			followerNames: followersByProspect[p.id]?.names ?? [],
+			createdAt: p.createdAt,
+			updatedAt: p.updatedAt,
 		};
 	});
 
@@ -1515,60 +1585,93 @@ export async function findProspectByWhatsappUsername(username: string) {
 /**
  * Get aggregated stats for the admin leads dashboard.
  */
+/**
+ * Get aggregated stats for the admin leads dashboard.
+ * No inactivity UPDATE on this path — list owns the throttled sweep.
+ */
 export async function getLeadsStatsAdmin(): Promise<LeadsStatsAdmin> {
-	await autoMarkInactiveLeads();
-	// Total count
-	const [totalRow] = await db
-		.select({ count: sql<number>`count(*)` })
-		.from(prospects);
-
-	// By stage
-	const stageRows = await db
-		.select({
-			stage: prospects.stage,
-			count: sql<number>`count(*)`,
-		})
-		.from(prospects)
-		.groupBy(prospects.stage);
-
-	// By type
-	const typeRows = await db
-		.select({
-			type: prospects.type,
-			count: sql<number>`count(*)`,
-		})
-		.from(prospects)
-		.groupBy(prospects.type);
-
-	// By lead type
-	const leadTypeRows = await db
-		.select({
-			leadType: prospects.leadType,
-			count: sql<number>`count(*)`,
-		})
-		.from(prospects)
-		.groupBy(prospects.leadType);
-
-	// By status
-	const statusRows = await db
-		.select({
-			status: prospects.status,
-			count: sql<number>`count(*)`,
-		})
-		.from(prospects)
-		.groupBy(prospects.status);
-
-	// Unclaimed company leads
-	const [unclaimedRow] = await db
-		.select({ count: sql<number>`count(*)` })
-		.from(prospects)
-		.where(and(eq(prospects.leadType, "company"), isNull(prospects.agentId)));
-
-	// Total agents that have leads
-	const [agentsRow] = await db
-		.select({ count: sql<number>`count(distinct ${prospects.agentId})` })
-		.from(prospects)
-		.where(sql`${prospects.agentId} is not null`);
+	const [
+		totalRow,
+		stageRows,
+		typeRows,
+		leadTypeRows,
+		statusRows,
+		unclaimedRow,
+		agentsRow,
+		monthlyRows,
+		catRows,
+	] = await Promise.all([
+		db.select({ count: sql<number>`count(*)` }).from(prospects).then((r) => r[0]),
+		db
+			.select({
+				stage: prospects.stage,
+				count: sql<number>`count(*)`,
+			})
+			.from(prospects)
+			.groupBy(prospects.stage),
+		db
+			.select({
+				type: prospects.type,
+				count: sql<number>`count(*)`,
+			})
+			.from(prospects)
+			.groupBy(prospects.type),
+		db
+			.select({
+				leadType: prospects.leadType,
+				count: sql<number>`count(*)`,
+			})
+			.from(prospects)
+			.groupBy(prospects.leadType),
+		db
+			.select({
+				status: prospects.status,
+				count: sql<number>`count(*)`,
+			})
+			.from(prospects)
+			.groupBy(prospects.status),
+		db
+			.select({ count: sql<number>`count(*)` })
+			.from(prospects)
+			.where(and(eq(prospects.leadType, "company"), isNull(prospects.agentId)))
+			.then((r) => r[0]),
+		db
+			.select({ count: sql<number>`count(distinct ${prospects.agentId})` })
+			.from(prospects)
+			.where(sql`${prospects.agentId} is not null`)
+			.then((r) => r[0]),
+		db
+			.select({
+				ym: sql<string>`to_char(date_trunc('month', ${prospects.createdAt}), 'YYYY-MM')`,
+				count: sql<number>`count(*)::int`,
+			})
+			.from(prospects)
+			.where(
+				sql`${prospects.createdAt} >= date_trunc('month', NOW()) - interval '5 months'`,
+			)
+			.groupBy(
+				sql`to_char(date_trunc('month', ${prospects.createdAt}), 'YYYY-MM')`,
+			)
+			.orderBy(
+				sql`to_char(date_trunc('month', ${prospects.createdAt}), 'YYYY-MM')`,
+			),
+		(async () => {
+			try {
+				return await db
+					.select({
+						name: crmTags.name,
+						count: sql<number>`count(*)`,
+					})
+					.from(prospectTags)
+					.innerJoin(crmTags, eq(prospectTags.tagId, crmTags.id))
+					.groupBy(crmTags.name)
+					.orderBy(desc(sql`count(*)`))
+					.limit(10);
+			} catch {
+				return [] as Array<{ name: string; count: number }>;
+			}
+		})(),
+	]);
 
 	const byStage: Record<string, number> = {};
 	for (const row of stageRows) {
@@ -1593,6 +1696,27 @@ export async function getLeadsStatsAdmin(): Promise<LeadsStatsAdmin> {
 		byStatus[s] = (byStatus[s] ?? 0) + Number(row.count);
 	}
 
+	const now = new Date();
+	const monthlyTrend: Array<{ key: string; label: string; count: number }> = [];
+	const monthlyMap = new Map<string, number>();
+	for (const row of monthlyRows) {
+		monthlyMap.set(row.ym, Number(row.count));
+	}
+	for (let i = 5; i >= 0; i--) {
+		const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+		const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+		monthlyTrend.push({
+			key,
+			label: d.toLocaleDateString("en", { month: "short", year: "2-digit" }),
+			count: monthlyMap.get(key) ?? 0,
+		});
+	}
+
+	const byCategory = (catRows ?? []).map((r) => ({
+		name: r.name,
+		count: Number(r.count),
+	}));
+
 	return {
 		total: Number(totalRow?.count ?? 0),
 		byStage,
@@ -1601,6 +1725,8 @@ export async function getLeadsStatsAdmin(): Promise<LeadsStatsAdmin> {
 		byStatus,
 		unclaimedCompanyLeads: Number(unclaimedRow?.count ?? 0),
 		totalAgentsWithLeads: Number(agentsRow?.count ?? 0),
+		monthlyTrend,
+		byCategory,
 	};
 }
 

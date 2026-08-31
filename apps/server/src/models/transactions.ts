@@ -64,8 +64,10 @@ export const documentCategoryEnum = pgEnum("document_category", [
 	"spa",
 ]);
 
-// Main transactions table
-export const transactions = pgTable("transactions", {
+// Main transactions table — indexes for list/filter/dashboard performance
+export const transactions = pgTable(
+	"transactions",
+	{
 	id: uuid("id").primaryKey().defaultRandom(),
 	/** Client-facing sequential case number e.g. P000711 */
 	caseNo: text("case_no").unique(),
@@ -286,7 +288,27 @@ export const transactions = pgTable("transactions", {
 
 	createdAt: timestamp("created_at").defaultNow().notNull(),
 	updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
+},
+	(table) => ({
+		agentIdIdx: index("idx_transactions_agent_id").on(table.agentId),
+		statusIdx: index("idx_transactions_status").on(table.status),
+		caseNoIdx: index("idx_transactions_case_no").on(table.caseNo),
+		createdAtIdx: index("idx_transactions_created_at").on(table.createdAt),
+		bookingDateIdx: index("idx_transactions_booking_date").on(table.bookingDate),
+		submittedAtIdx: index("idx_transactions_submitted_at").on(table.submittedAt),
+		marketTypeIdx: index("idx_transactions_market_type").on(table.marketType),
+		transactionTypeIdx: index("idx_transactions_transaction_type").on(
+			table.transactionType,
+		),
+		agentStatusIdx: index("idx_transactions_agent_status").on(
+			table.agentId,
+			table.status,
+		),
+		pendingEditIdx: index("idx_transactions_pending_edit").on(
+			table.pendingEditRequest,
+		),
+	}),
+);
 
 // Transaction documents table for file metadata
 export const transactionDocuments = pgTable(

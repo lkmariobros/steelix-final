@@ -48,6 +48,7 @@ import {
 } from "@remixicon/react";
 import Link from "next/link";
 import { Fragment, useMemo, useState } from "react";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
 
 const PAGE_SIZE = 25;
 
@@ -138,6 +139,7 @@ export function AdminTransactionSegmentPage({
 	config: AdminTransactionSegmentConfig;
 }) {
 	const [search, setSearch] = useState("");
+	const debouncedSearch = useDebouncedValue(search, 300);
 	const [page, setPage] = useState(0);
 	const { openCreateModal } = useTransactionModalActions();
 
@@ -145,13 +147,13 @@ export function AdminTransactionSegmentPage({
 		() => ({
 			limit: PAGE_SIZE,
 			offset: page * PAGE_SIZE,
-			search: search.trim() || undefined,
+			search: debouncedSearch.trim() || undefined,
 			marketType: config.marketType,
 			transactionType: config.transactionType,
 			pendingApprovalOnly: config.view === "approval",
 			editRequestsOnly: config.view === "requests",
 		}),
-		[config, page, search],
+		[config, page, debouncedSearch],
 	);
 
 	const { data, isLoading } = trpc.transactions.adminList.useQuery(queryInput);

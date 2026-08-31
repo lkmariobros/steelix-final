@@ -115,6 +115,15 @@ export const prospects = pgTable(
 		propertyIdx: index("idx_prospects_property").on(table.property),
 		leadTypeIdx: index("idx_prospects_lead_type").on(table.leadType),
 		projectIdIdx: index("idx_prospects_project_id").on(table.projectId),
+		createdAtIdx: index("idx_prospects_created_at").on(table.createdAt),
+		statusUpdatedAtIdx: index("idx_prospects_status_updated_at").on(
+			table.status,
+			table.updatedAt,
+		),
+		stageCreatedAtIdx: index("idx_prospects_stage_created_at").on(
+			table.stage,
+			table.createdAt,
+		),
 	}),
 );
 

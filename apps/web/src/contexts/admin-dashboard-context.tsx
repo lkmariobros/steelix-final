@@ -3,16 +3,32 @@
 /**
  * AdminDashboardContext
  *
- * Fetches ALL admin dashboard data in one place so every widget reads from
- * context instead of making its own independent network requests.
+ * Fetches admin dashboard data in one place. Critical widgets (summary + queue)
+ * load first; heavier insights/performance wait until after first paint.
  */
 
 import { trpc } from "@/utils/trpc";
-import { createContext, useCallback, useContext, useState } from "react";
+import {
+	createContext,
+	useCallback,
+	useContext,
+	useEffect,
+	useMemo,
+	useState,
+} from "react";
 
 export interface AdminDateRange {
 	startDate?: Date;
 	endDate?: Date;
+}
+
+function defaultDashboardDateRange(): AdminDateRange {
+	const end = new Date();
+	end.setHours(23, 59, 59, 999);
+	const start = new Date();
+	start.setDate(start.getDate() - 90);
+	start.setHours(0, 0, 0, 0);
+	return { startDate: start, endDate: end };
 }
 
 export interface DashboardSummaryData {
@@ -144,33 +160,61 @@ const AdminDashboardContext = createContext<AdminDashboardContextValue | null>(
 export function AdminDashboardProvider({
 	children,
 }: { children: React.ReactNode }) {
-	const [dateRange, setDateRange] = useState<AdminDateRange>({});
+	const [dateRange, setDateRange] = useState<AdminDateRange>(
+		defaultDashboardDateRange,
+	);
+	const [loadSecondary, setLoadSecondary] = useState(false);
 
-	const summaryQuery = trpc.admin.getDashboardSummary.useQuery(dateRange, {
+	useEffect(() => {
+		const idle =
+			typeof window !== "undefined" && "requestIdleCallback" in window
+				? window.requestIdleCallback(() => setLoadSecondary(true), {
+						timeout: 1200,
+					})
+				: null;
+		const fallback = window.setTimeout(() => setLoadSecondary(true), 600);
+		return () => {
+			if (idle != null && "cancelIdleCallback" in window) {
+				window.cancelIdleCallback(idle);
+			}
+			window.clearTimeout(fallback);
+		};
+	}, []);
+
+	const queryRange = useMemo(
+		() => ({
+			startDate: dateRange.startDate,
+			endDate: dateRange.endDate,
+		}),
+		[dateRange.endDate, dateRange.startDate],
+	);
+
+	const summaryQuery = trpc.admin.getDashboardSummary.useQuery(queryRange, {
 		staleTime: 3 * 60_000,
 	});
 
 	const queueQuery = trpc.admin.getCommissionApprovalQueue.useQuery(
-		{ limit: 100, offset: 0, status: "pending" },
+		{ limit: 20, offset: 0, status: "pending" },
 		{ staleTime: 3 * 60_000 },
 	);
 
-	const insightsQuery = trpc.admin.getDashboardInsights.useQuery(dateRange, {
+	const insightsQuery = trpc.admin.getDashboardInsights.useQuery(queryRange, {
 		staleTime: 3 * 60_000,
+		enabled: loadSecondary,
 	});
 
 	const performanceQuery = trpc.admin.getAgentPerformance.useQuery(
-		{ dateRange },
-		{ staleTime: 3 * 60_000 },
+		{ dateRange: queryRange, limit: 24 },
+		{ staleTime: 3 * 60_000, enabled: loadSecondary },
 	);
 
 	const summaryLoading = summaryQuery.isPending;
 	const queueLoading = queueQuery.isPending;
-	const insightsLoading = insightsQuery.isPending;
-	const performanceLoading = performanceQuery.isPending;
+	const insightsLoading = loadSecondary && insightsQuery.isPending;
+	const performanceLoading = loadSecondary && performanceQuery.isPending;
 
-	const isLoading =
-		summaryLoading || queueLoading || insightsLoading || performanceLoading;
+	// First paint only waits on summary + queue
+	const isLoading = summaryLoading || queueLoading;
 
 	const isRefetching =
 		summaryQuery.isFetching ||
@@ -185,10 +229,10 @@ export function AdminDashboardProvider({
 		!!performanceQuery.error;
 
 	const refetch = useCallback(() => {
-		summaryQuery.refetch();
-		queueQuery.refetch();
-		insightsQuery.refetch();
-		performanceQuery.refetch();
+		void summaryQuery.refetch();
+		void queueQuery.refetch();
+		void insightsQuery.refetch();
+		void performanceQuery.refetch();
 	}, [summaryQuery, queueQuery, insightsQuery, performanceQuery]);
 
 	return (

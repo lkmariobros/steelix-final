@@ -1,108 +1,88 @@
 /**
- * Comprehensive query invalidation utilities for transaction data flow
- * Ensures real-time updates across admin and agent dashboards
+ * Targeted query invalidation for transaction data flow.
+ * Prefer narrow keys so dashboards do not refetch everything on every edit.
  */
 
 import type { QueryClient } from "@tanstack/react-query";
 
 /**
- * Invalidate all dashboard-related queries after transaction operations
- * This ensures both admin and agent dashboards show updated data
+ * After agent create / draft save / update / submit.
  */
 export function invalidateTransactionQueries(queryClient: QueryClient) {
-	// Agent dashboard queries
 	queryClient.invalidateQueries({
-		queryKey: ["dashboard", "getFinancialOverview"],
+		queryKey: [["transactions"]],
 	});
 	queryClient.invalidateQueries({
-		queryKey: ["dashboard", "getSalesPipeline"],
+		queryKey: [["dashboard", "getRecentTransactions"]],
 	});
 	queryClient.invalidateQueries({
-		queryKey: ["dashboard", "getTransactionStatus"],
+		queryKey: [["dashboard", "getTransactionStatus"]],
 	});
 	queryClient.invalidateQueries({
-		queryKey: ["dashboard", "getRecentTransactions"],
-	});
-
-	// Admin dashboard queries
-	queryClient.invalidateQueries({
-		queryKey: ["admin", "getDashboardSummary"],
+		queryKey: [["dashboard", "getSalesPipeline"]],
 	});
 	queryClient.invalidateQueries({
-		queryKey: ["admin", "getCommissionApprovalQueue"],
+		queryKey: [["admin", "getCommissionApprovalQueue"]],
 	});
 	queryClient.invalidateQueries({
-		queryKey: ["admin", "getAgentPerformance"],
-	});
-	queryClient.invalidateQueries({
-		queryKey: ["admin", "getUrgentTasks"],
-	});
-	queryClient.invalidateQueries({
-		queryKey: ["admin", "getDashboardInsights"],
-	});
-
-	// Transaction-specific queries
-	queryClient.invalidateQueries({
-		queryKey: ["transactions"],
+		queryKey: [["admin", "getRecordLog"]],
 	});
 }
 
 /**
- * Invalidate queries after transaction status changes (approve/reject)
- * More targeted invalidation for admin actions
+ * After admin approve / reject / status change.
  */
 export function invalidateAdminQueries(queryClient: QueryClient) {
-	// Admin-specific queries that change with approvals
 	queryClient.invalidateQueries({
-		queryKey: ["admin", "getCommissionApprovalQueue"],
+		queryKey: [["admin", "getCommissionApprovalQueue"]],
 	});
 	queryClient.invalidateQueries({
-		queryKey: ["admin", "getDashboardSummary"],
+		queryKey: [["admin", "getDashboardSummary"]],
 	});
 	queryClient.invalidateQueries({
-		queryKey: ["admin", "getAgentPerformance"],
+		queryKey: [["admin", "getUrgentTasks"]],
 	});
 	queryClient.invalidateQueries({
-		queryKey: ["admin", "getUrgentTasks"],
+		queryKey: [["admin", "getDashboardInsights"]],
 	});
 	queryClient.invalidateQueries({
-		queryKey: ["admin", "getDashboardInsights"],
-	});
-
-	// Also update agent dashboards as their transaction status changed
-	queryClient.invalidateQueries({
-		queryKey: ["dashboard", "getFinancialOverview"],
+		queryKey: [["transactions"]],
 	});
 	queryClient.invalidateQueries({
-		queryKey: ["dashboard", "getSalesPipeline"],
+		queryKey: [["dashboard", "getRecentTransactions"]],
 	});
 	queryClient.invalidateQueries({
-		queryKey: ["dashboard", "getTransactionStatus"],
+		queryKey: [["dashboard", "getTransactionStatus"]],
+	});
+	queryClient.invalidateQueries({
+		queryKey: [["admin", "getRecordLog"]],
 	});
 }
 
 /**
- * Invalidate queries after agent-specific actions
- * More targeted invalidation for agent operations
+ * After agent-only actions that should refresh agent home widgets.
  */
 export function invalidateAgentQueries(queryClient: QueryClient) {
-	// Agent dashboard queries
 	queryClient.invalidateQueries({
-		queryKey: ["dashboard"],
-	});
-
-	// Also update admin views as they aggregate agent data
-	queryClient.invalidateQueries({
-		queryKey: ["admin", "getDashboardSummary"],
+		queryKey: [["dashboard", "getFinancialOverview"]],
 	});
 	queryClient.invalidateQueries({
-		queryKey: ["admin", "getAgentPerformance"],
+		queryKey: [["dashboard", "getSalesPipeline"]],
+	});
+	queryClient.invalidateQueries({
+		queryKey: [["dashboard", "getTransactionStatus"]],
+	});
+	queryClient.invalidateQueries({
+		queryKey: [["dashboard", "getRecentTransactions"]],
+	});
+	queryClient.invalidateQueries({
+		queryKey: [["transactions"]],
 	});
 }
 
 /**
- * Force refresh all transaction-related data
- * Use sparingly - for major data changes or user role changes
+ * Force refresh all transaction-related data.
+ * Use sparingly — for major data changes or user role changes.
  */
 export function forceRefreshAllQueries(queryClient: QueryClient) {
 	queryClient.invalidateQueries();
@@ -110,8 +90,8 @@ export function forceRefreshAllQueries(queryClient: QueryClient) {
 }
 
 /**
- * Optimistic update helper for transaction status changes
- * Updates local cache immediately before server response
+ * Optimistic update helper for transaction status changes.
+ * Updates local cache immediately before server response.
  */
 export function optimisticUpdateTransaction(
 	queryClient: QueryClient,
@@ -122,7 +102,7 @@ export function optimisticUpdateTransaction(
 		transactions?: Array<{ id: string; [k: string]: unknown }>;
 	};
 	queryClient.setQueryData(
-		["admin", "getCommissionApprovalQueue"],
+		[["admin", "getCommissionApprovalQueue"]],
 		(oldData: OldQueue | undefined) => {
 			if (!oldData?.transactions) return oldData;
 
@@ -139,7 +119,7 @@ export function optimisticUpdateTransaction(
 
 	type TransactionItem = { id: string; [k: string]: unknown };
 	queryClient.setQueryData(
-		["dashboard", "getRecentTransactions"],
+		[["dashboard", "getRecentTransactions"]],
 		(oldData: TransactionItem[] | undefined) => {
 			if (!Array.isArray(oldData)) return oldData;
 

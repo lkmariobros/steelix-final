@@ -57,6 +57,7 @@ import {
 } from "@remixicon/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { toast } from "sonner";
 import { ImportTagsDialog } from "./_components/import-tags-dialog";
 
@@ -81,6 +82,7 @@ export default function AdminTagsPage() {
 	const queryClient = useQueryClient();
 	const { data: session } = authClient.useSession();
 	const [searchQuery, setSearchQuery] = useState("");
+	const debouncedSearch = useDebouncedValue(searchQuery, 300);
 	const [currentPage, setCurrentPage] = useState(1);
 	const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
 	const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
@@ -97,7 +99,7 @@ export default function AdminTagsPage() {
 		refetch: refetchTags,
 	} = trpc.tags.list.useQuery(
 		{
-			search: searchQuery || undefined,
+			search: debouncedSearch || undefined,
 			page: currentPage,
 			limit: itemsPerPage,
 		},
@@ -105,6 +107,7 @@ export default function AdminTagsPage() {
 			enabled: !!session,
 			retry: 1,
 			staleTime: 30000,
+			placeholderData: (prev) => prev,
 		},
 	);
 

@@ -527,6 +527,60 @@ export const crmRouter = router({
 		}),
 
 	/**
+	 * Lightweight aggregates for the agent CRM summary cards
+	 * (assigned personal leads only — no row payload).
+	 */
+	stats: protectedProcedure.query(async ({ ctx }) => {
+		const agentId = ctx.session.user.id;
+		const conditions = and(
+			eq(prospects.leadType, "personal"),
+			eq(prospects.agentId, agentId),
+		);
+
+		const [totalRow] = await db
+			.select({ count: sql<number>`count(*)` })
+			.from(prospects)
+			.where(conditions);
+
+		const statusRows = await db
+			.select({
+				status: prospects.status,
+				count: sql<number>`count(*)`,
+			})
+			.from(prospects)
+			.where(conditions)
+			.groupBy(prospects.status);
+
+		const stageRows = await db
+			.select({
+				stage: prospects.stage,
+				count: sql<number>`count(*)`,
+			})
+			.from(prospects)
+			.where(conditions)
+			.groupBy(prospects.stage);
+
+		const byStatus = { active: 0, inactive: 0, pending: 0 };
+		for (const row of statusRows) {
+			const s = row.status as keyof typeof byStatus;
+			if (s in byStatus) byStatus[s] = Number(row.count);
+		}
+
+		const byStage: Record<string, number> = {};
+		for (const row of stageRows) {
+			byStage[row.stage] = Number(row.count);
+		}
+
+		return {
+			total: Number(totalRow?.count ?? 0),
+			byStatus,
+			byStage,
+			potential: byStage.potential_lead ?? 0,
+			appointmentsMade: byStage.appointment_made ?? 0,
+		};
+	}),
+
+	/**
 	 * Bulk import prospects from CSV (same columns as admin export).
 	 * personal_assigned → your CRM (personal leads assigned to you).
 	 * company_unclaimed → company pool (unclaimed company leads).

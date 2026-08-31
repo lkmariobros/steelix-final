@@ -1,12 +1,7 @@
 "use client";
 
-import { AppSidebar } from "@/components/app-sidebar";
 import { HeaderActions } from "@/components/header-actions";
-import {
-	SidebarInset,
-	SidebarProvider,
-	SidebarTrigger,
-} from "@/components/sidebar";
+import { SidebarTrigger } from "@/components/sidebar";
 import { Badge } from "@/components/ui/badge";
 import {
 	Breadcrumb,
@@ -280,633 +275,630 @@ export default function AutoReplyPage() {
 	}
 
 	return (
-		<SidebarProvider>
-			<AppSidebar />
-			<SidebarInset className="overflow-hidden px-4 md:px-6 lg:px-8">
-				<header className="flex h-16 shrink-0 items-center gap-2 border-b">
-					<div className="flex flex-1 items-center gap-2 px-3">
-						<SidebarTrigger className="-ms-4" />
-						<Separator
-							orientation="vertical"
-							className="mr-2 data-[orientation=vertical]:h-4"
+		<>
+			<header className="flex h-16 shrink-0 items-center gap-2 border-b">
+				<div className="flex flex-1 items-center gap-2 px-3">
+					<SidebarTrigger className="-ms-4" />
+					<Separator
+						orientation="vertical"
+						className="mr-2 data-[orientation=vertical]:h-4"
+					/>
+					<Breadcrumb>
+						<BreadcrumbList>
+							<BreadcrumbItem className="hidden md:block">
+								<BreadcrumbLink href="/dashboard">
+									<RiDashboardLine size={22} aria-hidden="true" />
+									<span className="sr-only">Dashboard</span>
+								</BreadcrumbLink>
+							</BreadcrumbItem>
+							<BreadcrumbSeparator className="hidden md:block" />
+							<BreadcrumbItem>
+								<BreadcrumbPage className="flex items-center gap-2">
+									<RiSettings3Line size={18} />
+									Auto-Reply
+								</BreadcrumbPage>
+							</BreadcrumbItem>
+						</BreadcrumbList>
+					</Breadcrumb>
+				</div>
+				<div className="ml-auto flex gap-3">
+					<HeaderActions />
+				</div>
+			</header>
+			<div className="flex flex-1 flex-col gap-4 py-4 lg:gap-6 lg:py-6">
+				{/* Page Header */}
+				<div className="flex items-center justify-between">
+					<h1 className="font-semibold text-2xl">Auto-Reply Rules</h1>
+					<Button onClick={handleCreateClick} size="sm" className="gap-2">
+						<RiAddLine className="h-4 w-4" />
+						Create Rule
+					</Button>
+				</div>
+
+				{/* Search and Filters */}
+				<div className="flex items-center gap-3">
+					<div className="relative flex-1">
+						<RiSearchLine className="-translate-y-1/2 absolute top-1/2 left-3 size-4 text-muted-foreground" />
+						<Input
+							placeholder="Search rules..."
+							value={searchQuery}
+							onChange={(e) => setSearchQuery(e.target.value)}
+							className="pl-9"
 						/>
-						<Breadcrumb>
-							<BreadcrumbList>
-								<BreadcrumbItem className="hidden md:block">
-									<BreadcrumbLink href="/dashboard">
-										<RiDashboardLine size={22} aria-hidden="true" />
-										<span className="sr-only">Dashboard</span>
-									</BreadcrumbLink>
-								</BreadcrumbItem>
-								<BreadcrumbSeparator className="hidden md:block" />
-								<BreadcrumbItem>
-									<BreadcrumbPage className="flex items-center gap-2">
-										<RiSettings3Line size={18} />
-										Auto-Reply
-									</BreadcrumbPage>
-								</BreadcrumbItem>
-							</BreadcrumbList>
-						</Breadcrumb>
 					</div>
-					<div className="ml-auto flex gap-3">
-						<HeaderActions />
-					</div>
-				</header>
-				<div className="flex flex-1 flex-col gap-4 py-4 lg:gap-6 lg:py-6">
-					{/* Page Header */}
-					<div className="flex items-center justify-between">
-						<h1 className="font-semibold text-2xl">Auto-Reply Rules</h1>
-						<Button onClick={handleCreateClick} size="sm" className="gap-2">
-							<RiAddLine className="h-4 w-4" />
-							Create Rule
-						</Button>
-					</div>
+					<Select
+						value={statusFilter}
+						onValueChange={(value) =>
+							setStatusFilter(value as "all" | "tenant" | "owner")
+						}
+					>
+						<SelectTrigger className="w-40">
+							<SelectValue placeholder="Status" />
+						</SelectTrigger>
+						<SelectContent>
+							<SelectItem value="all">Status: All</SelectItem>
+							<SelectItem value="owner">Status: Owner</SelectItem>
+							<SelectItem value="tenant">Status: Tenant</SelectItem>
+						</SelectContent>
+					</Select>
+					<Select
+						value={sortBy}
+						onValueChange={(value) => setSortBy(value as "owner" | "status")}
+					>
+						<SelectTrigger className="w-48">
+							<SelectValue placeholder="Sort" />
+						</SelectTrigger>
+						<SelectContent>
+							<SelectItem value="status">Sort: Status</SelectItem>
+							<SelectItem value="owner">Sort: Owner Name</SelectItem>
+						</SelectContent>
+					</Select>
+				</div>
 
-					{/* Search and Filters */}
-					<div className="flex items-center gap-3">
-						<div className="relative flex-1">
-							<RiSearchLine className="-translate-y-1/2 absolute top-1/2 left-3 size-4 text-muted-foreground" />
-							<Input
-								placeholder="Search rules..."
-								value={searchQuery}
-								onChange={(e) => setSearchQuery(e.target.value)}
-								className="pl-9"
-							/>
-						</div>
-						<Select
-							value={statusFilter}
-							onValueChange={(value) =>
-								setStatusFilter(value as "all" | "tenant" | "owner")
-							}
-						>
-							<SelectTrigger className="w-40">
-								<SelectValue placeholder="Status" />
-							</SelectTrigger>
-							<SelectContent>
-								<SelectItem value="all">Status: All</SelectItem>
-								<SelectItem value="owner">Status: Owner</SelectItem>
-								<SelectItem value="tenant">Status: Tenant</SelectItem>
-							</SelectContent>
-						</Select>
-						<Select
-							value={sortBy}
-							onValueChange={(value) => setSortBy(value as "owner" | "status")}
-						>
-							<SelectTrigger className="w-48">
-								<SelectValue placeholder="Sort" />
-							</SelectTrigger>
-							<SelectContent>
-								<SelectItem value="status">Sort: Status</SelectItem>
-								<SelectItem value="owner">Sort: Owner Name</SelectItem>
-							</SelectContent>
-						</Select>
-					</div>
-
-					{/* Rules List */}
-					<div className="flex flex-col gap-6">
-						{isLoadingRules ? (
-							<div className="flex flex-col gap-6">
-								{["sk-1", "sk-2", "sk-3"].map((id) => (
-									<Card key={id} className="border-2">
-										<CardContent className="pt-6">
-											<div className="space-y-4">
-												{/* Message owner row */}
-												<div className="flex items-center justify-between rounded-md border-2 border-muted p-3">
-													<div className="flex items-center gap-2.5">
-														<Skeleton className="h-5 w-5 rounded" />
-														<Skeleton className="h-5 w-36" />
-													</div>
-													<Skeleton className="h-5 w-16 rounded-full" />
-												</div>
-												{/* Trigger block */}
-												<div className="rounded-md bg-muted/30 p-3">
-													<div className="mb-2 flex items-center gap-2">
-														<Skeleton className="h-4 w-4 rounded" />
-														<Skeleton className="h-4 w-24" />
-													</div>
-													<div className="flex flex-wrap gap-2">
-														<Skeleton className="h-5 w-16 rounded-full" />
-														<Skeleton className="h-5 w-20 rounded-full" />
-													</div>
-												</div>
-												{/* Response block */}
-												<div className="rounded-md bg-muted/30 p-3">
-													<Skeleton className="mb-2 h-4 w-20" />
-													<Skeleton className="h-4 w-full" />
-													<Skeleton className="mt-1 h-4 w-4/5" />
-												</div>
-												{/* Action buttons */}
-												<div className="flex justify-end gap-2">
-													<Skeleton className="h-8 w-8 rounded-md" />
-													<Skeleton className="h-8 w-8 rounded-md" />
-												</div>
-											</div>
-										</CardContent>
-									</Card>
-								))}
-							</div>
-						) : rulesError ? (
-							<div className="py-12 text-center">
-								<div className="mb-2 text-red-500">Error loading rules</div>
-								<div className="text-muted-foreground text-sm">
-									{rulesError.message}
-								</div>
-								<Button
-									variant="outline"
-									size="sm"
-									onClick={() => refetchRules()}
-									className="mt-4"
-								>
-									Retry
-								</Button>
-							</div>
-						) : rules.length === 0 ? (
-							<div className="py-12 text-center text-muted-foreground">
-								No auto-reply rules found. Create your first rule to get
-								started.
-							</div>
-						) : (
-							rules.map((rule) => (
-								<Card key={rule.id} className="border-2">
-									<CardContent>
-										<div className="space-y-6">
-											{/* Message Owner - with green border outline */}
-											<div className="flex items-center justify-between rounded-md border-2 border-green-500 bg-muted/30 p-3">
+				{/* Rules List */}
+				<div className="flex flex-col gap-6">
+					{isLoadingRules ? (
+						<div className="flex flex-col gap-6">
+							{["sk-1", "sk-2", "sk-3"].map((id) => (
+								<Card key={id} className="border-2">
+									<CardContent className="pt-6">
+										<div className="space-y-4">
+											{/* Message owner row */}
+											<div className="flex items-center justify-between rounded-md border-2 border-muted p-3">
 												<div className="flex items-center gap-2.5">
-													<RiUserLine className="size-5 text-foreground" />
-													<span className="font-semibold text-base text-foreground">
-														{rule.messageOwner}
-													</span>
+													<Skeleton className="h-5 w-5 rounded" />
+													<Skeleton className="h-5 w-36" />
 												</div>
-												<Badge
-													variant="outline"
-													className={`font-semibold text-xs ${
-														rule.status === "owner"
-															? "border-blue-500 text-blue-600 dark:text-blue-400"
-															: "border-purple-500 text-purple-600 dark:text-purple-400"
-													}`}
-												>
-													{rule.status === "owner" ? "Owner" : "Tenant"}
-												</Badge>
+												<Skeleton className="h-5 w-16 rounded-full" />
 											</div>
-
-											{/* Trigger */}
-											<div className="space-y-3">
-												<div className="font-bold text-foreground text-sm uppercase tracking-wider">
-													TRIGGER:
+											{/* Trigger block */}
+											<div className="rounded-md bg-muted/30 p-3">
+												<div className="mb-2 flex items-center gap-2">
+													<Skeleton className="h-4 w-4 rounded" />
+													<Skeleton className="h-4 w-24" />
 												</div>
-												<div className="text-base text-foreground">
-													{rule.trigger.type === "contains" &&
-														"Message contains: "}
-													{rule.trigger.type === "equals" && "Message equals: "}
-													{rule.trigger.type === "starts_with" &&
-														"Message starts with: "}
-													{rule.trigger.type === "regex" &&
-														"Message matches regex: "}
-													<span className="font-semibold">
-														"{rule.trigger.keywords.join('" or "')}"
-													</span>
+												<div className="flex flex-wrap gap-2">
+													<Skeleton className="h-5 w-16 rounded-full" />
+													<Skeleton className="h-5 w-20 rounded-full" />
 												</div>
 											</div>
-
-											{/* Response */}
-											<div className="space-y-3">
-												<div className="font-bold text-foreground text-sm uppercase tracking-wider">
-													RESPONSE:
-												</div>
-												<div className="relative">
-													<Input
-														value={`"${rule.response}"`}
-														readOnly
-														className="cursor-default rounded-md border border-border bg-muted/60 px-4 py-3 font-normal text-base text-foreground"
-													/>
-												</div>
+											{/* Response block */}
+											<div className="rounded-md bg-muted/30 p-3">
+												<Skeleton className="mb-2 h-4 w-20" />
+												<Skeleton className="h-4 w-full" />
+												<Skeleton className="mt-1 h-4 w-4/5" />
 											</div>
-
-											{/* Action Buttons */}
-											<div className="flex items-center gap-2 border-t pt-4">
-												<Button
-													variant="outline"
-													size="sm"
-													onClick={() => handleEditClick(rule)}
-													className="border-blue-500 text-blue-600 hover:bg-blue-50 hover:text-blue-700 dark:border-blue-500/50 dark:text-blue-400 dark:hover:bg-blue-500/10 dark:hover:text-blue-300"
-												>
-													<RiEditLine className="mr-2 h-4 w-4" />
-													Edit
-												</Button>
-												<Button
-													variant="outline"
-													size="sm"
-													onClick={() => handleDeleteClick(rule)}
-													className="border-red-500 text-red-600 hover:bg-red-50 hover:text-red-700 dark:border-red-500/50 dark:text-red-400 dark:hover:bg-red-500/10 dark:hover:text-red-300"
-												>
-													<RiDeleteBinLine className="mr-2 h-4 w-4" />
-													Delete
-												</Button>
+											{/* Action buttons */}
+											<div className="flex justify-end gap-2">
+												<Skeleton className="h-8 w-8 rounded-md" />
+												<Skeleton className="h-8 w-8 rounded-md" />
 											</div>
 										</div>
 									</CardContent>
 								</Card>
-							))
-						)}
-					</div>
-
-					{/* Summary */}
-					<div className="flex items-center justify-between border-t pt-4">
-						<div className="text-muted-foreground text-sm">
-							Total Rules: <span className="font-medium">{summary.total}</span>{" "}
-							| Owner:{" "}
-							<span className="font-medium text-blue-600 dark:text-blue-400">
-								{summary.owner}
-							</span>{" "}
-							| Tenant:{" "}
-							<span className="font-medium text-purple-600 dark:text-purple-400">
-								{summary.tenant}
-							</span>
+							))}
 						</div>
-					</div>
-				</div>
-
-				{/* Create Rule Dialog */}
-				<Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-					<DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[600px]">
-						<DialogHeader>
-							<DialogTitle className="flex items-center gap-2">
-								<RiAddLine className="size-5" />
-								Create Auto-Reply Rule
-							</DialogTitle>
-							<DialogDescription>
-								Create a new auto-reply rule that will automatically respond to
-								incoming messages.
-							</DialogDescription>
-						</DialogHeader>
-
-						<div className="space-y-4 py-4">
-							{/* Trigger Type */}
-							<div className="space-y-2">
-								<Label htmlFor="trigger-type">Trigger Type *</Label>
-								<Select
-									value={formTriggerType}
-									onValueChange={(value) =>
-										setFormTriggerType(value as typeof formTriggerType)
-									}
-								>
-									<SelectTrigger id="trigger-type">
-										<SelectValue />
-									</SelectTrigger>
-									<SelectContent>
-										<SelectItem value="contains">Contains</SelectItem>
-										<SelectItem value="equals">Equals</SelectItem>
-										<SelectItem value="starts_with">Starts With</SelectItem>
-										<SelectItem value="regex">Regex</SelectItem>
-									</SelectContent>
-								</Select>
-								<p className="text-muted-foreground text-xs">
-									{formTriggerType === "contains" &&
-										"Message contains any of the keywords"}
-									{formTriggerType === "equals" &&
-										"Message exactly equals one of the keywords"}
-									{formTriggerType === "starts_with" &&
-										"Message starts with one of the keywords"}
-									{formTriggerType === "regex" &&
-										"Message matches the regex pattern"}
-								</p>
+					) : rulesError ? (
+						<div className="py-12 text-center">
+							<div className="mb-2 text-red-500">Error loading rules</div>
+							<div className="text-muted-foreground text-sm">
+								{rulesError.message}
 							</div>
-
-							{/* Keywords */}
-							<div className="space-y-2">
-								<Label htmlFor="keywords">Keywords * (comma-separated)</Label>
-								<Input
-									id="keywords"
-									value={formKeywords}
-									onChange={(e) => setFormKeywords(e.target.value)}
-									placeholder="hello, hi, greeting"
-								/>
-								<p className="text-muted-foreground text-xs">
-									Separate multiple keywords with commas
-								</p>
-							</div>
-
-							{/* Response */}
-							<div className="space-y-2">
-								<Label htmlFor="response">Response Message *</Label>
-								<Textarea
-									id="response"
-									value={formResponse}
-									onChange={(e) => setFormResponse(e.target.value)}
-									placeholder="Thank you for your message. We'll get back to you soon!"
-									rows={4}
-								/>
-							</div>
-
-							{/* Message Owner */}
-							<div className="space-y-2">
-								<Label htmlFor="message-owner">Message Owner *</Label>
-								<Input
-									id="message-owner"
-									value={formMessageOwner}
-									onChange={(e) => setFormMessageOwner(e.target.value)}
-									placeholder="Agent Name"
-								/>
-								<p className="text-muted-foreground text-xs">
-									The name of the agent or user who created this rule
-								</p>
-							</div>
-
-							{/* Status */}
-							<div className="space-y-2">
-								<Label htmlFor="status">Status *</Label>
-								<Select
-									value={formStatus}
-									onValueChange={(value) =>
-										setFormStatus(value as typeof formStatus)
-									}
-								>
-									<SelectTrigger id="status">
-										<SelectValue />
-									</SelectTrigger>
-									<SelectContent>
-										<SelectItem value="owner">Owner</SelectItem>
-										<SelectItem value="tenant">Tenant</SelectItem>
-									</SelectContent>
-								</Select>
-							</div>
-						</div>
-
-						<DialogFooter>
 							<Button
 								variant="outline"
-								onClick={() => {
-									setIsCreateDialogOpen(false);
-									resetForm();
-								}}
-								disabled={createRuleMutation.isPending}
+								size="sm"
+								onClick={() => refetchRules()}
+								className="mt-4"
 							>
-								Cancel
+								Retry
 							</Button>
-							<Button
-								onClick={handleCreateSubmit}
-								disabled={createRuleMutation.isPending}
-							>
-								{createRuleMutation.isPending ? (
-									<>
-										<RiLoader4Line className="mr-2 h-4 w-4 animate-spin" />
-										Creating...
-									</>
-								) : (
-									<>
-										<RiAddLine className="mr-2 h-4 w-4" />
-										Create Rule
-									</>
-								)}
-							</Button>
-						</DialogFooter>
-					</DialogContent>
-				</Dialog>
-
-				{/* Edit Rule Dialog */}
-				<Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-					<DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[600px]">
-						<DialogHeader>
-							<DialogTitle className="flex items-center gap-2">
-								<RiEditLine className="size-5" />
-								Edit Auto-Reply Rule
-							</DialogTitle>
-							<DialogDescription>
-								Update the auto-reply rule settings.
-							</DialogDescription>
-						</DialogHeader>
-
-						<div className="space-y-4 py-4">
-							{/* Trigger Type */}
-							<div className="space-y-2">
-								<Label htmlFor="edit-trigger-type">Trigger Type *</Label>
-								<Select
-									value={formTriggerType}
-									onValueChange={(value) =>
-										setFormTriggerType(value as typeof formTriggerType)
-									}
-								>
-									<SelectTrigger id="edit-trigger-type">
-										<SelectValue />
-									</SelectTrigger>
-									<SelectContent>
-										<SelectItem value="contains">Contains</SelectItem>
-										<SelectItem value="equals">Equals</SelectItem>
-										<SelectItem value="starts_with">Starts With</SelectItem>
-										<SelectItem value="regex">Regex</SelectItem>
-									</SelectContent>
-								</Select>
-								<p className="text-muted-foreground text-xs">
-									{formTriggerType === "contains" &&
-										"Message contains any of the keywords"}
-									{formTriggerType === "equals" &&
-										"Message exactly equals one of the keywords"}
-									{formTriggerType === "starts_with" &&
-										"Message starts with one of the keywords"}
-									{formTriggerType === "regex" &&
-										"Message matches the regex pattern"}
-								</p>
-							</div>
-
-							{/* Keywords */}
-							<div className="space-y-2">
-								<Label htmlFor="edit-keywords">
-									Keywords * (comma-separated)
-								</Label>
-								<Input
-									id="edit-keywords"
-									value={formKeywords}
-									onChange={(e) => setFormKeywords(e.target.value)}
-									placeholder="hello, hi, greeting"
-								/>
-								<p className="text-muted-foreground text-xs">
-									Separate multiple keywords with commas
-								</p>
-							</div>
-
-							{/* Response */}
-							<div className="space-y-2">
-								<Label htmlFor="edit-response">Response Message *</Label>
-								<Textarea
-									id="edit-response"
-									value={formResponse}
-									onChange={(e) => setFormResponse(e.target.value)}
-									placeholder="Thank you for your message. We'll get back to you soon!"
-									rows={4}
-								/>
-							</div>
-
-							{/* Message Owner */}
-							<div className="space-y-2">
-								<Label htmlFor="edit-message-owner">Message Owner *</Label>
-								<Input
-									id="edit-message-owner"
-									value={formMessageOwner}
-									onChange={(e) => setFormMessageOwner(e.target.value)}
-									placeholder="Agent Name"
-								/>
-								<p className="text-muted-foreground text-xs">
-									The name of the agent or user who created this rule
-								</p>
-							</div>
-
-							{/* Status */}
-							<div className="space-y-2">
-								<Label htmlFor="edit-status">Status *</Label>
-								<Select
-									value={formStatus}
-									onValueChange={(value) =>
-										setFormStatus(value as typeof formStatus)
-									}
-								>
-									<SelectTrigger id="edit-status">
-										<SelectValue />
-									</SelectTrigger>
-									<SelectContent>
-										<SelectItem value="owner">Owner</SelectItem>
-										<SelectItem value="tenant">Tenant</SelectItem>
-									</SelectContent>
-								</Select>
-							</div>
 						</div>
-
-						<DialogFooter>
-							<Button
-								variant="outline"
-								onClick={() => {
-									setIsEditDialogOpen(false);
-									setRuleToEdit(null);
-									resetForm();
-								}}
-								disabled={updateRuleMutation.isPending}
-							>
-								Cancel
-							</Button>
-							<Button
-								onClick={handleEditSubmit}
-								disabled={updateRuleMutation.isPending}
-							>
-								{updateRuleMutation.isPending ? (
-									<>
-										<RiLoader4Line className="mr-2 h-4 w-4 animate-spin" />
-										Updating...
-									</>
-								) : (
-									<>
-										<RiEditLine className="mr-2 h-4 w-4" />
-										Update Rule
-									</>
-								)}
-							</Button>
-						</DialogFooter>
-					</DialogContent>
-				</Dialog>
-
-				{/* Delete Confirmation Dialog */}
-				<Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-					<DialogContent className="sm:max-w-[500px]">
-						<DialogHeader>
-							<DialogTitle className="flex items-center gap-2 text-red-600 dark:text-red-400">
-								<RiAlertLine className="size-5" />
-								Delete Auto-Reply Rule
-							</DialogTitle>
-							<DialogDescription>
-								Are you sure you want to delete this auto-reply rule? This
-								action cannot be undone.
-							</DialogDescription>
-						</DialogHeader>
-
-						{ruleToDelete && (
-							<div className="py-4">
-								<div className="rounded-lg border bg-muted/30 p-4">
-									<div className="space-y-4">
-										{/* Message Owner */}
+					) : rules.length === 0 ? (
+						<div className="py-12 text-center text-muted-foreground">
+							No auto-reply rules found. Create your first rule to get
+							started.
+						</div>
+					) : (
+						rules.map((rule) => (
+							<Card key={rule.id} className="border-2">
+								<CardContent>
+									<div className="space-y-6">
+										{/* Message Owner - with green border outline */}
 										<div className="flex items-center justify-between rounded-md border-2 border-green-500 bg-muted/30 p-3">
 											<div className="flex items-center gap-2.5">
 												<RiUserLine className="size-5 text-foreground" />
 												<span className="font-semibold text-base text-foreground">
-													{ruleToDelete.messageOwner}
+													{rule.messageOwner}
 												</span>
 											</div>
 											<Badge
 												variant="outline"
 												className={`font-semibold text-xs ${
-													ruleToDelete.status === "owner"
+													rule.status === "owner"
 														? "border-blue-500 text-blue-600 dark:text-blue-400"
 														: "border-purple-500 text-purple-600 dark:text-purple-400"
 												}`}
 											>
-												{ruleToDelete.status === "owner" ? "Owner" : "Tenant"}
+												{rule.status === "owner" ? "Owner" : "Tenant"}
 											</Badge>
 										</div>
 
 										{/* Trigger */}
-										<div className="space-y-2">
+										<div className="space-y-3">
 											<div className="font-bold text-foreground text-sm uppercase tracking-wider">
 												TRIGGER:
 											</div>
 											<div className="text-base text-foreground">
-												{ruleToDelete.trigger.type === "contains" &&
+												{rule.trigger.type === "contains" &&
 													"Message contains: "}
-												{ruleToDelete.trigger.type === "equals" &&
-													"Message equals: "}
-												{ruleToDelete.trigger.type === "starts_with" &&
+												{rule.trigger.type === "equals" && "Message equals: "}
+												{rule.trigger.type === "starts_with" &&
 													"Message starts with: "}
-												{ruleToDelete.trigger.type === "regex" &&
+												{rule.trigger.type === "regex" &&
 													"Message matches regex: "}
 												<span className="font-semibold">
-													"{ruleToDelete.trigger.keywords.join('" or "')}"
+													"{rule.trigger.keywords.join('" or "')}"
 												</span>
 											</div>
 										</div>
 
 										{/* Response */}
-										<div className="space-y-2">
+										<div className="space-y-3">
 											<div className="font-bold text-foreground text-sm uppercase tracking-wider">
 												RESPONSE:
 											</div>
-											<div className="rounded-md border border-border bg-muted/60 p-3 text-foreground text-sm">
-												"{ruleToDelete.response}"
+											<div className="relative">
+												<Input
+													value={`"${rule.response}"`}
+													readOnly
+													className="cursor-default rounded-md border border-border bg-muted/60 px-4 py-3 font-normal text-base text-foreground"
+												/>
 											</div>
+										</div>
+
+										{/* Action Buttons */}
+										<div className="flex items-center gap-2 border-t pt-4">
+											<Button
+												variant="outline"
+												size="sm"
+												onClick={() => handleEditClick(rule)}
+												className="border-blue-500 text-blue-600 hover:bg-blue-50 hover:text-blue-700 dark:border-blue-500/50 dark:text-blue-400 dark:hover:bg-blue-500/10 dark:hover:text-blue-300"
+											>
+												<RiEditLine className="mr-2 h-4 w-4" />
+												Edit
+											</Button>
+											<Button
+												variant="outline"
+												size="sm"
+												onClick={() => handleDeleteClick(rule)}
+												className="border-red-500 text-red-600 hover:bg-red-50 hover:text-red-700 dark:border-red-500/50 dark:text-red-400 dark:hover:bg-red-500/10 dark:hover:text-red-300"
+											>
+												<RiDeleteBinLine className="mr-2 h-4 w-4" />
+												Delete
+											</Button>
+										</div>
+									</div>
+								</CardContent>
+							</Card>
+						))
+					)}
+				</div>
+
+				{/* Summary */}
+				<div className="flex items-center justify-between border-t pt-4">
+					<div className="text-muted-foreground text-sm">
+						Total Rules: <span className="font-medium">{summary.total}</span>{" "}
+						| Owner:{" "}
+						<span className="font-medium text-blue-600 dark:text-blue-400">
+							{summary.owner}
+						</span>{" "}
+						| Tenant:{" "}
+						<span className="font-medium text-purple-600 dark:text-purple-400">
+							{summary.tenant}
+						</span>
+					</div>
+				</div>
+			</div>
+
+			{/* Create Rule Dialog */}
+			<Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+				<DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[600px]">
+					<DialogHeader>
+						<DialogTitle className="flex items-center gap-2">
+							<RiAddLine className="size-5" />
+							Create Auto-Reply Rule
+						</DialogTitle>
+						<DialogDescription>
+							Create a new auto-reply rule that will automatically respond to
+							incoming messages.
+						</DialogDescription>
+					</DialogHeader>
+
+					<div className="space-y-4 py-4">
+						{/* Trigger Type */}
+						<div className="space-y-2">
+							<Label htmlFor="trigger-type">Trigger Type *</Label>
+							<Select
+								value={formTriggerType}
+								onValueChange={(value) =>
+									setFormTriggerType(value as typeof formTriggerType)
+								}
+							>
+								<SelectTrigger id="trigger-type">
+									<SelectValue />
+								</SelectTrigger>
+								<SelectContent>
+									<SelectItem value="contains">Contains</SelectItem>
+									<SelectItem value="equals">Equals</SelectItem>
+									<SelectItem value="starts_with">Starts With</SelectItem>
+									<SelectItem value="regex">Regex</SelectItem>
+								</SelectContent>
+							</Select>
+							<p className="text-muted-foreground text-xs">
+								{formTriggerType === "contains" &&
+									"Message contains any of the keywords"}
+								{formTriggerType === "equals" &&
+									"Message exactly equals one of the keywords"}
+								{formTriggerType === "starts_with" &&
+									"Message starts with one of the keywords"}
+								{formTriggerType === "regex" &&
+									"Message matches the regex pattern"}
+							</p>
+						</div>
+
+						{/* Keywords */}
+						<div className="space-y-2">
+							<Label htmlFor="keywords">Keywords * (comma-separated)</Label>
+							<Input
+								id="keywords"
+								value={formKeywords}
+								onChange={(e) => setFormKeywords(e.target.value)}
+								placeholder="hello, hi, greeting"
+							/>
+							<p className="text-muted-foreground text-xs">
+								Separate multiple keywords with commas
+							</p>
+						</div>
+
+						{/* Response */}
+						<div className="space-y-2">
+							<Label htmlFor="response">Response Message *</Label>
+							<Textarea
+								id="response"
+								value={formResponse}
+								onChange={(e) => setFormResponse(e.target.value)}
+								placeholder="Thank you for your message. We'll get back to you soon!"
+								rows={4}
+							/>
+						</div>
+
+						{/* Message Owner */}
+						<div className="space-y-2">
+							<Label htmlFor="message-owner">Message Owner *</Label>
+							<Input
+								id="message-owner"
+								value={formMessageOwner}
+								onChange={(e) => setFormMessageOwner(e.target.value)}
+								placeholder="Agent Name"
+							/>
+							<p className="text-muted-foreground text-xs">
+								The name of the agent or user who created this rule
+							</p>
+						</div>
+
+						{/* Status */}
+						<div className="space-y-2">
+							<Label htmlFor="status">Status *</Label>
+							<Select
+								value={formStatus}
+								onValueChange={(value) =>
+									setFormStatus(value as typeof formStatus)
+								}
+							>
+								<SelectTrigger id="status">
+									<SelectValue />
+								</SelectTrigger>
+								<SelectContent>
+									<SelectItem value="owner">Owner</SelectItem>
+									<SelectItem value="tenant">Tenant</SelectItem>
+								</SelectContent>
+							</Select>
+						</div>
+					</div>
+
+					<DialogFooter>
+						<Button
+							variant="outline"
+							onClick={() => {
+								setIsCreateDialogOpen(false);
+								resetForm();
+							}}
+							disabled={createRuleMutation.isPending}
+						>
+							Cancel
+						</Button>
+						<Button
+							onClick={handleCreateSubmit}
+							disabled={createRuleMutation.isPending}
+						>
+							{createRuleMutation.isPending ? (
+								<>
+									<RiLoader4Line className="mr-2 h-4 w-4 animate-spin" />
+									Creating...
+								</>
+							) : (
+								<>
+									<RiAddLine className="mr-2 h-4 w-4" />
+									Create Rule
+								</>
+							)}
+						</Button>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
+
+			{/* Edit Rule Dialog */}
+			<Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+				<DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[600px]">
+					<DialogHeader>
+						<DialogTitle className="flex items-center gap-2">
+							<RiEditLine className="size-5" />
+							Edit Auto-Reply Rule
+						</DialogTitle>
+						<DialogDescription>
+							Update the auto-reply rule settings.
+						</DialogDescription>
+					</DialogHeader>
+
+					<div className="space-y-4 py-4">
+						{/* Trigger Type */}
+						<div className="space-y-2">
+							<Label htmlFor="edit-trigger-type">Trigger Type *</Label>
+							<Select
+								value={formTriggerType}
+								onValueChange={(value) =>
+									setFormTriggerType(value as typeof formTriggerType)
+								}
+							>
+								<SelectTrigger id="edit-trigger-type">
+									<SelectValue />
+								</SelectTrigger>
+								<SelectContent>
+									<SelectItem value="contains">Contains</SelectItem>
+									<SelectItem value="equals">Equals</SelectItem>
+									<SelectItem value="starts_with">Starts With</SelectItem>
+									<SelectItem value="regex">Regex</SelectItem>
+								</SelectContent>
+							</Select>
+							<p className="text-muted-foreground text-xs">
+								{formTriggerType === "contains" &&
+									"Message contains any of the keywords"}
+								{formTriggerType === "equals" &&
+									"Message exactly equals one of the keywords"}
+								{formTriggerType === "starts_with" &&
+									"Message starts with one of the keywords"}
+								{formTriggerType === "regex" &&
+									"Message matches the regex pattern"}
+							</p>
+						</div>
+
+						{/* Keywords */}
+						<div className="space-y-2">
+							<Label htmlFor="edit-keywords">
+								Keywords * (comma-separated)
+							</Label>
+							<Input
+								id="edit-keywords"
+								value={formKeywords}
+								onChange={(e) => setFormKeywords(e.target.value)}
+								placeholder="hello, hi, greeting"
+							/>
+							<p className="text-muted-foreground text-xs">
+								Separate multiple keywords with commas
+							</p>
+						</div>
+
+						{/* Response */}
+						<div className="space-y-2">
+							<Label htmlFor="edit-response">Response Message *</Label>
+							<Textarea
+								id="edit-response"
+								value={formResponse}
+								onChange={(e) => setFormResponse(e.target.value)}
+								placeholder="Thank you for your message. We'll get back to you soon!"
+								rows={4}
+							/>
+						</div>
+
+						{/* Message Owner */}
+						<div className="space-y-2">
+							<Label htmlFor="edit-message-owner">Message Owner *</Label>
+							<Input
+								id="edit-message-owner"
+								value={formMessageOwner}
+								onChange={(e) => setFormMessageOwner(e.target.value)}
+								placeholder="Agent Name"
+							/>
+							<p className="text-muted-foreground text-xs">
+								The name of the agent or user who created this rule
+							</p>
+						</div>
+
+						{/* Status */}
+						<div className="space-y-2">
+							<Label htmlFor="edit-status">Status *</Label>
+							<Select
+								value={formStatus}
+								onValueChange={(value) =>
+									setFormStatus(value as typeof formStatus)
+								}
+							>
+								<SelectTrigger id="edit-status">
+									<SelectValue />
+								</SelectTrigger>
+								<SelectContent>
+									<SelectItem value="owner">Owner</SelectItem>
+									<SelectItem value="tenant">Tenant</SelectItem>
+								</SelectContent>
+							</Select>
+						</div>
+					</div>
+
+					<DialogFooter>
+						<Button
+							variant="outline"
+							onClick={() => {
+								setIsEditDialogOpen(false);
+								setRuleToEdit(null);
+								resetForm();
+							}}
+							disabled={updateRuleMutation.isPending}
+						>
+							Cancel
+						</Button>
+						<Button
+							onClick={handleEditSubmit}
+							disabled={updateRuleMutation.isPending}
+						>
+							{updateRuleMutation.isPending ? (
+								<>
+									<RiLoader4Line className="mr-2 h-4 w-4 animate-spin" />
+									Updating...
+								</>
+							) : (
+								<>
+									<RiEditLine className="mr-2 h-4 w-4" />
+									Update Rule
+								</>
+							)}
+						</Button>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
+
+			{/* Delete Confirmation Dialog */}
+			<Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+				<DialogContent className="sm:max-w-[500px]">
+					<DialogHeader>
+						<DialogTitle className="flex items-center gap-2 text-red-600 dark:text-red-400">
+							<RiAlertLine className="size-5" />
+							Delete Auto-Reply Rule
+						</DialogTitle>
+						<DialogDescription>
+							Are you sure you want to delete this auto-reply rule? This
+							action cannot be undone.
+						</DialogDescription>
+					</DialogHeader>
+
+					{ruleToDelete && (
+						<div className="py-4">
+							<div className="rounded-lg border bg-muted/30 p-4">
+								<div className="space-y-4">
+									{/* Message Owner */}
+									<div className="flex items-center justify-between rounded-md border-2 border-green-500 bg-muted/30 p-3">
+										<div className="flex items-center gap-2.5">
+											<RiUserLine className="size-5 text-foreground" />
+											<span className="font-semibold text-base text-foreground">
+												{ruleToDelete.messageOwner}
+											</span>
+										</div>
+										<Badge
+											variant="outline"
+											className={`font-semibold text-xs ${
+												ruleToDelete.status === "owner"
+													? "border-blue-500 text-blue-600 dark:text-blue-400"
+													: "border-purple-500 text-purple-600 dark:text-purple-400"
+											}`}
+										>
+											{ruleToDelete.status === "owner" ? "Owner" : "Tenant"}
+										</Badge>
+									</div>
+
+									{/* Trigger */}
+									<div className="space-y-2">
+										<div className="font-bold text-foreground text-sm uppercase tracking-wider">
+											TRIGGER:
+										</div>
+										<div className="text-base text-foreground">
+											{ruleToDelete.trigger.type === "contains" &&
+												"Message contains: "}
+											{ruleToDelete.trigger.type === "equals" &&
+												"Message equals: "}
+											{ruleToDelete.trigger.type === "starts_with" &&
+												"Message starts with: "}
+											{ruleToDelete.trigger.type === "regex" &&
+												"Message matches regex: "}
+											<span className="font-semibold">
+												"{ruleToDelete.trigger.keywords.join('" or "')}"
+											</span>
+										</div>
+									</div>
+
+									{/* Response */}
+									<div className="space-y-2">
+										<div className="font-bold text-foreground text-sm uppercase tracking-wider">
+											RESPONSE:
+										</div>
+										<div className="rounded-md border border-border bg-muted/60 p-3 text-foreground text-sm">
+											"{ruleToDelete.response}"
 										</div>
 									</div>
 								</div>
 							</div>
-						)}
+						</div>
+					)}
 
-						<DialogFooter>
-							<Button
-								variant="outline"
-								onClick={() => {
-									setIsDeleteDialogOpen(false);
-									setRuleToDelete(null);
-								}}
-								disabled={deleteRuleMutation.isPending}
-							>
-								Cancel
-							</Button>
-							<Button
-								onClick={handleDeleteConfirm}
-								disabled={deleteRuleMutation.isPending}
-								className="bg-red-600 hover:bg-red-700"
-							>
-								{deleteRuleMutation.isPending ? (
-									<>
-										<RiLoader4Line className="mr-2 h-4 w-4 animate-spin" />
-										Deleting...
-									</>
-								) : (
-									<>
-										<RiDeleteBinLine className="mr-2 h-4 w-4" />
-										Delete Rule
-									</>
-								)}
-							</Button>
-						</DialogFooter>
-					</DialogContent>
-				</Dialog>
-			</SidebarInset>
-		</SidebarProvider>
+					<DialogFooter>
+						<Button
+							variant="outline"
+							onClick={() => {
+								setIsDeleteDialogOpen(false);
+								setRuleToDelete(null);
+							}}
+							disabled={deleteRuleMutation.isPending}
+						>
+							Cancel
+						</Button>
+						<Button
+							onClick={handleDeleteConfirm}
+							disabled={deleteRuleMutation.isPending}
+							className="bg-red-600 hover:bg-red-700"
+						>
+							{deleteRuleMutation.isPending ? (
+								<>
+									<RiLoader4Line className="mr-2 h-4 w-4 animate-spin" />
+									Deleting...
+								</>
+							) : (
+								<>
+									<RiDeleteBinLine className="mr-2 h-4 w-4" />
+									Delete Rule
+								</>
+							)}
+						</Button>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
+		</>
 	);
 }

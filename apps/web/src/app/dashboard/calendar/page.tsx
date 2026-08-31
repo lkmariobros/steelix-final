@@ -1,12 +1,7 @@
 "use client";
 
-import { AppSidebar } from "@/components/app-sidebar";
 import { HeaderActions } from "@/components/header-actions";
-import {
-	SidebarInset,
-	SidebarProvider,
-	SidebarTrigger,
-} from "@/components/sidebar";
+import { SidebarTrigger } from "@/components/sidebar";
 import { Badge } from "@/components/ui/badge";
 import {
 	Breadcrumb,
@@ -601,638 +596,749 @@ export default function CalendarPage() {
 	}
 
 	return (
-		<SidebarProvider>
-			<AppSidebar />
-			<SidebarInset className="overflow-hidden px-4 md:px-6 lg:px-8">
-				<header className="flex h-16 shrink-0 items-center gap-2 border-b">
-					<div className="flex flex-1 items-center gap-2 px-3">
-						<SidebarTrigger className="-ms-4" />
-						<Separator
-							orientation="vertical"
-							className="mr-2 data-[orientation=vertical]:h-4"
-						/>
-						<Breadcrumb>
-							<BreadcrumbList>
-								<BreadcrumbItem className="hidden md:block">
-									<BreadcrumbLink href="/dashboard">
-										<RiDashboardLine size={22} aria-hidden="true" />
-										<span className="sr-only">Dashboard</span>
-									</BreadcrumbLink>
-								</BreadcrumbItem>
-								<BreadcrumbSeparator className="hidden md:block" />
-								<BreadcrumbItem>
-									<BreadcrumbPage className="flex items-center gap-2">
-										<RiCalendarLine size={18} />
-										Office Calendar
-									</BreadcrumbPage>
-								</BreadcrumbItem>
-							</BreadcrumbList>
-						</Breadcrumb>
-					</div>
-					<div className="ml-auto flex gap-3">
-						<HeaderActions />
-					</div>
-				</header>
+		<>
+			<header className="flex h-16 shrink-0 items-center gap-2 border-b">
+				<div className="flex flex-1 items-center gap-2 px-3">
+					<SidebarTrigger className="-ms-4" />
+					<Separator
+						orientation="vertical"
+						className="mr-2 data-[orientation=vertical]:h-4"
+					/>
+					<Breadcrumb>
+						<BreadcrumbList>
+							<BreadcrumbItem className="hidden md:block">
+								<BreadcrumbLink href="/dashboard">
+									<RiDashboardLine size={22} aria-hidden="true" />
+									<span className="sr-only">Dashboard</span>
+								</BreadcrumbLink>
+							</BreadcrumbItem>
+							<BreadcrumbSeparator className="hidden md:block" />
+							<BreadcrumbItem>
+								<BreadcrumbPage className="flex items-center gap-2">
+									<RiCalendarLine size={18} />
+									Office Calendar
+								</BreadcrumbPage>
+							</BreadcrumbItem>
+						</BreadcrumbList>
+					</Breadcrumb>
+				</div>
+				<div className="ml-auto flex gap-3">
+					<HeaderActions />
+				</div>
+			</header>
 
-				<div className="flex flex-1 flex-col gap-4 py-4 lg:gap-6 lg:py-6">
-					{/* Header */}
-					<div className="flex items-center justify-between">
-						<div>
-							<h1 className="font-semibold text-2xl">
-								Office Calendar & Announcements
-							</h1>
-							<p className="text-muted-foreground text-sm">
-								View upcoming meetings, events, and office announcements
-							</p>
-						</div>
-						{isAdmin && (
-							<div className="flex gap-2">
-								<Button onClick={() => handleCreateEvent()} variant="default">
-									<RiAddLine className="mr-2 size-4" />
-									New Event
-								</Button>
-								<Button onClick={handleCreateAnnouncement} variant="outline">
-									<RiAddLine className="mr-2 size-4" />
-									New Announcement
-								</Button>
-							</div>
-						)}
+			<div className="flex flex-1 flex-col gap-4 py-4 lg:gap-6 lg:py-6">
+				{/* Header */}
+				<div className="flex items-center justify-between">
+					<div>
+						<h1 className="font-semibold text-2xl">
+							Office Calendar & Announcements
+						</h1>
+						<p className="text-muted-foreground text-sm">
+							View upcoming meetings, events, and office announcements
+						</p>
 					</div>
-
-					{/* View Toggle */}
-					<div className="flex items-center gap-4">
-						<div className="flex w-fit items-center gap-1 rounded-md border bg-muted/50 p-1">
-							<Button
-								variant={viewMode === "calendar" ? "default" : "ghost"}
-								size="sm"
-								onClick={() => setViewMode("calendar")}
-								className="h-8"
-							>
-								<RiCalendarLine className="mr-2 size-4" />
-								Calendar Events
+					{isAdmin && (
+						<div className="flex gap-2">
+							<Button onClick={() => handleCreateEvent()} variant="default">
+								<RiAddLine className="mr-2 size-4" />
+								New Event
 							</Button>
-							<Button
-								variant={viewMode === "announcements" ? "default" : "ghost"}
-								size="sm"
-								onClick={() => setViewMode("announcements")}
-								className="h-8"
-							>
-								<RiNotificationLine className="mr-2 size-4" />
-								Announcements
+							<Button onClick={handleCreateAnnouncement} variant="outline">
+								<RiAddLine className="mr-2 size-4" />
+								New Announcement
 							</Button>
 						</div>
-					</div>
+					)}
+				</div>
 
-					{/* Calendar Events View - Monthly Grid */}
-					{viewMode === "calendar" && (
-						<Card className="w-full">
-							<CardContent className="p-6">
-								{isLoadingEvents ? (
-									<div className="space-y-6">
-										{/* Header skeleton */}
-										<div className="flex items-center justify-between">
-											<div className="flex items-center gap-4">
-												<Skeleton className="h-[60px] w-[60px] rounded-lg" />
-												<div className="space-y-2">
-													<Skeleton className="h-7 w-44" />
-													<Skeleton className="h-4 w-52" />
-												</div>
-											</div>
-											<div className="flex items-center gap-2">
-												<Skeleton className="h-9 w-9 rounded-md" />
-												<Skeleton className="h-9 w-16 rounded-md" />
-												<Skeleton className="h-9 w-9 rounded-md" />
-												{isAdmin && (
-													<Skeleton className="ml-2 h-9 w-28 rounded-md" />
-												)}
+				{/* View Toggle */}
+				<div className="flex items-center gap-4">
+					<div className="flex w-fit items-center gap-1 rounded-md border bg-muted/50 p-1">
+						<Button
+							variant={viewMode === "calendar" ? "default" : "ghost"}
+							size="sm"
+							onClick={() => setViewMode("calendar")}
+							className="h-8"
+						>
+							<RiCalendarLine className="mr-2 size-4" />
+							Calendar Events
+						</Button>
+						<Button
+							variant={viewMode === "announcements" ? "default" : "ghost"}
+							size="sm"
+							onClick={() => setViewMode("announcements")}
+							className="h-8"
+						>
+							<RiNotificationLine className="mr-2 size-4" />
+							Announcements
+						</Button>
+					</div>
+				</div>
+
+				{/* Calendar Events View - Monthly Grid */}
+				{viewMode === "calendar" && (
+					<Card className="w-full">
+						<CardContent className="p-6">
+							{isLoadingEvents ? (
+								<div className="space-y-6">
+									{/* Header skeleton */}
+									<div className="flex items-center justify-between">
+										<div className="flex items-center gap-4">
+											<Skeleton className="h-[60px] w-[60px] rounded-lg" />
+											<div className="space-y-2">
+												<Skeleton className="h-7 w-44" />
+												<Skeleton className="h-4 w-52" />
 											</div>
 										</div>
-										{/* Calendar grid skeleton */}
-										<div className="overflow-hidden rounded-lg border">
-											<div className="grid grid-cols-7 border-b bg-muted/50">
-												{[
-													"sk-ch-0",
-													"sk-ch-1",
-													"sk-ch-2",
-													"sk-ch-3",
-													"sk-ch-4",
-													"sk-ch-5",
-													"sk-ch-6",
-												].map((id) => (
-													<div
-														key={id}
-														className="border-r p-3 last:border-r-0"
-													>
-														<Skeleton className="mx-auto h-4 w-8" />
-													</div>
-												))}
-											</div>
-											<div className="grid grid-cols-7">
-												{Array.from({ length: 35 }, (_, i) => i).map((n) => (
-													<div
-														key={`sk-cd-${n}`}
-														className="min-h-[100px] border-r border-b p-2 last:border-r-0"
-													>
-														<Skeleton className="mb-1 h-5 w-5 rounded-full" />
-														{n % 5 === 0 && (
-															<Skeleton className="mt-1 h-5 w-full rounded" />
-														)}
-														{n % 7 === 2 && (
-															<Skeleton className="mt-1 h-5 w-4/5 rounded" />
-														)}
-													</div>
-												))}
-											</div>
+										<div className="flex items-center gap-2">
+											<Skeleton className="h-9 w-9 rounded-md" />
+											<Skeleton className="h-9 w-16 rounded-md" />
+											<Skeleton className="h-9 w-9 rounded-md" />
+											{isAdmin && (
+												<Skeleton className="ml-2 h-9 w-28 rounded-md" />
+											)}
 										</div>
 									</div>
-								) : (
-									<>
-										{/* Calendar Header with Navigation */}
-										<div className="mb-6 flex items-center justify-between">
-											{/* Current Date Display */}
-											<div className="flex items-center gap-4">
-												<div className="flex min-w-[60px] flex-col items-center justify-center rounded-lg bg-muted p-3">
-													<div className="font-medium text-muted-foreground text-xs uppercase">
-														{format(currentMonth, "MMM")}
-													</div>
-													<div className="font-bold text-2xl">
-														{format(new Date(), "d")}
-													</div>
+									{/* Calendar grid skeleton */}
+									<div className="overflow-hidden rounded-lg border">
+										<div className="grid grid-cols-7 border-b bg-muted/50">
+											{[
+												"sk-ch-0",
+												"sk-ch-1",
+												"sk-ch-2",
+												"sk-ch-3",
+												"sk-ch-4",
+												"sk-ch-5",
+												"sk-ch-6",
+											].map((id) => (
+												<div
+													key={id}
+													className="border-r p-3 last:border-r-0"
+												>
+													<Skeleton className="mx-auto h-4 w-8" />
 												</div>
-												<div>
-													<h2 className="font-semibold text-2xl">
-														{format(currentMonth, "MMMM, yyyy")}
-													</h2>
-													<p className="text-muted-foreground text-sm">
-														{formatDateDMY(startOfMonth(currentMonth))}{" "}
-														- {formatDateDMY(endOfMonth(currentMonth))}
-													</p>
+											))}
+										</div>
+										<div className="grid grid-cols-7">
+											{Array.from({ length: 35 }, (_, i) => i).map((n) => (
+												<div
+													key={`sk-cd-${n}`}
+													className="min-h-[100px] border-r border-b p-2 last:border-r-0"
+												>
+													<Skeleton className="mb-1 h-5 w-5 rounded-full" />
+													{n % 5 === 0 && (
+														<Skeleton className="mt-1 h-5 w-full rounded" />
+													)}
+													{n % 7 === 2 && (
+														<Skeleton className="mt-1 h-5 w-4/5 rounded" />
+													)}
+												</div>
+											))}
+										</div>
+									</div>
+								</div>
+							) : (
+								<>
+									{/* Calendar Header with Navigation */}
+									<div className="mb-6 flex items-center justify-between">
+										{/* Current Date Display */}
+										<div className="flex items-center gap-4">
+											<div className="flex min-w-[60px] flex-col items-center justify-center rounded-lg bg-muted p-3">
+												<div className="font-medium text-muted-foreground text-xs uppercase">
+													{format(currentMonth, "MMM")}
+												</div>
+												<div className="font-bold text-2xl">
+													{format(new Date(), "d")}
 												</div>
 											</div>
-
-											{/* Navigation Controls */}
-											<div className="flex items-center gap-2">
-												<Button
-													variant="ghost"
-													size="icon"
-													onClick={() => navigateMonth("prev")}
-													className="h-9 w-9"
-												>
-													<RiArrowLeftLine className="size-5" />
-												</Button>
-												<Button
-													variant="outline"
-													size="sm"
-													onClick={() => navigateMonth("today")}
-													className="h-9"
-												>
-													Today
-												</Button>
-												<Button
-													variant="ghost"
-													size="icon"
-													onClick={() => navigateMonth("next")}
-													className="h-9 w-9"
-												>
-													<RiArrowRightLine className="size-5" />
-												</Button>
+											<div>
+												<h2 className="font-semibold text-2xl">
+													{format(currentMonth, "MMMM, yyyy")}
+												</h2>
+												<p className="text-muted-foreground text-sm">
+													{formatDateDMY(startOfMonth(currentMonth))}{" "}
+													- {formatDateDMY(endOfMonth(currentMonth))}
+												</p>
 											</div>
 										</div>
 
-										{/* Calendar Grid */}
-										<div className="overflow-hidden rounded-lg border">
-											{/* Days of Week Header */}
-											<div className="grid grid-cols-7 border-b bg-muted/50">
-												{["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(
-													(day) => (
+										{/* Navigation Controls */}
+										<div className="flex items-center gap-2">
+											<Button
+												variant="ghost"
+												size="icon"
+												onClick={() => navigateMonth("prev")}
+												className="h-9 w-9"
+											>
+												<RiArrowLeftLine className="size-5" />
+											</Button>
+											<Button
+												variant="outline"
+												size="sm"
+												onClick={() => navigateMonth("today")}
+												className="h-9"
+											>
+												Today
+											</Button>
+											<Button
+												variant="ghost"
+												size="icon"
+												onClick={() => navigateMonth("next")}
+												className="h-9 w-9"
+											>
+												<RiArrowRightLine className="size-5" />
+											</Button>
+										</div>
+									</div>
+
+									{/* Calendar Grid */}
+									<div className="overflow-hidden rounded-lg border">
+										{/* Days of Week Header */}
+										<div className="grid grid-cols-7 border-b bg-muted/50">
+											{["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(
+												(day) => (
+													<div
+														key={day}
+														className="border-r p-3 text-center font-medium text-muted-foreground text-sm last:border-r-0"
+													>
+														{day}
+													</div>
+												),
+											)}
+										</div>
+
+										{/* Calendar Days Grid */}
+										<div className="grid grid-cols-7">
+											{(() => {
+												const monthStart = startOfMonth(currentMonth);
+												const monthEnd = endOfMonth(currentMonth);
+												const calendarStart = new Date(monthStart);
+												calendarStart.setDate(
+													calendarStart.getDate() - calendarStart.getDay(),
+												);
+												const calendarEnd = new Date(monthEnd);
+												calendarEnd.setDate(
+													calendarEnd.getDate() + (6 - calendarEnd.getDay()),
+												);
+												const days = eachDayOfInterval({
+													start: calendarStart,
+													end: calendarEnd,
+												});
+
+												return days.map((day) => {
+													const dateKey = format(day, "yyyy-MM-dd");
+													const dayEvents = eventsByDate.get(dateKey) || [];
+													const isCurrentMonth = isSameMonth(
+														day,
+														currentMonth,
+													);
+													const isCurrentDay = isToday(day);
+
+													return (
 														<div
-															key={day}
-															className="border-r p-3 text-center font-medium text-muted-foreground text-sm last:border-r-0"
+															key={dateKey}
+															className={`min-h-[120px] border-r border-b p-2 last:border-r-0 ${
+																!isCurrentMonth
+																	? "bg-muted/30"
+																	: "bg-background"
+															} ${isAdmin ? "cursor-pointer transition-colors hover:bg-muted/50" : ""}`}
+															onClick={() => isAdmin && handleDayClick(day)}
+															onKeyDown={(e) => {
+																if (e.key === "Enter" || e.key === " ") {
+																	if (isAdmin) handleDayClick(day);
+																}
+															}}
 														>
-															{day}
-														</div>
-													),
-												)}
-											</div>
-
-											{/* Calendar Days Grid */}
-											<div className="grid grid-cols-7">
-												{(() => {
-													const monthStart = startOfMonth(currentMonth);
-													const monthEnd = endOfMonth(currentMonth);
-													const calendarStart = new Date(monthStart);
-													calendarStart.setDate(
-														calendarStart.getDate() - calendarStart.getDay(),
-													);
-													const calendarEnd = new Date(monthEnd);
-													calendarEnd.setDate(
-														calendarEnd.getDate() + (6 - calendarEnd.getDay()),
-													);
-													const days = eachDayOfInterval({
-														start: calendarStart,
-														end: calendarEnd,
-													});
-
-													return days.map((day) => {
-														const dateKey = format(day, "yyyy-MM-dd");
-														const dayEvents = eventsByDate.get(dateKey) || [];
-														const isCurrentMonth = isSameMonth(
-															day,
-															currentMonth,
-														);
-														const isCurrentDay = isToday(day);
-
-														return (
-															<div
-																key={dateKey}
-																className={`min-h-[120px] border-r border-b p-2 last:border-r-0 ${
-																	!isCurrentMonth
-																		? "bg-muted/30"
-																		: "bg-background"
-																} ${isAdmin ? "cursor-pointer transition-colors hover:bg-muted/50" : ""}`}
-																onClick={() => isAdmin && handleDayClick(day)}
-																onKeyDown={(e) => {
-																	if (e.key === "Enter" || e.key === " ") {
-																		if (isAdmin) handleDayClick(day);
-																	}
-																}}
-															>
-																<div className="mb-1 flex items-center justify-between">
-																	<span
-																		className={`font-medium text-sm ${
-																			isCurrentDay
-																				? "flex h-7 w-7 items-center justify-center rounded-full bg-primary text-primary-foreground"
-																				: !isCurrentMonth
-																					? "text-muted-foreground"
-																					: "text-foreground"
-																		}`}
-																	>
-																		{format(day, "d")}
-																	</span>
-																</div>
-																<div className="space-y-1">
-																	{dayEvents.slice(0, 3).map((event) => (
-																		<div
-																			key={event.id}
-																			onClick={(e) => {
+															<div className="mb-1 flex items-center justify-between">
+																<span
+																	className={`font-medium text-sm ${
+																		isCurrentDay
+																			? "flex h-7 w-7 items-center justify-center rounded-full bg-primary text-primary-foreground"
+																			: !isCurrentMonth
+																				? "text-muted-foreground"
+																				: "text-foreground"
+																	}`}
+																>
+																	{format(day, "d")}
+																</span>
+															</div>
+															<div className="space-y-1">
+																{dayEvents.slice(0, 3).map((event) => (
+																	<div
+																		key={event.id}
+																		onClick={(e) => {
+																			e.stopPropagation();
+																			if (isAdmin) {
+																				handleEditEvent(event);
+																			} else {
+																				handleViewEvent(event);
+																			}
+																		}}
+																		onKeyDown={(e) => {
+																			if (
+																				e.key === "Enter" ||
+																				e.key === " "
+																			) {
 																				e.stopPropagation();
 																				if (isAdmin) {
 																					handleEditEvent(event);
 																				} else {
 																					handleViewEvent(event);
 																				}
-																			}}
-																			onKeyDown={(e) => {
-																				if (
-																					e.key === "Enter" ||
-																					e.key === " "
-																				) {
-																					e.stopPropagation();
-																					if (isAdmin) {
-																						handleEditEvent(event);
-																					} else {
-																						handleViewEvent(event);
-																					}
-																				}
-																			}}
-																			className={`cursor-pointer truncate rounded p-1.5 text-xs ${getEventTypeColor(
-																				event.eventType,
-																			)} ${!event.isActive ? "opacity-50" : ""}`}
-																			title={event.title}
-																		>
-																			{!event.isAllDay && (
-																				<span className="font-medium">
-																					{formatTime(event.startDate)}{" "}
-																				</span>
-																			)}
-																			{event.title}
-																		</div>
-																	))}
-																	{dayEvents.length > 3 && (
-																		<div className="p-1 text-muted-foreground text-xs">
-																			+{dayEvents.length - 3} more
-																		</div>
-																	)}
-																</div>
+																			}
+																		}}
+																		className={`cursor-pointer truncate rounded p-1.5 text-xs ${getEventTypeColor(
+																			event.eventType,
+																		)} ${!event.isActive ? "opacity-50" : ""}`}
+																		title={event.title}
+																	>
+																		{!event.isAllDay && (
+																			<span className="font-medium">
+																				{formatTime(event.startDate)}{" "}
+																			</span>
+																		)}
+																		{event.title}
+																	</div>
+																))}
+																{dayEvents.length > 3 && (
+																	<div className="p-1 text-muted-foreground text-xs">
+																		+{dayEvents.length - 3} more
+																	</div>
+																)}
 															</div>
-														);
-													});
-												})()}
-											</div>
+														</div>
+													);
+												});
+											})()}
 										</div>
-									</>
-								)}
-							</CardContent>
-						</Card>
-					)}
+									</div>
+								</>
+							)}
+						</CardContent>
+					</Card>
+				)}
 
-					{/* Announcements View */}
-					{viewMode === "announcements" && (
-						<div className="space-y-4">
-							{isLoadingAnnouncements ? (
-								["sk-an-1", "sk-an-2", "sk-an-3"].map((id) => (
-									<Card key={id}>
+				{/* Announcements View */}
+				{viewMode === "announcements" && (
+					<div className="space-y-4">
+						{isLoadingAnnouncements ? (
+							["sk-an-1", "sk-an-2", "sk-an-3"].map((id) => (
+								<Card key={id}>
+									<CardHeader>
+										<div className="flex items-start justify-between">
+											<div className="flex items-center gap-2">
+												<Skeleton className="h-5 w-5" />
+												<Skeleton className="h-6 w-56" />
+											</div>
+											{isAdmin && (
+												<div className="flex gap-1">
+													<Skeleton className="h-8 w-8 rounded-md" />
+													<Skeleton className="h-8 w-8 rounded-md" />
+												</div>
+											)}
+										</div>
+										<div className="mt-2 flex items-center gap-2">
+											<Skeleton className="h-5 w-16 rounded-full" />
+											<Skeleton className="h-3.5 w-40" />
+										</div>
+									</CardHeader>
+									<CardContent>
+										<Skeleton className="h-4 w-full" />
+										<Skeleton className="mt-1.5 h-4 w-4/5" />
+									</CardContent>
+								</Card>
+							))
+						) : announcements.length === 0 ? (
+							<Card>
+								<CardContent className="flex flex-col items-center justify-center py-12">
+									<RiNotificationLine className="mb-4 size-12 text-muted-foreground" />
+									<p className="font-medium text-lg">No announcements</p>
+									<p className="text-muted-foreground text-sm">
+										{isAdmin
+											? "Create an announcement to share with the team"
+											: "Check back later for announcements"}
+									</p>
+								</CardContent>
+							</Card>
+						) : (
+							<div className="space-y-4">
+								{announcements.map((announcement) => (
+									<Card
+										key={announcement.id}
+										className={
+											announcement.isPinned ? "border-yellow-500" : ""
+										}
+									>
 										<CardHeader>
 											<div className="flex items-start justify-between">
 												<div className="flex items-center gap-2">
-													<Skeleton className="h-5 w-5" />
-													<Skeleton className="h-6 w-56" />
+													{announcement.isPinned && (
+														<RiPushpinLine className="size-5 text-yellow-500" />
+													)}
+													<CardTitle className="text-lg">
+														{announcement.title}
+													</CardTitle>
 												</div>
 												{isAdmin && (
 													<div className="flex gap-1">
-														<Skeleton className="h-8 w-8 rounded-md" />
-														<Skeleton className="h-8 w-8 rounded-md" />
+														<Button
+															variant="ghost"
+															size="sm"
+															onClick={() =>
+																handleEditAnnouncement(
+																	announcement as Announcement,
+																)
+															}
+															className="h-8 w-8 p-0"
+														>
+															<RiEditLine className="size-4" />
+														</Button>
+														<Button
+															variant="ghost"
+															size="sm"
+															onClick={() =>
+																handleDeleteAnnouncement(announcement.id)
+															}
+															className="h-8 w-8 p-0 text-destructive"
+														>
+															<RiDeleteBinLine className="size-4" />
+														</Button>
 													</div>
 												)}
 											</div>
 											<div className="mt-2 flex items-center gap-2">
-												<Skeleton className="h-5 w-16 rounded-full" />
-												<Skeleton className="h-3.5 w-40" />
+												<Badge
+													className={getPriorityColor(
+														announcement.priority || "normal",
+													)}
+												>
+													{announcement.priority || "normal"}
+												</Badge>
+												<span className="text-muted-foreground text-xs">
+													{formatDate(announcement.createdAt)} •{" "}
+													{announcement.createdByName || "Admin"}
+												</span>
+												{announcement.expiresAt && (
+													<span className="text-muted-foreground text-xs">
+														• Expires {formatDate(announcement.expiresAt)}
+													</span>
+												)}
 											</div>
 										</CardHeader>
 										<CardContent>
-											<Skeleton className="h-4 w-full" />
-											<Skeleton className="mt-1.5 h-4 w-4/5" />
+											<p className="whitespace-pre-wrap text-sm">
+												{announcement.content}
+											</p>
 										</CardContent>
 									</Card>
-								))
-							) : announcements.length === 0 ? (
-								<Card>
-									<CardContent className="flex flex-col items-center justify-center py-12">
-										<RiNotificationLine className="mb-4 size-12 text-muted-foreground" />
-										<p className="font-medium text-lg">No announcements</p>
-										<p className="text-muted-foreground text-sm">
-											{isAdmin
-												? "Create an announcement to share with the team"
-												: "Check back later for announcements"}
-										</p>
-									</CardContent>
-								</Card>
-							) : (
-								<div className="space-y-4">
-									{announcements.map((announcement) => (
-										<Card
-											key={announcement.id}
-											className={
-												announcement.isPinned ? "border-yellow-500" : ""
-											}
+								))}
+							</div>
+						)}
+					</div>
+				)}
+			</div>
+
+			{/* Create/Edit Event Dialog */}
+			<Dialog open={isEventDialogOpen} onOpenChange={setIsEventDialogOpen}>
+				<DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
+					<DialogHeader>
+						<DialogTitle>
+							{editingEvent ? "Edit Event" : "Create New Event"}
+						</DialogTitle>
+						<DialogDescription>
+							{editingEvent
+								? "Update the event details below"
+								: "Add a new event to the office calendar"}
+						</DialogDescription>
+					</DialogHeader>
+					<Form {...eventForm}>
+						<form
+							onSubmit={eventForm.handleSubmit(onSubmitEvent)}
+							className="space-y-4"
+						>
+							<FormField
+								control={eventForm.control}
+								name="title"
+								render={({ field }) => (
+									<FormItem>
+										<FormLabel>Title *</FormLabel>
+										<FormControl>
+											<Input placeholder="e.g., Team Meeting" {...field} />
+										</FormControl>
+										<FormMessage />
+									</FormItem>
+								)}
+							/>
+
+							<FormField
+								control={eventForm.control}
+								name="eventType"
+								render={({ field }) => (
+									<FormItem>
+										<FormLabel>Event Type *</FormLabel>
+										<Select
+											onValueChange={field.onChange}
+											defaultValue={field.value}
 										>
-											<CardHeader>
-												<div className="flex items-start justify-between">
-													<div className="flex items-center gap-2">
-														{announcement.isPinned && (
-															<RiPushpinLine className="size-5 text-yellow-500" />
-														)}
-														<CardTitle className="text-lg">
-															{announcement.title}
-														</CardTitle>
-													</div>
-													{isAdmin && (
-														<div className="flex gap-1">
-															<Button
-																variant="ghost"
-																size="sm"
-																onClick={() =>
-																	handleEditAnnouncement(
-																		announcement as Announcement,
-																	)
-																}
-																className="h-8 w-8 p-0"
-															>
-																<RiEditLine className="size-4" />
-															</Button>
-															<Button
-																variant="ghost"
-																size="sm"
-																onClick={() =>
-																	handleDeleteAnnouncement(announcement.id)
-																}
-																className="h-8 w-8 p-0 text-destructive"
-															>
-																<RiDeleteBinLine className="size-4" />
-															</Button>
-														</div>
-													)}
-												</div>
-												<div className="mt-2 flex items-center gap-2">
-													<Badge
-														className={getPriorityColor(
-															announcement.priority || "normal",
-														)}
-													>
-														{announcement.priority || "normal"}
-													</Badge>
-													<span className="text-muted-foreground text-xs">
-														{formatDate(announcement.createdAt)} •{" "}
-														{announcement.createdByName || "Admin"}
-													</span>
-													{announcement.expiresAt && (
-														<span className="text-muted-foreground text-xs">
-															• Expires {formatDate(announcement.expiresAt)}
-														</span>
-													)}
-												</div>
-											</CardHeader>
-											<CardContent>
-												<p className="whitespace-pre-wrap text-sm">
-													{announcement.content}
-												</p>
-											</CardContent>
-										</Card>
-									))}
-								</div>
-							)}
-						</div>
-					)}
-				</div>
+											<FormControl>
+												<SelectTrigger>
+													<SelectValue placeholder="Select event type" />
+												</SelectTrigger>
+											</FormControl>
+											<SelectContent>
+												<SelectItem value="meeting">Meeting</SelectItem>
+												<SelectItem value="training">Training</SelectItem>
+												<SelectItem value="announcement">
+													Announcement
+												</SelectItem>
+												<SelectItem value="holiday">Holiday</SelectItem>
+												<SelectItem value="deadline">Deadline</SelectItem>
+												<SelectItem value="other">Other</SelectItem>
+											</SelectContent>
+										</Select>
+										<FormMessage />
+									</FormItem>
+								)}
+							/>
 
-				{/* Create/Edit Event Dialog */}
-				<Dialog open={isEventDialogOpen} onOpenChange={setIsEventDialogOpen}>
-					<DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
-						<DialogHeader>
-							<DialogTitle>
-								{editingEvent ? "Edit Event" : "Create New Event"}
-							</DialogTitle>
-							<DialogDescription>
-								{editingEvent
-									? "Update the event details below"
-									: "Add a new event to the office calendar"}
-							</DialogDescription>
-						</DialogHeader>
-						<Form {...eventForm}>
-							<form
-								onSubmit={eventForm.handleSubmit(onSubmitEvent)}
-								className="space-y-4"
-							>
+							<FormField
+								control={eventForm.control}
+								name="description"
+								render={({ field }) => (
+									<FormItem>
+										<FormLabel>Description</FormLabel>
+										<FormControl>
+											<Textarea
+												placeholder="Add event details..."
+												className="resize-none"
+												{...field}
+											/>
+										</FormControl>
+										<FormMessage />
+									</FormItem>
+								)}
+							/>
+
+							<div className="grid grid-cols-2 gap-4">
 								<FormField
 									control={eventForm.control}
-									name="title"
+									name="startDate"
 									render={({ field }) => (
 										<FormItem>
-											<FormLabel>Title *</FormLabel>
+											<FormLabel>Start Date *</FormLabel>
 											<FormControl>
-												<Input placeholder="e.g., Team Meeting" {...field} />
+												<Input type="date" {...field} />
 											</FormControl>
 											<FormMessage />
 										</FormItem>
 									)}
 								/>
 
-								<FormField
-									control={eventForm.control}
-									name="eventType"
-									render={({ field }) => (
-										<FormItem>
-											<FormLabel>Event Type *</FormLabel>
-											<Select
-												onValueChange={field.onChange}
-												defaultValue={field.value}
-											>
-												<FormControl>
-													<SelectTrigger>
-														<SelectValue placeholder="Select event type" />
-													</SelectTrigger>
-												</FormControl>
-												<SelectContent>
-													<SelectItem value="meeting">Meeting</SelectItem>
-													<SelectItem value="training">Training</SelectItem>
-													<SelectItem value="announcement">
-														Announcement
-													</SelectItem>
-													<SelectItem value="holiday">Holiday</SelectItem>
-													<SelectItem value="deadline">Deadline</SelectItem>
-													<SelectItem value="other">Other</SelectItem>
-												</SelectContent>
-											</Select>
-											<FormMessage />
-										</FormItem>
-									)}
-								/>
-
-								<FormField
-									control={eventForm.control}
-									name="description"
-									render={({ field }) => (
-										<FormItem>
-											<FormLabel>Description</FormLabel>
-											<FormControl>
-												<Textarea
-													placeholder="Add event details..."
-													className="resize-none"
-													{...field}
-												/>
-											</FormControl>
-											<FormMessage />
-										</FormItem>
-									)}
-								/>
-
-								<div className="grid grid-cols-2 gap-4">
+								{!eventForm.watch("isAllDay") && (
 									<FormField
 										control={eventForm.control}
-										name="startDate"
+										name="startTime"
 										render={({ field }) => (
 											<FormItem>
-												<FormLabel>Start Date *</FormLabel>
+												<FormLabel>Start Time</FormLabel>
 												<FormControl>
-													<Input type="date" {...field} />
+													<Input type="time" {...field} />
 												</FormControl>
 												<FormMessage />
 											</FormItem>
 										)}
 									/>
+								)}
+							</div>
 
-									{!eventForm.watch("isAllDay") && (
-										<FormField
-											control={eventForm.control}
-											name="startTime"
-											render={({ field }) => (
-												<FormItem>
-													<FormLabel>Start Time</FormLabel>
-													<FormControl>
-														<Input type="time" {...field} />
-													</FormControl>
-													<FormMessage />
-												</FormItem>
-											)}
-										/>
-									)}
-								</div>
-
-								<div className="grid grid-cols-2 gap-4">
-									<FormField
-										control={eventForm.control}
-										name="endDate"
-										render={({ field }) => (
-											<FormItem>
-												<FormLabel>End Date</FormLabel>
-												<FormControl>
-													<Input type="date" {...field} />
-												</FormControl>
-												<FormMessage />
-											</FormItem>
-										)}
-									/>
-
-									{!eventForm.watch("isAllDay") && (
-										<FormField
-											control={eventForm.control}
-											name="endTime"
-											render={({ field }) => (
-												<FormItem>
-													<FormLabel>End Time</FormLabel>
-													<FormControl>
-														<Input type="time" {...field} />
-													</FormControl>
-													<FormMessage />
-												</FormItem>
-											)}
-										/>
-									)}
-								</div>
-
+							<div className="grid grid-cols-2 gap-4">
 								<FormField
 									control={eventForm.control}
-									name="isAllDay"
-									render={({ field }) => (
-										<FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-											<div className="space-y-0.5">
-												<FormLabel className="text-base">
-													All Day Event
-												</FormLabel>
-												<FormDescription>
-													Event spans the entire day without specific times
-												</FormDescription>
-											</div>
-											<FormControl>
-												<Switch
-													checked={field.value}
-													onCheckedChange={field.onChange}
-												/>
-											</FormControl>
-										</FormItem>
-									)}
-								/>
-
-								<FormField
-									control={eventForm.control}
-									name="location"
+									name="endDate"
 									render={({ field }) => (
 										<FormItem>
-											<FormLabel>Location</FormLabel>
+											<FormLabel>End Date</FormLabel>
 											<FormControl>
-												<Input
-													placeholder="e.g., Conference Room A, Online"
-													{...field}
-												/>
+												<Input type="date" {...field} />
 											</FormControl>
 											<FormMessage />
 										</FormItem>
 									)}
 								/>
 
+								{!eventForm.watch("isAllDay") && (
+									<FormField
+										control={eventForm.control}
+										name="endTime"
+										render={({ field }) => (
+											<FormItem>
+												<FormLabel>End Time</FormLabel>
+												<FormControl>
+													<Input type="time" {...field} />
+												</FormControl>
+												<FormMessage />
+											</FormItem>
+										)}
+									/>
+								)}
+							</div>
+
+							<FormField
+								control={eventForm.control}
+								name="isAllDay"
+								render={({ field }) => (
+									<FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+										<div className="space-y-0.5">
+											<FormLabel className="text-base">
+												All Day Event
+											</FormLabel>
+											<FormDescription>
+												Event spans the entire day without specific times
+											</FormDescription>
+										</div>
+										<FormControl>
+											<Switch
+												checked={field.value}
+												onCheckedChange={field.onChange}
+											/>
+										</FormControl>
+									</FormItem>
+								)}
+							/>
+
+							<FormField
+								control={eventForm.control}
+								name="location"
+								render={({ field }) => (
+									<FormItem>
+										<FormLabel>Location</FormLabel>
+										<FormControl>
+											<Input
+												placeholder="e.g., Conference Room A, Online"
+												{...field}
+											/>
+										</FormControl>
+										<FormMessage />
+									</FormItem>
+								)}
+							/>
+
+							<FormField
+								control={eventForm.control}
+								name="priority"
+								render={({ field }) => (
+									<FormItem>
+										<FormLabel>Priority</FormLabel>
+										<Select
+											onValueChange={field.onChange}
+											defaultValue={field.value}
+										>
+											<FormControl>
+												<SelectTrigger>
+													<SelectValue placeholder="Select priority" />
+												</SelectTrigger>
+											</FormControl>
+											<SelectContent>
+												<SelectItem value="low">Low</SelectItem>
+												<SelectItem value="normal">Normal</SelectItem>
+												<SelectItem value="high">High</SelectItem>
+												<SelectItem value="urgent">Urgent</SelectItem>
+											</SelectContent>
+										</Select>
+										<FormMessage />
+									</FormItem>
+								)}
+							/>
+
+							<DialogFooter>
+								<Button
+									type="button"
+									variant="outline"
+									onClick={() => {
+										setIsEventDialogOpen(false);
+										eventForm.reset();
+										setEditingEvent(null);
+									}}
+								>
+									Cancel
+								</Button>
+								<Button
+									type="submit"
+									disabled={
+										createEventMutation.isPending ||
+										updateEventMutation.isPending
+									}
+								>
+									{editingEvent ? "Update Event" : "Create Event"}
+								</Button>
+							</DialogFooter>
+						</form>
+					</Form>
+				</DialogContent>
+			</Dialog>
+
+			{/* Create/Edit Announcement Dialog */}
+			<Dialog
+				open={isAnnouncementDialogOpen}
+				onOpenChange={setIsAnnouncementDialogOpen}
+			>
+				<DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
+					<DialogHeader>
+						<DialogTitle>
+							{editingAnnouncement
+								? "Edit Announcement"
+								: "Create New Announcement"}
+						</DialogTitle>
+						<DialogDescription>
+							{editingAnnouncement
+								? "Update the announcement details below"
+								: "Create a new office announcement to share with all agents"}
+						</DialogDescription>
+					</DialogHeader>
+					<Form {...announcementForm}>
+						<form
+							onSubmit={announcementForm.handleSubmit(onSubmitAnnouncement)}
+							className="space-y-4"
+						>
+							<FormField
+								control={announcementForm.control}
+								name="title"
+								render={({ field }) => (
+									<FormItem>
+										<FormLabel>Title *</FormLabel>
+										<FormControl>
+											<Input
+												placeholder="e.g., Office Policy Update"
+												{...field}
+											/>
+										</FormControl>
+										<FormMessage />
+									</FormItem>
+								)}
+							/>
+
+							<FormField
+								control={announcementForm.control}
+								name="content"
+								render={({ field }) => (
+									<FormItem>
+										<FormLabel>Content *</FormLabel>
+										<FormControl>
+											<Textarea
+												placeholder="Enter announcement details..."
+												className="min-h-[120px] resize-none"
+												{...field}
+											/>
+										</FormControl>
+										<FormMessage />
+									</FormItem>
+								)}
+							/>
+
+							<div className="grid grid-cols-2 gap-4">
 								<FormField
-									control={eventForm.control}
+									control={announcementForm.control}
 									name="priority"
 									render={({ field }) => (
 										<FormItem>
@@ -1258,323 +1364,209 @@ export default function CalendarPage() {
 									)}
 								/>
 
-								<DialogFooter>
-									<Button
-										type="button"
-										variant="outline"
-										onClick={() => {
-											setIsEventDialogOpen(false);
-											eventForm.reset();
-											setEditingEvent(null);
-										}}
-									>
-										Cancel
-									</Button>
-									<Button
-										type="submit"
-										disabled={
-											createEventMutation.isPending ||
-											updateEventMutation.isPending
-										}
-									>
-										{editingEvent ? "Update Event" : "Create Event"}
-									</Button>
-								</DialogFooter>
-							</form>
-						</Form>
-					</DialogContent>
-				</Dialog>
-
-				{/* Create/Edit Announcement Dialog */}
-				<Dialog
-					open={isAnnouncementDialogOpen}
-					onOpenChange={setIsAnnouncementDialogOpen}
-				>
-					<DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
-						<DialogHeader>
-							<DialogTitle>
-								{editingAnnouncement
-									? "Edit Announcement"
-									: "Create New Announcement"}
-							</DialogTitle>
-							<DialogDescription>
-								{editingAnnouncement
-									? "Update the announcement details below"
-									: "Create a new office announcement to share with all agents"}
-							</DialogDescription>
-						</DialogHeader>
-						<Form {...announcementForm}>
-							<form
-								onSubmit={announcementForm.handleSubmit(onSubmitAnnouncement)}
-								className="space-y-4"
-							>
 								<FormField
 									control={announcementForm.control}
-									name="title"
+									name="expiresAt"
 									render={({ field }) => (
 										<FormItem>
-											<FormLabel>Title *</FormLabel>
+											<FormLabel>Expiration Date (Optional)</FormLabel>
 											<FormControl>
 												<Input
-													placeholder="e.g., Office Policy Update"
-													{...field}
+													type="date"
+													value={field.value || ""}
+													onChange={(e) =>
+														field.onChange(e.target.value || null)
+													}
 												/>
 											</FormControl>
+											<FormDescription>
+												Announcement will be hidden after this date
+											</FormDescription>
 											<FormMessage />
 										</FormItem>
 									)}
 								/>
+							</div>
 
-								<FormField
-									control={announcementForm.control}
-									name="content"
-									render={({ field }) => (
-										<FormItem>
-											<FormLabel>Content *</FormLabel>
-											<FormControl>
-												<Textarea
-													placeholder="Enter announcement details..."
-													className="min-h-[120px] resize-none"
-													{...field}
-												/>
-											</FormControl>
-											<FormMessage />
-										</FormItem>
-									)}
-								/>
-
-								<div className="grid grid-cols-2 gap-4">
-									<FormField
-										control={announcementForm.control}
-										name="priority"
-										render={({ field }) => (
-											<FormItem>
-												<FormLabel>Priority</FormLabel>
-												<Select
-													onValueChange={field.onChange}
-													defaultValue={field.value}
-												>
-													<FormControl>
-														<SelectTrigger>
-															<SelectValue placeholder="Select priority" />
-														</SelectTrigger>
-													</FormControl>
-													<SelectContent>
-														<SelectItem value="low">Low</SelectItem>
-														<SelectItem value="normal">Normal</SelectItem>
-														<SelectItem value="high">High</SelectItem>
-														<SelectItem value="urgent">Urgent</SelectItem>
-													</SelectContent>
-												</Select>
-												<FormMessage />
-											</FormItem>
-										)}
-									/>
-
-									<FormField
-										control={announcementForm.control}
-										name="expiresAt"
-										render={({ field }) => (
-											<FormItem>
-												<FormLabel>Expiration Date (Optional)</FormLabel>
-												<FormControl>
-													<Input
-														type="date"
-														value={field.value || ""}
-														onChange={(e) =>
-															field.onChange(e.target.value || null)
-														}
-													/>
-												</FormControl>
-												<FormDescription>
-													Announcement will be hidden after this date
-												</FormDescription>
-												<FormMessage />
-											</FormItem>
-										)}
-									/>
-								</div>
-
-								<FormField
-									control={announcementForm.control}
-									name="isPinned"
-									render={({ field }) => (
-										<FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-											<div className="space-y-0.5">
-												<FormLabel className="text-base">Pin to Top</FormLabel>
-												<FormDescription>
-													Pinned announcements appear at the top of the list
-												</FormDescription>
-											</div>
-											<FormControl>
-												<Switch
-													checked={field.value}
-													onCheckedChange={field.onChange}
-												/>
-											</FormControl>
-										</FormItem>
-									)}
-								/>
-
-								<DialogFooter>
-									<Button
-										type="button"
-										variant="outline"
-										onClick={() => {
-											setIsAnnouncementDialogOpen(false);
-											announcementForm.reset();
-											setEditingAnnouncement(null);
-										}}
-									>
-										Cancel
-									</Button>
-									<Button
-										type="submit"
-										disabled={
-											createAnnouncementMutation.isPending ||
-											updateAnnouncementMutation.isPending
-										}
-									>
-										{editingAnnouncement
-											? "Update Announcement"
-											: "Create Announcement"}
-									</Button>
-								</DialogFooter>
-							</form>
-						</Form>
-					</DialogContent>
-				</Dialog>
-
-				{/* View Event Details Dialog (Agents) */}
-				<Dialog
-					open={isEventViewDialogOpen}
-					onOpenChange={setIsEventViewDialogOpen}
-				>
-					<DialogContent className="max-w-2xl">
-						<DialogHeader>
-							<DialogTitle className="flex items-center gap-2">
-								<RiCalendarLine className="size-5" />
-								{viewingEvent?.title}
-							</DialogTitle>
-							<DialogDescription>
-								Event details and information
-							</DialogDescription>
-						</DialogHeader>
-						{viewingEvent && (
-							<div className="space-y-4">
-								{/* Event Type and Priority */}
-								<div className="flex flex-wrap gap-2">
-									<Badge className={getEventTypeColor(viewingEvent.eventType)}>
-										{viewingEvent.eventType}
-									</Badge>
-									<Badge
-										className={getPriorityColor(
-											viewingEvent.priority || "normal",
-										)}
-									>
-										{viewingEvent.priority || "normal"}
-									</Badge>
-									{!viewingEvent.isActive && (
-										<Badge
-											variant="outline"
-											className="text-muted-foreground text-xs"
-										>
-											Inactive
-										</Badge>
-									)}
-								</div>
-
-								{/* Description */}
-								{viewingEvent.description && (
-									<div>
-										<h4 className="mb-2 font-semibold text-sm">Description</h4>
-										<p className="whitespace-pre-wrap text-muted-foreground text-sm">
-											{viewingEvent.description}
-										</p>
-									</div>
+							<FormField
+								control={announcementForm.control}
+								name="isPinned"
+								render={({ field }) => (
+									<FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+										<div className="space-y-0.5">
+											<FormLabel className="text-base">Pin to Top</FormLabel>
+											<FormDescription>
+												Pinned announcements appear at the top of the list
+											</FormDescription>
+										</div>
+										<FormControl>
+											<Switch
+												checked={field.value}
+												onCheckedChange={field.onChange}
+											/>
+										</FormControl>
+									</FormItem>
 								)}
+							/>
 
-								{/* Date and Time */}
-								<div className="space-y-2">
-									<h4 className="font-semibold text-sm">Date & Time</h4>
-									<div className="space-y-1 text-sm">
+							<DialogFooter>
+								<Button
+									type="button"
+									variant="outline"
+									onClick={() => {
+										setIsAnnouncementDialogOpen(false);
+										announcementForm.reset();
+										setEditingAnnouncement(null);
+									}}
+								>
+									Cancel
+								</Button>
+								<Button
+									type="submit"
+									disabled={
+										createAnnouncementMutation.isPending ||
+										updateAnnouncementMutation.isPending
+									}
+								>
+									{editingAnnouncement
+										? "Update Announcement"
+										: "Create Announcement"}
+								</Button>
+							</DialogFooter>
+						</form>
+					</Form>
+				</DialogContent>
+			</Dialog>
+
+			{/* View Event Details Dialog (Agents) */}
+			<Dialog
+				open={isEventViewDialogOpen}
+				onOpenChange={setIsEventViewDialogOpen}
+			>
+				<DialogContent className="max-w-2xl">
+					<DialogHeader>
+						<DialogTitle className="flex items-center gap-2">
+							<RiCalendarLine className="size-5" />
+							{viewingEvent?.title}
+						</DialogTitle>
+						<DialogDescription>
+							Event details and information
+						</DialogDescription>
+					</DialogHeader>
+					{viewingEvent && (
+						<div className="space-y-4">
+							{/* Event Type and Priority */}
+							<div className="flex flex-wrap gap-2">
+								<Badge className={getEventTypeColor(viewingEvent.eventType)}>
+									{viewingEvent.eventType}
+								</Badge>
+								<Badge
+									className={getPriorityColor(
+										viewingEvent.priority || "normal",
+									)}
+								>
+									{viewingEvent.priority || "normal"}
+								</Badge>
+								{!viewingEvent.isActive && (
+									<Badge
+										variant="outline"
+										className="text-muted-foreground text-xs"
+									>
+										Inactive
+									</Badge>
+								)}
+							</div>
+
+							{/* Description */}
+							{viewingEvent.description && (
+								<div>
+									<h4 className="mb-2 font-semibold text-sm">Description</h4>
+									<p className="whitespace-pre-wrap text-muted-foreground text-sm">
+										{viewingEvent.description}
+									</p>
+								</div>
+							)}
+
+							{/* Date and Time */}
+							<div className="space-y-2">
+								<h4 className="font-semibold text-sm">Date & Time</h4>
+								<div className="space-y-1 text-sm">
+									<div className="flex items-center gap-2">
+										<RiTimeLine className="size-4 text-muted-foreground" />
+										<span>
+											{formatDate(viewingEvent.startDate)}
+											{!viewingEvent.isAllDay &&
+												` at ${formatTime(viewingEvent.startDate)}`}
+											{viewingEvent.isAllDay && " (All Day)"}
+										</span>
+									</div>
+									{viewingEvent.endDate && (
 										<div className="flex items-center gap-2">
 											<RiTimeLine className="size-4 text-muted-foreground" />
 											<span>
-												{formatDate(viewingEvent.startDate)}
+												Ends: {formatDate(viewingEvent.endDate)}
 												{!viewingEvent.isAllDay &&
-													` at ${formatTime(viewingEvent.startDate)}`}
-												{viewingEvent.isAllDay && " (All Day)"}
+													` at ${formatTime(viewingEvent.endDate)}`}
 											</span>
 										</div>
-										{viewingEvent.endDate && (
-											<div className="flex items-center gap-2">
-												<RiTimeLine className="size-4 text-muted-foreground" />
-												<span>
-													Ends: {formatDate(viewingEvent.endDate)}
-													{!viewingEvent.isAllDay &&
-														` at ${formatTime(viewingEvent.endDate)}`}
-												</span>
-											</div>
-										)}
+									)}
+								</div>
+							</div>
+
+							{/* Location */}
+							{viewingEvent.location && (
+								<div className="space-y-2">
+									<h4 className="font-semibold text-sm">Location</h4>
+									<div className="flex items-center gap-2 text-sm">
+										<RiMapPinLine className="size-4 text-muted-foreground" />
+										<span>{viewingEvent.location}</span>
 									</div>
 								</div>
+							)}
 
-								{/* Location */}
-								{viewingEvent.location && (
-									<div className="space-y-2">
-										<h4 className="font-semibold text-sm">Location</h4>
-										<div className="flex items-center gap-2 text-sm">
-											<RiMapPinLine className="size-4 text-muted-foreground" />
-											<span>{viewingEvent.location}</span>
+							{/* Days Until */}
+							{(() => {
+								const daysUntil = getDaysUntil(viewingEvent.startDate);
+								if (daysUntil >= 0 && daysUntil <= 7) {
+									return (
+										<div className="flex items-center gap-2 font-medium text-blue-600 text-sm">
+											<RiAlarmLine className="size-4" />
+											<span>
+												{daysUntil === 0
+													? "Today"
+													: daysUntil === 1
+														? "Tomorrow"
+														: `In ${daysUntil} days`}
+											</span>
 										</div>
-									</div>
-								)}
+									);
+								}
+								return null;
+							})()}
 
-								{/* Days Until */}
-								{(() => {
-									const daysUntil = getDaysUntil(viewingEvent.startDate);
-									if (daysUntil >= 0 && daysUntil <= 7) {
-										return (
-											<div className="flex items-center gap-2 font-medium text-blue-600 text-sm">
-												<RiAlarmLine className="size-4" />
-												<span>
-													{daysUntil === 0
-														? "Today"
-														: daysUntil === 1
-															? "Tomorrow"
-															: `In ${daysUntil} days`}
-												</span>
-											</div>
-										);
-									}
-									return null;
-								})()}
-
-								{/* Created By */}
-								{viewingEvent.createdByName && (
-									<div className="border-t pt-2 text-muted-foreground text-xs">
-										Created by {viewingEvent.createdByName} on{" "}
-										{formatDate(viewingEvent.createdAt)}
-									</div>
-								)}
-							</div>
-						)}
-						<DialogFooter>
-							<Button
-								type="button"
-								variant="outline"
-								onClick={() => {
-									setIsEventViewDialogOpen(false);
-									setViewingEvent(null);
-								}}
-							>
-								Close
-							</Button>
-						</DialogFooter>
-					</DialogContent>
-				</Dialog>
-			</SidebarInset>
-		</SidebarProvider>
+							{/* Created By */}
+							{viewingEvent.createdByName && (
+								<div className="border-t pt-2 text-muted-foreground text-xs">
+									Created by {viewingEvent.createdByName} on{" "}
+									{formatDate(viewingEvent.createdAt)}
+								</div>
+							)}
+						</div>
+					)}
+					<DialogFooter>
+						<Button
+							type="button"
+							variant="outline"
+							onClick={() => {
+								setIsEventViewDialogOpen(false);
+								setViewingEvent(null);
+							}}
+						>
+							Close
+						</Button>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
+		</>
 	);
 }

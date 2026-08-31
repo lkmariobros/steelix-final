@@ -11,8 +11,6 @@ import {
 	RiMoneyDollarCircleLine,
 } from "@remixicon/react";
 import { StripedProgress } from "@/dashboards/admin/widgets/striped-progress";
-import type { Lead } from "./lead-models";
-
 type Trend = "up" | "down" | "neutral";
 type ProgressTone = "primary" | "success" | "warning" | "danger";
 
@@ -77,35 +75,37 @@ function LeadMetricCard({
 	);
 }
 
+export type LeadStatsSummary = {
+	total: number;
+	active: number;
+	inactive: number;
+	appointmentsMade: number;
+	bookingsMade: number;
+	buyers: number;
+	tenants: number;
+};
+
 export function StatsCards({
-	leads,
+	summary,
 	isLoading,
 }: {
-	leads: Lead[];
+	summary: LeadStatsSummary | null | undefined;
 	isLoading: boolean;
 }) {
-	const stats = useMemo(() => {
-		const total = leads.length;
-		const active = leads.filter((l) => l.status === "active").length;
-		const inactive = leads.filter(
-			(l) => l.status === "inactive" || l.status === "pending",
-		).length;
-		const appointmentsMade = leads.filter(
-			(l) => l.stage === "appointment_made",
-		).length;
-		const bookingsMade = leads.filter((l) => l.stage === "booking_made").length;
-		const buyers = leads.filter((l) => l.type === "buyer").length;
-		const tenants = leads.filter((l) => l.type === "tenant").length;
-		return {
-			total,
-			active,
-			inactive,
-			appointmentsMade,
-			bookingsMade,
-			buyers,
-			tenants,
-		};
-	}, [leads]);
+	const stats = useMemo((): LeadStatsSummary => {
+		if (!summary) {
+			return {
+				total: 0,
+				active: 0,
+				inactive: 0,
+				appointmentsMade: 0,
+				bookingsMade: 0,
+				buyers: 0,
+				tenants: 0,
+			};
+		}
+		return summary;
+	}, [summary]);
 
 	if (isLoading) {
 		return (

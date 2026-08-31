@@ -192,6 +192,7 @@ export function BulkEditDialog({
 			}
 
 			await utils.adminLeads.list.invalidate();
+			await utils.adminLeads.stats.invalidate();
 			toast.success(
 				`Updated ${selectedIds.length} lead(s): ${applied.join(", ")}`,
 			);

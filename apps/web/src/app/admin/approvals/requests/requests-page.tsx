@@ -52,6 +52,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { toast } from "sonner";
 
 type RequestSegment = "new-project" | "subsale" | "rental";
@@ -399,6 +400,7 @@ export default function AdminApprovalRequestsPage() {
 	const queryClient = useQueryClient();
 	const [page, setPage] = useState(0);
 	const [search, setSearch] = useState("");
+	const debouncedSearch = useDebouncedValue(search, 300);
 	const pageSize = 20;
 
 	const segmentParam = searchParams.get("segment") as RequestSegment | null;
@@ -431,12 +433,12 @@ export default function AdminApprovalRequestsPage() {
 		() => ({
 			limit: pageSize,
 			offset: page * pageSize,
-			search: search.trim() || undefined,
+			search: debouncedSearch.trim() || undefined,
 			editRequestsOnly: true,
 			marketType: segmentConfig.marketType,
 			transactionType: segmentConfig.transactionType,
 		}),
-		[page, search, segmentConfig],
+		[page, debouncedSearch, segmentConfig],
 	);
 
 	const { data, isLoading, refetch } = trpc.transactions.adminList.useQuery(

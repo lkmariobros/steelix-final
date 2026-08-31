@@ -24,7 +24,7 @@ import { DealMixPanel } from "./widgets/deal-mix-panel";
 function AdminDashboardContent({ className }: { className?: string }) {
 	const { dateRange, setDateRange, isRefetching, refetch } =
 		useAdminDashboard();
-	const [timeFilter, setTimeFilter] = useState<string>("all");
+	const [timeFilter, setTimeFilter] = useState<string>("quarter");
 	const [isCalendarOpen, setIsCalendarOpen] = useState(false);
 
 	const handleTimeFilterChange = (filter: string) => {

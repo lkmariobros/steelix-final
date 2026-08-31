@@ -1,5 +1,10 @@
 "use client";
 
+import { AppSidebar } from "@/components/app-sidebar";
+import {
+	SidebarInset,
+	SidebarProvider,
+} from "@/components/sidebar";
 import { LoadingScreen } from "@/components/ui/loading-spinner";
 import { useRedirectUnauthenticated } from "@/hooks/use-redirect-unauthenticated";
 import { useUserRole } from "@/hooks/use-user-role";
@@ -21,5 +26,12 @@ export default function DashboardLayout({
 	}
 	if (!session) return <LoadingScreen text="Redirecting..." />;
 
-	return children;
+	return (
+		<SidebarProvider className="h-svh overflow-hidden">
+			<AppSidebar />
+			<SidebarInset className="h-svh min-h-0 overflow-y-auto overscroll-y-contain bg-background px-4 md:px-6 lg:px-8">
+				{children}
+			</SidebarInset>
+		</SidebarProvider>
+	);
 }

@@ -164,6 +164,7 @@ export function ImportLeadsDialog({
 			].filter(Boolean);
 			toast.success(`Import finished: ${parts.join(" · ")}`);
 			void queryClient.invalidateQueries({ queryKey: [["adminLeads"]] });
+			void queryClient.invalidateQueries({ queryKey: [["adminLeads", "stats"]] });
 			onImported();
 		},
 		onError: (e) => toast.error(e.message),

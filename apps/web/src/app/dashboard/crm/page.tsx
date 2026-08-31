@@ -1,13 +1,8 @@
 "use client";
 
-import { AppSidebar } from "@/components/app-sidebar";
 import { KanbanBoard, type PipelineStage } from "@/components/crm-kanban-board";
 import { HeaderActions } from "@/components/header-actions";
-import {
-	SidebarInset,
-	SidebarProvider,
-	SidebarTrigger,
-} from "@/components/sidebar";
+import { SidebarTrigger } from "@/components/sidebar";
 import { Badge } from "@/components/ui/badge";
 import {
 	Breadcrumb,
@@ -83,6 +78,7 @@ import {
 } from "@remixicon/react";
 import { FileSpreadsheet, FileText } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { useRedirectUnauthenticated } from "@/hooks/use-redirect-unauthenticated";
 import { useCallback, useMemo, useState, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -248,6 +244,7 @@ export default function CRMPage() {
 	const [activeTab, setActiveTab] = useState<LeadsTab>("my"); // My Leads | Company Leads
 	const [viewMode, setViewMode] = useState<ViewMode>("kanban");
 	const [searchQuery, setSearchQuery] = useState("");
+	const debouncedSearch = useDebouncedValue(searchQuery, 300);
 	const [stageFilter, setStageFilter] = useState<PipelineStage | "all">("all");
 	const [categoryFilter, setCategoryFilter] = useState<string>("all"); // tagId
 	const [agentFilter, setAgentFilter] = useState<string>("all");
@@ -289,7 +286,7 @@ export default function CRMPage() {
 		refetch: refetchProspects,
 	} = trpc.crm.list.useQuery(
 		{
-			search: searchQuery || undefined,
+			search: debouncedSearch || undefined,
 			stage: stageFilter === "all" ? undefined : stageFilter,
 			tagId: categoryFilter === "all" ? undefined : categoryFilter,
 			status: statusFilter === "all" ? undefined : statusFilter,
@@ -304,12 +301,13 @@ export default function CRMPage() {
 						? ("__unassigned__" as const)
 						: agentFilter,
 			page: currentPage,
-			limit: viewMode === "kanban" ? 1000 : itemsPerPage,
+			limit: viewMode === "kanban" ? 200 : itemsPerPage,
 		},
 		{
 			enabled: !!session,
 			retry: 1,
 			staleTime: 30000,
+			placeholderData: (prev) => prev,
 		},
 	);
 
@@ -325,39 +323,30 @@ export default function CRMPage() {
 		return prospects.filter((p) => p.agentId === agentFilter);
 	}, [prospects, agentFilter]);
 
-	// Summary cards: My Leads (personal) assigned to this agent
-	const agentStatsQuery = trpc.crm.list.useQuery(
-		{
-			search: searchQuery || undefined,
-			stage: stageFilter === "all" ? undefined : stageFilter,
-			tagId: categoryFilter === "all" ? undefined : categoryFilter,
-			status: statusFilter === "all" ? undefined : statusFilter,
-			leadType: "personal",
-			includeCompanyLeads: false,
-			filterAgentId: session?.user?.id,
-			page: 1,
-			limit: 5000,
-			forExport: true,
-		},
-		{
-			enabled: Boolean(session?.user?.id),
-			staleTime: 30_000,
-		},
-	);
+	// Summary cards via aggregate endpoint (no 5k row fetch)
+	const agentStatsQuery = trpc.crm.stats.useQuery(undefined, {
+		enabled: Boolean(session?.user?.id),
+		staleTime: 60_000,
+	});
 
-	const assignedLeadsForStats = useMemo(() => {
-		const rows = agentStatsQuery.data?.prospects ?? [];
-		const me = session?.user?.id;
-		if (!me) return [];
-		return rows.filter((p) => p.agentId === me);
-	}, [agentStatsQuery.data?.prospects, session?.user?.id]);
+	const assignedLeadsStatsSummary = useMemo(() => {
+		const s = agentStatsQuery.data;
+		if (!s) return null;
+		return {
+			total: s.total,
+			active: s.byStatus.active,
+			inactive: s.byStatus.inactive + s.byStatus.pending,
+			potential: s.potential,
+			appointmentsMade: s.appointmentsMade,
+		};
+	}, [agentStatsQuery.data]);
 
 	const importMode: AgentCrmImportMode =
 		activeTab === "company" ? "company_unclaimed" : "personal_assigned";
 
 	const exportListParams = useMemo(
 		() => ({
-			search: searchQuery || undefined,
+			search: debouncedSearch || undefined,
 			stage: stageFilter === "all" ? undefined : stageFilter,
 			tagId: categoryFilter === "all" ? undefined : categoryFilter,
 			status: statusFilter === "all" ? undefined : statusFilter,
@@ -375,7 +364,7 @@ export default function CRMPage() {
 			forExport: true as const,
 		}),
 		[
-			searchQuery,
+			debouncedSearch,
 			stageFilter,
 			categoryFilter,
 			statusFilter,
@@ -442,6 +431,7 @@ export default function CRMPage() {
 			setCreateTagIds([]);
 			form.reset();
 			queryClient.invalidateQueries({ queryKey: [["crm", "list"]] });
+			queryClient.invalidateQueries({ queryKey: [["crm", "stats"]] });
 			refetchProspects();
 		},
 		onError: (error) => {
@@ -611,6 +601,7 @@ export default function CRMPage() {
 				});
 			}
 			void trpcUtils.crm.list.invalidate();
+			void trpcUtils.crm.stats.invalidate();
 			void trpcUtils.crm.get.invalidate({ id: updated.id });
 		},
 		onError: (error) =>
@@ -756,6 +747,7 @@ export default function CRMPage() {
 		onSuccess: () => {
 			// Silently sync with server (no toast for drag-and-drop to avoid spam)
 			queryClient.invalidateQueries({ queryKey: [["crm", "list"]] });
+			queryClient.invalidateQueries({ queryKey: [["crm", "stats"]] });
 		},
 		onError: (error, variables, context) => {
 			// Rollback optimistic update on error
@@ -819,569 +811,538 @@ export default function CRMPage() {
 		"size-8 shrink-0 rounded-full border border-border/60 bg-muted/40 p-0 text-muted-foreground shadow-none hover:bg-muted hover:text-foreground";
 
 	return (
-		<SidebarProvider className="h-svh overflow-hidden">
-			<AppSidebar />
-			<SidebarInset className="h-svh min-h-0 overflow-y-auto overscroll-y-contain bg-background px-4 md:px-6 lg:px-8">
-				<header className="sticky top-0 z-40 -mx-4 flex h-16 shrink-0 items-center gap-2 border-border/60 border-b bg-background px-4 backdrop-blur-md supports-backdrop-filter:bg-background/95 md:-mx-6 md:px-6 lg:-mx-8 lg:px-8">
-					<div className="flex flex-1 items-center gap-2 px-1 sm:px-0">
-						<SidebarTrigger className="-ms-1 rounded-xl" />
-						<Separator
-							orientation="vertical"
-							className="mr-2 data-[orientation=vertical]:h-4"
-						/>
-						<Breadcrumb>
-							<BreadcrumbList>
-								<BreadcrumbItem className="hidden md:block">
-									<BreadcrumbLink href="/dashboard">
-										<RiDashboardLine size={22} aria-hidden="true" />
-										<span className="sr-only">Dashboard</span>
-									</BreadcrumbLink>
-								</BreadcrumbItem>
-								<BreadcrumbSeparator className="hidden md:block" />
-								<BreadcrumbItem>
-									<BreadcrumbPage className="flex items-center gap-2 font-medium">
-										<span className="flex size-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
-											<RiUserLine size={16} />
-										</span>
-										CRM
-									</BreadcrumbPage>
-								</BreadcrumbItem>
-							</BreadcrumbList>
-						</Breadcrumb>
-					</div>
-					<div className="ml-auto flex gap-2">
-						<HeaderActions />
-					</div>
-				</header>
-				<div className="flex flex-1 flex-col gap-5 py-5 lg:gap-6 lg:py-7">
-					{/* Page Header with My Leads / Company Leads tabs */}
-					<div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-						<div className="min-w-0 flex-1 space-y-3">
-							<div>
-								<h1 className="font-bold text-2xl tracking-tight">
-									CRM — Prospect Management
-								</h1>
-								<p className="mt-0.5 text-muted-foreground text-sm">
-									Manage your leads, follow-ups, and pipeline stages
-								</p>
-							</div>
-							<div
-								className="inline-flex items-center rounded-md border border-border/70 bg-background p-1 shadow-sm"
-								role="tablist"
-								aria-label="Lead type"
-							>
-								<Button
-									type="button"
-									role="tab"
-									aria-selected={activeTab === "my"}
-									variant="ghost"
-									size="sm"
-									onClick={() => {
-										setActiveTab("my");
-										setCurrentPage(1);
-									}}
-									className={cn(
-										"h-9 rounded-md px-3",
-										activeTab === "my"
-											? "bg-primary text-primary-foreground hover:bg-primary/90"
-											: "text-muted-foreground hover:bg-muted hover:text-foreground",
-									)}
-								>
-									My Leads
-								</Button>
-								<Button
-									type="button"
-									role="tab"
-									aria-selected={activeTab === "company"}
-									variant="ghost"
-									size="sm"
-									onClick={() => {
-										setActiveTab("company");
-										setCurrentPage(1);
-										setAgentFilter("all");
-									}}
-									className={cn(
-										"h-9 rounded-md px-3",
-										activeTab === "company"
-											? "bg-primary text-primary-foreground hover:bg-primary/90"
-											: "text-muted-foreground hover:bg-muted hover:text-foreground",
-									)}
-								>
-									Company Leads
-								</Button>
-							</div>
+		<>
+			<header className="sticky top-0 z-40 -mx-4 flex h-16 shrink-0 items-center gap-2 border-border/60 border-b bg-background px-4 backdrop-blur-md supports-backdrop-filter:bg-background/95 md:-mx-6 md:px-6 lg:-mx-8 lg:px-8">
+				<div className="flex flex-1 items-center gap-2 px-1 sm:px-0">
+					<SidebarTrigger className="-ms-1 rounded-xl" />
+					<Separator
+						orientation="vertical"
+						className="mr-2 data-[orientation=vertical]:h-4"
+					/>
+					<Breadcrumb>
+						<BreadcrumbList>
+							<BreadcrumbItem className="hidden md:block">
+								<BreadcrumbLink href="/dashboard">
+									<RiDashboardLine size={22} aria-hidden="true" />
+									<span className="sr-only">Dashboard</span>
+								</BreadcrumbLink>
+							</BreadcrumbItem>
+							<BreadcrumbSeparator className="hidden md:block" />
+							<BreadcrumbItem>
+								<BreadcrumbPage className="flex items-center gap-2 font-medium">
+									<span className="flex size-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
+										<RiUserLine size={16} />
+									</span>
+									CRM
+								</BreadcrumbPage>
+							</BreadcrumbItem>
+						</BreadcrumbList>
+					</Breadcrumb>
+				</div>
+				<div className="ml-auto flex gap-2">
+					<HeaderActions />
+				</div>
+			</header>
+			<div className="flex flex-1 flex-col gap-5 py-5 lg:gap-6 lg:py-7">
+				{/* Page Header with My Leads / Company Leads tabs */}
+				<div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+					<div className="min-w-0 flex-1 space-y-3">
+						<div>
+							<h1 className="font-bold text-2xl tracking-tight">
+								CRM — Prospect Management
+							</h1>
+							<p className="mt-0.5 text-muted-foreground text-sm">
+								Manage your leads, follow-ups, and pipeline stages
+							</p>
 						</div>
-						<div className="flex flex-shrink-0 flex-wrap items-center justify-end gap-2">
-							<div className="inline-flex items-center overflow-hidden rounded-md border border-border/70 bg-card shadow-sm">
-								<Tooltip>
-									<TooltipTrigger asChild>
-										<Button
-											type="button"
-											size="icon"
-											variant="ghost"
-											className="h-9 w-9 rounded-none p-0 text-muted-foreground hover:text-foreground"
-											disabled={isLoadingProspects}
-											aria-label="Import prospects from CSV"
-											onClick={() => setIsImportOpen(true)}
-										>
-											<RiFileUploadLine size={16} aria-hidden />
-										</Button>
-									</TooltipTrigger>
-									<TooltipContent>Import CSV</TooltipContent>
-								</Tooltip>
-								<div className="h-5 w-px bg-border" />
-								<DropdownMenu>
-									<DropdownMenuTrigger asChild>
-										<span
-											className={
-												isLoadingProspects || isExporting
-													? "pointer-events-none inline-flex opacity-50"
-													: "inline-flex"
-											}
-										>
-											<Tooltip>
-												<TooltipTrigger asChild>
-													<Button
-														type="button"
-														size="icon"
-														variant="ghost"
-														className="h-9 w-9 rounded-none p-0 text-muted-foreground hover:text-foreground"
-														disabled={isLoadingProspects || isExporting}
-														aria-label="Export prospects"
-													>
-														<RiFileDownloadLine size={16} aria-hidden />
-													</Button>
-												</TooltipTrigger>
-												<TooltipContent>Export CSV or Excel</TooltipContent>
-											</Tooltip>
-										</span>
-									</DropdownMenuTrigger>
-									<DropdownMenuContent
-										align="end"
-										className="w-fit min-w-0 p-0"
-									>
-										<div className="flex items-center gap-0 p-0">
-											<Tooltip>
-												<TooltipTrigger asChild>
-													<DropdownMenuItem
-														disabled={isLoadingProspects || isExporting}
-														onSelect={() => {
-															void handleExportProspects("csv");
-														}}
-														className="h-9 w-9 justify-center gap-0 !px-0 !py-0"
-													>
-														<FileText size={15} aria-hidden />
-													</DropdownMenuItem>
-												</TooltipTrigger>
-												<TooltipContent>Export CSV</TooltipContent>
-											</Tooltip>
-											<Tooltip>
-												<TooltipTrigger asChild>
-													<DropdownMenuItem
-														disabled={isLoadingProspects || isExporting}
-														onSelect={() => {
-															void handleExportProspects("excel");
-														}}
-														className="h-9 w-9 justify-center gap-0 !px-0 !py-0"
-													>
-														<FileSpreadsheet size={15} aria-hidden />
-													</DropdownMenuItem>
-												</TooltipTrigger>
-												<TooltipContent>Export Excel</TooltipContent>
-											</Tooltip>
-										</div>
-									</DropdownMenuContent>
-								</DropdownMenu>
-							</div>
-							<div className="inline-flex items-center rounded-md border border-border/70 bg-background p-1 shadow-sm">
-								<Button
-									type="button"
-									variant="ghost"
-									size="sm"
-									aria-pressed={viewMode === "list"}
-									onClick={() => setViewMode("list")}
-									className={cn(
-										"h-9 rounded-md px-3",
-										viewMode === "list"
-											? "bg-primary text-primary-foreground hover:bg-primary/90"
-											: "text-muted-foreground hover:bg-muted hover:text-foreground",
-									)}
-								>
-									List View
-								</Button>
-								<Button
-									type="button"
-									variant="ghost"
-									size="sm"
-									aria-pressed={viewMode === "kanban"}
-									onClick={() => setViewMode("kanban")}
-									className={cn(
-										"h-9 rounded-md px-3",
-										viewMode === "kanban"
-											? "bg-primary text-primary-foreground hover:bg-primary/90"
-											: "text-muted-foreground hover:bg-muted hover:text-foreground",
-									)}
-								>
-									Board View
-								</Button>
-							</div>
+						<div
+							className="inline-flex items-center rounded-md border border-border/70 bg-background p-1 shadow-sm"
+							role="tablist"
+							aria-label="Lead type"
+						>
 							<Button
 								type="button"
-								onClick={handleAddProspect}
+								role="tab"
+								aria-selected={activeTab === "my"}
+								variant="ghost"
 								size="sm"
-								className="h-9"
+								onClick={() => {
+									setActiveTab("my");
+									setCurrentPage(1);
+								}}
+								className={cn(
+									"h-9 rounded-md px-3",
+									activeTab === "my"
+										? "bg-primary text-primary-foreground hover:bg-primary/90"
+										: "text-muted-foreground hover:bg-muted hover:text-foreground",
+								)}
 							>
-								<RiAddLine size={16} className="mr-1.5" aria-hidden />
-								New Lead
+								My Leads
+							</Button>
+							<Button
+								type="button"
+								role="tab"
+								aria-selected={activeTab === "company"}
+								variant="ghost"
+								size="sm"
+								onClick={() => {
+									setActiveTab("company");
+									setCurrentPage(1);
+									setAgentFilter("all");
+								}}
+								className={cn(
+									"h-9 rounded-md px-3",
+									activeTab === "company"
+										? "bg-primary text-primary-foreground hover:bg-primary/90"
+										: "text-muted-foreground hover:bg-muted hover:text-foreground",
+								)}
+							>
+								Company Leads
 							</Button>
 						</div>
 					</div>
-
-					<TodayTasksWidget scope="agent" onViewLead={handleViewLeadById} />
-
-					<AgentLeadStatsCards
-						leads={assignedLeadsForStats}
-						isLoading={agentStatsQuery.isLoading}
-					/>
-
-					{/* Add Lead Dialog */}
-					<Dialog
-						open={isAddDialogOpen}
-						onOpenChange={(open) => {
-							setIsAddDialogOpen(open);
-							if (!open) setCreateTagIds([]);
-						}}
-					>
-						<DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[600px]">
-							<DialogHeader>
-								<DialogTitle className="flex items-center gap-2">
-									<RiUserLine className="size-5" />
-									Create New Lead
-								</DialogTitle>
-								<DialogDescription>
-									Add a new lead and assign it to an agent.
-								</DialogDescription>
-							</DialogHeader>
-
-							<Form {...form}>
-								<form
-									onSubmit={form.handleSubmit(onSubmit)}
-									className="space-y-4"
-								>
-									<div className="grid grid-cols-2 gap-4">
-										<FormField
-											control={form.control}
-											name="name"
-											render={({ field }) => (
-												<FormItem>
-													<FormLabel>
-														Name <span className="text-destructive">*</span>
-													</FormLabel>
-													<FormControl>
-														<Input placeholder="Full name" {...field} />
-													</FormControl>
-													<FormMessage />
-												</FormItem>
-											)}
-										/>
-
-										<FormField
-											control={form.control}
-											name="phone"
-											render={({ field }) => (
-												<FormItem>
-													<FormLabel>Phone</FormLabel>
-													<FormControl>
-														<Input placeholder="+60 12-345 6789" {...field} />
-													</FormControl>
-													<FormMessage />
-												</FormItem>
-											)}
-										/>
-
-										<FormField
-											control={form.control}
-											name="whatsappUsername"
-											render={({ field }) => (
-												<FormItem>
-													<FormLabel>WhatsApp Username (optional)</FormLabel>
-													<FormControl>
-														<Input placeholder="@username" {...field} />
-													</FormControl>
-													<p className="text-muted-foreground text-xs">
-														Required if phone is empty.
-													</p>
-													<FormMessage />
-												</FormItem>
-											)}
-										/>
-
-										<FormField
-											control={form.control}
-											name="email"
-											render={({ field }) => (
-												<FormItem>
-													<FormLabel>Email</FormLabel>
-													<FormControl>
-														<Input
-															type="email"
-															placeholder="email@example.com"
-															{...field}
-														/>
-													</FormControl>
-													<FormMessage />
-												</FormItem>
-											)}
-										/>
-
-										<FormField
-											control={form.control}
-											name="source"
-											render={({ field }) => (
-												<FormItem>
-													<FormLabel>
-														Source <span className="text-destructive">*</span>
-													</FormLabel>
-													<Select
-														onValueChange={field.onChange}
-														value={field.value || undefined}
-													>
-														<FormControl>
-															<SelectTrigger>
-																<SelectValue placeholder="Select source" />
-															</SelectTrigger>
-														</FormControl>
-														<SelectContent>
-															{LEAD_SOURCE_OPTIONS.map((o) => (
-																<SelectItem key={o.value} value={o.value}>
-																	{o.label}
-																</SelectItem>
-															))}
-														</SelectContent>
-													</Select>
-													<FormMessage />
-												</FormItem>
-											)}
-										/>
-
-										<FormField
-											control={form.control}
-											name="leadType"
-											render={({ field }) => (
-												<FormItem>
-													<FormLabel>Lead Type</FormLabel>
-													<Select
-														onValueChange={field.onChange}
-														value={field.value}
-													>
-														<FormControl>
-															<SelectTrigger>
-																<SelectValue />
-															</SelectTrigger>
-														</FormControl>
-														<SelectContent>
-															{LEAD_TYPE_OPTIONS.map((o) => (
-																<SelectItem key={o.value} value={o.value}>
-																	{o.label}
-																</SelectItem>
-															))}
-														</SelectContent>
-													</Select>
-													<FormMessage />
-												</FormItem>
-											)}
-										/>
-
-										<FormField
-											control={form.control}
-											name="status"
-											render={({ field }) => (
-												<FormItem>
-													<FormLabel>Status</FormLabel>
-													<Select
-														onValueChange={field.onChange}
-														value={field.value}
-													>
-														<FormControl>
-															<SelectTrigger>
-																<SelectValue />
-															</SelectTrigger>
-														</FormControl>
-														<SelectContent>
-															{STATUS_OPTIONS.map((o) => (
-																<SelectItem key={o.value} value={o.value}>
-																	{o.label}
-																</SelectItem>
-															))}
-														</SelectContent>
-													</Select>
-													<FormMessage />
-												</FormItem>
-											)}
-										/>
-
-										<FormField
-											control={form.control}
-											name="stage"
-											render={({ field }) => (
-												<FormItem>
-													<FormLabel>Pipeline Stage</FormLabel>
-													<Select
-														onValueChange={field.onChange}
-														value={field.value}
-													>
-														<FormControl>
-															<SelectTrigger>
-																<SelectValue />
-															</SelectTrigger>
-														</FormControl>
-														<SelectContent>
-															{PIPELINE_STAGES.map((s) => (
-																<SelectItem key={s.value} value={s.value}>
-																	{s.label}
-																</SelectItem>
-															))}
-														</SelectContent>
-													</Select>
-													<FormMessage />
-												</FormItem>
-											)}
-										/>
-
-										<FormField
-											control={form.control}
-											name="agentId"
-											render={({ field }) => (
-												<FormItem>
-													<FormLabel>
-														Assign to Agent{" "}
-														<span className="text-destructive">*</span>
-													</FormLabel>
-													<Select
-														onValueChange={field.onChange}
-														value={field.value || undefined}
-													>
-														<FormControl>
-															<SelectTrigger>
-																<SelectValue placeholder="Select agent" />
-															</SelectTrigger>
-														</FormControl>
-														<SelectContent>
-															{followerAgents.map((a) => (
-																<SelectItem key={a.agentId} value={a.agentId}>
-																	{a.agentName ?? a.agentEmail}
-																</SelectItem>
-															))}
-														</SelectContent>
-													</Select>
-													<FormMessage />
-												</FormItem>
-											)}
-										/>
-									</div>
-
-									<div className="space-y-1.5">
-										<FormLabel>
-											Categories <span className="text-destructive">*</span>
-										</FormLabel>
-										<p className="text-muted-foreground text-xs">
-											Required — group this lead with others under the same
-											category.
-										</p>
-										<TagSelector
-											value={createTagIds}
-											onChange={setCreateTagIds}
-										/>
-										{createTagIds.length === 0 && (
-											<p className="text-destructive text-xs">
-												Select at least one category.
-											</p>
-										)}
-									</div>
-
-									<DialogFooter>
-										<Button
-											type="button"
-											variant="outline"
-											onClick={() => setIsAddDialogOpen(false)}
-											disabled={createProspectMutation.isPending}
-										>
-											Cancel
-										</Button>
-										<Button
-											type="submit"
-											disabled={
-												createProspectMutation.isPending ||
-												createTagIds.length === 0
-											}
-											className="bg-green-600 hover:bg-green-700"
-										>
-											{createProspectMutation.isPending ? (
-												<>
-													<RiLoader4Line className="mr-2 h-4 w-4 animate-spin" />
-													Creating...
-												</>
-											) : (
-												<>
-													<RiAddLine className="mr-2 h-4 w-4" />
-													Create Lead
-												</>
-											)}
-										</Button>
-									</DialogFooter>
-								</form>
-							</Form>
-						</DialogContent>
-					</Dialog>
-
-					{/* View Prospect Dialog */}
-					<Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
-						<DialogContent className="max-h-[90vh] overflow-y-auto border-border/70 sm:max-w-[700px] [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
-							<DialogHeader className="pr-8">
-								<DialogTitle className="flex items-center gap-2">
-									<span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/12 text-primary">
-										<RiUserLine className="size-4" />
+					<div className="flex flex-shrink-0 flex-wrap items-center justify-end gap-2">
+						<div className="inline-flex items-center overflow-hidden rounded-md border border-border/70 bg-card shadow-sm">
+							<Tooltip>
+								<TooltipTrigger asChild>
+									<Button
+										type="button"
+										size="icon"
+										variant="ghost"
+										className="h-9 w-9 rounded-none p-0 text-muted-foreground hover:text-foreground"
+										disabled={isLoadingProspects}
+										aria-label="Import prospects from CSV"
+										onClick={() => setIsImportOpen(true)}
+									>
+										<RiFileUploadLine size={16} aria-hidden />
+									</Button>
+								</TooltipTrigger>
+								<TooltipContent>Import CSV</TooltipContent>
+							</Tooltip>
+							<div className="h-5 w-px bg-border" />
+							<DropdownMenu>
+								<DropdownMenuTrigger asChild>
+									<span
+										className={
+											isLoadingProspects || isExporting
+												? "pointer-events-none inline-flex opacity-50"
+												: "inline-flex"
+										}
+									>
+										<Tooltip>
+											<TooltipTrigger asChild>
+												<Button
+													type="button"
+													size="icon"
+													variant="ghost"
+													className="h-9 w-9 rounded-none p-0 text-muted-foreground hover:text-foreground"
+													disabled={isLoadingProspects || isExporting}
+													aria-label="Export prospects"
+												>
+													<RiFileDownloadLine size={16} aria-hidden />
+												</Button>
+											</TooltipTrigger>
+											<TooltipContent>Export CSV or Excel</TooltipContent>
+										</Tooltip>
 									</span>
-									{canEditLeadName && isEditingLeadName ? (
-										<div className="flex min-w-0 flex-1 items-center gap-2">
-											<Input
-												value={leadNameDraft}
-												onChange={(e) => setLeadNameDraft(e.target.value)}
-												className="h-9 font-semibold text-base"
-												placeholder="Lead name"
-												autoFocus
-												onKeyDown={(e) => {
-													if (e.key === "Enter") {
-														e.preventDefault();
-														const next = leadNameDraft.trim();
-														if (
-															!next ||
-															!activeProspect ||
-															next === activeProspect.name
-														) {
-															setIsEditingLeadName(false);
-															return;
-														}
-														updateLeadNameMutation.mutate({
-															id: activeProspect.id,
-															name: next,
-														});
-													}
-													if (e.key === "Escape") {
-														setIsEditingLeadName(false);
-														setLeadNameDraft("");
-													}
-												}}
-											/>
-											<Button
-												type="button"
-												size="sm"
-												className="shrink-0"
-												disabled={
-													!leadNameDraft.trim() ||
-													updateLeadNameMutation.isPending
-												}
-												onClick={() => {
+								</DropdownMenuTrigger>
+								<DropdownMenuContent
+									align="end"
+									className="w-fit min-w-0 p-0"
+								>
+									<div className="flex items-center gap-0 p-0">
+										<Tooltip>
+											<TooltipTrigger asChild>
+												<DropdownMenuItem
+													disabled={isLoadingProspects || isExporting}
+													onSelect={() => {
+														void handleExportProspects("csv");
+													}}
+													className="h-9 w-9 justify-center gap-0 !px-0 !py-0"
+												>
+													<FileText size={15} aria-hidden />
+												</DropdownMenuItem>
+											</TooltipTrigger>
+											<TooltipContent>Export CSV</TooltipContent>
+										</Tooltip>
+										<Tooltip>
+											<TooltipTrigger asChild>
+												<DropdownMenuItem
+													disabled={isLoadingProspects || isExporting}
+													onSelect={() => {
+														void handleExportProspects("excel");
+													}}
+													className="h-9 w-9 justify-center gap-0 !px-0 !py-0"
+												>
+													<FileSpreadsheet size={15} aria-hidden />
+												</DropdownMenuItem>
+											</TooltipTrigger>
+											<TooltipContent>Export Excel</TooltipContent>
+										</Tooltip>
+									</div>
+								</DropdownMenuContent>
+							</DropdownMenu>
+						</div>
+						<div className="inline-flex items-center rounded-md border border-border/70 bg-background p-1 shadow-sm">
+							<Button
+								type="button"
+								variant="ghost"
+								size="sm"
+								aria-pressed={viewMode === "list"}
+								onClick={() => setViewMode("list")}
+								className={cn(
+									"h-9 rounded-md px-3",
+									viewMode === "list"
+										? "bg-primary text-primary-foreground hover:bg-primary/90"
+										: "text-muted-foreground hover:bg-muted hover:text-foreground",
+								)}
+							>
+								List View
+							</Button>
+							<Button
+								type="button"
+								variant="ghost"
+								size="sm"
+								aria-pressed={viewMode === "kanban"}
+								onClick={() => setViewMode("kanban")}
+								className={cn(
+									"h-9 rounded-md px-3",
+									viewMode === "kanban"
+										? "bg-primary text-primary-foreground hover:bg-primary/90"
+										: "text-muted-foreground hover:bg-muted hover:text-foreground",
+								)}
+							>
+								Board View
+							</Button>
+						</div>
+						<Button
+							type="button"
+							onClick={handleAddProspect}
+							size="sm"
+							className="h-9"
+						>
+							<RiAddLine size={16} className="mr-1.5" aria-hidden />
+							New Lead
+						</Button>
+					</div>
+				</div>
+
+				<TodayTasksWidget scope="agent" onViewLead={handleViewLeadById} />
+
+				<AgentLeadStatsCards
+					summary={assignedLeadsStatsSummary}
+					isLoading={agentStatsQuery.isLoading}
+				/>
+
+				{/* Add Lead Dialog */}
+				<Dialog
+					open={isAddDialogOpen}
+					onOpenChange={(open) => {
+						setIsAddDialogOpen(open);
+						if (!open) setCreateTagIds([]);
+					}}
+				>
+					<DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[600px]">
+						<DialogHeader>
+							<DialogTitle className="flex items-center gap-2">
+								<RiUserLine className="size-5" />
+								Create New Lead
+							</DialogTitle>
+							<DialogDescription>
+								Add a new lead and assign it to an agent.
+							</DialogDescription>
+						</DialogHeader>
+
+						<Form {...form}>
+							<form
+								onSubmit={form.handleSubmit(onSubmit)}
+								className="space-y-4"
+							>
+								<div className="grid grid-cols-2 gap-4">
+									<FormField
+										control={form.control}
+										name="name"
+										render={({ field }) => (
+											<FormItem>
+												<FormLabel>
+													Name <span className="text-destructive">*</span>
+												</FormLabel>
+												<FormControl>
+													<Input placeholder="Full name" {...field} />
+												</FormControl>
+												<FormMessage />
+											</FormItem>
+										)}
+									/>
+
+									<FormField
+										control={form.control}
+										name="phone"
+										render={({ field }) => (
+											<FormItem>
+												<FormLabel>Phone</FormLabel>
+												<FormControl>
+													<Input placeholder="+60 12-345 6789" {...field} />
+												</FormControl>
+												<FormMessage />
+											</FormItem>
+										)}
+									/>
+
+									<FormField
+										control={form.control}
+										name="whatsappUsername"
+										render={({ field }) => (
+											<FormItem>
+												<FormLabel>WhatsApp Username (optional)</FormLabel>
+												<FormControl>
+													<Input placeholder="@username" {...field} />
+												</FormControl>
+												<p className="text-muted-foreground text-xs">
+													Required if phone is empty.
+												</p>
+												<FormMessage />
+											</FormItem>
+										)}
+									/>
+
+									<FormField
+										control={form.control}
+										name="email"
+										render={({ field }) => (
+											<FormItem>
+												<FormLabel>Email</FormLabel>
+												<FormControl>
+													<Input
+														type="email"
+														placeholder="email@example.com"
+														{...field}
+													/>
+												</FormControl>
+												<FormMessage />
+											</FormItem>
+										)}
+									/>
+
+									<FormField
+										control={form.control}
+										name="source"
+										render={({ field }) => (
+											<FormItem>
+												<FormLabel>
+													Source <span className="text-destructive">*</span>
+												</FormLabel>
+												<Select
+													onValueChange={field.onChange}
+													value={field.value || undefined}
+												>
+													<FormControl>
+														<SelectTrigger>
+															<SelectValue placeholder="Select source" />
+														</SelectTrigger>
+													</FormControl>
+													<SelectContent>
+														{LEAD_SOURCE_OPTIONS.map((o) => (
+															<SelectItem key={o.value} value={o.value}>
+																{o.label}
+															</SelectItem>
+														))}
+													</SelectContent>
+												</Select>
+												<FormMessage />
+											</FormItem>
+										)}
+									/>
+
+									<FormField
+										control={form.control}
+										name="leadType"
+										render={({ field }) => (
+											<FormItem>
+												<FormLabel>Lead Type</FormLabel>
+												<Select
+													onValueChange={field.onChange}
+													value={field.value}
+												>
+													<FormControl>
+														<SelectTrigger>
+															<SelectValue />
+														</SelectTrigger>
+													</FormControl>
+													<SelectContent>
+														{LEAD_TYPE_OPTIONS.map((o) => (
+															<SelectItem key={o.value} value={o.value}>
+																{o.label}
+															</SelectItem>
+														))}
+													</SelectContent>
+												</Select>
+												<FormMessage />
+											</FormItem>
+										)}
+									/>
+
+									<FormField
+										control={form.control}
+										name="status"
+										render={({ field }) => (
+											<FormItem>
+												<FormLabel>Status</FormLabel>
+												<Select
+													onValueChange={field.onChange}
+													value={field.value}
+												>
+													<FormControl>
+														<SelectTrigger>
+															<SelectValue />
+														</SelectTrigger>
+													</FormControl>
+													<SelectContent>
+														{STATUS_OPTIONS.map((o) => (
+															<SelectItem key={o.value} value={o.value}>
+																{o.label}
+															</SelectItem>
+														))}
+													</SelectContent>
+												</Select>
+												<FormMessage />
+											</FormItem>
+										)}
+									/>
+
+									<FormField
+										control={form.control}
+										name="stage"
+										render={({ field }) => (
+											<FormItem>
+												<FormLabel>Pipeline Stage</FormLabel>
+												<Select
+													onValueChange={field.onChange}
+													value={field.value}
+												>
+													<FormControl>
+														<SelectTrigger>
+															<SelectValue />
+														</SelectTrigger>
+													</FormControl>
+													<SelectContent>
+														{PIPELINE_STAGES.map((s) => (
+															<SelectItem key={s.value} value={s.value}>
+																{s.label}
+															</SelectItem>
+														))}
+													</SelectContent>
+												</Select>
+												<FormMessage />
+											</FormItem>
+										)}
+									/>
+
+									<FormField
+										control={form.control}
+										name="agentId"
+										render={({ field }) => (
+											<FormItem>
+												<FormLabel>
+													Assign to Agent{" "}
+													<span className="text-destructive">*</span>
+												</FormLabel>
+												<Select
+													onValueChange={field.onChange}
+													value={field.value || undefined}
+												>
+													<FormControl>
+														<SelectTrigger>
+															<SelectValue placeholder="Select agent" />
+														</SelectTrigger>
+													</FormControl>
+													<SelectContent>
+														{followerAgents.map((a) => (
+															<SelectItem key={a.agentId} value={a.agentId}>
+																{a.agentName ?? a.agentEmail}
+															</SelectItem>
+														))}
+													</SelectContent>
+												</Select>
+												<FormMessage />
+											</FormItem>
+										)}
+									/>
+								</div>
+
+								<div className="space-y-1.5">
+									<FormLabel>
+										Categories <span className="text-destructive">*</span>
+									</FormLabel>
+									<p className="text-muted-foreground text-xs">
+										Required — group this lead with others under the same
+										category.
+									</p>
+									<TagSelector
+										value={createTagIds}
+										onChange={setCreateTagIds}
+									/>
+									{createTagIds.length === 0 && (
+										<p className="text-destructive text-xs">
+											Select at least one category.
+										</p>
+									)}
+								</div>
+
+								<DialogFooter>
+									<Button
+										type="button"
+										variant="outline"
+										onClick={() => setIsAddDialogOpen(false)}
+										disabled={createProspectMutation.isPending}
+									>
+										Cancel
+									</Button>
+									<Button
+										type="submit"
+										disabled={
+											createProspectMutation.isPending ||
+											createTagIds.length === 0
+										}
+										className="bg-green-600 hover:bg-green-700"
+									>
+										{createProspectMutation.isPending ? (
+											<>
+												<RiLoader4Line className="mr-2 h-4 w-4 animate-spin" />
+												Creating...
+											</>
+										) : (
+											<>
+												<RiAddLine className="mr-2 h-4 w-4" />
+												Create Lead
+											</>
+										)}
+									</Button>
+								</DialogFooter>
+							</form>
+						</Form>
+					</DialogContent>
+				</Dialog>
+
+				{/* View Prospect Dialog */}
+				<Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
+					<DialogContent className="max-h-[90vh] overflow-y-auto border-border/70 sm:max-w-[700px] [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+						<DialogHeader className="pr-8">
+							<DialogTitle className="flex items-center gap-2">
+								<span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/12 text-primary">
+									<RiUserLine className="size-4" />
+								</span>
+								{canEditLeadName && isEditingLeadName ? (
+									<div className="flex min-w-0 flex-1 items-center gap-2">
+										<Input
+											value={leadNameDraft}
+											onChange={(e) => setLeadNameDraft(e.target.value)}
+											className="h-9 font-semibold text-base"
+											placeholder="Lead name"
+											autoFocus
+											onKeyDown={(e) => {
+												if (e.key === "Enter") {
+													e.preventDefault();
 													const next = leadNameDraft.trim();
 													if (
 														!next ||
@@ -1395,1015 +1356,1046 @@ export default function CRMPage() {
 														id: activeProspect.id,
 														name: next,
 													});
-												}}
-											>
-												{updateLeadNameMutation.isPending ? (
-													<RiLoader4Line className="size-4 animate-spin" />
-												) : (
-													<RiCheckLine className="size-4" />
-												)}
-											</Button>
-											<Button
-												type="button"
-												size="sm"
-												variant="ghost"
-												className="shrink-0"
-												onClick={() => {
+												}
+												if (e.key === "Escape") {
 													setIsEditingLeadName(false);
 													setLeadNameDraft("");
+												}
+											}}
+										/>
+										<Button
+											type="button"
+											size="sm"
+											className="shrink-0"
+											disabled={
+												!leadNameDraft.trim() ||
+												updateLeadNameMutation.isPending
+											}
+											onClick={() => {
+												const next = leadNameDraft.trim();
+												if (
+													!next ||
+													!activeProspect ||
+													next === activeProspect.name
+												) {
+													setIsEditingLeadName(false);
+													return;
+												}
+												updateLeadNameMutation.mutate({
+													id: activeProspect.id,
+													name: next,
+												});
+											}}
+										>
+											{updateLeadNameMutation.isPending ? (
+												<RiLoader4Line className="size-4 animate-spin" />
+											) : (
+												<RiCheckLine className="size-4" />
+											)}
+										</Button>
+										<Button
+											type="button"
+											size="sm"
+											variant="ghost"
+											className="shrink-0"
+											onClick={() => {
+												setIsEditingLeadName(false);
+												setLeadNameDraft("");
+											}}
+										>
+											<RiCloseLine className="size-4" />
+										</Button>
+									</div>
+								) : (
+									<div className="flex min-w-0 items-center gap-2">
+										<span className="truncate">
+											{activeProspect?.name ?? "Lead Detail"}
+										</span>
+										{canEditLeadName ? (
+											<Button
+												type="button"
+												variant="ghost"
+												size="sm"
+												className="h-7 shrink-0 gap-1 px-2 text-muted-foreground"
+												onClick={() => {
+													setLeadNameDraft(activeProspect?.name ?? "");
+													setIsEditingLeadName(true);
 												}}
 											>
-												<RiCloseLine className="size-4" />
+												<RiPencilLine className="size-3.5" />
+												Edit name
 											</Button>
-										</div>
-									) : (
-										<div className="flex min-w-0 items-center gap-2">
-											<span className="truncate">
-												{activeProspect?.name ?? "Lead Detail"}
+										) : null}
+									</div>
+								)}
+							</DialogTitle>
+							<DialogDescription>
+								View complete information about this lead.
+							</DialogDescription>
+						</DialogHeader>
+
+						{activeProspect && (
+							<div className="space-y-6 py-4">
+								<LeadContactInfoCard
+									lead={{
+										status: activeProspect.status,
+										email: activeProspect.email,
+										phone: activeProspect.phone,
+										whatsappUsername: activeProspect.whatsappUsername,
+										source: activeProspect.source,
+										leadType: activeProspect.leadType,
+										tagNames: activeProspect.tagNames,
+										tags: activeProspect.tags,
+										createdAt: activeProspect.createdAt,
+										agentName: activeProspect.agentName,
+									}}
+									showDescription={false}
+									showNotes={false}
+								/>
+
+								{/* Lead Detail */}
+								<Card className="gap-0 overflow-hidden border-border/70 py-0 shadow-sm">
+									<CardHeader className="border-border/60 border-b bg-muted/40 px-4 py-3 dark:bg-muted/50">
+										<CardTitle className="flex items-center gap-2 font-semibold text-sm">
+											<span className="flex size-7 items-center justify-center rounded-lg bg-primary/12 text-primary">
+												<RiLinksLine className="size-3.5" />
 											</span>
-											{canEditLeadName ? (
-												<Button
-													type="button"
-													variant="ghost"
-													size="sm"
-													className="h-7 shrink-0 gap-1 px-2 text-muted-foreground"
-													onClick={() => {
-														setLeadNameDraft(activeProspect?.name ?? "");
-														setIsEditingLeadName(true);
-													}}
-												>
-													<RiPencilLine className="size-3.5" />
-													Edit name
-												</Button>
-											) : null}
+											Lead Detail
+										</CardTitle>
+									</CardHeader>
+									<CardContent className="space-y-3 p-4">
+										<div className="space-y-2">
+											<div className="flex items-center gap-2 text-muted-foreground text-sm">
+												<RiLinksLine className="size-4" />
+												Lead Stage
+											</div>
+											{canEditStageForSelected ? (
+												<div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+													<Select
+														value={detailStage || activeProspect.stage}
+														onValueChange={(v) =>
+															setDetailStage(v as PipelineStage)
+														}
+													>
+														<SelectTrigger className="rounded-xl border-border/70 sm:flex-1">
+															<SelectValue placeholder="Select stage…" />
+														</SelectTrigger>
+														<SelectContent>
+															{PIPELINE_STAGES.map((s) => (
+																<SelectItem key={s.value} value={s.value}>
+																	{s.label}
+																</SelectItem>
+															))}
+														</SelectContent>
+													</Select>
+													<Button
+														size="sm"
+														className="h-9 shrink-0 rounded-full px-4"
+														disabled={
+															!detailStage ||
+															detailStage === activeProspect.stage ||
+															updateStageMutation.isPending
+														}
+														onClick={handleDetailStageSave}
+													>
+														{updateStageMutation.isPending ? (
+															<RiLoader4Line className="size-4 animate-spin" />
+														) : (
+															"Update"
+														)}
+													</Button>
+												</div>
+											) : (
+												<StageBadge stage={activeProspect.stage} />
+											)}
 										</div>
-									)}
-								</DialogTitle>
-								<DialogDescription>
-									View complete information about this lead.
-								</DialogDescription>
-							</DialogHeader>
-
-							{activeProspect && (
-								<div className="space-y-6 py-4">
-									<LeadContactInfoCard
-										lead={{
-											status: activeProspect.status,
-											email: activeProspect.email,
-											phone: activeProspect.phone,
-											whatsappUsername: activeProspect.whatsappUsername,
-											source: activeProspect.source,
-											leadType: activeProspect.leadType,
-											tagNames: activeProspect.tagNames,
-											tags: activeProspect.tags,
-											createdAt: activeProspect.createdAt,
-											agentName: activeProspect.agentName,
-										}}
-										showDescription={false}
-										showNotes={false}
-									/>
-
-									{/* Lead Detail */}
-									<Card className="gap-0 overflow-hidden border-border/70 py-0 shadow-sm">
-										<CardHeader className="border-border/60 border-b bg-muted/40 px-4 py-3 dark:bg-muted/50">
-											<CardTitle className="flex items-center gap-2 font-semibold text-sm">
-												<span className="flex size-7 items-center justify-center rounded-lg bg-primary/12 text-primary">
-													<RiLinksLine className="size-3.5" />
+										<div className="space-y-2">
+											<div className="flex items-center gap-2 text-muted-foreground text-sm">
+												<RiPriceTagLine className="size-4 shrink-0" />
+												Categories
+											</div>
+											{canEditCategoriesForSelected ? (
+												<>
+													<TagSelector
+														value={categoryTagIds}
+														onChange={setCategoryTagIds}
+														placeholder="Add categories…"
+													/>
+													<p className="text-muted-foreground text-xs">
+														Choose from admin-defined categories only.
+													</p>
+													<Button
+														size="sm"
+														className="h-8 rounded-full px-4"
+														disabled={
+															setCategoriesMutation.isPending ||
+															JSON.stringify(categoryTagIds) ===
+																JSON.stringify(
+																	activeProspect.tagIds ?? [],
+																)
+														}
+														onClick={() =>
+															setCategoriesMutation.mutate({
+																id: activeProspect.id,
+																tagIds: categoryTagIds,
+															})
+														}
+													>
+														{setCategoriesMutation.isPending ? (
+															<RiLoader4Line className="size-4 animate-spin" />
+														) : (
+															"Save Categories"
+														)}
+													</Button>
+												</>
+											) : activeProspect.tagNames &&
+											  activeProspect.tagNames.length > 0 ? (
+												<div className="flex flex-wrap gap-1">
+													{activeProspect.tagNames.map((tag) => (
+														<Badge
+															key={tag}
+															variant="secondary"
+															className="text-xs"
+														>
+															{tag}
+														</Badge>
+													))}
+												</div>
+											) : activeProspect.tags?.trim() ? (
+												<div className="flex flex-wrap gap-1">
+													{activeProspect.tags
+														.split(",")
+														.map((tag) => (
+															<Badge
+																key={tag.trim()}
+																variant="secondary"
+																className="text-xs"
+															>
+																{tag.trim()}
+															</Badge>
+														))}
+												</div>
+											) : (
+												<span className="text-muted-foreground text-sm">
+													—
 												</span>
-												Lead Detail
-											</CardTitle>
-										</CardHeader>
-										<CardContent className="space-y-3 p-4">
+											)}
+										</div>
+										{(activeProspect.agentId ||
+											activeProspect.agentName ||
+											canEditOwnerForSelected) && (
 											<div className="space-y-2">
 												<div className="flex items-center gap-2 text-muted-foreground text-sm">
-													<RiLinksLine className="size-4" />
-													Lead Stage
+													<RiUserLine className="size-4" />
+													Owner
 												</div>
-												{canEditStageForSelected ? (
-													<div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+												{canEditOwnerForSelected ? (
+													<div className="flex gap-2">
 														<Select
-															value={detailStage || activeProspect.stage}
-															onValueChange={(v) =>
-																setDetailStage(v as PipelineStage)
-															}
+															value={ownerAgentId || undefined}
+															onValueChange={setOwnerAgentId}
 														>
-															<SelectTrigger className="rounded-xl border-border/70 sm:flex-1">
-																<SelectValue placeholder="Select stage…" />
+															<SelectTrigger className="min-w-0 flex-1">
+																<SelectValue placeholder="Select owner" />
 															</SelectTrigger>
 															<SelectContent>
-																{PIPELINE_STAGES.map((s) => (
-																	<SelectItem key={s.value} value={s.value}>
-																		{s.label}
+																{followerAgents.map((a) => (
+																	<SelectItem key={a.agentId} value={a.agentId}>
+																		{a.agentName ?? a.agentEmail}
 																	</SelectItem>
 																))}
 															</SelectContent>
 														</Select>
 														<Button
 															size="sm"
-															className="h-9 shrink-0 rounded-full px-4"
 															disabled={
-																!detailStage ||
-																detailStage === activeProspect.stage ||
-																updateStageMutation.isPending
-															}
-															onClick={handleDetailStageSave}
-														>
-															{updateStageMutation.isPending ? (
-																<RiLoader4Line className="size-4 animate-spin" />
-															) : (
-																"Update"
-															)}
-														</Button>
-													</div>
-												) : (
-													<StageBadge stage={activeProspect.stage} />
-												)}
-											</div>
-											<div className="space-y-2">
-												<div className="flex items-center gap-2 text-muted-foreground text-sm">
-													<RiPriceTagLine className="size-4 shrink-0" />
-													Categories
-												</div>
-												{canEditCategoriesForSelected ? (
-													<>
-														<TagSelector
-															value={categoryTagIds}
-															onChange={setCategoryTagIds}
-															placeholder="Add categories…"
-														/>
-														<p className="text-muted-foreground text-xs">
-															Choose from admin-defined categories only.
-														</p>
-														<Button
-															size="sm"
-															className="h-8 rounded-full px-4"
-															disabled={
-																setCategoriesMutation.isPending ||
-																JSON.stringify(categoryTagIds) ===
-																	JSON.stringify(
-																		activeProspect.tagIds ?? [],
-																	)
+																setOwnerMutation.isPending ||
+																!ownerAgentId ||
+																ownerAgentId === activeProspect.agentId
 															}
 															onClick={() =>
-																setCategoriesMutation.mutate({
+																setOwnerMutation.mutate({
 																	id: activeProspect.id,
-																	tagIds: categoryTagIds,
+																	agentId: ownerAgentId,
 																})
 															}
 														>
-															{setCategoriesMutation.isPending ? (
+															{setOwnerMutation.isPending ? (
 																<RiLoader4Line className="size-4 animate-spin" />
 															) : (
-																"Save Categories"
+																"Save"
 															)}
 														</Button>
-													</>
-												) : activeProspect.tagNames &&
-												  activeProspect.tagNames.length > 0 ? (
-													<div className="flex flex-wrap gap-1">
-														{activeProspect.tagNames.map((tag) => (
-															<Badge
-																key={tag}
-																variant="secondary"
-																className="text-xs"
-															>
-																{tag}
-															</Badge>
-														))}
-													</div>
-												) : activeProspect.tags?.trim() ? (
-													<div className="flex flex-wrap gap-1">
-														{activeProspect.tags
-															.split(",")
-															.map((tag) => (
-																<Badge
-																	key={tag.trim()}
-																	variant="secondary"
-																	className="text-xs"
-																>
-																	{tag.trim()}
-																</Badge>
-															))}
 													</div>
 												) : (
-													<span className="text-muted-foreground text-sm">
-														—
-													</span>
+													<div className="font-medium text-sm">
+														{activeProspect.agentName ?? "—"}
+													</div>
 												)}
 											</div>
-											{(activeProspect.agentId ||
-												activeProspect.agentName ||
-												canEditOwnerForSelected) && (
-												<div className="space-y-2">
-													<div className="flex items-center gap-2 text-muted-foreground text-sm">
-														<RiUserLine className="size-4" />
-														Owner
-													</div>
-													{canEditOwnerForSelected ? (
-														<div className="flex gap-2">
-															<Select
-																value={ownerAgentId || undefined}
-																onValueChange={setOwnerAgentId}
-															>
-																<SelectTrigger className="min-w-0 flex-1">
-																	<SelectValue placeholder="Select owner" />
-																</SelectTrigger>
-																<SelectContent>
-																	{followerAgents.map((a) => (
-																		<SelectItem key={a.agentId} value={a.agentId}>
-																			{a.agentName ?? a.agentEmail}
-																		</SelectItem>
-																	))}
-																</SelectContent>
-															</Select>
-															<Button
-																size="sm"
-																disabled={
-																	setOwnerMutation.isPending ||
-																	!ownerAgentId ||
-																	ownerAgentId === activeProspect.agentId
-																}
-																onClick={() =>
-																	setOwnerMutation.mutate({
-																		id: activeProspect.id,
-																		agentId: ownerAgentId,
-																	})
-																}
-															>
-																{setOwnerMutation.isPending ? (
-																	<RiLoader4Line className="size-4 animate-spin" />
-																) : (
-																	"Save"
-																)}
-															</Button>
+										)}
+										<div className="space-y-2">
+											<div className="flex items-center gap-2 text-muted-foreground text-sm">
+												<RiUserLine className="size-4" />
+												Followers
+											</div>
+											{activeProspect.followerNames &&
+											  activeProspect.followerNames.length > 0 ? (
+												<div className="flex flex-wrap gap-1">
+													{activeProspect.followerNames.map((name) => (
+														<Badge key={name} variant="secondary">
+															{name}
+														</Badge>
+													))}
+												</div>
+											) : (
+												<span className="text-muted-foreground text-sm">—</span>
+											)}
+										</div>
+										{activeProspect.projectName && (
+											<div className="flex items-center justify-between">
+												<div className="flex items-center gap-2 text-muted-foreground text-sm">
+													<RiHomeLine className="size-4" />
+													Developer Project
+												</div>
+												<div className="font-medium text-sm">
+													{activeProspect.projectName}
+												</div>
+											</div>
+										)}
+									</CardContent>
+								</Card>
+
+								{/* Contact History */}
+								{(activeProspect.lastContact ||
+									activeProspect.nextContact) && (
+									<Card className="gap-0 overflow-hidden border-border/70 py-0 shadow-sm">
+										<CardHeader className="border-border/60 border-b bg-muted/40 px-4 py-3 dark:bg-muted/50">
+											<CardTitle className="flex items-center gap-2 font-semibold text-sm">
+												<span className="flex size-7 items-center justify-center rounded-lg bg-primary/12 text-primary">
+													<RiCalendarLine className="size-3.5" />
+												</span>
+												Contact History
+											</CardTitle>
+										</CardHeader>
+										<CardContent className="space-y-2 p-4">
+											{activeProspect.lastContact && (
+												<div className="flex items-center gap-3">
+													<RiCalendarLine className="size-4 text-muted-foreground" />
+													<div className="flex-1">
+														<div className="text-muted-foreground text-xs">
+															Last Contact
 														</div>
-													) : (
 														<div className="font-medium text-sm">
-															{activeProspect.agentName ?? "—"}
+															{formatContactDate(
+																activeProspect.lastContact,
+															)}
 														</div>
-													)}
+													</div>
 												</div>
 											)}
-											<div className="space-y-2">
-												<div className="flex items-center gap-2 text-muted-foreground text-sm">
-													<RiUserLine className="size-4" />
-													Followers
-												</div>
-												{activeProspect.followerNames &&
-												  activeProspect.followerNames.length > 0 ? (
-													<div className="flex flex-wrap gap-1">
-														{activeProspect.followerNames.map((name) => (
-															<Badge key={name} variant="secondary">
-																{name}
-															</Badge>
-														))}
-													</div>
-												) : (
-													<span className="text-muted-foreground text-sm">—</span>
-												)}
-											</div>
-											{activeProspect.projectName && (
-												<div className="flex items-center justify-between">
-													<div className="flex items-center gap-2 text-muted-foreground text-sm">
-														<RiHomeLine className="size-4" />
-														Developer Project
-													</div>
-													<div className="font-medium text-sm">
-														{activeProspect.projectName}
+											{activeProspect.nextContact && (
+												<div className="flex items-center gap-3">
+													<RiCalendarLine className="size-4 text-muted-foreground" />
+													<div className="flex-1">
+														<div className="text-muted-foreground text-xs">
+															Next Contact
+														</div>
+														<div className="font-medium text-sm">
+															{formatContactDate(
+																activeProspect.nextContact,
+															)}
+														</div>
 													</div>
 												</div>
 											)}
 										</CardContent>
 									</Card>
+								)}
 
-									{/* Contact History */}
-									{(activeProspect.lastContact ||
-										activeProspect.nextContact) && (
-										<Card className="gap-0 overflow-hidden border-border/70 py-0 shadow-sm">
-											<CardHeader className="border-border/60 border-b bg-muted/40 px-4 py-3 dark:bg-muted/50">
-												<CardTitle className="flex items-center gap-2 font-semibold text-sm">
-													<span className="flex size-7 items-center justify-center rounded-lg bg-primary/12 text-primary">
-														<RiCalendarLine className="size-3.5" />
-													</span>
-													Contact History
-												</CardTitle>
-											</CardHeader>
-											<CardContent className="space-y-2 p-4">
-												{activeProspect.lastContact && (
-													<div className="flex items-center gap-3">
-														<RiCalendarLine className="size-4 text-muted-foreground" />
-														<div className="flex-1">
-															<div className="text-muted-foreground text-xs">
-																Last Contact
-															</div>
-															<div className="font-medium text-sm">
-																{formatContactDate(
-																	activeProspect.lastContact,
-																)}
-															</div>
-														</div>
-													</div>
-												)}
-												{activeProspect.nextContact && (
-													<div className="flex items-center gap-3">
-														<RiCalendarLine className="size-4 text-muted-foreground" />
-														<div className="flex-1">
-															<div className="text-muted-foreground text-xs">
-																Next Contact
-															</div>
-															<div className="font-medium text-sm">
-																{formatContactDate(
-																	activeProspect.nextContact,
-																)}
-															</div>
-														</div>
-													</div>
-												)}
-											</CardContent>
-										</Card>
-									)}
+								{canManageTasksForSelected && activeProspect ? (
+									<LeadTasksCard leadId={activeProspect.id} />
+								) : activeProspect?.leadType === "company" &&
+								  !activeProspect.agentId ? (
+									<p className="rounded-lg border border-dashed p-4 text-center text-muted-foreground text-sm">
+										Claim this company lead to add tasks and follow-ups.
+									</p>
+								) : null}
 
-									{canManageTasksForSelected && activeProspect ? (
-										<LeadTasksCard leadId={activeProspect.id} />
-									) : activeProspect?.leadType === "company" &&
-									  !activeProspect.agentId ? (
-										<p className="rounded-lg border border-dashed p-4 text-center text-muted-foreground text-sm">
-											Claim this company lead to add tasks and follow-ups.
-										</p>
-									) : null}
+								{/* Notes Timeline */}
+								<div className="space-y-3">
+									<div className="font-medium text-muted-foreground text-sm">
+										Notes & Timeline
+									</div>
+									<div className="max-h-64 space-y-3 overflow-y-auto rounded-lg border bg-muted/30 p-4">
+										{notes.length === 0 ? (
+											<div className="py-4 text-center text-muted-foreground text-sm">
+												No notes yet. Add a note to track interactions.
+											</div>
+										) : (
+											notes
+												.slice(
+													(notesPage - 1) * NOTES_PER_PAGE,
+													notesPage * NOTES_PER_PAGE,
+												)
+												.map((note) => {
+												const noteDate = new Date(
+													note.updatedAt ?? note.createdAt,
+												);
+												const formattedDate = formatDateTimeDMY(noteDate);
+												const gmtOffset = -noteDate.getTimezoneOffset() / 60;
+												const gmtSign = gmtOffset >= 0 ? "+" : "";
+												const gmtString = `(GMT ${gmtSign}${gmtOffset.toString().padStart(2, "0")})`;
+												const wasEdited =
+													note.updatedAt &&
+													new Date(note.updatedAt).getTime() -
+														new Date(note.createdAt).getTime() >
+														1000;
+												const isOwnNote =
+													note.agentId === session?.user?.id;
+												const isEditing = editingNoteId === note.id;
+												const isConfirmingDelete =
+													confirmDeleteNoteId === note.id;
 
-									{/* Notes Timeline */}
-									<div className="space-y-3">
-										<div className="font-medium text-muted-foreground text-sm">
-											Notes & Timeline
-										</div>
-										<div className="max-h-64 space-y-3 overflow-y-auto rounded-lg border bg-muted/30 p-4">
-											{notes.length === 0 ? (
-												<div className="py-4 text-center text-muted-foreground text-sm">
-													No notes yet. Add a note to track interactions.
-												</div>
-											) : (
-												notes
-													.slice(
-														(notesPage - 1) * NOTES_PER_PAGE,
-														notesPage * NOTES_PER_PAGE,
-													)
-													.map((note) => {
-													const noteDate = new Date(
-														note.updatedAt ?? note.createdAt,
-													);
-													const formattedDate = formatDateTimeDMY(noteDate);
-													const gmtOffset = -noteDate.getTimezoneOffset() / 60;
-													const gmtSign = gmtOffset >= 0 ? "+" : "";
-													const gmtString = `(GMT ${gmtSign}${gmtOffset.toString().padStart(2, "0")})`;
-													const wasEdited =
-														note.updatedAt &&
-														new Date(note.updatedAt).getTime() -
-															new Date(note.createdAt).getTime() >
-															1000;
-													const isOwnNote =
-														note.agentId === session?.user?.id;
-													const isEditing = editingNoteId === note.id;
-													const isConfirmingDelete =
-														confirmDeleteNoteId === note.id;
-
-													return (
-														<div
-															key={note.id}
-															className="space-y-1 border-b pb-3 last:border-0 last:pb-0"
-														>
-															{isEditing ? (
-																<div className="space-y-2">
-																	<Textarea
-																		value={editingNoteContent}
-																		onChange={(e) =>
-																			setEditingNoteContent(e.target.value)
+												return (
+													<div
+														key={note.id}
+														className="space-y-1 border-b pb-3 last:border-0 last:pb-0"
+													>
+														{isEditing ? (
+															<div className="space-y-2">
+																<Textarea
+																	value={editingNoteContent}
+																	onChange={(e) =>
+																		setEditingNoteContent(e.target.value)
+																	}
+																	rows={3}
+																	className="resize-none bg-background text-sm"
+																	autoFocus
+																/>
+																<div className="flex gap-2">
+																	<Button
+																		size="sm"
+																		className="h-7 px-2 text-xs"
+																		onClick={handleSaveEditNote}
+																		disabled={
+																			!editingNoteContent.trim() ||
+																			updateNoteMutation.isPending
 																		}
-																		rows={3}
-																		className="resize-none bg-background text-sm"
-																		autoFocus
-																	/>
-																	<div className="flex gap-2">
+																	>
+																		{updateNoteMutation.isPending ? (
+																			<RiLoader4Line className="size-3.5 animate-spin" />
+																		) : (
+																			"Save"
+																		)}
+																	</Button>
+																	<Button
+																		size="sm"
+																		variant="outline"
+																		className="h-7 px-2 text-xs"
+																		onClick={handleCancelEditNote}
+																	>
+																		Cancel
+																	</Button>
+																</div>
+															</div>
+														) : (
+															<>
+																<div className="break-words whitespace-pre-line text-foreground text-sm leading-relaxed">
+																	{note.content}
+																</div>
+																<div className="flex flex-wrap items-center gap-2 text-muted-foreground text-xs">
+																	<span>
+																		{formattedDate} {gmtString}
+																	</span>
+																	{note.agentName && (
+																		<>
+																			<span>•</span>
+																			<span>Created by: {note.agentName}</span>
+																		</>
+																	)}
+																	{wasEdited && (
+																		<span className="italic">(edited)</span>
+																	)}
+																	{isOwnNote && !isConfirmingDelete && (
+																		<div className="ml-auto flex items-center gap-2">
+																			<button
+																				type="button"
+																				className="text-muted-foreground hover:text-foreground"
+																				title="Edit note"
+																				onClick={() =>
+																					handleStartEditNote(note)
+																				}
+																			>
+																				<RiPencilLine className="size-3.5" />
+																			</button>
+																			<button
+																				type="button"
+																				className="text-muted-foreground hover:text-destructive"
+																				title="Delete note"
+																				onClick={() =>
+																					setConfirmDeleteNoteId(note.id)
+																				}
+																			>
+																				<RiDeleteBinLine className="size-3.5" />
+																			</button>
+																		</div>
+																	)}
+																</div>
+																{isConfirmingDelete && (
+																	<div className="flex items-center gap-2 pt-1">
+																		<span className="text-muted-foreground text-xs">
+																			Delete this note?
+																		</span>
 																		<Button
 																			size="sm"
-																			className="h-7 px-2 text-xs"
-																			onClick={handleSaveEditNote}
-																			disabled={
-																				!editingNoteContent.trim() ||
-																				updateNoteMutation.isPending
+																			variant="destructive"
+																			className="h-6 px-2 text-xs"
+																			onClick={() =>
+																				deleteNoteMutation.mutate({
+																					id: note.id,
+																				})
 																			}
+																			disabled={deleteNoteMutation.isPending}
 																		>
-																			{updateNoteMutation.isPending ? (
+																			{deleteNoteMutation.isPending ? (
 																				<RiLoader4Line className="size-3.5 animate-spin" />
 																			) : (
-																				"Save"
+																				"Delete"
 																			)}
 																		</Button>
 																		<Button
 																			size="sm"
 																			variant="outline"
-																			className="h-7 px-2 text-xs"
-																			onClick={handleCancelEditNote}
+																			className="h-6 px-2 text-xs"
+																			onClick={() =>
+																				setConfirmDeleteNoteId(null)
+																			}
 																		>
 																			Cancel
 																		</Button>
 																	</div>
-																</div>
-															) : (
-																<>
-																	<div className="break-words whitespace-pre-line text-foreground text-sm leading-relaxed">
-																		{note.content}
-																	</div>
-																	<div className="flex flex-wrap items-center gap-2 text-muted-foreground text-xs">
-																		<span>
-																			{formattedDate} {gmtString}
-																		</span>
-																		{note.agentName && (
-																			<>
-																				<span>•</span>
-																				<span>Created by: {note.agentName}</span>
-																			</>
-																		)}
-																		{wasEdited && (
-																			<span className="italic">(edited)</span>
-																		)}
-																		{isOwnNote && !isConfirmingDelete && (
-																			<div className="ml-auto flex items-center gap-2">
-																				<button
-																					type="button"
-																					className="text-muted-foreground hover:text-foreground"
-																					title="Edit note"
-																					onClick={() =>
-																						handleStartEditNote(note)
-																					}
-																				>
-																					<RiPencilLine className="size-3.5" />
-																				</button>
-																				<button
-																					type="button"
-																					className="text-muted-foreground hover:text-destructive"
-																					title="Delete note"
-																					onClick={() =>
-																						setConfirmDeleteNoteId(note.id)
-																					}
-																				>
-																					<RiDeleteBinLine className="size-3.5" />
-																				</button>
-																			</div>
-																		)}
-																	</div>
-																	{isConfirmingDelete && (
-																		<div className="flex items-center gap-2 pt-1">
-																			<span className="text-muted-foreground text-xs">
-																				Delete this note?
-																			</span>
-																			<Button
-																				size="sm"
-																				variant="destructive"
-																				className="h-6 px-2 text-xs"
-																				onClick={() =>
-																					deleteNoteMutation.mutate({
-																						id: note.id,
-																					})
-																				}
-																				disabled={deleteNoteMutation.isPending}
-																			>
-																				{deleteNoteMutation.isPending ? (
-																					<RiLoader4Line className="size-3.5 animate-spin" />
-																				) : (
-																					"Delete"
-																				)}
-																			</Button>
-																			<Button
-																				size="sm"
-																				variant="outline"
-																				className="h-6 px-2 text-xs"
-																				onClick={() =>
-																					setConfirmDeleteNoteId(null)
-																				}
-																			>
-																				Cancel
-																			</Button>
-																		</div>
-																	)}
-																</>
-															)}
-														</div>
-													);
-												})
-											)}
-										</div>
-										{notes.length > NOTES_PER_PAGE && (
-											<div className="flex items-center justify-between">
-												<p className="text-muted-foreground text-xs">
-													{(notesPage - 1) * NOTES_PER_PAGE + 1}–
-													{Math.min(
-														notesPage * NOTES_PER_PAGE,
-														notes.length,
-													)}{" "}
-													of {notes.length} notes
-												</p>
-												<div className="flex items-center gap-1">
-													<Button
-														variant="outline"
-														size="sm"
-														className="h-7 px-2 text-xs"
-														disabled={notesPage === 1}
-														onClick={() =>
-															setNotesPage((p) => Math.max(1, p - 1))
-														}
-													>
-														Prev
-													</Button>
-													<Button
-														variant="outline"
-														size="sm"
-														className="h-7 px-2 text-xs"
-														disabled={
-															notesPage * NOTES_PER_PAGE >= notes.length
-														}
-														onClick={() => setNotesPage((p) => p + 1)}
-													>
-														Next
-													</Button>
-												</div>
-											</div>
+																)}
+															</>
+														)}
+													</div>
+												);
+											})
 										)}
-										{/* Add Note Form */}
-										<div className="flex items-end gap-2">
-											<Textarea
-												placeholder="Add a note..."
-												value={newNoteContent}
-												onChange={(e) => setNewNoteContent(e.target.value)}
-												rows={2}
-												className="resize-none"
-											/>
-											<Button
-												size="sm"
-												onClick={handleAddNote}
-												disabled={
-													!newNoteContent.trim() || addNoteMutation.isPending
-												}
-											>
-												{addNoteMutation.isPending ? (
-													<RiLoader4Line className="h-4 w-4 animate-spin" />
-												) : (
-													"Add"
-												)}
-											</Button>
-										</div>
 									</div>
-								</div>
-							)}
-
-							<DialogFooter>
-								<Button
-									variant="outline"
-									onClick={() => setIsViewDialogOpen(false)}
-								>
-									Close
-								</Button>
-							</DialogFooter>
-						</DialogContent>
-					</Dialog>
-
-					{/* Stage Transition Prompt Dialog */}
-					<Dialog open={isStagePromptOpen} onOpenChange={setIsStagePromptOpen}>
-						<DialogContent className="sm:max-w-[400px]">
-							<DialogHeader>
-								<DialogTitle className="flex items-center gap-2">
-									<RiAlertLine className="size-5 text-blue-600 dark:text-blue-400" />
-									Update Stage?
-								</DialogTitle>
-								<DialogDescription>{stagePromptMessage}</DialogDescription>
-							</DialogHeader>
-							{stagePromptProspect && (
-								<div className="py-2">
-									<div className="text-muted-foreground text-sm">
-										Prospect:{" "}
-										<span className="font-semibold text-foreground">
-											{stagePromptProspect.name}
-										</span>
-									</div>
-									<div className="mt-1 text-muted-foreground text-sm">
-										Current:{" "}
-										<span className="font-semibold text-foreground capitalize">
-											{stagePromptProspect.stage.replace(/_/g, " ")}
-										</span>
-									</div>
-									{stagePromptTargetStage && (
-										<div className="mt-1 text-muted-foreground text-sm">
-											New:{" "}
-											<span className="font-semibold text-foreground capitalize">
-												{stagePromptTargetStage.replace(/_/g, " ")}
-											</span>
-										</div>
-									)}
-								</div>
-							)}
-							<DialogFooter>
-								<Button
-									variant="outline"
-									onClick={handleStagePromptCancel}
-									disabled={updateStageMutation.isPending}
-								>
-									Cancel
-								</Button>
-								<Button
-									onClick={handleStagePromptConfirm}
-									disabled={updateStageMutation.isPending}
-									className="bg-blue-600 hover:bg-blue-700"
-								>
-									{updateStageMutation.isPending ? (
-										<>
-											<RiLoader4Line className="mr-2 h-4 w-4 animate-spin" />
-											Updating...
-										</>
-									) : (
-										"Yes, Move"
-									)}
-								</Button>
-							</DialogFooter>
-						</DialogContent>
-					</Dialog>
-
-					{/* Search and Filters */}
-					<Card className="gap-0 overflow-hidden border-border/70 py-0 shadow-card">
-						<CardContent className="flex flex-wrap items-center gap-2.5 p-4 sm:p-5">
-						<div className="relative w-full min-w-[min(100%,240px)] flex-1 basis-full xl:basis-0">
-							<RiSearchLine className="-translate-y-1/2 absolute top-1/2 left-3 size-4 text-muted-foreground" />
-							<Input
-								placeholder="Search prospects..."
-								value={searchQuery}
-								onChange={(e) => setSearchQuery(e.target.value)}
-								className="h-10 rounded-xl border-border/70 bg-muted/30 pl-9 shadow-none focus-visible:bg-background"
-							/>
-						</div>
-						<div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
-						<Select
-							value={categoryFilter}
-							onValueChange={(v) => {
-								setCategoryFilter(v);
-								setCurrentPage(1);
-							}}
-						>
-							<SelectTrigger className="h-10 w-full min-w-[140px] flex-1 rounded-full border-border/70 bg-card shadow-card sm:w-[150px] sm:flex-none">
-								<SelectValue placeholder="Category" />
-							</SelectTrigger>
-							<SelectContent>
-								<SelectItem value="all">All Categories</SelectItem>
-								{(tagsData?.tags ?? []).map((t) => (
-									<SelectItem key={t.id} value={t.id}>
-										{t.name}
-									</SelectItem>
-								))}
-							</SelectContent>
-						</Select>
-
-						<Select
-							value={agentFilter}
-							onValueChange={(v) => {
-								setAgentFilter(v);
-								setCurrentPage(1);
-							}}
-						>
-							<SelectTrigger className="h-10 w-full min-w-[140px] flex-1 rounded-full border-border/70 bg-card shadow-card sm:w-[160px] sm:flex-none">
-								<RiUserLine className="mr-1.5 size-4 shrink-0 text-muted-foreground" />
-								<SelectValue placeholder="Agent" />
-							</SelectTrigger>
-							<SelectContent>
-								<SelectItem value="all">All Agents</SelectItem>
-								<SelectItem value="__unassigned__">Unassigned</SelectItem>
-								{session?.user?.id ? (
-									<SelectItem value={session.user.id}>
-										{session.user.name?.trim()
-											? `${session.user.name} (Me)`
-											: "Me (My assigned leads)"}
-									</SelectItem>
-								) : null}
-								{followerAgents
-									.filter((a) => a.agentId !== session?.user?.id)
-									.map((a) => (
-										<SelectItem key={a.agentId} value={a.agentId}>
-											{a.agentName ?? a.agentEmail}
-										</SelectItem>
-									))}
-							</SelectContent>
-						</Select>
-
-						<Select
-							value={stageFilter}
-							onValueChange={(v) => {
-								setStageFilter(v as PipelineStage | "all");
-								setCurrentPage(1);
-							}}
-						>
-							<SelectTrigger className="h-10 w-full min-w-[140px] flex-1 rounded-full border-border/70 bg-card shadow-card sm:w-[150px] sm:flex-none">
-								<SelectValue placeholder="Lead Stage" />
-							</SelectTrigger>
-							<SelectContent>
-								<SelectItem value="all">All Stages</SelectItem>
-								{PIPELINE_STAGES.map((s) => (
-									<SelectItem key={s.value} value={s.value}>
-										{s.label}
-									</SelectItem>
-								))}
-							</SelectContent>
-						</Select>
-
-						<Select
-							value={statusFilter}
-							onValueChange={(v) => {
-								setStatusFilter(v as "all" | "active" | "inactive");
-								setCurrentPage(1);
-							}}
-						>
-							<SelectTrigger className="h-10 w-full min-w-[120px] flex-1 rounded-full border-border/70 bg-card shadow-card sm:w-[130px] sm:flex-none">
-								<SelectValue placeholder="Status" />
-							</SelectTrigger>
-							<SelectContent>
-								<SelectItem value="all">All Status</SelectItem>
-								<SelectItem value="active">Active</SelectItem>
-								<SelectItem value="inactive">Inactive</SelectItem>
-							</SelectContent>
-						</Select>
-						</div>
-						</CardContent>
-					</Card>
-
-					{/* Prospects View - Kanban or List */}
-					{viewMode === "kanban" ? (
-						// Kanban Board View
-						<div className="flex flex-col gap-4">
-							{isLoadingProspects ? (
-								<div className="flex h-[min(75vh,calc(100dvh-13rem))] gap-3 overflow-hidden">
-									{["sk-kb-1", "sk-kb-2", "sk-kb-3", "sk-kb-4", "sk-kb-5"].map(
-										(colId) => (
-											<div
-												key={colId}
-												className="w-[280px] shrink-0 rounded-2xl bg-muted/40 p-3 sm:w-[300px]"
-											>
-												<div className="mb-3 flex items-center justify-between">
-													<Skeleton className="h-4 w-28" />
-													<Skeleton className="h-5 w-8 rounded-full" />
-												</div>
-												<div className="space-y-2.5">
-													{[`${colId}-a`, `${colId}-b`].map((cardId) => (
-														<div
-															key={cardId}
-															className="rounded-xl border border-border/40 bg-card p-3.5 shadow-sm"
-														>
-															<Skeleton className="mb-2 h-4 w-full" />
-															<Skeleton className="h-3 w-3/4" />
-															<div className="mt-2 flex justify-between">
-																<Skeleton className="h-3 w-16" />
-																<Skeleton className="h-5 w-14 rounded-full" />
-															</div>
-														</div>
-													))}
-												</div>
-											</div>
-										),
-									)}
-								</div>
-							) : prospectsError ? (
-								<div className="py-12 text-center">
-									<div className="mb-2 text-red-500">
-										Error loading prospects
-									</div>
-									<div className="text-muted-foreground text-sm">
-										{prospectsError.message}
-									</div>
-									<Button
-										variant="outline"
-										size="sm"
-										onClick={() => refetchProspects()}
-										className="mt-4"
-									>
-										Retry
-									</Button>
-								</div>
-							) : (
-								<KanbanBoard
-									prospects={displayedProspects}
-									onView={handleView}
-									onStageChange={handleStageChange}
-									leadsTab={activeTab}
-								/>
-							)}
-						</div>
-					) : (
-						// List View
-						<div className="flex flex-col gap-3">
-							{isLoadingProspects ? (
-								<div className="flex flex-col gap-3">
-									{["sk-lv-1", "sk-lv-2", "sk-lv-3", "sk-lv-4", "sk-lv-5"].map(
-										(id) => (
-											<Card
-												key={id}
-												className="gap-0 overflow-hidden border-border/70 py-0 shadow-card"
-											>
-												<CardContent className="p-4 sm:p-5">
-													<div className="flex items-start justify-between gap-3">
-														<div className="flex-1 space-y-3">
-															<div className="flex items-center gap-2">
-																<Skeleton className="size-9 rounded-xl" />
-																<Skeleton className="h-4 w-36" />
-																<Skeleton className="h-5 w-16 rounded-full" />
-															</div>
-															<div className="flex flex-wrap gap-4">
-																<Skeleton className="h-3.5 w-40" />
-																<Skeleton className="h-3.5 w-32" />
-															</div>
-															<div className="flex gap-2">
-																<Skeleton className="h-5 w-16 rounded-full" />
-																<Skeleton className="h-5 w-24 rounded-full" />
-															</div>
-														</div>
-														<Skeleton className="size-8 rounded-full" />
-													</div>
-												</CardContent>
-											</Card>
-										),
-									)}
-								</div>
-							) : prospectsError ? (
-								<div className="col-span-full py-12 text-center">
-									<div className="mb-2 text-red-500">
-										Error loading prospects
-									</div>
-									<div className="text-muted-foreground text-sm">
-										{prospectsError.message}
-									</div>
-									<Button
-										variant="outline"
-										size="sm"
-										onClick={() => refetchProspects()}
-										className="mt-4"
-									>
-										Retry
-									</Button>
-								</div>
-							) : displayedProspects.length === 0 ? (
-								<div className="col-span-full py-12 text-center text-muted-foreground">
-									No prospects found. Click "Add Prospect" to get started.
-								</div>
-							) : (
-								displayedProspects.map((prospect) => (
-									<Card
-										key={prospect.id}
-										className="gap-0 overflow-hidden border-border/70 py-0 shadow-card transition-shadow hover:shadow-md"
-									>
-										<CardContent className="p-4 sm:p-5">
-											<div className="flex items-start justify-between gap-3">
-												<div className="min-w-0 flex-1 space-y-3">
-													<div className="flex flex-wrap items-center gap-2">
-														<span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary/12 font-semibold text-primary text-sm">
-															{prospect.name
-																.trim()
-																.split(/\s+/)
-																.slice(0, 2)
-																.map((p) => p[0] ?? "")
-																.join("")
-																.toUpperCase() || "?"}
-														</span>
-														<span className="font-semibold text-sm sm:text-base">
-															{prospect.name}
-														</span>
-														<StatusBadge status={prospect.status} />
-														<StageBadge stage={prospect.stage} />
-													</div>
-
-													<div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-muted-foreground text-sm">
-														<div className="flex items-center gap-1.5">
-															<RiMailLine className="size-3.5 shrink-0" />
-															<span className="truncate">
-																{prospect.email || "—"}
-															</span>
-														</div>
-														<div className="flex items-center gap-1.5">
-															<RiPhoneLine className="size-3.5 shrink-0" />
-															<span>
-																{prospect.phone?.trim() ||
-																	(prospect.whatsappUsername
-																		? `@${prospect.whatsappUsername.replace(/^@/, "")}`
-																		: "—")}
-															</span>
-														</div>
-													</div>
-
-													{(prospect.tagNames &&
-														prospect.tagNames.length > 0) ||
-													prospect.tags?.trim() ? (
-														<div className="flex flex-wrap items-center gap-1.5">
-															{prospect.tagNames && prospect.tagNames.length > 0
-																? prospect.tagNames.map((tag) => (
-																		<span
-																			key={tag}
-																			className="inline-flex rounded-full bg-muted px-2 py-0.5 font-medium text-[11px] text-muted-foreground"
-																		>
-																			{tag}
-																		</span>
-																	))
-																: prospect.tags
-																	? prospect.tags.split(",").map((tag) => (
-																			<span
-																				key={tag.trim()}
-																				className="inline-flex rounded-full bg-muted px-2 py-0.5 font-medium text-[11px] text-muted-foreground"
-																			>
-																				{tag.trim()}
-																			</span>
-																		))
-																	: null}
-														</div>
-													) : null}
-
-													<div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-muted-foreground text-xs">
-														<span className="inline-flex items-center gap-1">
-															<RiMapPinLine className="size-3.5" />
-															Source: {prospect.source}
-														</span>
-														{prospect.agentName ? (
-															<span className="inline-flex items-center gap-1">
-																<RiUserLine className="size-3.5" />
-																Owner: {prospect.agentName}
-															</span>
-														) : null}
-														{prospect.nextContact ? (
-															<span className="inline-flex items-center gap-1">
-																<RiCalendarLine className="size-3.5" />
-																Next:{" "}
-																{formatContactDate(prospect.nextContact)}
-															</span>
-														) : null}
-													</div>
-												</div>
-
+									{notes.length > NOTES_PER_PAGE && (
+										<div className="flex items-center justify-between">
+											<p className="text-muted-foreground text-xs">
+												{(notesPage - 1) * NOTES_PER_PAGE + 1}–
+												{Math.min(
+													notesPage * NOTES_PER_PAGE,
+													notes.length,
+												)}{" "}
+												of {notes.length} notes
+											</p>
+											<div className="flex items-center gap-1">
 												<Button
 													variant="outline"
-													size="icon"
-													onClick={() => handleView(prospect)}
-													className={actionBtnClass}
-													aria-label={`View ${prospect.name}`}
+													size="sm"
+													className="h-7 px-2 text-xs"
+													disabled={notesPage === 1}
+													onClick={() =>
+														setNotesPage((p) => Math.max(1, p - 1))
+													}
 												>
-													<RiEyeLine className="size-4" />
+													Prev
+												</Button>
+												<Button
+													variant="outline"
+													size="sm"
+													className="h-7 px-2 text-xs"
+													disabled={
+														notesPage * NOTES_PER_PAGE >= notes.length
+													}
+													onClick={() => setNotesPage((p) => p + 1)}
+												>
+													Next
 												</Button>
 											</div>
-										</CardContent>
-									</Card>
-								))
-							)}
-						</div>
-					)}
+										</div>
+									)}
+									{/* Add Note Form */}
+									<div className="flex items-end gap-2">
+										<Textarea
+											placeholder="Add a note..."
+											value={newNoteContent}
+											onChange={(e) => setNewNoteContent(e.target.value)}
+											rows={2}
+											className="resize-none"
+										/>
+										<Button
+											size="sm"
+											onClick={handleAddNote}
+											disabled={
+												!newNoteContent.trim() || addNoteMutation.isPending
+											}
+										>
+											{addNoteMutation.isPending ? (
+												<RiLoader4Line className="h-4 w-4 animate-spin" />
+											) : (
+												"Add"
+											)}
+										</Button>
+									</div>
+								</div>
+							</div>
+						)}
 
-					{/* Pagination - Only show in List View */}
-					{viewMode === "list" && totalPages > 0 && (
-						<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-							<div className="text-muted-foreground text-sm">
-								Showing {(currentPage - 1) * itemsPerPage + 1}-
-								{Math.min(
-									currentPage * itemsPerPage,
-									prospectsData?.pagination.total || 0,
-								)}{" "}
-								of {prospectsData?.pagination.total || 0} prospects
+						<DialogFooter>
+							<Button
+								variant="outline"
+								onClick={() => setIsViewDialogOpen(false)}
+							>
+								Close
+							</Button>
+						</DialogFooter>
+					</DialogContent>
+				</Dialog>
+
+				{/* Stage Transition Prompt Dialog */}
+				<Dialog open={isStagePromptOpen} onOpenChange={setIsStagePromptOpen}>
+					<DialogContent className="sm:max-w-[400px]">
+						<DialogHeader>
+							<DialogTitle className="flex items-center gap-2">
+								<RiAlertLine className="size-5 text-blue-600 dark:text-blue-400" />
+								Update Stage?
+							</DialogTitle>
+							<DialogDescription>{stagePromptMessage}</DialogDescription>
+						</DialogHeader>
+						{stagePromptProspect && (
+							<div className="py-2">
+								<div className="text-muted-foreground text-sm">
+									Prospect:{" "}
+									<span className="font-semibold text-foreground">
+										{stagePromptProspect.name}
+									</span>
+								</div>
+								<div className="mt-1 text-muted-foreground text-sm">
+									Current:{" "}
+									<span className="font-semibold text-foreground capitalize">
+										{stagePromptProspect.stage.replace(/_/g, " ")}
+									</span>
+								</div>
+								{stagePromptTargetStage && (
+									<div className="mt-1 text-muted-foreground text-sm">
+										New:{" "}
+										<span className="font-semibold text-foreground capitalize">
+											{stagePromptTargetStage.replace(/_/g, " ")}
+										</span>
+									</div>
+								)}
 							</div>
-							<div className="flex items-center gap-2">
+						)}
+						<DialogFooter>
+							<Button
+								variant="outline"
+								onClick={handleStagePromptCancel}
+								disabled={updateStageMutation.isPending}
+							>
+								Cancel
+							</Button>
+							<Button
+								onClick={handleStagePromptConfirm}
+								disabled={updateStageMutation.isPending}
+								className="bg-blue-600 hover:bg-blue-700"
+							>
+								{updateStageMutation.isPending ? (
+									<>
+										<RiLoader4Line className="mr-2 h-4 w-4 animate-spin" />
+										Updating...
+									</>
+								) : (
+									"Yes, Move"
+								)}
+							</Button>
+						</DialogFooter>
+					</DialogContent>
+				</Dialog>
+
+				{/* Search and Filters */}
+				<Card className="gap-0 overflow-hidden border-border/70 py-0 shadow-card">
+					<CardContent className="flex flex-wrap items-center gap-2.5 p-4 sm:p-5">
+					<div className="relative w-full min-w-[min(100%,240px)] flex-1 basis-full xl:basis-0">
+						<RiSearchLine className="-translate-y-1/2 absolute top-1/2 left-3 size-4 text-muted-foreground" />
+						<Input
+							placeholder="Search prospects..."
+							value={searchQuery}
+							onChange={(e) => {
+								setSearchQuery(e.target.value);
+								setCurrentPage(1);
+							}}
+							className="h-10 rounded-xl border-border/70 bg-muted/30 pl-9 shadow-none focus-visible:bg-background"
+						/>
+					</div>
+					<div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+					<Select
+						value={categoryFilter}
+						onValueChange={(v) => {
+							setCategoryFilter(v);
+							setCurrentPage(1);
+						}}
+					>
+						<SelectTrigger className="h-10 w-full min-w-[140px] flex-1 rounded-full border-border/70 bg-card shadow-card sm:w-[150px] sm:flex-none">
+							<SelectValue placeholder="Category" />
+						</SelectTrigger>
+						<SelectContent>
+							<SelectItem value="all">All Categories</SelectItem>
+							{(tagsData?.tags ?? []).map((t) => (
+								<SelectItem key={t.id} value={t.id}>
+									{t.name}
+								</SelectItem>
+							))}
+						</SelectContent>
+					</Select>
+
+					<Select
+						value={agentFilter}
+						onValueChange={(v) => {
+							setAgentFilter(v);
+							setCurrentPage(1);
+						}}
+					>
+						<SelectTrigger className="h-10 w-full min-w-[140px] flex-1 rounded-full border-border/70 bg-card shadow-card sm:w-[160px] sm:flex-none">
+							<RiUserLine className="mr-1.5 size-4 shrink-0 text-muted-foreground" />
+							<SelectValue placeholder="Agent" />
+						</SelectTrigger>
+						<SelectContent>
+							<SelectItem value="all">All Agents</SelectItem>
+							<SelectItem value="__unassigned__">Unassigned</SelectItem>
+							{session?.user?.id ? (
+								<SelectItem value={session.user.id}>
+									{session.user.name?.trim()
+										? `${session.user.name} (Me)`
+										: "Me (My assigned leads)"}
+								</SelectItem>
+							) : null}
+							{followerAgents
+								.filter((a) => a.agentId !== session?.user?.id)
+								.map((a) => (
+									<SelectItem key={a.agentId} value={a.agentId}>
+										{a.agentName ?? a.agentEmail}
+									</SelectItem>
+								))}
+						</SelectContent>
+					</Select>
+
+					<Select
+						value={stageFilter}
+						onValueChange={(v) => {
+							setStageFilter(v as PipelineStage | "all");
+							setCurrentPage(1);
+						}}
+					>
+						<SelectTrigger className="h-10 w-full min-w-[140px] flex-1 rounded-full border-border/70 bg-card shadow-card sm:w-[150px] sm:flex-none">
+							<SelectValue placeholder="Lead Stage" />
+						</SelectTrigger>
+						<SelectContent>
+							<SelectItem value="all">All Stages</SelectItem>
+							{PIPELINE_STAGES.map((s) => (
+								<SelectItem key={s.value} value={s.value}>
+									{s.label}
+								</SelectItem>
+							))}
+						</SelectContent>
+					</Select>
+
+					<Select
+						value={statusFilter}
+						onValueChange={(v) => {
+							setStatusFilter(v as "all" | "active" | "inactive");
+							setCurrentPage(1);
+						}}
+					>
+						<SelectTrigger className="h-10 w-full min-w-[120px] flex-1 rounded-full border-border/70 bg-card shadow-card sm:w-[130px] sm:flex-none">
+							<SelectValue placeholder="Status" />
+						</SelectTrigger>
+						<SelectContent>
+							<SelectItem value="all">All Status</SelectItem>
+							<SelectItem value="active">Active</SelectItem>
+							<SelectItem value="inactive">Inactive</SelectItem>
+						</SelectContent>
+					</Select>
+					</div>
+					</CardContent>
+				</Card>
+
+				{/* Prospects View - Kanban or List */}
+				{viewMode === "kanban" ? (
+					// Kanban Board View
+					<div className="flex flex-col gap-4">
+						{isLoadingProspects ? (
+							<div className="flex h-[min(75vh,calc(100dvh-13rem))] gap-3 overflow-hidden">
+								{["sk-kb-1", "sk-kb-2", "sk-kb-3", "sk-kb-4", "sk-kb-5"].map(
+									(colId) => (
+										<div
+											key={colId}
+											className="w-[280px] shrink-0 rounded-2xl bg-muted/40 p-3 sm:w-[300px]"
+										>
+											<div className="mb-3 flex items-center justify-between">
+												<Skeleton className="h-4 w-28" />
+												<Skeleton className="h-5 w-8 rounded-full" />
+											</div>
+											<div className="space-y-2.5">
+												{[`${colId}-a`, `${colId}-b`].map((cardId) => (
+													<div
+														key={cardId}
+														className="rounded-xl border border-border/40 bg-card p-3.5 shadow-sm"
+													>
+														<Skeleton className="mb-2 h-4 w-full" />
+														<Skeleton className="h-3 w-3/4" />
+														<div className="mt-2 flex justify-between">
+															<Skeleton className="h-3 w-16" />
+															<Skeleton className="h-5 w-14 rounded-full" />
+														</div>
+													</div>
+												))}
+											</div>
+										</div>
+									),
+								)}
+							</div>
+						) : prospectsError ? (
+							<div className="py-12 text-center">
+								<div className="mb-2 text-red-500">
+									Error loading prospects
+								</div>
+								<div className="text-muted-foreground text-sm">
+									{prospectsError.message}
+								</div>
 								<Button
 									variant="outline"
 									size="sm"
-									className="h-9 rounded-full border-border/70 px-4 shadow-card"
-									onClick={() =>
-										setCurrentPage((prev) => Math.max(1, prev - 1))
-									}
-									disabled={currentPage === 1}
+									onClick={() => refetchProspects()}
+									className="mt-4"
 								>
-									&lt; Prev
+									Retry
 								</Button>
+							</div>
+						) : (
+							<KanbanBoard
+								prospects={displayedProspects}
+								onView={handleView}
+								onStageChange={handleStageChange}
+								leadsTab={activeTab}
+							/>
+						)}
+					</div>
+				) : (
+					// List View
+					<div className="flex flex-col gap-3">
+						{isLoadingProspects ? (
+							<div className="flex flex-col gap-3">
+								{["sk-lv-1", "sk-lv-2", "sk-lv-3", "sk-lv-4", "sk-lv-5"].map(
+									(id) => (
+										<Card
+											key={id}
+											className="gap-0 overflow-hidden border-border/70 py-0 shadow-card"
+										>
+											<CardContent className="p-4 sm:p-5">
+												<div className="flex items-start justify-between gap-3">
+													<div className="flex-1 space-y-3">
+														<div className="flex items-center gap-2">
+															<Skeleton className="size-9 rounded-xl" />
+															<Skeleton className="h-4 w-36" />
+															<Skeleton className="h-5 w-16 rounded-full" />
+														</div>
+														<div className="flex flex-wrap gap-4">
+															<Skeleton className="h-3.5 w-40" />
+															<Skeleton className="h-3.5 w-32" />
+														</div>
+														<div className="flex gap-2">
+															<Skeleton className="h-5 w-16 rounded-full" />
+															<Skeleton className="h-5 w-24 rounded-full" />
+														</div>
+													</div>
+													<Skeleton className="size-8 rounded-full" />
+												</div>
+											</CardContent>
+										</Card>
+									),
+								)}
+							</div>
+						) : prospectsError ? (
+							<div className="col-span-full py-12 text-center">
+								<div className="mb-2 text-red-500">
+									Error loading prospects
+								</div>
+								<div className="text-muted-foreground text-sm">
+									{prospectsError.message}
+								</div>
 								<Button
 									variant="outline"
 									size="sm"
-									className="h-9 rounded-full border-border/70 px-4 shadow-card"
-									onClick={() =>
-										setCurrentPage((prev) => Math.min(totalPages, prev + 1))
-									}
-									disabled={currentPage === totalPages}
+									onClick={() => refetchProspects()}
+									className="mt-4"
 								>
-									Next &gt;
+									Retry
 								</Button>
 							</div>
+						) : displayedProspects.length === 0 ? (
+							<div className="col-span-full py-12 text-center text-muted-foreground">
+								No prospects found. Click "Add Prospect" to get started.
+							</div>
+						) : (
+							displayedProspects.map((prospect) => (
+								<Card
+									key={prospect.id}
+									className="gap-0 overflow-hidden border-border/70 py-0 shadow-card transition-shadow hover:shadow-md"
+								>
+									<CardContent className="p-4 sm:p-5">
+										<div className="flex items-start justify-between gap-3">
+											<div className="min-w-0 flex-1 space-y-3">
+												<div className="flex flex-wrap items-center gap-2">
+													<span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary/12 font-semibold text-primary text-sm">
+														{prospect.name
+															.trim()
+															.split(/\s+/)
+															.slice(0, 2)
+															.map((p) => p[0] ?? "")
+															.join("")
+															.toUpperCase() || "?"}
+													</span>
+													<span className="font-semibold text-sm sm:text-base">
+														{prospect.name}
+													</span>
+													<StatusBadge status={prospect.status} />
+													<StageBadge stage={prospect.stage} />
+												</div>
+
+												<div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-muted-foreground text-sm">
+													<div className="flex items-center gap-1.5">
+														<RiMailLine className="size-3.5 shrink-0" />
+														<span className="truncate">
+															{prospect.email || "—"}
+														</span>
+													</div>
+													<div className="flex items-center gap-1.5">
+														<RiPhoneLine className="size-3.5 shrink-0" />
+														<span>
+															{prospect.phone?.trim() ||
+																(prospect.whatsappUsername
+																	? `@${prospect.whatsappUsername.replace(/^@/, "")}`
+																	: "—")}
+														</span>
+													</div>
+												</div>
+
+												{(prospect.tagNames &&
+													prospect.tagNames.length > 0) ||
+												prospect.tags?.trim() ? (
+													<div className="flex flex-wrap items-center gap-1.5">
+														{prospect.tagNames && prospect.tagNames.length > 0
+															? prospect.tagNames.map((tag) => (
+																	<span
+																		key={tag}
+																		className="inline-flex rounded-full bg-muted px-2 py-0.5 font-medium text-[11px] text-muted-foreground"
+																	>
+																		{tag}
+																	</span>
+																))
+															: prospect.tags
+																? prospect.tags.split(",").map((tag) => (
+																		<span
+																			key={tag.trim()}
+																			className="inline-flex rounded-full bg-muted px-2 py-0.5 font-medium text-[11px] text-muted-foreground"
+																		>
+																			{tag.trim()}
+																		</span>
+																	))
+																: null}
+													</div>
+												) : null}
+
+												<div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-muted-foreground text-xs">
+													<span className="inline-flex items-center gap-1">
+														<RiMapPinLine className="size-3.5" />
+														Source: {prospect.source}
+													</span>
+													{prospect.agentName ? (
+														<span className="inline-flex items-center gap-1">
+															<RiUserLine className="size-3.5" />
+															Owner: {prospect.agentName}
+														</span>
+													) : null}
+													{prospect.nextContact ? (
+														<span className="inline-flex items-center gap-1">
+															<RiCalendarLine className="size-3.5" />
+															Next:{" "}
+															{formatContactDate(prospect.nextContact)}
+														</span>
+													) : null}
+												</div>
+											</div>
+
+											<Button
+												variant="outline"
+												size="icon"
+												onClick={() => handleView(prospect)}
+												className={actionBtnClass}
+												aria-label={`View ${prospect.name}`}
+											>
+												<RiEyeLine className="size-4" />
+											</Button>
+										</div>
+									</CardContent>
+								</Card>
+							))
+						)}
+					</div>
+				)}
+
+				{/* Pagination - Only show in List View */}
+				{viewMode === "list" && totalPages > 0 && (
+					<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+						<div className="text-muted-foreground text-sm">
+							Showing {(currentPage - 1) * itemsPerPage + 1}-
+							{Math.min(
+								currentPage * itemsPerPage,
+								prospectsData?.pagination.total || 0,
+							)}{" "}
+							of {prospectsData?.pagination.total || 0} prospects
 						</div>
-					)}
-				</div>
-				<ImportLeadsDialog
-					open={isImportOpen}
-					onOpenChange={setIsImportOpen}
-					importMode={importMode}
-					onImported={() => {
-						void queryClient.invalidateQueries({ queryKey: [["crm"]] });
-						void refetchProspects();
-					}}
-				/>
-			</SidebarInset>
-		</SidebarProvider>
+						<div className="flex items-center gap-2">
+							<Button
+								variant="outline"
+								size="sm"
+								className="h-9 rounded-full border-border/70 px-4 shadow-card"
+								onClick={() =>
+									setCurrentPage((prev) => Math.max(1, prev - 1))
+								}
+								disabled={currentPage === 1}
+							>
+								&lt; Prev
+							</Button>
+							<Button
+								variant="outline"
+								size="sm"
+								className="h-9 rounded-full border-border/70 px-4 shadow-card"
+								onClick={() =>
+									setCurrentPage((prev) => Math.min(totalPages, prev + 1))
+								}
+								disabled={currentPage === totalPages}
+							>
+								Next &gt;
+							</Button>
+						</div>
+					</div>
+				)}
+			</div>
+			<ImportLeadsDialog
+				open={isImportOpen}
+				onOpenChange={setIsImportOpen}
+				importMode={importMode}
+				onImported={() => {
+					void queryClient.invalidateQueries({ queryKey: [["crm"]] });
+					void refetchProspects();
+				}}
+			/>
+		</>
 	);
 }

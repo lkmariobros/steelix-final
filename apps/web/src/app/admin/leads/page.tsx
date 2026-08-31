@@ -37,6 +37,7 @@ import {
 } from "@/components/ui/select";
 import { LoadingScreen } from "@/components/ui/loading-spinner";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { formatDateDMY } from "@/lib/date-format";
 import { trpc } from "@/utils/trpc";
 import {
@@ -102,14 +103,26 @@ const actionBtnClass =
 	"size-8 shrink-0 rounded-full border border-border/60 bg-muted/40 p-0 text-muted-foreground shadow-none hover:bg-muted hover:text-foreground";
 
 export default function AdminLeadsPage() {
-	// Defer non-critical widgets so the table can render first
+	const trpcUtils = trpc.useUtils();
+	// Defer non-critical widgets until after first list paint
 	const [loadSecondary, setLoadSecondary] = useState(false);
 	useEffect(() => {
-		const id = window.setTimeout(() => setLoadSecondary(true), 0);
-		return () => window.clearTimeout(id);
+		const idle =
+			typeof window !== "undefined" && "requestIdleCallback" in window
+				? window.requestIdleCallback(() => setLoadSecondary(true), {
+						timeout: 1500,
+					})
+				: null;
+		const id = window.setTimeout(() => setLoadSecondary(true), 800);
+		return () => {
+			if (idle != null && "cancelIdleCallback" in window) {
+				window.cancelIdleCallback(idle);
+			}
+			window.clearTimeout(id);
+		};
 	}, []);
 
-	// ── Filters (all client-side, no backend re-fetch) ──────────────────────
+	// ── Filters (server-side via adminLeads.list) ───────────────────────────
 	const [search, setSearch] = useState("");
 	const [statusFilter, setStatusFilter] = useState("__all__");
 	const [stageFilter, setStageFilter] = useState("__all__");
@@ -119,8 +132,11 @@ export default function AdminLeadsPage() {
 	const [sortKey, setSortKey] = useState<SortKey>("createdAt");
 	const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
 	const [page, setPage] = useState(1);
-	const [pageSize, setPageSize] = useState(100);
-	const [viewMode, setViewMode] = useState<"table" | "kanban">("kanban");
+	const [pageSize, setPageSize] = useState(25);
+	// Table-first for fast initial paint; kanban still available
+	const [viewMode, setViewMode] = useState<"table" | "kanban">("table");
+
+	const debouncedSearch = useDebouncedValue(search, 300);
 
 	// ── Dialogs ────────────────────────────────────────────────────────────
 	const [viewLead, setViewLead] = useState<Lead | null>(null);
@@ -133,41 +149,79 @@ export default function AdminLeadsPage() {
 	const [isExporting, setIsExporting] = useState(false);
 	const [isImportOpen, setIsImportOpen] = useState(false);
 
-	// ── Fetch ALL leads ONCE — no filter params sent to backend ─────────────
-	// Backend returns the full dataset; all filtering/sorting/pagination
-	// happens here on the client via useMemo (zero extra network requests).
+	const listSortBy =
+		sortKey === "agentName" ? ("createdAt" as const) : sortKey;
+
+	// Server-side filtered + paginated list (table uses pageSize; kanban uses larger page)
 	const {
 		data: rawData,
 		isPending: leadsPending,
 		isFetching,
 		refetch,
 	} = trpc.adminLeads.list.useQuery(
-		{ limit: 5000, page: 1 },
-		{ staleTime: 3 * 60 * 1000 },
+		{
+			search: debouncedSearch.trim() || undefined,
+			status: statusFilter === "active" ? "active" : undefined,
+			excludeActive: statusFilter === "inactive" ? true : undefined,
+			stage: stageFilter !== "__all__" ? (stageFilter as never) : undefined,
+			leadType:
+				leadTypeFilter !== "__all__"
+					? (leadTypeFilter as "personal" | "company")
+					: undefined,
+			agentId: agentFilter !== "__all__" ? agentFilter : undefined,
+			tagId: categoryFilter !== "__all__" ? categoryFilter : undefined,
+			page: viewMode === "kanban" ? 1 : page,
+			limit: viewMode === "kanban" ? 120 : pageSize,
+			slim: viewMode === "kanban",
+			sortBy: listSortBy,
+			sortOrder,
+		},
+		{ staleTime: 60_000, placeholderData: (prev) => prev },
 	);
+
+	const { data: leadsStats, isPending: statsPending } =
+		trpc.adminLeads.stats.useQuery(undefined, {
+			staleTime: 60_000,
+			enabled: loadSecondary,
+		});
 
 	const { data: agentsData } = trpc.adminLeads.agentsWithLeads.useQuery(
 		undefined,
-		{ staleTime: 3 * 60 * 1000 },
+		{ staleTime: 3 * 60 * 1000, enabled: loadSecondary },
 	);
 	const { data: tagsData } = trpc.tags.list.useQuery(
 		{ page: 1, limit: 100 },
-		{ staleTime: 30_000 },
+		{ staleTime: 30_000, enabled: loadSecondary },
 	);
 
-	const allLeads = (rawData?.leads ?? []) as Lead[];
+	const pageLeads = (rawData?.leads ?? []) as Lead[];
+	const totalFiltered = rawData?.pagination?.total ?? 0;
+	const totalPages = Math.max(1, rawData?.pagination?.totalPages ?? 1);
+	const visibleLeads = pageLeads;
+	const kanbanLeads = pageLeads;
 	const agents = agentsData ?? [];
 	const tags = tagsData?.tags ?? [];
+	const allLeads = pageLeads;
 
-	// ── Sort handler (just updates state, no API call) ──────────────────────
-	// Read sortKey directly from closure — avoids unreliable nested state setters
+	const leadStatsSummary = useMemo(() => {
+		if (!leadsStats) return null;
+		return {
+			total: leadsStats.total,
+			active: leadsStats.byStatus.active,
+			inactive: leadsStats.byStatus.inactive + leadsStats.byStatus.pending,
+			appointmentsMade: leadsStats.byStage.appointment_made ?? 0,
+			bookingsMade: leadsStats.byStage.booking_made ?? 0,
+			buyers: leadsStats.byType.buyer,
+			tenants: leadsStats.byType.tenant,
+		};
+	}, [leadsStats]);
+
+	// ── Sort handler ────────────────────────────────────────────────────────
 	const handleSort = useCallback(
 		(key: SortKey) => {
 			if (sortKey === key) {
-				// Same column → toggle direction
 				setSortOrder((o) => (o === "asc" ? "desc" : "asc"));
 			} else {
-				// New column → default ascending
 				setSortKey(key);
 				setSortOrder("asc");
 			}
@@ -175,105 +229,6 @@ export default function AdminLeadsPage() {
 		},
 		[sortKey],
 	);
-
-	// ── All filtering + sorting + pagination via useMemo ────────────────────
-	// Runs entirely in memory — instant, no network round-trips
-	const { visibleLeads, totalFiltered, kanbanLeads, filteredLeads } = useMemo(() => {
-		const q = search.toLowerCase().trim();
-
-		// 1. Filter
-		let filtered = allLeads.filter((lead) => {
-			if (
-				q &&
-				!(
-					lead.name.toLowerCase().includes(q) ||
-					(lead.email ?? "").toLowerCase().includes(q) ||
-					lead.phone.toLowerCase().includes(q) ||
-					(lead.whatsappUsername ?? "").toLowerCase().includes(q) ||
-					lead.property.toLowerCase().includes(q) ||
-					lead.source.toLowerCase().includes(q) ||
-					getLeadDisplayTags(lead).some((t) => t.toLowerCase().includes(q)) ||
-					(lead.notes ?? "").toLowerCase().includes(q)
-				)
-			)
-				return false;
-
-			if (statusFilter !== "__all__") {
-				if (statusFilter === "active") {
-					if (lead.status !== "active") return false;
-				} else if (lead.status === "active") {
-					return false;
-				}
-			}
-			if (stageFilter !== "__all__" && lead.stage !== stageFilter) return false;
-			if (leadTypeFilter !== "__all__" && lead.leadType !== leadTypeFilter)
-				return false;
-
-			if (agentFilter !== "__all__") {
-				if (agentFilter === "__unassigned__") {
-					if (lead.agentId) return false;
-				} else {
-					if (lead.agentId !== agentFilter) return false;
-				}
-			}
-
-			if (categoryFilter !== "__all__") {
-				const tagIds = lead.tagIds ?? [];
-				if (categoryFilter === "__none__") {
-					if (tagIds.length > 0) return false;
-				} else {
-					if (!tagIds.includes(categoryFilter)) return false;
-				}
-			}
-
-			return true;
-		});
-
-		// 2. Sort
-		filtered = [...filtered].sort((a, b) => {
-			let valA: string | number | Date;
-			let valB: string | number | Date;
-
-			if (sortKey === "createdAt" || sortKey === "updatedAt") {
-				valA = new Date(a[sortKey]).getTime();
-				valB = new Date(b[sortKey]).getTime();
-			} else if (sortKey === "agentName") {
-				valA = (a.agentName ?? "").toLowerCase();
-				valB = (b.agentName ?? "").toLowerCase();
-			} else {
-				valA = String(a[sortKey] ?? "").toLowerCase();
-				valB = String(b[sortKey] ?? "").toLowerCase();
-			}
-
-			if (valA < valB) return sortOrder === "asc" ? -1 : 1;
-			if (valA > valB) return sortOrder === "asc" ? 1 : -1;
-			return 0;
-		});
-
-		const totalFiltered = filtered.length;
-		const kanbanLeads = filtered;
-		const filteredLeads = filtered;
-
-		// 3. Paginate
-		const start = (page - 1) * pageSize;
-		const visibleLeads = filtered.slice(start, start + pageSize);
-
-		return { visibleLeads, totalFiltered, kanbanLeads, filteredLeads };
-	}, [
-		allLeads,
-		search,
-		statusFilter,
-		stageFilter,
-		leadTypeFilter,
-		agentFilter,
-		categoryFilter,
-		sortKey,
-		sortOrder,
-		page,
-		pageSize,
-	]);
-
-	const totalPages = Math.ceil(totalFiltered / pageSize);
 
 	// Reset page when filters change
 	const setFilter = useCallback(
@@ -446,17 +401,43 @@ export default function AdminLeadsPage() {
 	);
 
 	const handleExport = useCallback(
-		(
+		async (
 			format: "csv" | "excel",
 			scope: "filtered" | "selected",
 		) => {
 			if (isExporting || leadsPending) return;
 			setIsExporting(true);
 			try {
-				const leads =
-					scope === "selected"
-						? allLeads.filter((l) => selectedIds.has(l.id))
-						: kanbanLeads;
+				let leads: Lead[];
+				if (scope === "selected") {
+					leads = allLeads.filter((l) => selectedIds.has(l.id));
+				} else {
+					const exported = await trpcUtils.adminLeads.list.fetch({
+						search: debouncedSearch.trim() || undefined,
+						status: statusFilter === "active" ? "active" : undefined,
+						excludeActive: statusFilter === "inactive" ? true : undefined,
+						stage:
+							stageFilter !== "__all__" ? (stageFilter as never) : undefined,
+						leadType:
+							leadTypeFilter !== "__all__"
+								? (leadTypeFilter as "personal" | "company")
+								: undefined,
+						agentId: agentFilter !== "__all__" ? agentFilter : undefined,
+						tagId: categoryFilter !== "__all__" ? categoryFilter : undefined,
+						page: 1,
+						limit: 5000,
+						forExport: true,
+						sortBy: listSortBy,
+						sortOrder,
+					});
+					leads = (exported.leads ?? []) as Lead[];
+					if ((exported.pagination?.total ?? 0) > 5000) {
+						// Soft notice via console; toast optional
+						console.warn(
+							"[leads export] Truncated to first 5,000 matching rows",
+						);
+					}
+				}
 
 				const exportRows = leadsToExportRows(leads);
 				const baseName =
@@ -469,14 +450,22 @@ export default function AdminLeadsPage() {
 			}
 		},
 		[
+			agentFilter,
 			allLeads,
+			categoryFilter,
+			debouncedSearch,
 			exportToCSV,
 			exportToExcelHtml,
 			isExporting,
+			leadTypeFilter,
 			leadsPending,
-			kanbanLeads,
 			leadsToExportRows,
+			listSortBy,
 			selectedIds,
+			sortOrder,
+			stageFilter,
+			statusFilter,
+			trpcUtils,
 		],
 	);
 
@@ -539,22 +528,33 @@ export default function AdminLeadsPage() {
 			<div className="flex flex-1 flex-col gap-6 py-6">
 					<AdminLeadsPageHeader
 						isLoading={leadsPending}
-						leadCount={allLeads.length}
+						leadCount={totalFiltered}
 						isRefreshing={leadsPending || isFetching}
 						viewMode={viewMode}
 						onRefresh={handleRefresh}
 						onViewMode={(mode) => {
 							setViewMode(mode);
 							setSelectedIds(new Set());
+							setPage(1);
 						}}
 						onNewLead={() => setIsCreateOpen(true)}
 					/>
 
 					{/* Stats */}
-					<StatsCards leads={filteredLeads} isLoading={leadsPending} />
+					{loadSecondary ? (
+						<StatsCards
+							summary={leadStatsSummary}
+							isLoading={statsPending && !leadsStats}
+						/>
+					) : null}
 
 					{/* Charts */}
-					<LeadsCharts leads={filteredLeads} isLoading={leadsPending} />
+					{loadSecondary ? (
+						<LeadsCharts
+							chartData={leadsStats}
+							isLoading={statsPending && !leadsStats}
+						/>
+					) : null}
 
 					{/* Today's Tasks */}
 					<TodayTasksWidget

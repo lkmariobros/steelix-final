@@ -37,11 +37,15 @@ const adminListLeadsInput = z.object({
 	search: z.string().optional(),
 	type: z.enum(["tenant", "buyer"]).optional(),
 	status: z.enum(["active", "inactive", "pending"]).optional(),
+	excludeActive: z.boolean().optional(),
 	stage: pipelineStageSchema.optional(),
 	leadType: z.enum(["personal", "company"]).optional(),
 	agentId: z.string().optional(), // can be agent UUID or "__unassigned__"
+	tagId: z.string().optional(), // uuid or "__none__"
 	page: z.number().min(1).default(1),
-	limit: z.number().min(1).max(10000).default(20),
+	limit: z.number().min(1).max(5000).default(25),
+	forExport: z.boolean().optional(),
+	slim: z.boolean().optional(),
 	sortBy: z
 		.enum(["createdAt", "updatedAt", "name", "stage"])
 		.default("createdAt"),

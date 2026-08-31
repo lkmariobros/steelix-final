@@ -1,12 +1,7 @@
 "use client";
 
-import { AppSidebar } from "@/components/app-sidebar";
 import { HeaderActions } from "@/components/header-actions";
-import {
-	SidebarInset,
-	SidebarProvider,
-	SidebarTrigger,
-} from "@/components/sidebar";
+import { SidebarTrigger } from "@/components/sidebar";
 import {
 	Breadcrumb,
 	BreadcrumbItem,
@@ -62,113 +57,110 @@ export default function AgentTransactionDetailPage() {
 	const isLocked = tx != null && !canEdit;
 
 	return (
-		<SidebarProvider>
-			<AppSidebar />
-			<SidebarInset className="overflow-hidden px-4 md:px-6 lg:px-8">
-				<header className="flex h-16 shrink-0 items-center gap-2 border-b">
-					<div className="flex flex-1 items-center gap-2 px-3">
-						<SidebarTrigger className="-ms-4" />
-						<Separator
-							orientation="vertical"
-							className="mr-2 data-[orientation=vertical]:h-4"
-						/>
-						<Breadcrumb>
-							<BreadcrumbList>
-								<BreadcrumbItem className="hidden md:block">
-									<BreadcrumbLink href="/dashboard">
-										<RiDashboardLine size={22} aria-hidden="true" />
-										<span className="sr-only">Dashboard</span>
-									</BreadcrumbLink>
-								</BreadcrumbItem>
-								<BreadcrumbSeparator className="hidden md:block" />
-								<BreadcrumbItem>
-									<BreadcrumbLink href="/dashboard/transactions">
-										Transactions
-									</BreadcrumbLink>
-								</BreadcrumbItem>
-								<BreadcrumbSeparator />
-								<BreadcrumbItem>
-									<BreadcrumbPage className="flex items-center gap-2">
-										<RiFileTextLine size={18} />
-										{tx?.caseNo ?? "Transaction detail"}
-									</BreadcrumbPage>
-								</BreadcrumbItem>
-							</BreadcrumbList>
-						</Breadcrumb>
-					</div>
-					<div className="ml-auto flex gap-3">
-						<HeaderActions />
-					</div>
-				</header>
-
-				<div className="flex flex-1 flex-col gap-4 py-4 lg:gap-6 lg:py-6">
-					<div className="flex flex-wrap items-center justify-between gap-3">
-						<div className="flex items-center gap-2">
-							<Button variant="outline" size="sm" asChild>
-								<Link href="/dashboard/transactions">
-									<RiArrowLeftLine className="mr-1 size-4" />
-									Back to transactions
-								</Link>
-							</Button>
-						</div>
-						{canEdit && tx ? (
-							<Button
-								size="sm"
-								onClick={() => openEditModal(tx.id)}
-							>
-								<RiEditLine className="mr-1 size-4" />
-								Edit draft
-							</Button>
-						) : null}
-					</div>
-
-					<Card>
-						<CardHeader>
-							<CardTitle>{tx?.caseNo ?? "Transaction"}</CardTitle>
-						</CardHeader>
-						<CardContent>
-							{isLoading ? (
-								<div className="space-y-4">
-									<Skeleton className="h-6 w-48" />
-									<Skeleton className="h-32 w-full" />
-									<Skeleton className="h-32 w-full" />
-								</div>
-							) : error ? (
-								<div className="space-y-3">
-									<p className="text-destructive text-sm">{error.message}</p>
-									<Button
-										variant="outline"
-										onClick={() => router.push("/dashboard/transactions")}
-									>
-										Return to list
-									</Button>
-								</div>
-							) : tx ? (
-								<Tabs defaultValue="details">
-									<TabsList>
-										<TabsTrigger value="details">Details</TabsTrigger>
-										<TabsTrigger value="messages">
-											Messages / Requests
-										</TabsTrigger>
-									</TabsList>
-									<TabsContent value="details" className="mt-4">
-										<TransactionDetailView
-											tx={tx}
-											allowDocumentUpload
-										/>
-									</TabsContent>
-									<TabsContent value="messages" className="mt-4">
-										<TransactionMessagesPanel
-											transactionId={tx.id}
-											locked={isLocked}
-										/>
-									</TabsContent>
-								</Tabs>
-							) : null}
-						</CardContent>
-					</Card>
+		<>
+			<header className="flex h-16 shrink-0 items-center gap-2 border-b">
+				<div className="flex flex-1 items-center gap-2 px-3">
+					<SidebarTrigger className="-ms-4" />
+					<Separator
+						orientation="vertical"
+						className="mr-2 data-[orientation=vertical]:h-4"
+					/>
+					<Breadcrumb>
+						<BreadcrumbList>
+							<BreadcrumbItem className="hidden md:block">
+								<BreadcrumbLink href="/dashboard">
+									<RiDashboardLine size={22} aria-hidden="true" />
+									<span className="sr-only">Dashboard</span>
+								</BreadcrumbLink>
+							</BreadcrumbItem>
+							<BreadcrumbSeparator className="hidden md:block" />
+							<BreadcrumbItem>
+								<BreadcrumbLink href="/dashboard/transactions">
+									Transactions
+								</BreadcrumbLink>
+							</BreadcrumbItem>
+							<BreadcrumbSeparator />
+							<BreadcrumbItem>
+								<BreadcrumbPage className="flex items-center gap-2">
+									<RiFileTextLine size={18} />
+									{tx?.caseNo ?? "Transaction detail"}
+								</BreadcrumbPage>
+							</BreadcrumbItem>
+						</BreadcrumbList>
+					</Breadcrumb>
 				</div>
-			</SidebarInset>
-		</SidebarProvider>
+				<div className="ml-auto flex gap-3">
+					<HeaderActions />
+				</div>
+			</header>
+
+			<div className="flex flex-1 flex-col gap-4 py-4 lg:gap-6 lg:py-6">
+				<div className="flex flex-wrap items-center justify-between gap-3">
+					<div className="flex items-center gap-2">
+						<Button variant="outline" size="sm" asChild>
+							<Link href="/dashboard/transactions">
+								<RiArrowLeftLine className="mr-1 size-4" />
+								Back to transactions
+							</Link>
+						</Button>
+					</div>
+					{canEdit && tx ? (
+						<Button
+							size="sm"
+							onClick={() => openEditModal(tx.id)}
+						>
+							<RiEditLine className="mr-1 size-4" />
+							Edit draft
+						</Button>
+					) : null}
+				</div>
+
+				<Card>
+					<CardHeader>
+						<CardTitle>{tx?.caseNo ?? "Transaction"}</CardTitle>
+					</CardHeader>
+					<CardContent>
+						{isLoading ? (
+							<div className="space-y-4">
+								<Skeleton className="h-6 w-48" />
+								<Skeleton className="h-32 w-full" />
+								<Skeleton className="h-32 w-full" />
+							</div>
+						) : error ? (
+							<div className="space-y-3">
+								<p className="text-destructive text-sm">{error.message}</p>
+								<Button
+									variant="outline"
+									onClick={() => router.push("/dashboard/transactions")}
+								>
+									Return to list
+								</Button>
+							</div>
+						) : tx ? (
+							<Tabs defaultValue="details">
+								<TabsList>
+									<TabsTrigger value="details">Details</TabsTrigger>
+									<TabsTrigger value="messages">
+										Messages / Requests
+									</TabsTrigger>
+								</TabsList>
+								<TabsContent value="details" className="mt-4">
+									<TransactionDetailView
+										tx={tx}
+										allowDocumentUpload
+									/>
+								</TabsContent>
+								<TabsContent value="messages" className="mt-4">
+									<TransactionMessagesPanel
+										transactionId={tx.id}
+										locked={isLocked}
+									/>
+								</TabsContent>
+							</Tabs>
+						) : null}
+					</CardContent>
+				</Card>
+			</div>
+		</>
 	);
 }

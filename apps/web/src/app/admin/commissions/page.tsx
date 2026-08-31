@@ -66,6 +66,7 @@ import { format } from "date-fns";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { toast } from "sonner";
 
 const actionBtnClass =
@@ -213,6 +214,7 @@ export default function AdminCommissionsPage() {
 	const searchParams = useSearchParams();
 
 	const [search, setSearch] = useState("");
+	const debouncedSearch = useDebouncedValue(search, 300);
 	const [agentId, setAgentId] = useState("__all__");
 	const [projectName, setProjectName] = useState("__all__");
 	const [status, setStatus] = useState<string>("__all__");
@@ -241,7 +243,7 @@ export default function AdminCommissionsPage() {
 
 	const filterArgs = useMemo(
 		() => ({
-			search: search.trim() || undefined,
+			search: debouncedSearch.trim() || undefined,
 			agentId: agentId === "__all__" ? undefined : agentId,
 			projectName: projectName === "__all__" ? undefined : projectName,
 			status:
@@ -259,7 +261,7 @@ export default function AdminCommissionsPage() {
 			limit: pageSize,
 			offset: page * pageSize,
 		}),
-		[search, agentId, projectName, status, dateFrom, dateTo, page],
+		[debouncedSearch, agentId, projectName, status, dateFrom, dateTo, page],
 	);
 
 	const summaryFilters = useMemo(

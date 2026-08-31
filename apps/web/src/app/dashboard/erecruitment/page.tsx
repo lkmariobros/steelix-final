@@ -1,12 +1,7 @@
 "use client";
 
-import { AppSidebar } from "@/components/app-sidebar";
 import { HeaderActions } from "@/components/header-actions";
-import {
-	SidebarInset,
-	SidebarProvider,
-	SidebarTrigger,
-} from "@/components/sidebar";
+import { SidebarTrigger } from "@/components/sidebar";
 import {
 	Breadcrumb,
 	BreadcrumbItem,
@@ -30,46 +25,43 @@ export default function AgentERecruitmentPage() {
 	if (!session) return <LoadingScreen text="Redirecting..." />;
 
 	return (
-		<SidebarProvider>
-			<AppSidebar />
-			<SidebarInset className="overflow-hidden px-4 md:px-6 lg:px-8">
-				<header className="flex h-16 shrink-0 items-center gap-2 border-b">
-					<div className="flex flex-1 items-center gap-2">
-						<SidebarTrigger className="-ms-1" />
-						<Separator orientation="vertical" className="mr-2 h-4" />
-						<Breadcrumb>
-							<BreadcrumbList>
-								<BreadcrumbItem className="hidden md:block">
-									<BreadcrumbLink href="/dashboard">
-										<RiDashboardLine size={22} aria-hidden="true" />
-										<span className="sr-only">Dashboard</span>
-									</BreadcrumbLink>
-								</BreadcrumbItem>
-								<BreadcrumbSeparator className="hidden md:block" />
-								<BreadcrumbItem>
-									<BreadcrumbPage className="flex items-center gap-2">
-										<RiUserAddLine size={18} />
-										eRecruitment
-									</BreadcrumbPage>
-								</BreadcrumbItem>
-							</BreadcrumbList>
-						</Breadcrumb>
-					</div>
-					<HeaderActions />
-				</header>
-
-				<div className="flex flex-1 flex-col gap-6 py-6">
-					<div>
-						<h1 className="font-bold text-2xl tracking-tight">eRecruitment</h1>
-						<p className="text-muted-foreground text-sm">
-							Generate recruitment links for new joiners. Application approval is
-							handled by Admin / Super Admin.
-						</p>
-					</div>
-
-					<GenerateRecruitmentLinkCard />
+		<>
+			<header className="flex h-16 shrink-0 items-center gap-2 border-b">
+				<div className="flex flex-1 items-center gap-2">
+					<SidebarTrigger className="-ms-1" />
+					<Separator orientation="vertical" className="mr-2 h-4" />
+					<Breadcrumb>
+						<BreadcrumbList>
+							<BreadcrumbItem className="hidden md:block">
+								<BreadcrumbLink href="/dashboard">
+									<RiDashboardLine size={22} aria-hidden="true" />
+									<span className="sr-only">Dashboard</span>
+								</BreadcrumbLink>
+							</BreadcrumbItem>
+							<BreadcrumbSeparator className="hidden md:block" />
+							<BreadcrumbItem>
+								<BreadcrumbPage className="flex items-center gap-2">
+									<RiUserAddLine size={18} />
+									eRecruitment
+								</BreadcrumbPage>
+							</BreadcrumbItem>
+						</BreadcrumbList>
+					</Breadcrumb>
 				</div>
-			</SidebarInset>
-		</SidebarProvider>
+				<HeaderActions />
+			</header>
+
+			<div className="flex flex-1 flex-col gap-6 py-6">
+				<div>
+					<h1 className="font-bold text-2xl tracking-tight">eRecruitment</h1>
+					<p className="text-muted-foreground text-sm">
+						Generate recruitment links for new joiners. Application approval is
+						handled by Admin / Super Admin.
+					</p>
+				</div>
+
+				<GenerateRecruitmentLinkCard />
+			</div>
+		</>
 	);
 }
