@@ -1285,10 +1285,10 @@ export default function AdminLeadsPage() {
 																);
 															})()}
 														</TableCell>
-														<TableCell className="px-4 py-3.5">
+														<TableCell className="whitespace-nowrap px-4 py-3.5">
 															<StageBadge stage={lead.stage} />
 														</TableCell>
-														<TableCell className="px-4 py-3.5">
+														<TableCell className="whitespace-nowrap px-4 py-3.5">
 															<StatusBadge status={lead.status} />
 														</TableCell>
 														<TableCell className="px-4 py-3.5">

@@ -31,7 +31,7 @@ export function StageBadge({
 		<span
 			title={title ?? info.label}
 			className={cn(
-				"inline-flex items-center rounded-full px-2 py-0.5 font-medium text-xs",
+				"inline-flex shrink-0 items-center whitespace-nowrap rounded-full px-2.5 py-0.5 font-medium text-xs leading-none",
 				info.color,
 				className,
 			)}
@@ -58,7 +58,7 @@ export function StatusBadge({
 	return (
 		<span
 			className={cn(
-				"inline-flex shrink-0 items-center rounded-full px-2.5 py-0.5 font-medium text-[11px]",
+				"inline-flex shrink-0 items-center whitespace-nowrap rounded-full px-2.5 py-0.5 font-medium text-[11px] leading-none",
 				colors[normalizedStatus] ?? colors.inactive,
 				className,
 			)}
