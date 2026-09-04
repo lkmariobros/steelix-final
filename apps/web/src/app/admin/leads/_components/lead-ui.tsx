@@ -27,11 +27,16 @@ export function StageBadge({
 		label: formatPipelineStageLabel(stage),
 		color: "bg-gray-100 text-gray-700 dark:bg-gray-900/20 dark:text-gray-400",
 	};
+	const isLong = info.label.length > 12;
+
 	return (
 		<span
 			title={title ?? info.label}
 			className={cn(
-				"inline-flex shrink-0 items-center whitespace-nowrap rounded-full px-2.5 py-0.5 font-medium text-xs leading-none",
+				// 1–2 line badge: fixed max width, smaller type when label is long
+				"inline-block max-w-[8.75rem] rounded-md px-2 py-1 text-center font-medium leading-snug",
+				"line-clamp-2 break-words align-middle",
+				isLong ? "text-[10px]" : "text-[11px]",
 				info.color,
 				className,
 			)}
@@ -58,7 +63,7 @@ export function StatusBadge({
 	return (
 		<span
 			className={cn(
-				"inline-flex shrink-0 items-center whitespace-nowrap rounded-full px-2.5 py-0.5 font-medium text-[11px] leading-none",
+				"inline-flex shrink-0 items-center rounded-full px-2.5 py-0.5 font-medium text-[11px]",
 				colors[normalizedStatus] ?? colors.inactive,
 				className,
 			)}
