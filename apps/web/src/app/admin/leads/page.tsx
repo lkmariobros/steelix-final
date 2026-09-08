@@ -152,7 +152,27 @@ export default function AdminLeadsPage() {
 	const listSortBy =
 		sortKey === "agentName" ? ("createdAt" as const) : sortKey;
 
-	// Server-side filtered + paginated list (table uses pageSize; kanban uses larger page)
+	const hasActiveListFilters = Boolean(
+		debouncedSearch.trim() ||
+			statusFilter !== "__all__" ||
+			stageFilter !== "__all__" ||
+			leadTypeFilter !== "__all__" ||
+			agentFilter !== "__all__" ||
+			categoryFilter !== "__all__",
+	);
+
+	// Board: search/filters run against the full DB; load all matches (up to API max).
+	// Unfiltered board stays capped so first paint stays fast.
+	const KANBAN_PREVIEW_LIMIT = 120;
+	const KANBAN_FILTERED_LIMIT = 5000;
+	const listLimit =
+		viewMode === "kanban"
+			? hasActiveListFilters
+				? KANBAN_FILTERED_LIMIT
+				: KANBAN_PREVIEW_LIMIT
+			: pageSize;
+
+	// Server-side filtered + paginated list (table uses pageSize; kanban uses scope above)
 	const {
 		data: rawData,
 		isPending: leadsPending,
@@ -171,7 +191,7 @@ export default function AdminLeadsPage() {
 			agentId: agentFilter !== "__all__" ? agentFilter : undefined,
 			tagId: categoryFilter !== "__all__" ? categoryFilter : undefined,
 			page: viewMode === "kanban" ? 1 : page,
-			limit: viewMode === "kanban" ? 120 : pageSize,
+			limit: listLimit,
 			slim: viewMode === "kanban",
 			sortBy: listSortBy,
 			sortOrder,
@@ -860,7 +880,7 @@ export default function AdminLeadsPage() {
 									<span className="text-muted-foreground text-xs">
 										{leadsPending ? (
 											"Loading…"
-										) : totalFiltered === allLeads.length ? (
+										) : allLeads.length >= totalFiltered ? (
 											<>
 												Total leads:{" "}
 												<span className="font-medium text-foreground">
@@ -869,10 +889,11 @@ export default function AdminLeadsPage() {
 											</>
 										) : (
 											<>
+												Showing{" "}
 												<span className="font-medium text-foreground">
-													{totalFiltered}
+													{allLeads.length}
 												</span>{" "}
-												of {allLeads.length} leads
+												of {totalFiltered} leads
 											</>
 										)}
 									</span>
@@ -1555,6 +1576,16 @@ export default function AdminLeadsPage() {
 								)}
 							</div>
 							<div className={viewMode === "kanban" ? "p-4" : "hidden"}>
+								{viewMode === "kanban" &&
+									!leadsPending &&
+									!hasActiveListFilters &&
+									totalFiltered > allLeads.length && (
+										<p className="mb-3 rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-muted-foreground text-xs">
+											Board preview shows the latest {allLeads.length} of{" "}
+											{totalFiltered} leads. Search or use filters to find
+											across all leads.
+										</p>
+									)}
 								{leadsPending ? (
 									<div className="flex items-center justify-center py-12">
 										<RiLoader4Line className="size-8 animate-spin text-primary" />
