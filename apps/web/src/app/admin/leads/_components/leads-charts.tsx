@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useTheme } from "next-themes";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -67,32 +67,6 @@ function AreaTooltip({
 	);
 }
 
-function PieTooltip({
-	active,
-	payload,
-}: {
-	active?: boolean;
-	payload?: Array<{ name: string; value: number; payload: { color: string } }>;
-}) {
-	if (!active || !payload?.length) return null;
-	const item = payload[0];
-	return (
-		<div className="rounded-xl border border-border/70 bg-popover px-3 py-2 shadow-card">
-			<div className="flex items-center gap-2">
-				<span
-					className="size-2.5 shrink-0 rounded-full"
-					style={{ backgroundColor: item.payload.color }}
-				/>
-				<span className="font-semibold text-foreground text-xs">{item.name}</span>
-			</div>
-			<p className="mt-1 text-muted-foreground text-xs">
-				<span className="font-bold tabular-nums text-primary">{item.value}</span>{" "}
-				leads
-			</p>
-		</div>
-	);
-}
-
 function ChartCardShell({
 	title,
 	description,
@@ -133,33 +107,71 @@ function DonutChart({
 	data: Array<{ name: string; value: number; color: string }>;
 	total: number;
 }) {
+	const [active, setActive] = useState<{
+		name: string;
+		value: number;
+		color: string;
+	} | null>(null);
+
 	return (
-		<div className="relative mx-auto size-[140px]">
-			<ResponsiveContainer width="100%" height="100%">
-				<PieChart>
-					<Pie
-						data={data}
-						dataKey="value"
-						nameKey="name"
-						cx="50%"
-						cy="50%"
-						innerRadius={42}
-						outerRadius={62}
-						paddingAngle={2}
-						strokeWidth={0}
-					>
-						{data.map((entry) => (
-							<Cell key={entry.name} fill={entry.color} />
-						))}
-					</Pie>
-					<Tooltip content={<PieTooltip />} />
-				</PieChart>
-			</ResponsiveContainer>
-			<div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-				<span className="font-bold text-lg text-foreground tabular-nums leading-none">
-					{total}
-				</span>
-				<span className="mt-0.5 text-muted-foreground text-[10px]">total</span>
+		<div className="mx-auto flex w-full max-w-[200px] flex-col items-center gap-2">
+			<div className="relative size-[168px]">
+				<ResponsiveContainer width="100%" height="100%">
+					<PieChart>
+						<Pie
+							data={data}
+							dataKey="value"
+							nameKey="name"
+							cx="50%"
+							cy="50%"
+							// Thicker ring than before (was ~20px; now ~30px)
+							innerRadius={42}
+							outerRadius={72}
+							paddingAngle={2}
+							strokeWidth={0}
+							onMouseEnter={(_, index) => {
+								const row = data[index];
+								if (row) setActive(row);
+							}}
+							onMouseLeave={() => setActive(null)}
+						>
+							{data.map((entry) => (
+								<Cell key={entry.name} fill={entry.color} />
+							))}
+						</Pie>
+					</PieChart>
+				</ResponsiveContainer>
+				<div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+					<span className="font-bold text-lg text-foreground tabular-nums leading-none">
+						{total}
+					</span>
+					<span className="mt-0.5 text-muted-foreground text-[10px]">total</span>
+				</div>
+			</div>
+
+			{/* Fixed-height slot so hover tooltip never grows the card */}
+			<div className="flex h-[52px] w-full shrink-0 items-center justify-center overflow-hidden px-1">
+				{active ? (
+					<div className="max-w-full truncate rounded-xl border border-border/70 bg-popover px-3 py-1.5 shadow-card">
+						<div className="flex items-center justify-center gap-2">
+							<span
+								className="size-2.5 shrink-0 rounded-full"
+								style={{ backgroundColor: active.color }}
+							/>
+							<span className="truncate font-semibold text-foreground text-xs">
+								{active.name}
+							</span>
+						</div>
+						<p className="text-center text-muted-foreground text-xs leading-tight">
+							<span className="font-bold tabular-nums text-primary">
+								{active.value}
+							</span>{" "}
+							leads
+						</p>
+					</div>
+				) : (
+					<p className="text-muted-foreground text-[10px]">Hover a segment</p>
+				)}
 			</div>
 		</div>
 	);
@@ -222,7 +234,7 @@ export function LeadsCharts({
 						<Skeleton className="h-5 w-36" />
 					</CardHeader>
 					<CardContent className="flex justify-center">
-						<Skeleton className="size-[140px] rounded-full" />
+						<Skeleton className="size-[168px] rounded-full" />
 					</CardContent>
 				</Card>
 				<Card className="h-full">
@@ -230,7 +242,7 @@ export function LeadsCharts({
 						<Skeleton className="h-5 w-40" />
 					</CardHeader>
 					<CardContent className="flex justify-center">
-						<Skeleton className="size-[140px] rounded-full" />
+						<Skeleton className="size-[168px] rounded-full" />
 					</CardContent>
 				</Card>
 			</div>
@@ -242,7 +254,7 @@ export function LeadsCharts({
 	return (
 		<div className="grid items-stretch gap-4 lg:grid-cols-4">
 			<ChartCardShell
-				className="lg:col-span-2"
+				className="min-h-[280px] lg:col-span-2"
 				title="Monthly Lead Trend"
 				description="Leads created over the last 6 months"
 				icon={<RiBarChartBoxLine size={16} />}
@@ -299,21 +311,33 @@ export function LeadsCharts({
 				</div>
 			</ChartCardShell>
 
-			<ChartCardShell title="By Pipeline Stage" icon={<RiPieChart2Line size={16} />}>
-				<DonutChart data={stageData} total={totalLeads} />
+			<ChartCardShell
+				className="min-h-[280px]"
+				title="By Pipeline Stage"
+				icon={<RiPieChart2Line size={16} />}
+			>
+				<div className="flex flex-1 items-center justify-center">
+					<DonutChart data={stageData} total={totalLeads} />
+				</div>
 			</ChartCardShell>
 
-			<ChartCardShell title="By Category" icon={<RiPieChart2Line size={16} />}>
-				{categoryData.length > 0 ? (
-					<DonutChart
-						data={categoryData}
-						total={categoryData.reduce((s, c) => s + c.value, 0)}
-					/>
-				) : (
-					<p className="py-10 text-center text-muted-foreground text-xs">
-						No category data
-					</p>
-				)}
+			<ChartCardShell
+				className="min-h-[280px]"
+				title="By Category"
+				icon={<RiPieChart2Line size={16} />}
+			>
+				<div className="flex flex-1 items-center justify-center">
+					{categoryData.length > 0 ? (
+						<DonutChart
+							data={categoryData}
+							total={categoryData.reduce((s, c) => s + c.value, 0)}
+						/>
+					) : (
+						<p className="py-10 text-center text-muted-foreground text-xs">
+							No category data
+						</p>
+					)}
+				</div>
 			</ChartCardShell>
 		</div>
 	);
