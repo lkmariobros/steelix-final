@@ -34,7 +34,7 @@ export default function AdminFilesPage() {
 							<BreadcrumbItem>
 								<BreadcrumbPage className="flex items-center gap-2">
 									<RiFolderCloudLine size={18} />
-									Files
+									Company Drive
 								</BreadcrumbPage>
 							</BreadcrumbItem>
 						</BreadcrumbList>
@@ -45,18 +45,20 @@ export default function AdminFilesPage() {
 
 			<div className="flex flex-1 flex-col gap-6 py-6">
 				<div>
-					<h1 className="font-bold text-2xl tracking-tight">Portal files</h1>
+					<h1 className="font-bold text-2xl tracking-tight">Company Drive</h1>
 					<p className="text-muted-foreground text-sm">
-						Upload, download, and manage company files or agent-specific documents.
+						Shared company files plus per-agent folders. Upload, download, organise —
+						agents can view only.
 					</p>
 				</div>
 
 				<Card>
 					<CardHeader>
-						<CardTitle>File drive</CardTitle>
+						<CardTitle>Drive</CardTitle>
 						<CardDescription>
-							Admins and super admins can upload and download. Use &ldquo;Company
-							files&rdquo; for documents all agents can view.
+							Use <strong>Company</strong> for files all agents see. Use{" "}
+							<strong>Agent folder</strong> to put files for one agent. Nested folders
+							supported.
 						</CardDescription>
 					</CardHeader>
 					<CardContent>

@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import { and, desc, eq, ilike, inArray, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { portalFiles, portalFolders } from "../models/portal-files";
 import {
@@ -10,6 +10,7 @@ import {
 	agentAccessibleOwnerIds,
 	assertAllowedPortalMimeType,
 	assertCanAccessPortalFile,
+	assertCanAccessPortalFolder,
 	assertCanDownloadPortalFiles,
 	assertCanManagePortalFiles,
 	assertCanUploadPortalFiles,
@@ -20,7 +21,10 @@ import {
 	createPortalSignedUrl,
 	getPortalFileCapabilities,
 	getPortalFileForAccess,
+	getPortalFolderBreadcrumb,
+	getPortalFolderForAccess,
 	getPortalStorageUsageBytes,
+	isFolderDescendantOf,
 	mapPortalFileRow,
 	normalisePortalOwnerInput,
 	resolvePortalOwnerUserId,
@@ -143,6 +147,8 @@ export const portalFilesRouter = router({
 		.input(
 			folderInput.extend({
 				search: z.string().optional(),
+				sortBy: z.enum(["name", "size", "date"]).default("date"),
+				sortOrder: z.enum(["asc", "desc"]).default("desc"),
 			}),
 		)
 		.query(async ({ ctx, input }) => {
@@ -160,13 +166,69 @@ export const portalFilesRouter = router({
 				conditions.push(ilike(portalFiles.fileName, `%${input.search.trim()}%`));
 			}
 
+			const orderCol =
+				input.sortBy === "name"
+					? portalFiles.fileName
+					: input.sortBy === "size"
+						? portalFiles.fileSize
+						: portalFiles.createdAt;
+			const orderDir = input.sortOrder === "asc" ? asc(orderCol) : desc(orderCol);
+
 			const rows = await db
 				.select()
 				.from(portalFiles)
 				.where(and(...conditions))
-				.orderBy(desc(portalFiles.createdAt));
+				.orderBy(orderDir);
 
 			return rows.map(mapPortalFileRow);
+		}),
+
+	getFolderPath: protectedProcedure
+		.input(z.object({ folderId: z.string().uuid() }))
+		.query(async ({ ctx, input }) => {
+			const user = sessionUser(ctx);
+			const folder = await getPortalFolderForAccess(input.folderId);
+			assertCanAccessPortalFolder(user, folder);
+			const trail = await getPortalFolderBreadcrumb(input.folderId);
+			return {
+				ownerUserId: folder.ownerUserId,
+				isShared: folder.ownerUserId === PORTAL_SHARED_OWNER_ID,
+				trail,
+			};
+		}),
+
+	listFoldersForMove: protectedProcedure
+		.input(
+			z.object({
+				ownerUserId: z.string().optional(),
+				parentFolderId: z.string().uuid().nullable().optional(),
+				excludeFolderId: z.string().uuid().optional(),
+			}),
+		)
+		.query(async ({ ctx, input }) => {
+			const user = sessionUser(ctx);
+			assertCanManagePortalFiles(user);
+			const { ownerUserId } = resolveListOwnerScope(user, input.ownerUserId);
+			const parentFolderId = input.parentFolderId ?? null;
+
+			const rows = await db
+				.select({
+					id: portalFolders.id,
+					name: portalFolders.name,
+					parentFolderId: portalFolders.parentFolderId,
+				})
+				.from(portalFolders)
+				.where(
+					and(
+						eq(portalFolders.ownerUserId, ownerUserId),
+						parentFolderId
+							? eq(portalFolders.parentFolderId, parentFolderId)
+							: isNull(portalFolders.parentFolderId),
+					),
+				)
+				.orderBy(portalFolders.name);
+
+			return rows.filter((r) => r.id !== input.excludeFolderId);
 		}),
 
 	createFolder: protectedProcedure
@@ -531,5 +593,144 @@ export const portalFilesRouter = router({
 				.returning();
 
 			return mapPortalFileRow(updated ?? file);
+		}),
+
+	renameFolder: protectedProcedure
+		.input(
+			z.object({
+				folderId: z.string().uuid(),
+				name: z.string().min(1).max(120),
+			}),
+		)
+		.mutation(async ({ ctx, input }) => {
+			const user = sessionUser(ctx);
+			assertCanManagePortalFiles(user);
+			const folder = await getPortalFolderForAccess(input.folderId);
+			assertCanAccessPortalFolder(user, folder);
+
+			const [updated] = await db
+				.update(portalFolders)
+				.set({
+					name: input.name.trim(),
+					updatedAt: new Date(),
+				})
+				.where(eq(portalFolders.id, folder.id))
+				.returning();
+
+			return {
+				id: updated?.id ?? folder.id,
+				name: updated?.name ?? input.name.trim(),
+				parentFolderId: updated?.parentFolderId ?? folder.parentFolderId,
+				ownerUserId: updated?.ownerUserId ?? folder.ownerUserId,
+			};
+		}),
+
+	moveFile: protectedProcedure
+		.input(
+			z.object({
+				fileId: z.string().uuid(),
+				folderId: z.string().uuid().nullable(),
+			}),
+		)
+		.mutation(async ({ ctx, input }) => {
+			const user = sessionUser(ctx);
+			assertCanManagePortalFiles(user);
+			const file = await getPortalFileForAccess(input.fileId);
+			assertCanAccessPortalFile(user, file);
+
+			if (input.folderId) {
+				await assertPortalFolderAccess(file.ownerUserId, input.folderId);
+			}
+
+			const [updated] = await db
+				.update(portalFiles)
+				.set({
+					folderId: input.folderId,
+					updatedAt: new Date(),
+				})
+				.where(eq(portalFiles.id, file.id))
+				.returning();
+
+			return mapPortalFileRow(updated ?? file);
+		}),
+
+	moveFolder: protectedProcedure
+		.input(
+			z.object({
+				folderId: z.string().uuid(),
+				parentFolderId: z.string().uuid().nullable(),
+			}),
+		)
+		.mutation(async ({ ctx, input }) => {
+			const user = sessionUser(ctx);
+			assertCanManagePortalFiles(user);
+			const folder = await getPortalFolderForAccess(input.folderId);
+			assertCanAccessPortalFolder(user, folder);
+
+			if (input.parentFolderId) {
+				if (input.parentFolderId === input.folderId) {
+					throw new TRPCError({
+						code: "BAD_REQUEST",
+						message: "Cannot move a folder into itself",
+					});
+				}
+				await assertPortalFolderAccess(folder.ownerUserId, input.parentFolderId);
+				const wouldCycle = await isFolderDescendantOf(
+					input.parentFolderId,
+					input.folderId,
+				);
+				if (wouldCycle) {
+					throw new TRPCError({
+						code: "BAD_REQUEST",
+						message: "Cannot move a folder into one of its subfolders",
+					});
+				}
+			}
+
+			const [updated] = await db
+				.update(portalFolders)
+				.set({
+					parentFolderId: input.parentFolderId,
+					updatedAt: new Date(),
+				})
+				.where(eq(portalFolders.id, folder.id))
+				.returning();
+
+			return {
+				id: updated?.id ?? folder.id,
+				name: updated?.name ?? folder.name,
+				parentFolderId: updated?.parentFolderId ?? input.parentFolderId,
+				ownerUserId: updated?.ownerUserId ?? folder.ownerUserId,
+			};
+		}),
+
+	deleteFilesBulk: protectedProcedure
+		.input(z.object({ fileIds: z.array(z.string().uuid()).min(1).max(50) }))
+		.mutation(async ({ ctx, input }) => {
+			const user = sessionUser(ctx);
+			assertCanManagePortalFiles(user);
+
+			const storage = requireSupabaseAdmin();
+			let deleted = 0;
+
+			for (const fileId of input.fileIds) {
+				const file = await getPortalFileForAccess(fileId);
+				assertCanAccessPortalFile(user, file);
+
+				const { error } = await storage.storage
+					.from(PORTAL_FILES_BUCKET)
+					.remove([file.storagePath]);
+				if (error) {
+					console.error("Portal file storage delete error:", error);
+				}
+
+				await db
+					.update(portalFiles)
+					.set({ deletedAt: new Date(), updatedAt: new Date() })
+					.where(eq(portalFiles.id, file.id));
+				deleted += 1;
+			}
+
+			return { success: true, deleted };
 		}),
 });

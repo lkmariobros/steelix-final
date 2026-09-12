@@ -21,7 +21,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 	return (
 		<SidebarProvider className="h-svh overflow-hidden">
 			<AppSidebar />
-			<SidebarInset className="h-svh min-h-0 overflow-y-auto overscroll-y-contain bg-background px-4 md:px-6 lg:px-8">
+			<SidebarInset className="h-svh min-h-0 min-w-0 overflow-y-auto overscroll-y-contain bg-background px-4 md:px-6 lg:px-8">
 				{children}
 			</SidebarInset>
 		</SidebarProvider>

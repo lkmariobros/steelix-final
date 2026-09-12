@@ -184,7 +184,7 @@ export function CommissionApprovalQueue({
 
 	if (isLoading) {
 		return (
-			<Card className={cn("flex h-full flex-col", className)}>
+			<Card className={cn("flex h-full min-w-0 flex-col", className)}>
 				<CardHeader className="pb-2">
 					<CardTitle className="flex items-center gap-2.5 text-base">
 						<span className="flex size-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
@@ -217,15 +217,15 @@ export function CommissionApprovalQueue({
 
 	return (
 		<>
-			<Card className={cn("flex h-full flex-col", className)}>
+			<Card className={cn("flex h-full min-w-0 flex-col", className)}>
 				<CardHeader className="pb-3">
 					<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-						<div className="flex items-center gap-2.5">
-							<CardTitle className="flex items-center gap-2.5 text-base">
-								<span className="flex size-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
+						<div className="flex min-w-0 flex-wrap items-center gap-2.5">
+							<CardTitle className="flex min-w-0 items-center gap-2.5 text-base">
+								<span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
 									<RiTimeLine size={18} />
 								</span>
-								Commission Approval Queue
+								<span className="truncate">Commission Approval Queue</span>
 							</CardTitle>
 							<Badge
 								variant="secondary"
@@ -248,7 +248,7 @@ export function CommissionApprovalQueue({
 						</div>
 					</div>
 				</CardHeader>
-				<CardContent className="flex flex-1 flex-col pt-0">
+				<CardContent className="flex min-w-0 flex-1 flex-col pt-0">
 					{allTransactions.length === 0 ? (
 						<div className="flex flex-1 flex-col items-center justify-center py-12 text-center">
 							<div className="mb-3 flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary">
@@ -267,26 +267,137 @@ export function CommissionApprovalQueue({
 						</div>
 					) : (
 						<>
-							<div className="min-h-0 flex-1 overflow-x-auto rounded-xl border border-border/60">
-								<Table className="w-full table-fixed min-w-[720px]">
+							{/* Mobile / tight: card list */}
+							<div className="space-y-3 md:hidden">
+								{pageTransactions.map((transaction) => {
+									const agentName = transaction.agentName || "Unknown Agent";
+									const initials = agentName
+										.split(/\s+/)
+										.filter(Boolean)
+										.map((p) => p[0])
+										.join("")
+										.slice(0, 2)
+										.toUpperCase();
+									const submitted = transaction.submittedAt
+										? new Date(transaction.submittedAt)
+										: null;
+									const clientName =
+										transaction.clientData?.name || "Unknown Client";
+
+									return (
+										<div
+											key={transaction.id}
+											className="space-y-3 rounded-xl border border-border/60 bg-card p-3.5"
+										>
+											<div className="flex items-start gap-2.5">
+												<Avatar className="size-9 shrink-0 border border-border/60">
+													{transaction.agentImage ? (
+														<AvatarImage
+															src={transaction.agentImage}
+															alt={agentName}
+														/>
+													) : null}
+													<AvatarFallback className="bg-primary/10 font-semibold text-primary text-[10px]">
+														{initials || "?"}
+													</AvatarFallback>
+												</Avatar>
+												<div className="min-w-0 flex-1">
+													<p className="truncate font-medium text-sm">
+														{agentName}
+													</p>
+													<p className="truncate text-muted-foreground text-xs capitalize">
+														{clientName}
+													</p>
+												</div>
+												<Badge
+													className={cn(
+														"shrink-0 rounded-full border-0 px-2 py-0.5 font-medium text-[11px]",
+														transaction.status === "submitted" ||
+															transaction.status === "under_review"
+															? "bg-amber-500/15 text-amber-700 dark:text-amber-300"
+															: getStatusBadgeClass(transaction.status),
+													)}
+												>
+													{formatStatusLabel(transaction.status)}
+												</Badge>
+											</div>
+											<div className="grid gap-1 text-xs">
+												<p className="truncate text-muted-foreground">
+													{transaction.propertyData?.address ||
+														"Unknown Property"}
+												</p>
+												<div className="flex flex-wrap items-center justify-between gap-2">
+													<span className="font-semibold tabular-nums text-sm">
+														{formatCurrency(transaction.commissionAmount)}
+													</span>
+													<span className="text-muted-foreground">
+														{submitted ? formatDateDMY(submitted) : "—"}
+													</span>
+												</div>
+											</div>
+											<div className="flex flex-wrap gap-1.5">
+												<Button
+													size="sm"
+													variant="secondary"
+													asChild
+													className="h-8 flex-1 gap-1 rounded-lg border-0 bg-sky-500/15 text-sky-700 text-xs hover:bg-sky-500/25 dark:text-sky-300"
+												>
+													<Link
+														href={`/admin/transactions/case/${transaction.id}`}
+													>
+														<RiEyeLine size={14} />
+														View
+													</Link>
+												</Button>
+												<Button
+													size="sm"
+													variant="secondary"
+													onClick={() =>
+														handleApprovalAction(transaction, "approve")
+													}
+													className="h-8 flex-1 gap-1 rounded-lg border-0 bg-emerald-500/15 text-emerald-700 text-xs hover:bg-emerald-500/25 dark:text-emerald-300"
+												>
+													<RiCheckLine size={14} />
+													Approve
+												</Button>
+												<Button
+													size="sm"
+													variant="secondary"
+													onClick={() =>
+														handleApprovalAction(transaction, "reject")
+													}
+													className="h-8 flex-1 gap-1 rounded-lg border-0 bg-rose-500/15 text-rose-700 text-xs hover:bg-rose-500/25 dark:text-rose-300"
+												>
+													<RiCloseLine size={14} />
+													Reject
+												</Button>
+											</div>
+										</div>
+									);
+								})}
+							</div>
+
+							{/* Desktop table */}
+							<div className="hidden min-h-0 min-w-0 flex-1 overflow-x-auto rounded-xl border border-border/60 md:block">
+								<Table className="w-full min-w-[820px]">
 									<TableHeader>
 										<TableRow className="border-border/50 hover:bg-transparent">
-											<TableHead className="h-11 w-[22%] bg-muted/50 font-semibold text-foreground text-xs">
+											<TableHead className="h-11 min-w-[180px] bg-muted/50 font-semibold text-foreground text-xs">
 												Agent & Client
 											</TableHead>
-											<TableHead className="h-11 w-[16%] bg-muted/50 font-semibold text-foreground text-xs">
+											<TableHead className="h-11 min-w-[140px] bg-muted/50 font-semibold text-foreground text-xs">
 												Property
 											</TableHead>
-											<TableHead className="h-11 w-[12%] bg-muted/50 font-semibold text-foreground text-xs">
+											<TableHead className="h-11 min-w-[110px] bg-muted/50 font-semibold text-foreground text-xs">
 												Commission
 											</TableHead>
-											<TableHead className="h-11 w-[14%] bg-muted/50 font-semibold text-foreground text-xs">
+											<TableHead className="h-11 min-w-[110px] bg-muted/50 font-semibold text-foreground text-xs">
 												Submitted
 											</TableHead>
-											<TableHead className="h-11 w-[10%] bg-muted/50 font-semibold text-foreground text-xs">
+											<TableHead className="h-11 min-w-[100px] bg-muted/50 font-semibold text-foreground text-xs">
 												Status
 											</TableHead>
-											<TableHead className="h-11 w-[26%] bg-muted/50 text-right font-semibold text-foreground text-xs">
+											<TableHead className="h-11 min-w-[200px] bg-muted/50 text-right font-semibold text-foreground text-xs">
 												Actions
 											</TableHead>
 										</TableRow>
@@ -314,7 +425,7 @@ export function CommissionApprovalQueue({
 													key={transaction.id}
 													className="border-border/40 hover:bg-muted/20"
 												>
-													<TableCell className="max-w-0 py-3">
+													<TableCell className="max-w-[220px] py-3">
 														<div className="flex min-w-0 items-center gap-2">
 															<Avatar className="size-8 shrink-0 border border-border/60">
 																{transaction.agentImage ? (
@@ -343,7 +454,7 @@ export function CommissionApprovalQueue({
 															</div>
 														</div>
 													</TableCell>
-													<TableCell className="max-w-0 py-3">
+													<TableCell className="max-w-[160px] py-3">
 														<p
 															className="truncate text-muted-foreground text-sm"
 															title={
@@ -355,21 +466,21 @@ export function CommissionApprovalQueue({
 																"Unknown Property"}
 														</p>
 													</TableCell>
-													<TableCell className="py-3">
-														<p className="truncate font-semibold tabular-nums text-foreground text-sm">
+													<TableCell className="py-3 whitespace-nowrap">
+														<p className="font-semibold tabular-nums text-foreground text-sm">
 															{formatCurrency(transaction.commissionAmount)}
 														</p>
-														<p className="mt-0.5 truncate text-muted-foreground text-xs capitalize">
+														<p className="mt-0.5 text-muted-foreground text-xs capitalize">
 															{transaction.transactionType}
 														</p>
 													</TableCell>
-													<TableCell className="py-3">
+													<TableCell className="py-3 whitespace-nowrap">
 														{submitted ? (
 															<>
-																<p className="truncate text-foreground text-sm">
+																<p className="text-foreground text-sm">
 																	{formatDateDMY(submitted)}
 																</p>
-																<p className="mt-0.5 truncate text-muted-foreground text-xs">
+																<p className="mt-0.5 text-muted-foreground text-xs">
 																	{formatDateTimeDMY(submitted).split(", ")[1] ??
 																		""}
 																</p>
@@ -380,10 +491,10 @@ export function CommissionApprovalQueue({
 															</span>
 														)}
 													</TableCell>
-													<TableCell className="py-3">
+													<TableCell className="overflow-hidden py-3">
 														<Badge
 															className={cn(
-																"rounded-full border-0 px-2 py-0.5 font-medium text-[11px]",
+																"max-w-full truncate rounded-full border-0 px-2 py-0.5 font-medium text-[11px]",
 																transaction.status === "submitted" ||
 																	transaction.status === "under_review"
 																	? "bg-amber-500/15 text-amber-700 dark:text-amber-300"
@@ -394,41 +505,48 @@ export function CommissionApprovalQueue({
 														</Badge>
 													</TableCell>
 													<TableCell className="py-3 text-right">
-														<div className="flex flex-nowrap items-center justify-end gap-1">
+														<div className="inline-flex flex-nowrap items-center justify-end gap-1">
 															<Button
 																size="sm"
 																variant="secondary"
 																asChild
-																className="h-7 shrink-0 gap-1 rounded-lg border-0 bg-sky-500/15 px-2 text-sky-700 text-xs hover:bg-sky-500/25 dark:text-sky-300"
+																className="h-8 shrink-0 gap-1 rounded-lg border-0 bg-sky-500/15 px-2.5 text-sky-700 text-xs hover:bg-sky-500/25 dark:text-sky-300"
 															>
 																<Link
 																	href={`/admin/transactions/case/${transaction.id}`}
+																	title="View"
 																>
-																	<RiEyeLine size={13} />
-																	View
+																	<RiEyeLine size={14} />
+																	<span className="hidden xl:inline">View</span>
 																</Link>
 															</Button>
 															<Button
 																size="sm"
 																variant="secondary"
+																title="Approve"
 																onClick={() =>
 																	handleApprovalAction(transaction, "approve")
 																}
-																className="h-7 shrink-0 gap-1 rounded-lg border-0 bg-emerald-500/15 px-2 text-emerald-700 text-xs hover:bg-emerald-500/25 dark:text-emerald-300"
+																className="h-8 shrink-0 gap-1 rounded-lg border-0 bg-emerald-500/15 px-2.5 text-emerald-700 text-xs hover:bg-emerald-500/25 dark:text-emerald-300"
 															>
-																<RiCheckLine size={13} />
-																Approve
+																<RiCheckLine size={14} />
+																<span className="hidden xl:inline">
+																	Approve
+																</span>
 															</Button>
 															<Button
 																size="sm"
 																variant="secondary"
+																title="Reject"
 																onClick={() =>
 																	handleApprovalAction(transaction, "reject")
 																}
-																className="h-7 shrink-0 gap-1 rounded-lg border-0 bg-rose-500/15 px-2 text-rose-700 text-xs hover:bg-rose-500/25 dark:text-rose-300"
+																className="h-8 shrink-0 gap-1 rounded-lg border-0 bg-rose-500/15 px-2.5 text-rose-700 text-xs hover:bg-rose-500/25 dark:text-rose-300"
 															>
-																<RiCloseLine size={13} />
-																Reject
+																<RiCloseLine size={14} />
+																<span className="hidden xl:inline">
+																	Reject
+																</span>
 															</Button>
 														</div>
 													</TableCell>

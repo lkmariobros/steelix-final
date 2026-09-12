@@ -105,7 +105,7 @@ export function DashboardSummary({ className }: DashboardSummaryProps) {
 	const pendingMeta = rateTone(pendingRate, [10, 25], true);
 
 	return (
-		<div className={cn("space-y-4", className)}>
+		<div className={cn("min-w-0 space-y-4", className)}>
 			<div className="grid items-stretch gap-4 sm:grid-cols-2 xl:grid-cols-4">
 				<MetricCard
 					title="Total Transactions"
@@ -142,16 +142,16 @@ export function DashboardSummary({ className }: DashboardSummaryProps) {
 			</div>
 
 			{/* Rates overview — brand-green striped bars */}
-			<Card className="gap-0 py-5">
-				<CardContent className="grid gap-6 md:grid-cols-3 md:divide-x md:divide-border/60">
-					<div className="space-y-3 md:pr-6">
+			<Card className="gap-0 overflow-hidden py-5">
+				<CardContent className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 lg:divide-x lg:divide-border/60">
+					<div className="min-w-0 space-y-3 lg:pr-6">
 						<div className="flex items-center justify-between gap-3">
 							<span className="font-medium text-foreground text-sm">
 								Approval Rate
 							</span>
 							<span
 								className={cn(
-									"font-semibold text-sm tabular-nums",
+									"shrink-0 font-semibold text-sm tabular-nums",
 									approvalMeta.text,
 								)}
 							>
@@ -161,14 +161,14 @@ export function DashboardSummary({ className }: DashboardSummaryProps) {
 						<StripedProgress value={approvalRate} tone="primary" height="md" />
 					</div>
 
-					<div className="space-y-3 md:px-6">
+					<div className="min-w-0 space-y-3 lg:px-6">
 						<div className="flex items-center justify-between gap-3">
 							<span className="font-medium text-foreground text-sm">
 								Pending Rate
 							</span>
 							<span
 								className={cn(
-									"font-semibold text-sm tabular-nums",
+									"shrink-0 font-semibold text-sm tabular-nums",
 									pendingMeta.text,
 								)}
 							>
@@ -178,16 +178,16 @@ export function DashboardSummary({ className }: DashboardSummaryProps) {
 						<StripedProgress value={pendingRate} tone="primary" height="md" />
 					</div>
 
-					<div className="space-y-2 md:pl-6">
+					<div className="min-w-0 space-y-2 sm:col-span-2 lg:col-span-1 lg:pl-6">
 						<div className="flex items-center justify-between gap-3">
 							<span className="font-medium text-foreground text-sm">
 								Avg Commission
 							</span>
-							<span className="font-semibold text-sm tabular-nums text-primary">
+							<span className="shrink-0 font-semibold text-sm tabular-nums text-primary">
 								{formatCurrency(data.avgCommissionValue)}
 							</span>
 						</div>
-						<p className="truncate whitespace-nowrap text-muted-foreground text-xs">
+						<p className="truncate text-muted-foreground text-xs">
 							{data.totalTransactions > 0
 								? `Across ${data.totalTransactions} transactions`
 								: "No transactions"}

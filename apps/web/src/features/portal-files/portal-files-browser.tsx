@@ -12,6 +12,7 @@ import {
 } from "@/components/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
 	Dialog,
 	DialogContent,
@@ -37,35 +38,78 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/table";
-import { FolderGridSkeleton, FilesTableSkeleton, StorageUsageSkeleton } from "@/components/loading-skeletons";
-import { Skeleton } from "@/components/ui/skeleton";
+import {
+	FolderGridSkeleton,
+	FilesTableSkeleton,
+	StorageUsageSkeleton,
+} from "@/components/loading-skeletons";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { formatDateTimeDMY } from "@/lib/date-format";
+import { authClient } from "@/lib/auth-client";
+import { cn } from "@/lib/utils";
 import { trpc } from "@/utils/trpc";
 import {
+	RiArrowLeftSLine,
 	RiDeleteBinLine,
 	RiDownloadLine,
+	RiDriveLine,
+	RiEditLine,
 	RiEyeLine,
 	RiFolderAddLine,
 	RiFolderLine,
+	RiFolderTransferLine,
+	RiGridLine,
+	RiListCheck2,
 	RiRefreshLine,
 	RiUploadCloud2Line,
 } from "@remixicon/react";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { formatDateTimeDMY } from "@/lib/date-format";
-import { formatFileSize, isPreviewableType } from "./portal-files-utils";
+import {
+	type DriveSortBy,
+	type DriveSortOrder,
+	type DriveSpace,
+	type DriveViewMode,
+	PORTAL_SHARED_OWNER_SELECT_VALUE,
+	fileIconClass,
+	formatFileSize,
+	getFileTypeIcon,
+	isPreviewableType,
+} from "./portal-files-utils";
 import { usePortalFileUpload } from "./use-portal-file-upload";
 
-export const PORTAL_SHARED_OWNER_SELECT_VALUE = "__shared__";
+export { PORTAL_SHARED_OWNER_SELECT_VALUE };
 
 export type PortalFilesMode = "agent" | "admin";
 
 export function PortalFilesBrowser({ mode }: { mode: PortalFilesMode }) {
 	const isAdminMode = mode === "admin";
-	const [ownerUserId, setOwnerUserId] = useState<string | undefined>(undefined);
+	const { data: session } = authClient.useSession();
+	const myUserId = session?.user?.id;
+
+	const [space, setSpace] = useState<DriveSpace>("company");
+	const [agentId, setAgentId] = useState<string>("");
 	const [folderId, setFolderId] = useState<string | null>(null);
 	const [search, setSearch] = useState("");
+	const [viewMode, setViewMode] = useState<DriveViewMode>("list");
+	const [sortBy, setSortBy] = useState<DriveSortBy>("date");
+	const [sortOrder, setSortOrder] = useState<DriveSortOrder>("desc");
+	const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
 	const [newFolderOpen, setNewFolderOpen] = useState(false);
 	const [newFolderName, setNewFolderName] = useState("");
+	const [renameTarget, setRenameTarget] = useState<
+		| { type: "file"; id: string; name: string }
+		| { type: "folder"; id: string; name: string }
+		| null
+	>(null);
+	const [renameValue, setRenameValue] = useState("");
+	const [moveTarget, setMoveTarget] = useState<
+		| { type: "file"; id: string; name: string }
+		| { type: "folder"; id: string; name: string }
+		| null
+	>(null);
+	const [moveDestFolderId, setMoveDestFolderId] = useState<string | null>(null);
 	const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 	const [previewMeta, setPreviewMeta] = useState<{
 		fileName: string;
@@ -74,6 +118,7 @@ export function PortalFilesBrowser({ mode }: { mode: PortalFilesMode }) {
 	const [deleteTarget, setDeleteTarget] = useState<
 		| { type: "file"; id: string; name: string }
 		| { type: "folder"; id: string; name: string }
+		| { type: "bulk"; ids: string[]; count: number }
 		| null
 	>(null);
 	const fileInputRef = useRef<HTMLInputElement>(null);
@@ -84,28 +129,54 @@ export function PortalFilesBrowser({ mode }: { mode: PortalFilesMode }) {
 	const canManage = capabilities?.canManage ?? isAdminMode;
 	const canView = capabilities?.canView ?? true;
 
-	const effectiveOwner =
-		isAdminMode && ownerUserId === PORTAL_SHARED_OWNER_SELECT_VALUE
-			? PORTAL_SHARED_OWNER_SELECT_VALUE
-			: isAdminMode
-				? ownerUserId
-				: undefined;
+	const effectiveOwner = useMemo(() => {
+		if (space === "company") return PORTAL_SHARED_OWNER_SELECT_VALUE;
+		if (space === "mine") return myUserId;
+		if (space === "agent" && agentId) return agentId;
+		return PORTAL_SHARED_OWNER_SELECT_VALUE;
+	}, [space, myUserId, agentId]);
+
+	const queriesEnabled =
+		space !== "agent" || Boolean(agentId) || !isAdminMode;
 
 	const usageQuery = trpc.portalFiles.getStorageUsage.useQuery(
 		{ ownerUserId: effectiveOwner },
-		{ enabled: canUpload && (!isAdminMode || !!effectiveOwner || ownerUserId === undefined) },
+		{ enabled: canUpload && queriesEnabled && Boolean(effectiveOwner) },
 	);
 
-	const foldersQuery = trpc.portalFiles.listFolders.useQuery({
-		ownerUserId: effectiveOwner,
-		parentFolderId: folderId,
-	});
+	const foldersQuery = trpc.portalFiles.listFolders.useQuery(
+		{
+			ownerUserId: effectiveOwner,
+			parentFolderId: folderId,
+		},
+		{ enabled: queriesEnabled && Boolean(effectiveOwner) },
+	);
 
-	const filesQuery = trpc.portalFiles.listFiles.useQuery({
-		ownerUserId: effectiveOwner,
-		folderId,
-		search: search.trim() || undefined,
-	});
+	const filesQuery = trpc.portalFiles.listFiles.useQuery(
+		{
+			ownerUserId: effectiveOwner,
+			folderId,
+			search: search.trim() || undefined,
+			sortBy,
+			sortOrder,
+		},
+		{ enabled: queriesEnabled && Boolean(effectiveOwner) },
+	);
+
+	const pathQuery = trpc.portalFiles.getFolderPath.useQuery(
+		{ folderId: folderId! },
+		{ enabled: Boolean(folderId) },
+	);
+
+	const moveFoldersQuery = trpc.portalFiles.listFoldersForMove.useQuery(
+		{
+			ownerUserId: effectiveOwner,
+			parentFolderId: null,
+			excludeFolderId:
+				moveTarget?.type === "folder" ? moveTarget.id : undefined,
+		},
+		{ enabled: canManage && moveTarget !== null && Boolean(effectiveOwner) },
+	);
 
 	const agentsQuery = trpc.agents.list.useQuery(
 		{ limit: 100, offset: 0, sortBy: "name", sortOrder: "asc" },
@@ -127,6 +198,17 @@ export function PortalFilesBrowser({ mode }: { mode: PortalFilesMode }) {
 	const deleteFile = trpc.portalFiles.deleteFile.useMutation({
 		onSuccess: () => {
 			toast.success("File deleted");
+			setSelectedIds(new Set());
+			void filesQuery.refetch();
+			void usageQuery.refetch();
+		},
+		onError: (e) => toast.error(e.message),
+	});
+
+	const deleteFilesBulk = trpc.portalFiles.deleteFilesBulk.useMutation({
+		onSuccess: (res) => {
+			toast.success(`Deleted ${res.deleted} file(s)`);
+			setSelectedIds(new Set());
 			void filesQuery.refetch();
 			void usageQuery.refetch();
 		},
@@ -136,6 +218,44 @@ export function PortalFilesBrowser({ mode }: { mode: PortalFilesMode }) {
 	const deleteFolder = trpc.portalFiles.deleteFolder.useMutation({
 		onSuccess: () => {
 			toast.success("Folder deleted");
+			void foldersQuery.refetch();
+		},
+		onError: (e) => toast.error(e.message),
+	});
+
+	const renameFile = trpc.portalFiles.renameFile.useMutation({
+		onSuccess: () => {
+			toast.success("File renamed");
+			setRenameTarget(null);
+			void filesQuery.refetch();
+		},
+		onError: (e) => toast.error(e.message),
+	});
+
+	const renameFolder = trpc.portalFiles.renameFolder.useMutation({
+		onSuccess: () => {
+			toast.success("Folder renamed");
+			setRenameTarget(null);
+			void foldersQuery.refetch();
+			void pathQuery.refetch();
+		},
+		onError: (e) => toast.error(e.message),
+	});
+
+	const moveFile = trpc.portalFiles.moveFile.useMutation({
+		onSuccess: () => {
+			toast.success("File moved");
+			setMoveTarget(null);
+			void filesQuery.refetch();
+			void foldersQuery.refetch();
+		},
+		onError: (e) => toast.error(e.message),
+	});
+
+	const moveFolder = trpc.portalFiles.moveFolder.useMutation({
+		onSuccess: () => {
+			toast.success("Folder moved");
+			setMoveTarget(null);
 			void foldersQuery.refetch();
 		},
 		onError: (e) => toast.error(e.message),
@@ -201,6 +321,23 @@ export function PortalFilesBrowser({ mode }: { mode: PortalFilesMode }) {
 		[canUpload, uploadFiles],
 	);
 
+	const switchSpace = (next: DriveSpace) => {
+		setSpace(next);
+		setFolderId(null);
+		setSelectedIds(new Set());
+		setSearch("");
+	};
+
+	const openFolder = (id: string) => {
+		setFolderId(id);
+		setSelectedIds(new Set());
+	};
+
+	const goToBreadcrumb = (id: string | null) => {
+		setFolderId(id);
+		setSelectedIds(new Set());
+	};
+
 	const handleConfirmDelete = () => {
 		if (!deleteTarget) return;
 		if (deleteTarget.type === "file") {
@@ -208,18 +345,23 @@ export function PortalFilesBrowser({ mode }: { mode: PortalFilesMode }) {
 				{ fileId: deleteTarget.id },
 				{ onSettled: () => setDeleteTarget(null) },
 			);
-		} else {
+		} else if (deleteTarget.type === "folder") {
 			deleteFolder.mutate(
-				{
-					folderId: deleteTarget.id,
-					ownerUserId: effectiveOwner,
-				},
+				{ folderId: deleteTarget.id, ownerUserId: effectiveOwner },
+				{ onSettled: () => setDeleteTarget(null) },
+			);
+		} else {
+			deleteFilesBulk.mutate(
+				{ fileIds: deleteTarget.ids },
 				{ onSettled: () => setDeleteTarget(null) },
 			);
 		}
 	};
 
-	const isDeleting = deleteFile.isPending || deleteFolder.isPending;
+	const isDeleting =
+		deleteFile.isPending ||
+		deleteFolder.isPending ||
+		deleteFilesBulk.isPending;
 
 	const folders = foldersQuery.data ?? [];
 	const files = filesQuery.data ?? [];
@@ -227,47 +369,95 @@ export function PortalFilesBrowser({ mode }: { mode: PortalFilesMode }) {
 	const isUsageLoading = canUpload && usageQuery.isLoading;
 	const usage = usageQuery.data;
 	const agents = agentsQuery.data?.agents ?? [];
+	const trail = pathQuery.data?.trail ?? [];
+	const moveFolderOptions = moveFoldersQuery.data ?? [];
+
+	const allSelected =
+		files.length > 0 && files.every((f) => selectedIds.has(f.id));
+
+	const toggleSelectAll = () => {
+		if (allSelected) {
+			setSelectedIds(new Set());
+		} else {
+			setSelectedIds(new Set(files.map((f) => f.id)));
+		}
+	};
+
+	const toggleSelect = (id: string) => {
+		setSelectedIds((prev) => {
+			const next = new Set(prev);
+			if (next.has(id)) next.delete(id);
+			else next.add(id);
+			return next;
+		});
+	};
+
+	const spaceLabel =
+		space === "company"
+			? "Company"
+			: space === "mine"
+				? "My files"
+				: "Agent folder";
+
+	const emptyMessage = canUpload
+		? "This folder is empty. Upload files or create a folder."
+		: "No files here yet. Ask an admin to upload documents.";
 
 	return (
 		<div className="space-y-4">
-			{isAdminMode ? (
-				<div className="flex flex-wrap items-end gap-3">
-					<div className="min-w-[240px] flex-1 space-y-1.5">
-						<Label>Manage files for</Label>
-						{agentsQuery.isLoading ? (
-							<Skeleton className="h-10 w-full max-w-sm rounded-xl" />
-						) : (
-							<Select
-								value={ownerUserId ?? "__me__"}
-								onValueChange={(v) => {
-									setOwnerUserId(v === "__me__" ? undefined : v);
-									setFolderId(null);
-								}}
-							>
-								<SelectTrigger>
-									<SelectValue placeholder="Select location" />
-								</SelectTrigger>
-								<SelectContent>
-									<SelectItem value={PORTAL_SHARED_OWNER_SELECT_VALUE}>
-										Company files (all agents)
-									</SelectItem>
-									<SelectItem value="__me__">My files (admin)</SelectItem>
-									{agents.map((row) => (
-										<SelectItem key={row.agent.id} value={row.agent.id}>
-											{row.agent.name ?? row.agent.email ?? row.agent.id}
-										</SelectItem>
-									))}
-								</SelectContent>
-							</Select>
-						)}
-					</div>
-				</div>
-			) : (
-				<p className="text-muted-foreground text-sm">
-					View company and personal files shared with you. Contact an admin if you
-					need a file downloaded.
-				</p>
-			)}
+			{/* Space tabs */}
+			<div className="flex flex-wrap items-center gap-3">
+				<Tabs
+					value={space === "agent" ? "agent" : space}
+					onValueChange={(v) => {
+						if (v === "company" || v === "mine") switchSpace(v);
+						if (v === "agent" && isAdminMode) switchSpace("agent");
+					}}
+				>
+					<TabsList>
+						<TabsTrigger value="company" className="gap-1.5">
+							<RiDriveLine className="size-3.5" />
+							Company
+						</TabsTrigger>
+						<TabsTrigger value="mine" className="gap-1.5">
+							My files
+						</TabsTrigger>
+						{isAdminMode ? (
+							<TabsTrigger value="agent" className="gap-1.5">
+								Agent folder
+							</TabsTrigger>
+						) : null}
+					</TabsList>
+				</Tabs>
+
+				{isAdminMode && space === "agent" ? (
+					<Select
+						value={agentId || undefined}
+						onValueChange={(v) => {
+							setAgentId(v);
+							setFolderId(null);
+							setSelectedIds(new Set());
+						}}
+					>
+						<SelectTrigger className="w-[220px]">
+							<SelectValue placeholder="Select agent" />
+						</SelectTrigger>
+						<SelectContent>
+							{agents.map((row) => (
+								<SelectItem key={row.agent.id} value={row.agent.id}>
+									{row.agent.name ?? row.agent.email ?? row.agent.id}
+								</SelectItem>
+							))}
+						</SelectContent>
+					</Select>
+				) : null}
+
+				{!isAdminMode ? (
+					<p className="text-muted-foreground text-xs sm:ml-auto">
+						View only — contact admin to download files
+					</p>
+				) : null}
+			</div>
 
 			{isUsageLoading ? (
 				<StorageUsageSkeleton />
@@ -276,13 +466,46 @@ export function PortalFilesBrowser({ mode }: { mode: PortalFilesMode }) {
 					<div className="flex justify-between text-muted-foreground text-sm">
 						<span>Storage used</span>
 						<span>
-							{formatFileSize(usage.usedBytes)} / {formatFileSize(usage.quotaBytes)}
+							{formatFileSize(usage.usedBytes)} /{" "}
+							{formatFileSize(usage.quotaBytes)}
 						</span>
 					</div>
 					<Progress value={usage.usedPercent} className="h-2" />
 				</div>
 			) : null}
 
+			{/* Breadcrumb path */}
+			<nav className="flex flex-wrap items-center gap-1 text-sm">
+				<button
+					type="button"
+					className={cn(
+						"rounded px-1.5 py-0.5 font-medium hover:bg-muted",
+						!folderId ? "text-foreground" : "text-muted-foreground",
+					)}
+					onClick={() => goToBreadcrumb(null)}
+				>
+					{spaceLabel}
+				</button>
+				{trail.map((crumb) => (
+					<span key={crumb.id} className="flex items-center gap-1">
+						<span className="text-muted-foreground">/</span>
+						<button
+							type="button"
+							className={cn(
+								"rounded px-1.5 py-0.5 hover:bg-muted",
+								crumb.id === folderId
+									? "font-medium text-foreground"
+									: "text-muted-foreground",
+							)}
+							onClick={() => goToBreadcrumb(crumb.id)}
+						>
+							{crumb.name}
+						</button>
+					</span>
+				))}
+			</nav>
+
+			{/* Toolbar */}
 			<div className="flex flex-wrap items-center gap-2">
 				{canUpload ? (
 					<>
@@ -290,7 +513,7 @@ export function PortalFilesBrowser({ mode }: { mode: PortalFilesMode }) {
 							type="button"
 							size="sm"
 							onClick={() => fileInputRef.current?.click()}
-							disabled={uploading}
+							disabled={uploading || (space === "agent" && !agentId)}
 						>
 							<RiUploadCloud2Line className="mr-1.5 size-4" />
 							Upload
@@ -300,12 +523,48 @@ export function PortalFilesBrowser({ mode }: { mode: PortalFilesMode }) {
 							size="sm"
 							variant="outline"
 							onClick={() => setNewFolderOpen(true)}
+							disabled={space === "agent" && !agentId}
 						>
 							<RiFolderAddLine className="mr-1.5 size-4" />
 							New folder
 						</Button>
 					</>
 				) : null}
+
+				{canManage && selectedIds.size > 0 ? (
+					<Button
+						type="button"
+						size="sm"
+						variant="destructive"
+						onClick={() =>
+							setDeleteTarget({
+								type: "bulk",
+								ids: [...selectedIds],
+								count: selectedIds.size,
+							})
+						}
+					>
+						<RiDeleteBinLine className="mr-1.5 size-4" />
+						Delete ({selectedIds.size})
+					</Button>
+				) : null}
+
+				{folderId ? (
+					<Button
+						type="button"
+						size="sm"
+						variant="ghost"
+						onClick={() => {
+							const parent =
+								trail.length > 1 ? trail[trail.length - 2]?.id ?? null : null;
+							goToBreadcrumb(parent);
+						}}
+					>
+						<RiArrowLeftSLine className="mr-1 size-4" />
+						Up
+					</Button>
+				) : null}
+
 				<Button
 					type="button"
 					size="sm"
@@ -319,22 +578,57 @@ export function PortalFilesBrowser({ mode }: { mode: PortalFilesMode }) {
 					<RiRefreshLine className="mr-1.5 size-4" />
 					Refresh
 				</Button>
-				{folderId ? (
-					<Button
-						type="button"
-						size="sm"
-						variant="ghost"
-						onClick={() => setFolderId(null)}
+
+				<div className="ml-auto flex flex-wrap items-center gap-2">
+					<Select
+						value={`${sortBy}-${sortOrder}`}
+						onValueChange={(v) => {
+							const [by, order] = v.split("-") as [DriveSortBy, DriveSortOrder];
+							setSortBy(by);
+							setSortOrder(order);
+						}}
 					>
-						← Back to root
-					</Button>
-				) : null}
-				<div className="ml-auto min-w-[200px]">
+						<SelectTrigger className="h-9 w-[150px]">
+							<SelectValue placeholder="Sort" />
+						</SelectTrigger>
+						<SelectContent>
+							<SelectItem value="date-desc">Newest</SelectItem>
+							<SelectItem value="date-asc">Oldest</SelectItem>
+							<SelectItem value="name-asc">Name A–Z</SelectItem>
+							<SelectItem value="name-desc">Name Z–A</SelectItem>
+							<SelectItem value="size-desc">Largest</SelectItem>
+							<SelectItem value="size-asc">Smallest</SelectItem>
+						</SelectContent>
+					</Select>
+
+					<div className="flex rounded-md border">
+						<Button
+							type="button"
+							size="sm"
+							variant={viewMode === "list" ? "secondary" : "ghost"}
+							className="h-9 rounded-r-none px-2"
+							onClick={() => setViewMode("list")}
+							title="List view"
+						>
+							<RiListCheck2 className="size-4" />
+						</Button>
+						<Button
+							type="button"
+							size="sm"
+							variant={viewMode === "grid" ? "secondary" : "ghost"}
+							className="h-9 rounded-l-none px-2"
+							onClick={() => setViewMode("grid")}
+							title="Grid view"
+						>
+							<RiGridLine className="size-4" />
+						</Button>
+					</div>
+
 					<Input
 						placeholder="Search files…"
 						value={search}
 						onChange={(e) => setSearch(e.target.value)}
-						className="h-9"
+						className="h-9 w-[180px] sm:w-[220px]"
 					/>
 				</div>
 			</div>
@@ -357,12 +651,12 @@ export function PortalFilesBrowser({ mode }: { mode: PortalFilesMode }) {
 
 			{canUpload ? (
 				<div
-					className="rounded-lg border border-dashed bg-muted/20 p-6 text-center text-muted-foreground text-sm"
+					className="rounded-lg border border-dashed bg-muted/20 p-5 text-center text-muted-foreground text-sm"
 					onDragOver={(e) => e.preventDefault()}
 					onDrop={onDrop}
 				>
-					Drag and drop files here, or use Upload (PDF, Office, images, video up to
-					100MB)
+					Drag and drop files here, or use Upload (PDF, Office, images, video up
+					to 100MB)
 				</div>
 			) : null}
 
@@ -377,108 +671,315 @@ export function PortalFilesBrowser({ mode }: { mode: PortalFilesMode }) {
 				</div>
 			) : null}
 
-			{isContentLoading ? (
+			{isAdminMode && space === "agent" && !agentId ? (
+				<p className="rounded-lg border border-dashed py-12 text-center text-muted-foreground text-sm">
+					Select an agent to browse or manage their folder.
+				</p>
+			) : isContentLoading ? (
 				<div className="space-y-4">
 					<FolderGridSkeleton count={4} />
 					<FilesTableSkeleton rows={6} />
 				</div>
 			) : (
 				<>
-			{folders.length > 0 ? (
-				<div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-					{folders.map((folder) => (
-						<div
-							key={folder.id}
-							className="flex items-center justify-between gap-2 rounded-lg border bg-card p-3"
-						>
-							<button
-								type="button"
-								className="flex min-w-0 flex-1 items-center gap-2 text-left"
-								onClick={() => setFolderId(folder.id)}
-							>
-								<RiFolderLine className="size-5 shrink-0 text-primary" />
-								<span className="truncate font-medium text-sm">{folder.name}</span>
-								{"isShared" in folder && folder.isShared ? (
-									<Badge variant="secondary" className="text-xs">
-										Company
-									</Badge>
-								) : null}
-							</button>
-							{canManage ? (
-								<Button
-									type="button"
-									variant="ghost"
-									size="sm"
-									className="h-8 w-8 shrink-0 p-0 text-destructive"
-									onClick={() =>
-										setDeleteTarget({
-											type: "folder",
-											id: folder.id,
-											name: folder.name,
-										})
-									}
+					{/* Folders */}
+					{folders.length > 0 ? (
+						<div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+							{folders.map((folder) => (
+								<div
+									key={folder.id}
+									className="group flex items-center gap-2 rounded-lg border bg-card p-3 transition-colors hover:bg-muted/40"
 								>
-									<RiDeleteBinLine className="size-4" />
-								</Button>
-							) : null}
+									<button
+										type="button"
+										className="flex min-w-0 flex-1 items-center gap-2 text-left"
+										onClick={() => openFolder(folder.id)}
+									>
+										<RiFolderLine className="size-6 shrink-0 text-amber-500" />
+										<span className="truncate font-medium text-sm">
+											{folder.name}
+										</span>
+									</button>
+									{canManage ? (
+										<div className="flex shrink-0 opacity-100 sm:opacity-0 sm:group-hover:opacity-100">
+											<Button
+												type="button"
+												variant="ghost"
+												size="sm"
+												className="h-8 w-8 p-0"
+												title="Rename"
+												onClick={() => {
+													setRenameTarget({
+														type: "folder",
+														id: folder.id,
+														name: folder.name,
+													});
+													setRenameValue(folder.name);
+												}}
+											>
+												<RiEditLine className="size-4" />
+											</Button>
+											<Button
+												type="button"
+												variant="ghost"
+												size="sm"
+												className="h-8 w-8 p-0"
+												title="Move"
+												onClick={() => {
+													setMoveTarget({
+														type: "folder",
+														id: folder.id,
+														name: folder.name,
+													});
+													setMoveDestFolderId(null);
+												}}
+											>
+												<RiFolderTransferLine className="size-4" />
+											</Button>
+											<Button
+												type="button"
+												variant="ghost"
+												size="sm"
+												className="h-8 w-8 p-0 text-destructive"
+												title="Delete"
+												onClick={() =>
+													setDeleteTarget({
+														type: "folder",
+														id: folder.id,
+														name: folder.name,
+													})
+												}
+											>
+												<RiDeleteBinLine className="size-4" />
+											</Button>
+										</div>
+									) : null}
+								</div>
+							))}
 						</div>
-					))}
-				</div>
-			) : null}
+					) : null}
 
-			<div className="overflow-hidden rounded-lg border">
-				<Table>
-					<TableHeader>
-						<TableRow>
-							<TableHead>Name</TableHead>
-							<TableHead>Source</TableHead>
-							<TableHead>Type</TableHead>
-							<TableHead>Size</TableHead>
-							<TableHead>Uploaded</TableHead>
-							<TableHead className="text-right">Actions</TableHead>
-						</TableRow>
-					</TableHeader>
-					<TableBody>
-							{files.map((file) => (
-								<TableRow key={file.id}>
-									<TableCell className="max-w-[240px] truncate font-medium">
-										{file.fileName}
-									</TableCell>
-									<TableCell>
-										{file.isShared ? (
-											<Badge variant="secondary" className="text-xs">
-												Company
-											</Badge>
-										) : (
-											<Badge variant="outline" className="text-xs">
-												Personal
-											</Badge>
-										)}
-									</TableCell>
-									<TableCell>
-										<Badge variant="outline" className="font-mono text-xs">
-											{file.fileType.split("/").pop()}
-										</Badge>
-									</TableCell>
-									<TableCell className="tabular-nums">
-										{formatFileSize(file.fileSize)}
-									</TableCell>
-									<TableCell className="text-muted-foreground text-sm">
-										{formatDateTimeDMY(file.createdAt)}
-									</TableCell>
-									<TableCell className="text-right">
-										<div className="flex justify-end gap-1">
+					{/* Files — list */}
+					{viewMode === "list" ? (
+						<div className="overflow-hidden rounded-lg border">
+							<Table>
+								<TableHeader>
+									<TableRow>
+										{canManage ? (
+											<TableHead className="w-10">
+												<Checkbox
+													checked={allSelected}
+													onCheckedChange={toggleSelectAll}
+													aria-label="Select all"
+												/>
+											</TableHead>
+										) : null}
+										<TableHead>Name</TableHead>
+										<TableHead>Size</TableHead>
+										<TableHead>Uploaded</TableHead>
+										<TableHead className="text-right">Actions</TableHead>
+									</TableRow>
+								</TableHeader>
+								<TableBody>
+									{files.map((file) => {
+										const Icon = getFileTypeIcon(file.fileType, file.fileName);
+										return (
+											<TableRow key={file.id}>
+												{canManage ? (
+													<TableCell>
+														<Checkbox
+															checked={selectedIds.has(file.id)}
+															onCheckedChange={() => toggleSelect(file.id)}
+															aria-label={`Select ${file.fileName}`}
+														/>
+													</TableCell>
+												) : null}
+												<TableCell>
+													<div className="flex min-w-0 items-center gap-2">
+														<Icon
+															className={cn(
+																"size-5 shrink-0",
+																fileIconClass(file.fileType, file.fileName),
+															)}
+														/>
+														<span className="truncate font-medium">
+															{file.fileName}
+														</span>
+													</div>
+												</TableCell>
+												<TableCell className="tabular-nums text-muted-foreground">
+													{formatFileSize(file.fileSize)}
+												</TableCell>
+												<TableCell className="text-muted-foreground text-sm">
+													{formatDateTimeDMY(file.createdAt)}
+												</TableCell>
+												<TableCell className="text-right">
+													<div className="flex justify-end gap-0.5">
+														{canView ? (
+															<Button
+																type="button"
+																variant="ghost"
+																size="sm"
+																className="h-8 w-8 p-0"
+																title={
+																	isPreviewableType(file.fileType)
+																		? "Preview"
+																		: "View"
+																}
+																onClick={() =>
+																	void handlePreview(
+																		file.id,
+																		file.fileName,
+																		file.fileType,
+																	)
+																}
+															>
+																<RiEyeLine className="size-4" />
+															</Button>
+														) : null}
+														{canDownload ? (
+															<Button
+																type="button"
+																variant="ghost"
+																size="sm"
+																className="h-8 w-8 p-0"
+																title="Download"
+																onClick={() => void handleDownload(file.id)}
+															>
+																<RiDownloadLine className="size-4" />
+															</Button>
+														) : null}
+														{canManage ? (
+															<>
+																<Button
+																	type="button"
+																	variant="ghost"
+																	size="sm"
+																	className="h-8 w-8 p-0"
+																	title="Rename"
+																	onClick={() => {
+																		setRenameTarget({
+																			type: "file",
+																			id: file.id,
+																			name: file.fileName,
+																		});
+																		setRenameValue(file.fileName);
+																	}}
+																>
+																	<RiEditLine className="size-4" />
+																</Button>
+																<Button
+																	type="button"
+																	variant="ghost"
+																	size="sm"
+																	className="h-8 w-8 p-0"
+																	title="Move"
+																	onClick={() => {
+																		setMoveTarget({
+																			type: "file",
+																			id: file.id,
+																			name: file.fileName,
+																		});
+																		setMoveDestFolderId(folderId);
+																	}}
+																>
+																	<RiFolderTransferLine className="size-4" />
+																</Button>
+																<Button
+																	type="button"
+																	variant="ghost"
+																	size="sm"
+																	className="h-8 w-8 p-0 text-destructive"
+																	title="Delete"
+																	onClick={() =>
+																		setDeleteTarget({
+																			type: "file",
+																			id: file.id,
+																			name: file.fileName,
+																		})
+																	}
+																>
+																	<RiDeleteBinLine className="size-4" />
+																</Button>
+															</>
+														) : null}
+													</div>
+												</TableCell>
+											</TableRow>
+										);
+									})}
+									{files.length === 0 && folders.length === 0 ? (
+										<TableRow>
+											<TableCell
+												colSpan={canManage ? 5 : 4}
+												className="py-12 text-center text-muted-foreground"
+											>
+												{emptyMessage}
+											</TableCell>
+										</TableRow>
+									) : null}
+									{files.length === 0 && folders.length > 0 ? (
+										<TableRow>
+											<TableCell
+												colSpan={canManage ? 5 : 4}
+												className="py-6 text-center text-muted-foreground text-sm"
+											>
+												No files in this folder.
+											</TableCell>
+										</TableRow>
+									) : null}
+								</TableBody>
+							</Table>
+						</div>
+					) : (
+						/* Files — grid */
+						<div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+							{files.map((file) => {
+								const Icon = getFileTypeIcon(file.fileType, file.fileName);
+								return (
+									<div
+										key={file.id}
+										className="group relative flex flex-col rounded-lg border bg-card p-3 transition-colors hover:bg-muted/30"
+									>
+										{canManage ? (
+											<div className="absolute top-2 left-2 z-10">
+												<Checkbox
+													checked={selectedIds.has(file.id)}
+													onCheckedChange={() => toggleSelect(file.id)}
+												/>
+											</div>
+										) : null}
+										<button
+											type="button"
+											className="flex flex-1 flex-col items-center gap-2 pt-4 pb-2 text-center"
+											onClick={() =>
+												void handlePreview(
+													file.id,
+													file.fileName,
+													file.fileType,
+												)
+											}
+										>
+											<Icon
+												className={cn(
+													"size-12",
+													fileIconClass(file.fileType, file.fileName),
+												)}
+											/>
+											<span className="line-clamp-2 w-full text-sm font-medium">
+												{file.fileName}
+											</span>
+											<span className="text-muted-foreground text-xs">
+												{formatFileSize(file.fileSize)}
+											</span>
+										</button>
+										<div className="flex justify-center gap-0.5 border-t pt-2">
 											{canView ? (
 												<Button
 													type="button"
 													variant="ghost"
 													size="sm"
 													className="h-8 w-8 p-0"
-													title={
-														isPreviewableType(file.fileType)
-															? "Preview"
-															: "View"
-													}
 													onClick={() =>
 														void handlePreview(
 															file.id,
@@ -496,50 +997,61 @@ export function PortalFilesBrowser({ mode }: { mode: PortalFilesMode }) {
 													variant="ghost"
 													size="sm"
 													className="h-8 w-8 p-0"
-													title="Download"
 													onClick={() => void handleDownload(file.id)}
 												>
 													<RiDownloadLine className="size-4" />
 												</Button>
 											) : null}
 											{canManage ? (
-												<Button
-													type="button"
-													variant="ghost"
-													size="sm"
-													className="h-8 w-8 p-0 text-destructive"
-													title="Delete"
-													onClick={() =>
-														setDeleteTarget({
-															type: "file",
-															id: file.id,
-															name: file.fileName,
-														})
-													}
-												>
-													<RiDeleteBinLine className="size-4" />
-												</Button>
+												<>
+													<Button
+														type="button"
+														variant="ghost"
+														size="sm"
+														className="h-8 w-8 p-0"
+														onClick={() => {
+															setRenameTarget({
+																type: "file",
+																id: file.id,
+																name: file.fileName,
+															});
+															setRenameValue(file.fileName);
+														}}
+													>
+														<RiEditLine className="size-4" />
+													</Button>
+													<Button
+														type="button"
+														variant="ghost"
+														size="sm"
+														className="h-8 w-8 p-0 text-destructive"
+														onClick={() =>
+															setDeleteTarget({
+																type: "file",
+																id: file.id,
+																name: file.fileName,
+															})
+														}
+													>
+														<RiDeleteBinLine className="size-4" />
+													</Button>
+												</>
 											) : null}
 										</div>
-									</TableCell>
-								</TableRow>
-							))}
-							{files.length === 0 ? (
-								<TableRow>
-									<TableCell
-										colSpan={6}
-										className="py-10 text-center text-muted-foreground"
-									>
-										No files in this folder yet.
-									</TableCell>
-								</TableRow>
+									</div>
+								);
+							})}
+							{files.length === 0 && folders.length === 0 ? (
+								<p className="col-span-full py-12 text-center text-muted-foreground text-sm">
+									{emptyMessage}
+								</p>
 							) : null}
-						</TableBody>
-				</Table>
-			</div>
+						</div>
+					)}
 				</>
 			)}
 
+			{/* Delete dialog */}
 			<AlertDialog
 				open={deleteTarget !== null}
 				onOpenChange={(open) => {
@@ -549,27 +1061,37 @@ export function PortalFilesBrowser({ mode }: { mode: PortalFilesMode }) {
 				<AlertDialogContent className="gap-5 sm:max-w-md">
 					<AlertDialogHeader className="gap-2">
 						<div className="mx-auto flex size-12 items-center justify-center rounded-full bg-destructive/15 sm:mx-0">
-							<RiDeleteBinLine className="size-6 text-destructive" aria-hidden />
+							<RiDeleteBinLine
+								className="size-6 text-destructive"
+								aria-hidden
+							/>
 						</div>
 						<AlertDialogTitle>
-							Delete {deleteTarget?.type === "folder" ? "folder" : "file"}?
+							{deleteTarget?.type === "bulk"
+								? `Delete ${deleteTarget.count} files?`
+								: `Delete ${deleteTarget?.type === "folder" ? "folder" : "file"}?`}
 						</AlertDialogTitle>
 						<AlertDialogDescription className="text-left">
 							{deleteTarget?.type === "folder" ? (
 								<>
-									This will permanently delete the folder{" "}
+									Permanently delete folder{" "}
 									<span className="font-medium text-foreground">
 										&ldquo;{deleteTarget.name}&rdquo;
 									</span>
-									. The folder must be empty.
+									. It must be empty.
+								</>
+							) : deleteTarget?.type === "bulk" ? (
+								<>
+									Permanently delete {deleteTarget.count} selected file(s). This
+									cannot be undone.
 								</>
 							) : (
 								<>
-									This will permanently delete{" "}
+									Permanently delete{" "}
 									<span className="font-medium text-foreground">
 										&ldquo;{deleteTarget?.name}&rdquo;
-									</span>{" "}
-									from your portal drive. This action cannot be undone.
+									</span>
+									. This cannot be undone.
 								</>
 							)}
 						</AlertDialogDescription>
@@ -582,7 +1104,7 @@ export function PortalFilesBrowser({ mode }: { mode: PortalFilesMode }) {
 								e.preventDefault();
 								handleConfirmDelete();
 							}}
-							className="bg-destructive text-white shadow-xs hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40"
+							className="bg-destructive text-white hover:bg-destructive/90"
 						>
 							{isDeleting ? "Deleting…" : "Delete"}
 						</AlertDialogAction>
@@ -590,6 +1112,7 @@ export function PortalFilesBrowser({ mode }: { mode: PortalFilesMode }) {
 				</AlertDialogContent>
 			</AlertDialog>
 
+			{/* New folder */}
 			<Dialog open={newFolderOpen} onOpenChange={setNewFolderOpen}>
 				<DialogContent>
 					<DialogHeader>
@@ -599,6 +1122,15 @@ export function PortalFilesBrowser({ mode }: { mode: PortalFilesMode }) {
 						placeholder="Folder name"
 						value={newFolderName}
 						onChange={(e) => setNewFolderName(e.target.value)}
+						onKeyDown={(e) => {
+							if (e.key === "Enter" && newFolderName.trim()) {
+								createFolder.mutate({
+									name: newFolderName.trim(),
+									parentFolderId: folderId,
+									ownerUserId: effectiveOwner,
+								});
+							}
+						}}
 					/>
 					<DialogFooter>
 						<Button variant="ghost" onClick={() => setNewFolderOpen(false)}>
@@ -620,6 +1152,131 @@ export function PortalFilesBrowser({ mode }: { mode: PortalFilesMode }) {
 				</DialogContent>
 			</Dialog>
 
+			{/* Rename */}
+			<Dialog
+				open={renameTarget !== null}
+				onOpenChange={(open) => {
+					if (!open) setRenameTarget(null);
+				}}
+			>
+				<DialogContent>
+					<DialogHeader>
+						<DialogTitle>
+							Rename {renameTarget?.type === "folder" ? "folder" : "file"}
+						</DialogTitle>
+					</DialogHeader>
+					<div className="space-y-2">
+						<Label>Name</Label>
+						<Input
+							value={renameValue}
+							onChange={(e) => setRenameValue(e.target.value)}
+						/>
+					</div>
+					<DialogFooter>
+						<Button variant="ghost" onClick={() => setRenameTarget(null)}>
+							Cancel
+						</Button>
+						<Button
+							disabled={
+								!renameValue.trim() ||
+								renameFile.isPending ||
+								renameFolder.isPending
+							}
+							onClick={() => {
+								if (!renameTarget) return;
+								if (renameTarget.type === "file") {
+									renameFile.mutate({
+										fileId: renameTarget.id,
+										fileName: renameValue.trim(),
+									});
+								} else {
+									renameFolder.mutate({
+										folderId: renameTarget.id,
+										name: renameValue.trim(),
+									});
+								}
+							}}
+						>
+							Save
+						</Button>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
+
+			{/* Move */}
+			<Dialog
+				open={moveTarget !== null}
+				onOpenChange={(open) => {
+					if (!open) setMoveTarget(null);
+				}}
+			>
+				<DialogContent>
+					<DialogHeader>
+						<DialogTitle>
+							Move {moveTarget?.type === "folder" ? "folder" : "file"}
+						</DialogTitle>
+					</DialogHeader>
+					<p className="text-muted-foreground text-sm">
+						Moving{" "}
+						<span className="font-medium text-foreground">
+							{moveTarget?.name}
+						</span>
+					</p>
+					<div className="space-y-2">
+						<Label>Destination</Label>
+						<Select
+							value={moveDestFolderId ?? "__root__"}
+							onValueChange={(v) =>
+								setMoveDestFolderId(v === "__root__" ? null : v)
+							}
+						>
+							<SelectTrigger>
+								<SelectValue placeholder="Select folder" />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectItem value="__root__">
+									{spaceLabel} (root)
+								</SelectItem>
+								{moveFolderOptions.map((f) => (
+									<SelectItem key={f.id} value={f.id}>
+										{f.name}
+									</SelectItem>
+								))}
+							</SelectContent>
+						</Select>
+						<p className="text-muted-foreground text-xs">
+							Shows top-level folders in this space. Nested destinations can be
+							added later if needed.
+						</p>
+					</div>
+					<DialogFooter>
+						<Button variant="ghost" onClick={() => setMoveTarget(null)}>
+							Cancel
+						</Button>
+						<Button
+							disabled={moveFile.isPending || moveFolder.isPending}
+							onClick={() => {
+								if (!moveTarget) return;
+								if (moveTarget.type === "file") {
+									moveFile.mutate({
+										fileId: moveTarget.id,
+										folderId: moveDestFolderId,
+									});
+								} else {
+									moveFolder.mutate({
+										folderId: moveTarget.id,
+										parentFolderId: moveDestFolderId,
+									});
+								}
+							}}
+						>
+							Move
+						</Button>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
+
+			{/* Preview */}
 			<Dialog
 				open={!!previewUrl}
 				onOpenChange={(open) => {

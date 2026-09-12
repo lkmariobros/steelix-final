@@ -43,7 +43,7 @@ export default function AgentFilesPage() {
 							<BreadcrumbItem>
 								<BreadcrumbPage className="flex items-center gap-2">
 									<RiFolderCloudLine size={18} />
-									Files
+									Company Drive
 								</BreadcrumbPage>
 							</BreadcrumbItem>
 						</BreadcrumbList>
@@ -54,18 +54,19 @@ export default function AgentFilesPage() {
 
 			<div className="flex flex-1 flex-col gap-6 py-6">
 				<div>
-					<h1 className="font-bold text-2xl tracking-tight">Files</h1>
+					<h1 className="font-bold text-2xl tracking-tight">Company Drive</h1>
 					<p className="text-muted-foreground text-sm">
-						View company documents and files shared with you by your admin team.
+						Browse company documents and files shared to your folder. View only —
+						ask an admin if you need a download.
 					</p>
 				</div>
 
 				<Card>
 					<CardHeader>
-						<CardTitle>File drive</CardTitle>
+						<CardTitle>Drive</CardTitle>
 						<CardDescription>
-							View-only access — preview files in your browser. Admins can upload
-							and download on your behalf.
+							Switch between <strong>Company</strong> (everyone) and{" "}
+							<strong>My files</strong> (shared with you). Preview in browser.
 						</CardDescription>
 					</CardHeader>
 					<CardContent>

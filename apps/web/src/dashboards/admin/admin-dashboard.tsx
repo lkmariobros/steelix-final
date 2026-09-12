@@ -78,9 +78,9 @@ function AdminDashboardContent({ className }: { className?: string }) {
 	];
 
 	return (
-		<div className={cn("flex flex-col gap-6", className)}>
-			<div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-				<div className="flex flex-col gap-1.5">
+		<div className={cn("flex min-w-0 flex-col gap-6", className)}>
+			<div className="flex min-w-0 flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+				<div className="flex min-w-0 flex-col gap-1.5">
 					<h1 className="font-semibold text-2xl tracking-tight text-foreground sm:text-[1.75rem]">
 						Admin Dashboard
 					</h1>
@@ -89,15 +89,15 @@ function AdminDashboardContent({ className }: { className?: string }) {
 					</p>
 				</div>
 
-				<div className="flex flex-wrap items-center gap-2">
-					<div className="flex items-center gap-0.5 rounded-full border border-border/70 bg-card p-1 shadow-card">
+				<div className="flex min-w-0 flex-wrap items-center gap-2">
+					<div className="flex max-w-full flex-wrap items-center gap-0.5 rounded-full border border-border/70 bg-card p-1 shadow-card">
 						{filters.map((f) => (
 							<button
 								key={f.key}
 								type="button"
 								onClick={() => handleTimeFilterChange(f.key)}
 								className={cn(
-									"h-8 rounded-full px-3 font-medium text-xs transition-colors",
+									"h-8 shrink-0 rounded-full px-2.5 font-medium text-xs transition-colors sm:px-3",
 									timeFilter === f.key
 										? "bg-primary text-primary-foreground shadow-sm"
 										: "text-muted-foreground hover:bg-muted hover:text-foreground",
@@ -113,13 +113,13 @@ function AdminDashboardContent({ className }: { className?: string }) {
 							<Button
 								variant="outline"
 								size="sm"
-								className="h-9 gap-2 rounded-full border-border/70 bg-card shadow-card"
+								className="h-9 max-w-full gap-2 truncate rounded-full border-border/70 bg-card shadow-card"
 							>
-								<RiCalendarLine size={14} />
-								{formatDateRange()}
+								<RiCalendarLine size={14} className="shrink-0" />
+								<span className="truncate">{formatDateRange()}</span>
 							</Button>
 						</PopoverTrigger>
-						<PopoverContent className="w-auto p-0" align="end">
+						<PopoverContent className="w-auto max-w-[calc(100vw-2rem)] p-0" align="end">
 							<Calendar
 								mode="range"
 								selected={{ from: dateRange.startDate, to: dateRange.endDate }}
@@ -130,7 +130,7 @@ function AdminDashboardContent({ className }: { className?: string }) {
 										setIsCalendarOpen(false);
 									}
 								}}
-								numberOfMonths={2}
+								numberOfMonths={1}
 								required={false}
 							/>
 						</PopoverContent>
@@ -147,26 +147,29 @@ function AdminDashboardContent({ className }: { className?: string }) {
 							size={14}
 							className={isRefetching ? "animate-spin" : ""}
 						/>
-						{isRefetching ? "Refreshing…" : "Refresh"}
+						<span className="hidden sm:inline">
+							{isRefetching ? "Refreshing…" : "Refresh"}
+						</span>
 					</Button>
 				</div>
 			</div>
 
-			<div className="grid gap-5">
-				<div className="col-span-full">
+			<div className="grid min-w-0 gap-5">
+				<div className="col-span-full min-w-0">
 					<DashboardSummary />
 				</div>
 
-				<div className="grid items-stretch gap-5 lg:grid-cols-3">
-					<div className="flex min-h-0 lg:col-span-2">
-						<CommissionApprovalQueue className="w-full" />
+				{/* Stack until xl so MacBook + sidebar doesn't crush the queue table */}
+				<div className="grid min-w-0 items-stretch gap-5 xl:grid-cols-3">
+					<div className="flex min-h-0 min-w-0 xl:col-span-2">
+						<CommissionApprovalQueue className="w-full min-w-0" />
 					</div>
-					<div className="flex min-h-0 lg:col-span-1">
-						<DealMixPanel className="w-full" />
+					<div className="flex min-h-0 min-w-0 xl:col-span-1">
+						<DealMixPanel className="w-full min-w-0" />
 					</div>
 				</div>
 
-				<div className="col-span-full">
+				<div className="col-span-full min-w-0">
 					<AgentPerformanceGrid />
 				</div>
 			</div>

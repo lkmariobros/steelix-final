@@ -249,15 +249,15 @@ export function AgentPerformanceGrid({ className }: AgentPerformanceGridProps) {
 	}
 
 	return (
-		<Card className={className}>
+		<Card className={cn("min-w-0", className)}>
 			<CardHeader className="pb-3">
 				<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-					<div className="flex items-center gap-2.5">
-						<CardTitle className="flex items-center gap-2.5 text-base">
-							<span className="flex size-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
+					<div className="flex min-w-0 flex-wrap items-center gap-2.5">
+						<CardTitle className="flex min-w-0 items-center gap-2.5 text-base">
+							<span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
 								<RiBarChartLine size={18} />
 							</span>
-							Agent Performance
+							<span className="truncate">Agent Performance</span>
 						</CardTitle>
 						<Badge
 							variant="secondary"
@@ -295,8 +295,8 @@ export function AgentPerformanceGrid({ className }: AgentPerformanceGridProps) {
 					</div>
 				) : (
 					<>
-						<div className="overflow-x-auto rounded-xl border border-border/60">
-							<Table className="w-full table-fixed min-w-[760px]">
+						<div className="min-w-0 overflow-x-auto rounded-xl border border-border/60">
+							<Table className="w-full min-w-[760px]">
 								<TableHeader>
 									<TableRow className="border-border/50 hover:bg-transparent">
 										{(

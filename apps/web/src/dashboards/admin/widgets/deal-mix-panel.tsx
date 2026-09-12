@@ -75,14 +75,14 @@ export function DealMixPanel({ className }: DealMixPanelProps) {
 	const { segments, totalCount, totalAmount } = dealMix;
 
 	return (
-		<Card className={cn("flex h-full flex-col", className)}>
+		<Card className={cn("flex h-full min-w-0 flex-col", className)}>
 			<CardHeader className="pb-3">
 				<div className="flex items-center justify-between gap-3">
-					<CardTitle className="flex items-center gap-2.5 text-base">
-						<span className="flex size-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
+					<CardTitle className="flex min-w-0 items-center gap-2.5 text-base">
+						<span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
 							<RiPieChartLine size={18} />
 						</span>
-						Deal Mix
+						<span className="truncate">Deal Mix</span>
 					</CardTitle>
 					<Badge className="rounded-full border-0 bg-primary/12 font-medium text-primary">
 						{totalCount} deals

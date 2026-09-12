@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { portalFiles, portalFolders } from "../models/portal-files";
 import { db } from "../utils/db";
 import { supabaseAdmin, assertSupabaseConfigured } from "../utils/supabase";
@@ -218,6 +218,78 @@ export async function getPortalFileForAccess(fileId: string) {
 		throw new TRPCError({ code: "NOT_FOUND", message: "File not found" });
 	}
 	return file;
+}
+
+export async function getPortalFolderForAccess(folderId: string) {
+	const [folder] = await db
+		.select()
+		.from(portalFolders)
+		.where(eq(portalFolders.id, folderId))
+		.limit(1);
+	if (!folder) {
+		throw new TRPCError({ code: "NOT_FOUND", message: "Folder not found" });
+	}
+	return folder;
+}
+
+export function assertCanAccessPortalFolder(
+	user: SessionUser,
+	folder: { ownerUserId: string },
+) {
+	const isAdmin = hasAdminAccess({ role: user.role, roles: user.roles ?? [] });
+	if (isAdmin) return;
+	if (
+		folder.ownerUserId === user.id ||
+		isPortalSharedOwner(folder.ownerUserId)
+	) {
+		return;
+	}
+	throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
+}
+
+/** Walk parent chain to build breadcrumb trail (root → current). */
+export async function getPortalFolderBreadcrumb(folderId: string) {
+	const trail: Array<{
+		id: string;
+		name: string;
+		parentFolderId: string | null;
+		ownerUserId: string;
+	}> = [];
+	let currentId: string | null = folderId;
+	const seen = new Set<string>();
+
+	while (currentId) {
+		if (seen.has(currentId)) break;
+		seen.add(currentId);
+		const folder = await getPortalFolderForAccess(currentId);
+		trail.unshift({
+			id: folder.id,
+			name: folder.name,
+			parentFolderId: folder.parentFolderId,
+			ownerUserId: folder.ownerUserId,
+		});
+		currentId = folder.parentFolderId;
+	}
+
+	return trail;
+}
+
+/** Detect if `candidateId` is the same as or a descendant of `ancestorId`. */
+export async function isFolderDescendantOf(
+	candidateId: string,
+	ancestorId: string,
+): Promise<boolean> {
+	if (candidateId === ancestorId) return true;
+	let currentId: string | null = candidateId;
+	const seen = new Set<string>();
+	while (currentId) {
+		if (seen.has(currentId)) return false;
+		seen.add(currentId);
+		if (currentId === ancestorId) return true;
+		const folder = await getPortalFolderForAccess(currentId);
+		currentId = folder.parentFolderId;
+	}
+	return false;
 }
 
 export function assertCanAccessPortalFile(

@@ -80,9 +80,10 @@ export function MetricCard({
 					</p>
 					<p
 						className={cn(
-							"font-bold text-[1.75rem] tracking-tight tabular-nums leading-none sm:text-3xl",
+							"truncate font-bold text-[1.5rem] tracking-tight tabular-nums leading-none sm:text-[1.75rem] lg:text-3xl",
 							isGradient ? "text-white" : "text-foreground",
 						)}
+						title={value}
 					>
 						{value}
 					</p>
