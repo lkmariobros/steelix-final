@@ -85,7 +85,7 @@ export function DealMixPanel({ className }: DealMixPanelProps) {
 						<span className="truncate">Deal Mix</span>
 					</CardTitle>
 					<Badge className="rounded-full border-0 bg-primary/12 font-medium text-primary">
-						{totalCount} deals
+						{totalCount} deals in period
 					</Badge>
 				</div>
 				{totalCount > 0 && (

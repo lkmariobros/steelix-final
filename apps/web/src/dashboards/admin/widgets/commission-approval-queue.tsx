@@ -32,7 +32,13 @@ import {
 	optimisticUpdateTransaction,
 } from "@/lib/query-invalidation";
 import { cn } from "@/lib/utils";
+import { formatCurrency } from "@/lib/format-currency";
 import { formatDateDMY, formatDateTimeDMY } from "@/lib/date-format";
+import {
+	formatPropertyLabel,
+	formatStatusLabel,
+	getStatusBadgeClass,
+} from "@/features/transactions/transaction-detail-utils";
 import { trpc } from "@/utils/trpc";
 import {
 	RiCheckLine,
@@ -46,11 +52,6 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
-import { formatCurrency } from "../admin-schema";
-import {
-	formatStatusLabel,
-	getStatusBadgeClass,
-} from "@/features/transactions/transaction-detail-utils";
 import { TablePagination } from "./table-pagination";
 
 interface CommissionApprovalQueueProps {
@@ -233,6 +234,9 @@ export function CommissionApprovalQueue({
 							>
 								{queueData?.totalCount || allTransactions.length} pending
 							</Badge>
+							<span className="rounded-full bg-muted/60 px-2.5 py-1 font-medium text-[11px] text-muted-foreground">
+								Open queue · all time
+							</span>
 						</div>
 						<div className="relative w-full sm:max-w-[220px]">
 							<RiSearchLine
@@ -322,9 +326,11 @@ export function CommissionApprovalQueue({
 												</Badge>
 											</div>
 											<div className="grid gap-1 text-xs">
-												<p className="truncate text-muted-foreground">
-													{transaction.propertyData?.address ||
-														"Unknown Property"}
+												<p
+													className="truncate text-muted-foreground"
+													title={formatPropertyLabel(transaction)}
+												>
+													{formatPropertyLabel(transaction)}
 												</p>
 												<div className="flex flex-wrap items-center justify-between gap-2">
 													<span className="font-semibold tabular-nums text-sm">
@@ -457,13 +463,9 @@ export function CommissionApprovalQueue({
 													<TableCell className="max-w-[160px] py-3">
 														<p
 															className="truncate text-muted-foreground text-sm"
-															title={
-																transaction.propertyData?.address ||
-																"Unknown Property"
-															}
+															title={formatPropertyLabel(transaction)}
 														>
-															{transaction.propertyData?.address ||
-																"Unknown Property"}
+															{formatPropertyLabel(transaction)}
 														</p>
 													</TableCell>
 													<TableCell className="py-3 whitespace-nowrap">

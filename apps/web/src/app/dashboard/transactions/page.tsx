@@ -219,12 +219,12 @@ export default function TransactionsPage() {
 		};
 	};
 
-	// Format currency
+	// Format currency (MYR / RM)
 	const formatCurrency = (amount: string | number) => {
 		const num = typeof amount === "string" ? Number.parseFloat(amount) : amount;
-		return new Intl.NumberFormat("en-US", {
+		return new Intl.NumberFormat("en-MY", {
 			style: "currency",
-			currency: "USD",
+			currency: "MYR",
 		}).format(num);
 	};
 

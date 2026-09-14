@@ -129,11 +129,11 @@ export function TransactionOverview() {
 					<div>
 						<CardTitle className="text-base">Transaction Overview</CardTitle>
 						<p className="mt-0.5 text-muted-foreground text-xs">
-							Pipeline health and deal distribution
+							Active pipeline (excl. completed/rejected) · status mix is all-time
 						</p>
 					</div>
 					<span className="inline-flex items-center rounded-full bg-primary/10 px-2.5 py-1 font-semibold text-[11px] text-primary">
-						{totalTransactions} total transactions
+						{totalTransactions} all-time · {activeDeals} active
 					</span>
 				</div>
 			</CardHeader>
@@ -144,7 +144,7 @@ export function TransactionOverview() {
 						value={activeDeals.toString()}
 						icon={<RiFileList3Line className="size-5" />}
 						iconTone="primary"
-						changeLabel={`${activeDeals} open`}
+						changeLabel="Open pipeline"
 						trend="neutral"
 					/>
 					<InsightMetricCard
@@ -152,7 +152,7 @@ export function TransactionOverview() {
 						value={formatCurrency(pipelineValue)}
 						icon={<RiMoneyDollarCircleLine className="size-5" />}
 						iconTone="success"
-						changeLabel="In pipeline"
+						changeLabel="Active commission"
 						trend="up"
 					/>
 					<InsightMetricCard
@@ -168,9 +168,7 @@ export function TransactionOverview() {
 						value={formatPercentage(completionRate)}
 						icon={<RiPercentLine className="size-5" />}
 						iconTone="success"
-						changeLabel={
-							completionRate > 0 ? `+${completionRate.toFixed(1)}%` : "0%"
-						}
+						changeLabel="Of all-time deals"
 						trend={completionRate > 0 ? "up" : "neutral"}
 					/>
 				</div>
@@ -182,7 +180,7 @@ export function TransactionOverview() {
 							<div>
 								<h3 className="font-semibold text-sm">Sales Pipeline</h3>
 								<p className="text-muted-foreground text-xs">
-									Status wise breakdown
+									Active statuses only (excl. completed/rejected)
 								</p>
 							</div>
 							{completionRate > 0 && (

@@ -16,6 +16,7 @@ import {
 	TIER_COLORS,
 	hasLeadershipBonus,
 } from "@/lib/agent-tier-config";
+import { formatCurrency } from "@/lib/format-currency";
 import { cn } from "@/lib/utils";
 import {
 	RiArrowUpLine,
@@ -25,14 +26,6 @@ import {
 	RiUserAddLine,
 } from "@remixicon/react";
 import { InsightMetricCard } from "./insight-metric-card";
-
-const formatCurrency = (v: number): string =>
-	new Intl.NumberFormat("en-US", {
-		style: "currency",
-		currency: "USD",
-		minimumFractionDigits: 0,
-		maximumFractionDigits: 0,
-	}).format(v);
 
 interface LeadershipBonusWidgetProps {
 	className?: string;

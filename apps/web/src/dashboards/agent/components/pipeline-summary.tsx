@@ -4,18 +4,9 @@ import { Badge } from "@/components/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { formatCurrency } from "@/lib/format-currency";
 import { RiArrowRightLine, RiBarChartLine } from "@remixicon/react";
 import Link from "next/link";
-
-// Simple utility functions to avoid import issues
-const formatCurrency = (amount: number): string => {
-	return new Intl.NumberFormat("en-US", {
-		style: "currency",
-		currency: "USD",
-		minimumFractionDigits: 0,
-		maximumFractionDigits: 0,
-	}).format(amount);
-};
 
 const statusColors = {
 	draft: "bg-gray-100 text-gray-800",

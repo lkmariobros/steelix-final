@@ -1,6 +1,6 @@
 /**
- * Formats a monetary amount: up to 2 decimal places when needed;
- * whole amounts render without a fractional part (e.g. $1,360 not $1,360.00).
+ * Portal currency: Malaysian Ringgit (RM).
+ * Whole amounts omit decimals (e.g. RM1,360); otherwise up to 2 places.
  */
 export function formatCurrency(
 	amount: number | string | null | undefined,
@@ -13,21 +13,20 @@ export function formatCurrency(
 				: amount;
 
 	if (!Number.isFinite(num)) {
-		return new Intl.NumberFormat("en-US", {
+		return new Intl.NumberFormat("en-MY", {
 			style: "currency",
-			currency: "USD",
+			currency: "MYR",
 			minimumFractionDigits: 0,
 			maximumFractionDigits: 0,
 		}).format(0);
 	}
 
 	const rounded = Math.round(num * 100) / 100;
-	const isWholeNumber =
-		Math.abs(rounded - Math.trunc(rounded)) < 1e-9;
+	const isWholeNumber = Math.abs(rounded - Math.trunc(rounded)) < 1e-9;
 
-	return new Intl.NumberFormat("en-US", {
+	return new Intl.NumberFormat("en-MY", {
 		style: "currency",
-		currency: "USD",
+		currency: "MYR",
 		minimumFractionDigits: isWholeNumber ? 0 : 2,
 		maximumFractionDigits: isWholeNumber ? 0 : 2,
 	}).format(rounded);

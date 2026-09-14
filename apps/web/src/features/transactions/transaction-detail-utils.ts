@@ -12,6 +12,36 @@ export function formatRm(amount: string | number | null | undefined) {
 	}).format(num);
 }
 
+/** Display label for a deal: primary → project + unit; else address. */
+export function formatPropertyLabel(transaction: {
+	marketType?: string | null;
+	projectName?: string | null;
+	unitNo?: string | null;
+	propertyData?: {
+		address?: string | null;
+	} | null;
+	propertyAddress?: string | null;
+}): string {
+	const project = transaction.projectName?.trim();
+	const unit = transaction.unitNo?.trim();
+	const projectUnit =
+		project || unit
+			? [project, unit ? `Unit ${unit}` : null].filter(Boolean).join(" · ")
+			: "";
+
+	if (transaction.marketType === "primary" && projectUnit) {
+		return projectUnit;
+	}
+
+	const address =
+		transaction.propertyData?.address?.trim() ||
+		transaction.propertyAddress?.trim() ||
+		"";
+	if (address) return address;
+	if (projectUnit) return projectUnit;
+	return "Unknown Property";
+}
+
 export function formatTransactionDate(
 	date: Date | string | null | undefined,
 ): string {

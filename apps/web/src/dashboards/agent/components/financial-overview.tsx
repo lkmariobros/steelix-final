@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAgentDashboard } from "@/contexts/agent-dashboard-context";
 import { MetricCard } from "@/dashboards/admin/widgets/metric-card";
+import { formatCurrency } from "@/lib/format-currency";
 import { formatDateDMY } from "@/lib/date-format";
 import {
 	RiBarChartLine,
@@ -12,13 +13,15 @@ import {
 	RiTrophyLine,
 } from "@remixicon/react";
 
-const formatCurrency = (amount: number): string =>
-	new Intl.NumberFormat("en-US", {
-		style: "currency",
-		currency: "USD",
-		minimumFractionDigits: 0,
-		maximumFractionDigits: 0,
-	}).format(amount);
+function sparkFromTrend(
+	monthlyTrend: { commission: number; deals: number }[],
+	key: "commission" | "deals",
+): number[] | undefined {
+	if (!monthlyTrend.length) return undefined;
+	const values = monthlyTrend.map((m) => m[key]);
+	const max = Math.max(...values, 1);
+	return values.map((v) => Math.max(12, Math.round((v / max) * 100)));
+}
 
 export function FinancialOverview() {
 	const { financialOverview, isLoading, dateRange } = useAgentDashboard();
@@ -64,18 +67,41 @@ export function FinancialOverview() {
 		);
 	}
 
-	const { overview } = financialOverview;
+	const { overview, monthlyTrend = [], comparisons, scopeLabel } =
+		financialOverview;
+
+	const scopeBadge =
+		dateRange.startDate && dateRange.endDate
+			? `${formatDateDMY(dateRange.startDate)} – ${formatDateDMY(dateRange.endDate)}`
+			: scopeLabel || "All time";
+
+	const commissionSpark = sparkFromTrend(monthlyTrend, "commission");
+	const dealsSpark = sparkFromTrend(monthlyTrend, "deals");
+
+	const metric = (
+		key: keyof NonNullable<typeof comparisons>,
+		fallbackLabel: string,
+	) => {
+		const c = comparisons?.[key];
+		if (!c) {
+			return { changeLabel: fallbackLabel, trend: "neutral" as const };
+		}
+		return { changeLabel: c.label, trend: c.trend };
+	};
 
 	return (
 		<div className="space-y-4">
 			<div className="flex items-center justify-between gap-3">
-				<h2 className="font-semibold text-lg tracking-tight">
-					Financial Overview
-				</h2>
+				<div>
+					<h2 className="font-semibold text-lg tracking-tight">
+						Financial Overview
+					</h2>
+					<p className="mt-0.5 text-muted-foreground text-xs">
+						Totals for scope · badges compare recent activity
+					</p>
+				</div>
 				<span className="inline-flex items-center rounded-full bg-muted/60 px-2.5 py-1 font-medium text-[11px] text-muted-foreground">
-					{dateRange.startDate && dateRange.endDate
-						? `${formatDateDMY(dateRange.startDate)} – ${formatDateDMY(dateRange.endDate)}`
-						: "All time"}
+					{scopeBadge}
 				</span>
 			</div>
 
@@ -83,35 +109,31 @@ export function FinancialOverview() {
 				<MetricCard
 					title="Total Commission"
 					value={formatCurrency(overview.totalCommission)}
-					changeLabel="+12% vs last week"
-					trend="up"
+					{...metric("totalCommission", scopeBadge)}
 					icon={<RiMoneyDollarCircleLine size={20} />}
-					sparkline={[40, 48, 42, 55, 50, 62, 58, 70, 64, 72, 68, 80]}
+					sparkline={commissionSpark}
 					variant="gradient"
 				/>
 				<MetricCard
 					title="Completed Deals"
 					value={overview.completedDeals.toString()}
-					changeLabel="+8% vs last week"
-					trend="up"
+					{...metric("completedDeals", scopeBadge)}
 					icon={<RiTrophyLine size={20} />}
-					sparkline={[28, 35, 32, 40, 38, 48, 45, 52, 50, 58, 55, 62]}
+					sparkline={dealsSpark}
 				/>
 				<MetricCard
 					title="Pending Commission"
 					value={formatCurrency(overview.pendingCommission)}
-					changeLabel="+15% vs last week"
-					trend="up"
+					{...metric("pendingCommission", "Open pipeline")}
 					icon={<RiTimeLine size={20} />}
-					sparkline={[35, 42, 38, 50, 45, 55, 52, 60, 58, 65, 62, 70]}
+					sparkline={commissionSpark}
 				/>
 				<MetricCard
 					title="Avg Deal Value"
 					value={formatCurrency(overview.averageDealValue)}
-					changeLabel="+5% vs last week"
-					trend="up"
+					{...metric("averageDealValue", scopeBadge)}
 					icon={<RiBarChartLine size={20} />}
-					sparkline={[30, 32, 36, 40, 38, 44, 48, 46, 52, 55, 58, 60]}
+					sparkline={commissionSpark}
 				/>
 			</div>
 		</div>

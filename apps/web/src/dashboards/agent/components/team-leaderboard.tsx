@@ -4,6 +4,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/avatar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAgentDashboard } from "@/contexts/agent-dashboard-context";
+import { formatCurrency } from "@/lib/format-currency";
 import { cn } from "@/lib/utils";
 import {
 	RiAwardLine,
@@ -12,14 +13,6 @@ import {
 	RiSparklingLine,
 	RiTrophyLine,
 } from "@remixicon/react";
-
-const formatCurrency = (amount: number): string =>
-	new Intl.NumberFormat("en-US", {
-		style: "currency",
-		currency: "USD",
-		minimumFractionDigits: 0,
-		maximumFractionDigits: 0,
-	}).format(amount);
 
 const PERIODS = [
 	{ value: "month" as const, label: "Month" },

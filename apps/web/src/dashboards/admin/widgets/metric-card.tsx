@@ -6,16 +6,14 @@ import type { ReactNode } from "react";
 interface MetricCardProps {
 	title: string;
 	value: string;
-	changeLabel: string;
+	changeLabel?: string;
 	trend?: "up" | "down" | "neutral";
 	icon?: ReactNode;
-	/** Decorative sparkline heights (0–100). UI-only. */
+	/** Decorative sparkline heights (0–100). Omit when no real series. */
 	sparkline?: number[];
 	variant?: "default" | "gradient";
 	className?: string;
 }
-
-const DEFAULT_SPARK = [28, 42, 35, 58, 48, 72, 64, 80, 55, 70, 88, 76];
 
 function MiniSparkline({
 	values,
@@ -46,7 +44,7 @@ export function MetricCard({
 	changeLabel,
 	trend = "neutral",
 	icon,
-	sparkline = DEFAULT_SPARK,
+	sparkline,
 	variant = "default",
 	className,
 }: MetricCardProps) {
@@ -104,15 +102,19 @@ export function MetricCard({
 
 			{/* Shared footer height so all cards align on one baseline */}
 			<div className="mt-auto flex h-9 items-center justify-between gap-3 pt-5">
-				<span
-					className={cn(
-						"inline-flex max-w-full items-center truncate rounded-full px-2.5 py-1 font-medium text-[11px]",
-						isGradient ? "bg-white/20 text-white" : trendBadge,
-					)}
-				>
-					{changeLabel}
-				</span>
-				{!isGradient && (
+				{changeLabel ? (
+					<span
+						className={cn(
+							"inline-flex max-w-full items-center truncate rounded-full px-2.5 py-1 font-medium text-[11px]",
+							isGradient ? "bg-white/20 text-white" : trendBadge,
+						)}
+					>
+						{changeLabel}
+					</span>
+				) : (
+					<span />
+				)}
+				{!isGradient && sparkline && sparkline.length > 0 && (
 					<MiniSparkline values={sparkline} className="w-20 shrink-0" />
 				)}
 			</div>

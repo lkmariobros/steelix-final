@@ -191,18 +191,7 @@ export function getPriorityColor(priority: string): string {
 	);
 }
 
-export function formatCurrency(amount: number | string | null): string {
-	if (!amount) return "$0";
-
-	const numAmount =
-		typeof amount === "string" ? Number.parseFloat(amount) : amount;
-	return new Intl.NumberFormat("en-US", {
-		style: "currency",
-		currency: "USD",
-		minimumFractionDigits: 0,
-		maximumFractionDigits: 0,
-	}).format(numAmount);
-}
+export { formatCurrency } from "@/lib/format-currency";
 
 export function formatPercentage(
 	value: number | string | null | undefined,

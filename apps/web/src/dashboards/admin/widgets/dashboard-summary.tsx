@@ -3,6 +3,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAdminDashboard } from "@/contexts/admin-dashboard-context";
+import { formatDateDMY } from "@/lib/date-format";
 import { cn } from "@/lib/utils";
 import { safeToFixed } from "@/utils/number-formatting";
 import {
@@ -22,7 +23,19 @@ interface DashboardSummaryProps {
 }
 
 export function DashboardSummary({ className }: DashboardSummaryProps) {
-	const { dashboardSummary: raw, summaryLoading, hasError } = useAdminDashboard();
+	const {
+		dashboardSummary: raw,
+		summaryLoading,
+		hasError,
+		dateRange,
+	} = useAdminDashboard();
+
+	const scopeLabel = React.useMemo(() => {
+		if (dateRange.startDate && dateRange.endDate) {
+			return `${formatDateDMY(dateRange.startDate)} – ${formatDateDMY(dateRange.endDate)}`;
+		}
+		return "All time";
+	}, [dateRange.endDate, dateRange.startDate]);
 
 	const data = React.useMemo(() => {
 		if (!raw) return null;
@@ -106,22 +119,28 @@ export function DashboardSummary({ className }: DashboardSummaryProps) {
 
 	return (
 		<div className={cn("min-w-0 space-y-4", className)}>
+			<div className="flex items-center justify-between gap-2">
+				<p className="text-muted-foreground text-xs">
+					Summary metrics for selected date filter
+				</p>
+				<span className="inline-flex items-center rounded-full bg-muted/60 px-2.5 py-1 font-medium text-[11px] text-muted-foreground">
+					{scopeLabel}
+				</span>
+			</div>
 			<div className="grid items-stretch gap-4 sm:grid-cols-2 xl:grid-cols-4">
 				<MetricCard
 					title="Total Transactions"
 					value={data.totalTransactions.toString()}
-					changeLabel={`${data.totalTransactions} total`}
+					changeLabel="In selected period"
 					trend={data.totalTransactions > 0 ? "up" : "neutral"}
 					icon={<RiFileListLine size={20} />}
-					sparkline={[22, 34, 28, 46, 40, 58, 52, 68, 60, 74, 70, 82]}
 				/>
 				<MetricCard
 					title="Pending Approvals"
 					value={data.pendingApprovals.toString()}
-					changeLabel={`${safeToFixed(pendingRate, 1)}% of total`}
+					changeLabel={`${safeToFixed(pendingRate, 1)}% of period`}
 					trend={data.pendingApprovals > 5 ? "down" : "up"}
 					icon={<RiTimeLine size={20} />}
-					sparkline={[40, 48, 36, 55, 62, 50, 70, 58, 66, 72, 64, 78]}
 				/>
 				<MetricCard
 					title="Approved Transactions"
@@ -129,7 +148,6 @@ export function DashboardSummary({ className }: DashboardSummaryProps) {
 					changeLabel={`${safeToFixed(approvalRate, 1)}% approval`}
 					trend={approvalRate > 80 ? "up" : "neutral"}
 					icon={<RiCheckboxCircleLine size={20} />}
-					sparkline={[30, 38, 44, 42, 55, 60, 58, 72, 68, 80, 76, 88]}
 				/>
 				<MetricCard
 					title="Total Commission"

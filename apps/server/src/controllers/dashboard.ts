@@ -22,6 +22,102 @@ const leaderboardPeriodInput = z.object({
 	period: z.enum(["month", "30d", "all"]).default("month"),
 });
 
+/** Primary → project · unit; secondary → address, then project/unit. */
+const propertyLabelSql = sql<string>`CASE
+	WHEN ${transactions.marketType} = 'primary' THEN COALESCE(
+		NULLIF(
+			TRIM(BOTH ' · ' FROM CONCAT_WS(
+				' · ',
+				NULLIF(TRIM(${transactions.projectName}), ''),
+				CASE
+					WHEN NULLIF(TRIM(${transactions.unitNo}), '') IS NOT NULL
+					THEN CONCAT('Unit ', TRIM(${transactions.unitNo}))
+					ELSE NULL
+				END
+			)),
+			''
+		),
+		NULLIF(TRIM(${transactions.propertyData}->>'address'), ''),
+		'Unknown Property'
+	)
+	ELSE COALESCE(
+		NULLIF(TRIM(${transactions.propertyData}->>'address'), ''),
+		NULLIF(
+			TRIM(BOTH ' · ' FROM CONCAT_WS(
+				' · ',
+				NULLIF(TRIM(${transactions.projectName}), ''),
+				CASE
+					WHEN NULLIF(TRIM(${transactions.unitNo}), '') IS NOT NULL
+					THEN CONCAT('Unit ', TRIM(${transactions.unitNo}))
+					ELSE NULL
+				END
+			)),
+			''
+		),
+		'Unknown Property'
+	)
+END`;
+
+type OverviewTotals = {
+	totalCommission: number;
+	completedDeals: number;
+	pendingCommission: number;
+	averageDealValue: number;
+};
+
+function parseOverviewRow(
+	row:
+		| {
+				totalCommission: string;
+				completedDeals: string;
+				pendingCommission: string;
+				averageDealValue: string;
+		  }
+		| undefined,
+): OverviewTotals {
+	if (!row) {
+		return {
+			totalCommission: 0,
+			completedDeals: 0,
+			pendingCommission: 0,
+			averageDealValue: 0,
+		};
+	}
+	return {
+		totalCommission: Number(row.totalCommission) || 0,
+		completedDeals: Number(row.completedDeals) || 0,
+		pendingCommission: Number(row.pendingCommission) || 0,
+		averageDealValue: Number(row.averageDealValue) || 0,
+	};
+}
+
+function pctChange(current: number, previous: number): number | null {
+	if (previous === 0 && current === 0) return null;
+	if (previous === 0) return null;
+	return Math.round(((current - previous) / previous) * 100);
+}
+
+function comparisonMeta(
+	current: number,
+	previous: number,
+	suffix: string,
+): { changePct: number | null; label: string; trend: "up" | "down" | "neutral" } {
+	const changePct = pctChange(current, previous);
+	if (changePct === null) {
+		return {
+			changePct: null,
+			label: current === 0 && previous === 0 ? "No prior data" : suffix,
+			trend: "neutral",
+		};
+	}
+	const sign = changePct > 0 ? "+" : "";
+	return {
+		changePct,
+		label: `${sign}${changePct}% ${suffix}`,
+		trend: changePct > 0 ? "up" : changePct < 0 ? "down" : "neutral",
+	};
+}
+
 export const dashboardRouter = router({
 	// Get financial overview for agent dashboard
 	getFinancialOverview: protectedProcedure
@@ -41,16 +137,41 @@ export const dashboardRouter = router({
 				dateConditions.push(sql`${transactions.transactionDate} <= ${endDate}`);
 			}
 
+			const overviewSelect = {
+				totalCommission: sql<string>`COALESCE(SUM(${transactions.commissionAmount}), 0)`,
+				completedDeals: sql<string>`COUNT(CASE WHEN ${transactions.status} = 'completed' THEN 1 END)`,
+				pendingCommission: sql<string>`COALESCE(SUM(CASE WHEN ${transactions.status} IN ('approved', 'under_review', 'verified', 'pending') THEN ${transactions.commissionAmount} ELSE 0 END), 0)`,
+				averageDealValue: sql<string>`COALESCE(AVG(CASE WHEN ${transactions.propertyData}->>'price' IS NOT NULL THEN CAST(${transactions.propertyData}->>'price' AS DECIMAL) END), 0)`,
+			};
+
 			// Get commission data (PostgreSQL returns strings for aggregates)
 			const rawCommissionData = await db
-				.select({
-					totalCommission: sql<string>`COALESCE(SUM(${transactions.commissionAmount}), 0)`,
-					completedDeals: sql<string>`COUNT(CASE WHEN ${transactions.status} = 'completed' THEN 1 END)`,
-					pendingCommission: sql<string>`COALESCE(SUM(CASE WHEN ${transactions.status} IN ('approved', 'under_review') THEN ${transactions.commissionAmount} ELSE 0 END), 0)`,
-					averageDealValue: sql<string>`COALESCE(AVG(CASE WHEN ${transactions.propertyData}->>'price' IS NOT NULL THEN CAST(${transactions.propertyData}->>'price' AS DECIMAL) END), 0)`,
-				})
+				.select(overviewSelect)
 				.from(transactions)
 				.where(and(eq(transactions.agentId, userId), ...dateConditions));
+
+			// Prior equal window when a date range is set; otherwise MoM from monthly trend
+			let previousOverview: OverviewTotals | null = null;
+			let comparisonSuffix = "vs prior period";
+			if (startDate && endDate) {
+				const durationMs = Math.max(
+					endDate.getTime() - startDate.getTime(),
+					24 * 60 * 60 * 1000,
+				);
+				const prevEnd = new Date(startDate.getTime() - 1);
+				const prevStart = new Date(prevEnd.getTime() - durationMs);
+				const prevRows = await db
+					.select(overviewSelect)
+					.from(transactions)
+					.where(
+						and(
+							eq(transactions.agentId, userId),
+							sql`${transactions.transactionDate} >= ${prevStart}`,
+							sql`${transactions.transactionDate} <= ${prevEnd}`,
+						),
+					);
+				previousOverview = parseOverviewRow(prevRows[0]);
+			}
 
 			// Get monthly trend data
 			const rawMonthlyTrend = await db
@@ -69,22 +190,7 @@ export const dashboardRouter = router({
 				.groupBy(sql`TO_CHAR(${transactions.transactionDate}, 'YYYY-MM')`)
 				.orderBy(sql`TO_CHAR(${transactions.transactionDate}, 'YYYY-MM')`);
 
-			// Convert string values to numbers
-			const overview = rawCommissionData[0]
-				? {
-						totalCommission: Number(rawCommissionData[0].totalCommission) || 0,
-						completedDeals: Number(rawCommissionData[0].completedDeals) || 0,
-						pendingCommission:
-							Number(rawCommissionData[0].pendingCommission) || 0,
-						averageDealValue:
-							Number(rawCommissionData[0].averageDealValue) || 0,
-					}
-				: {
-						totalCommission: 0,
-						completedDeals: 0,
-						pendingCommission: 0,
-						averageDealValue: 0,
-					};
+			const overview = parseOverviewRow(rawCommissionData[0]);
 
 			const monthlyTrend = rawMonthlyTrend.map((item) => ({
 				month: item.month,
@@ -92,9 +198,87 @@ export const dashboardRouter = router({
 				deals: Number(item.deals) || 0,
 			}));
 
+			// Dated range → prior equal window on full overview; all-time → last vs prior month
+			let compareCurrent = overview;
+			let comparePrevious = previousOverview;
+			if (!(startDate && endDate)) {
+				comparisonSuffix = "vs last month";
+				if (monthlyTrend.length >= 1) {
+					const last = monthlyTrend[monthlyTrend.length - 1];
+					const prior =
+						monthlyTrend.length >= 2
+							? monthlyTrend[monthlyTrend.length - 2]
+							: { commission: 0, deals: 0, month: "" };
+					compareCurrent = {
+						totalCommission: last.commission,
+						completedDeals: last.deals,
+						pendingCommission: overview.pendingCommission,
+						averageDealValue: overview.averageDealValue,
+					};
+					comparePrevious = {
+						totalCommission: prior.commission,
+						completedDeals: prior.deals,
+						pendingCommission: 0,
+						averageDealValue: 0,
+					};
+				} else {
+					comparePrevious = {
+						totalCommission: 0,
+						completedDeals: 0,
+						pendingCommission: 0,
+						averageDealValue: 0,
+					};
+				}
+			}
+
+			const prev = comparePrevious ?? {
+				totalCommission: 0,
+				completedDeals: 0,
+				pendingCommission: 0,
+				averageDealValue: 0,
+			};
+
+			const hasDateRange = Boolean(startDate && endDate);
+			const comparisons = {
+				totalCommission: comparisonMeta(
+					compareCurrent.totalCommission,
+					prev.totalCommission,
+					comparisonSuffix,
+				),
+				completedDeals: comparisonMeta(
+					compareCurrent.completedDeals,
+					prev.completedDeals,
+					comparisonSuffix,
+				),
+				pendingCommission: hasDateRange
+					? comparisonMeta(
+							compareCurrent.pendingCommission,
+							prev.pendingCommission,
+							comparisonSuffix,
+						)
+					: {
+							changePct: null,
+							label: "Open pipeline",
+							trend: "neutral" as const,
+						},
+				averageDealValue: hasDateRange
+					? comparisonMeta(
+							compareCurrent.averageDealValue,
+							prev.averageDealValue,
+							comparisonSuffix,
+						)
+					: {
+							changePct: null,
+							label: "All time avg",
+							trend: "neutral" as const,
+						},
+			};
+
 			return {
 				overview,
 				monthlyTrend,
+				comparisons,
+				scopeLabel: startDate && endDate ? "Selected period" : "All time",
 			};
 		}),
 
@@ -130,7 +314,7 @@ export const dashboardRouter = router({
 		const activeTransactions = await db
 			.select({
 				id: transactions.id,
-				propertyAddress: sql<string>`${transactions.propertyData}->>'address'`,
+				propertyAddress: propertyLabelSql,
 				propertyPrice: sql<number>`CAST(${transactions.propertyData}->>'price' AS DECIMAL)`,
 				clientName: sql<string>`${transactions.clientData}->>'name'`,
 				status: transactions.status,
@@ -202,7 +386,7 @@ export const dashboardRouter = router({
 						agentId: transactions.agentId,
 						agentName: user.name,
 						agentImage: user.image,
-						propertyAddress: sql<string>`${transactions.propertyData}->>'address'`,
+						propertyAddress: propertyLabelSql,
 						propertyPrice: sql<number>`CAST(${transactions.propertyData}->>'price' AS DECIMAL)`,
 						clientName: sql<string>`${transactions.clientData}->>'name'`,
 						status: transactions.status,
@@ -225,7 +409,7 @@ export const dashboardRouter = router({
 					agentId: transactions.agentId,
 					agentName: user.name,
 					agentImage: user.image,
-					propertyAddress: sql<string>`${transactions.propertyData}->>'address'`,
+					propertyAddress: propertyLabelSql,
 					propertyPrice: sql<number>`CAST(${transactions.propertyData}->>'price' AS DECIMAL)`,
 					clientName: sql<string>`${transactions.clientData}->>'name'`,
 					status: transactions.status,

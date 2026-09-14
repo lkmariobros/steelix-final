@@ -12,18 +12,11 @@ import {
 	TableRow,
 } from "@/components/table";
 import { useAgentDashboard } from "@/contexts/agent-dashboard-context";
+import { formatCurrency } from "@/lib/format-currency";
 import { formatDateDMY } from "@/lib/date-format";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-
-const formatCurrency = (amount: number): string =>
-	new Intl.NumberFormat("en-US", {
-		style: "currency",
-		currency: "USD",
-		minimumFractionDigits: 0,
-		maximumFractionDigits: 0,
-	}).format(amount);
 
 const useRelativeTime = (date: Date): string => {
 	const [rel, setRel] = useState<string>("");

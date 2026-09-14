@@ -78,8 +78,9 @@ export function calculateDetailedCommission(
 /**
  * Format currency amount for display
  */
-export function formatCurrency(amount: number, currency = "USD"): string {
-	return new Intl.NumberFormat("en-US", {
+export function formatCurrency(amount: number, currency = "MYR"): string {
+	const locale = currency === "MYR" ? "en-MY" : "en-US";
+	return new Intl.NumberFormat(locale, {
 		style: "currency",
 		currency,
 		minimumFractionDigits: 0,

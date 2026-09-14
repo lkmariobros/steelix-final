@@ -4,18 +4,9 @@ import { Badge } from "@/components/badge";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { formatCurrency } from "@/lib/format-currency";
 import { formatDateDMY } from "@/lib/date-format";
 import { trpc } from "@/utils/trpc";
-
-// Simple utility functions to avoid import issues
-const formatCurrency = (amount: number): string => {
-	return new Intl.NumberFormat("en-US", {
-		style: "currency",
-		currency: "USD",
-		minimumFractionDigits: 0,
-		maximumFractionDigits: 0,
-	}).format(amount);
-};
 
 const statusColors = {
 	draft: "bg-gray-100 text-gray-800",
@@ -129,7 +120,12 @@ export function SalesPipeline() {
 	return (
 		<Card>
 			<CardHeader>
-				<CardTitle>Sales Pipeline</CardTitle>
+				<div className="flex flex-wrap items-center justify-between gap-2">
+					<CardTitle>Sales Pipeline</CardTitle>
+					<span className="rounded-full bg-muted/60 px-2.5 py-1 font-medium text-[11px] text-muted-foreground">
+						Active pipeline
+					</span>
+				</div>
 			</CardHeader>
 			<CardContent className="space-y-6">
 				{/* Pipeline Status Overview */}

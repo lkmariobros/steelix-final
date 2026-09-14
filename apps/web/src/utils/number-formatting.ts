@@ -36,10 +36,12 @@ export function safeFormatPercentage(value: unknown, decimals = 1): string {
 /**
  * Safely format currency with proper validation
  */
-export function safeFormatCurrency(amount: unknown, currency = "USD"): string {
+export function safeFormatCurrency(amount: unknown, currency = "MYR"): string {
+	const locale = currency === "MYR" ? "en-MY" : "en-US";
+
 	// Handle null, undefined, or invalid values
 	if (amount === null || amount === undefined) {
-		return new Intl.NumberFormat("en-US", {
+		return new Intl.NumberFormat(locale, {
 			style: "currency",
 			currency,
 			minimumFractionDigits: 0,
@@ -53,7 +55,7 @@ export function safeFormatCurrency(amount: unknown, currency = "USD"): string {
 
 	// Check if the conversion resulted in a valid number
 	if (Number.isNaN(numAmount) || typeof numAmount !== "number") {
-		return new Intl.NumberFormat("en-US", {
+		return new Intl.NumberFormat(locale, {
 			style: "currency",
 			currency,
 			minimumFractionDigits: 0,
@@ -61,7 +63,7 @@ export function safeFormatCurrency(amount: unknown, currency = "USD"): string {
 		}).format(0);
 	}
 
-	return new Intl.NumberFormat("en-US", {
+	return new Intl.NumberFormat(locale, {
 		style: "currency",
 		currency,
 		minimumFractionDigits: 0,

@@ -34,6 +34,29 @@ export interface FinancialOverviewData {
 		averageDealValue: number;
 	};
 	monthlyTrend: { month: string; commission: number; deals: number }[];
+	comparisons?: {
+		totalCommission: {
+			changePct: number | null;
+			label: string;
+			trend: "up" | "down" | "neutral";
+		};
+		completedDeals: {
+			changePct: number | null;
+			label: string;
+			trend: "up" | "down" | "neutral";
+		};
+		pendingCommission: {
+			changePct: number | null;
+			label: string;
+			trend: "up" | "down" | "neutral";
+		};
+		averageDealValue: {
+			changePct: number | null;
+			label: string;
+			trend: "up" | "down" | "neutral";
+		};
+	};
+	scopeLabel?: string;
 }
 
 export interface RecentTransactionItem {

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { formatDateDMY } from "@/lib/date-format";
+import { formatCurrency as formatCurrencyShared } from "@/lib/format-currency";
 
 // Financial overview data schema
 export const financialOverviewSchema = z.object({
@@ -194,13 +195,8 @@ export function getStatusLabel(status: string): string {
 	return statusLabels[status as keyof typeof statusLabels] || status;
 }
 
-export function formatCurrency(amount: number): string {
-	return new Intl.NumberFormat("en-US", {
-		style: "currency",
-		currency: "USD",
-		minimumFractionDigits: 0,
-		maximumFractionDigits: 0,
-	}).format(amount);
+export function formatCurrency(amount: number | string | null | undefined): string {
+	return formatCurrencyShared(amount);
 }
 
 export function formatPercentage(
