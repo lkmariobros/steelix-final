@@ -438,14 +438,12 @@ export const portalFilesRouter = router({
 
 			const storage = requireSupabaseAdmin();
 
-			const folderPath = file.storagePath.split("/").slice(0, -1).join("/");
-			const fileName = file.storagePath.split("/").pop();
-			const { data: listed, error } = await storage.storage
+			// Lightweight existence check (avoid downloading the whole object).
+			const { error: existsError } = await storage.storage
 				.from(PORTAL_FILES_BUCKET)
-				.list(folderPath);
+				.createSignedUrl(file.storagePath, 60);
 
-			const found = listed?.some((item) => item.name === fileName);
-			if (error || !found) {
+			if (existsError) {
 				throw new TRPCError({
 					code: "BAD_REQUEST",
 					message: "Upload not found in storage. Please retry.",

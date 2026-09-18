@@ -27,7 +27,35 @@ export function isPreviewableType(fileType: string): boolean {
 	);
 }
 
-export const PORTAL_BASE64_MAX_BYTES = 25 * 1024 * 1024;
+export const PORTAL_BASE64_MAX_BYTES = 512 * 1024;
+
+const EXT_MIME: Record<string, string> = {
+	pdf: "application/pdf",
+	doc: "application/msword",
+	docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+	xls: "application/vnd.ms-excel",
+	xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+	ppt: "application/vnd.ms-powerpoint",
+	pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+	txt: "text/plain",
+	jpg: "image/jpeg",
+	jpeg: "image/jpeg",
+	png: "image/png",
+	webp: "image/webp",
+	gif: "image/gif",
+	mp4: "video/mp4",
+	mov: "video/quicktime",
+	webm: "video/webm",
+};
+
+/** Prefer browser MIME; fall back to extension (Windows often sends empty type). */
+export function resolvePortalFileMimeType(file: File): string {
+	if (file.type && file.type !== "application/octet-stream") {
+		return file.type;
+	}
+	const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+	return EXT_MIME[ext] || file.type || "application/octet-stream";
+}
 
 export async function fileToBase64(file: File): Promise<string> {
 	return new Promise((resolve, reject) => {

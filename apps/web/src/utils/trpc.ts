@@ -25,10 +25,15 @@ export const queryClient = new QueryClient({
 	},
 	queryCache: new QueryCache({
 		onError: (error) => {
+			const raw = error.message;
 			const message =
-				error.message === "Unexpected end of JSON input"
+				raw === "Unexpected end of JSON input"
 					? "Session cookies are stale/oversized. Please sign in again or use Reset session cookies on login."
-					: error.message;
+					: /Unexpected token ['"]?R['"]?|Request Entity Too Large|not valid JSON/i.test(
+								raw,
+						  )
+						? "Upload failed: request body too large. Use direct file upload (portal files) or a smaller file."
+						: raw;
 			toast.error(message, {
 				action: {
 					label: "retry",

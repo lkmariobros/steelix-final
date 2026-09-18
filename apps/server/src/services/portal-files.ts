@@ -13,7 +13,8 @@ export const PORTAL_FILES_BUCKET =
 	process.env.PORTAL_FILES_BUCKET?.trim() || "portal-files";
 export const PORTAL_FILE_QUOTA_BYTES = 5 * 1024 * 1024 * 1024;
 export const PORTAL_MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024;
-export const PORTAL_BASE64_MAX_BYTES = 25 * 1024 * 1024;
+/** Legacy base64 path only — keep tiny; large payloads hit Vercel/proxy 413. */
+export const PORTAL_BASE64_MAX_BYTES = 512 * 1024;
 export const PORTAL_SIGNED_URL_TTL_SECONDS = 60 * 60;
 
 export const ALLOWED_PORTAL_MIME_TYPES = [
