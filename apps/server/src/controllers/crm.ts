@@ -28,7 +28,7 @@ import {
 	updateProspectNoteSchema,
 	updateProspectSchema,
 } from "../models/crm";
-import { getLeadActivityAdmin, importProspectsBulkForAgent, assignLeadAdmin, assertAssignableLeadAgent, buildAgentPersonalLeadsCondition, canAgentAccessProspect, fetchFollowersByProspectIds, getAgentsWithLeads, getProspectFollowers, isAgentProspectFollower, setProspectTagIds, agentLeadDisplayNameSql, logActivity, logStageChanged } from "../services/leads";
+import { getLeadActivityAdmin, importProspectsBulkForAgent, assignLeadAdmin, assertAssignableLeadAgent, buildAgentPersonalLeadsCondition, canAgentAccessProspect, fetchFollowersByProspectIds, getAgentsWithLeads, getProspectFollowers, isAgentProspectFollower, setProspectFollowers, setProspectTagIds, agentLeadDisplayNameSql, logActivity, logStageChanged } from "../services/leads";
 import { withPipelineStageSchemaRetry } from "../utils/pipeline-stage-schema";
 import { withProspectNotesSchemaRetry } from "../utils/prospect-notes-schema";
 import { db } from "../utils/db";
@@ -1284,5 +1284,54 @@ export const crmRouter = router({
 			}
 
 			return await setProspectTagIds(input.id, input.tagIds, agentId);
+		}),
+
+	/** Owner of a personal lead can add/edit followers. Company leads stay admin-managed. */
+	setFollowers: protectedProcedure
+		.input(
+			z.object({
+				id: z.string().uuid(),
+				followerIds: z.array(z.string()).default([]),
+			}),
+		)
+		.mutation(async ({ input, ctx }) => {
+			const agentId = ctx.session.user.id;
+			const [prospect] = await db
+				.select({
+					agentId: prospects.agentId,
+					leadType: prospects.leadType,
+				})
+				.from(prospects)
+				.where(eq(prospects.id, input.id))
+				.limit(1);
+
+			if (!prospect) {
+				throw new TRPCError({ code: "NOT_FOUND", message: "Lead not found" });
+			}
+
+			const leadType = prospect.leadType || "personal";
+			if (leadType !== "personal") {
+				throw new TRPCError({
+					code: "FORBIDDEN",
+					message: "Followers can only be edited on personal leads",
+				});
+			}
+
+			if (prospect.agentId !== agentId) {
+				throw new TRPCError({
+					code: "FORBIDDEN",
+					message: "Only the lead owner can edit followers",
+				});
+			}
+
+			const result = await setProspectFollowers(
+				input.id,
+				input.followerIds,
+				agentId,
+			);
+			return {
+				followerIds: result.ids,
+				followerNames: result.names,
+			};
 		}),
 });

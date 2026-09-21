@@ -108,6 +108,7 @@ import {
 import { LeadTasksCard } from "@/app/admin/leads/_components/lead-tasks-card";
 import { TodayTasksWidget } from "@/app/admin/leads/_components/today-tasks-widget";
 import { TagSelector } from "@/components/tag-selector";
+import { FollowerSelector } from "@/components/follower-selector";
 import { AgentLeadStatsCards } from "./_components/agent-lead-stats-cards";
 
 // Pipeline stages for Kanban board
@@ -542,6 +543,7 @@ export default function CRMPage() {
 
 	const [ownerAgentId, setOwnerAgentId] = useState<string>("");
 	const [categoryTagIds, setCategoryTagIds] = useState<string[]>([]);
+	const [followerIds, setFollowerIds] = useState<string[]>([]);
 	const [detailStage, setDetailStage] = useState<PipelineStage | "">("");
 	const [newNoteContent, setNewNoteContent] = useState("");
 	const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
@@ -580,6 +582,9 @@ export default function CRMPage() {
 		activeProspect?.agentId === session?.user?.id;
 
 	const canEditCategoriesForSelected = isOwnerOfSelected;
+	// Owner of a personal lead can add/edit followers
+	const canEditFollowersForSelected =
+		isOwnerOfSelected && activeProspect?.leadType === "personal";
 	// Owner or follower (team leader) can reassign the lead
 	const canEditOwnerForSelected = canManageTasksForSelected;
 
@@ -620,6 +625,15 @@ export default function CRMPage() {
 
 	useEffect(() => {
 		const current = prospectDetailData?.prospect ?? selectedProspect;
+		setFollowerIds(current?.followerIds ?? []);
+	}, [
+		prospectDetailData?.prospect,
+		selectedProspect?.id,
+		selectedProspect?.followerIds,
+	]);
+
+	useEffect(() => {
+		const current = prospectDetailData?.prospect ?? selectedProspect;
 		setDetailStage((current?.stage as PipelineStage | undefined) ?? "");
 	}, [prospectDetailData?.prospect, selectedProspect?.id, selectedProspect?.stage]);
 
@@ -642,6 +656,23 @@ export default function CRMPage() {
 					tagNames: result.tagNames,
 				});
 			}
+			refetchProspects();
+		},
+		onError: (error) => toast.error(error.message),
+	});
+
+	const setFollowersMutation = trpc.crm.setFollowers.useMutation({
+		onSuccess: (result) => {
+			toast.success("Followers updated");
+			setFollowerIds(result.followerIds ?? []);
+			if (selectedProspect) {
+				setSelectedProspect({
+					...selectedProspect,
+					followerIds: result.followerIds,
+					followerNames: result.followerNames,
+				});
+			}
+			void trpcUtils.crm.get.invalidate({ id: activeProspect?.id });
 			refetchProspects();
 		},
 		onError: (error) => toast.error(error.message),
@@ -1639,7 +1670,43 @@ export default function CRMPage() {
 												<RiUserLine className="size-4" />
 												Followers
 											</div>
-											{activeProspect.followerNames &&
+											{canEditFollowersForSelected ? (
+												<>
+													<p className="text-muted-foreground text-xs">
+														Add teammates who should track this personal lead
+													</p>
+													<div className="flex gap-2">
+														<FollowerSelector
+															value={followerIds}
+															onChange={setFollowerIds}
+															agents={followerAgents}
+															className="min-w-0 flex-1"
+														/>
+														<Button
+															size="sm"
+															disabled={
+																setFollowersMutation.isPending ||
+																JSON.stringify(followerIds) ===
+																	JSON.stringify(
+																		activeProspect.followerIds ?? [],
+																	)
+															}
+															onClick={() =>
+																setFollowersMutation.mutate({
+																	id: activeProspect.id,
+																	followerIds,
+																})
+															}
+														>
+															{setFollowersMutation.isPending ? (
+																<RiLoader4Line className="size-4 animate-spin" />
+															) : (
+																"Save"
+															)}
+														</Button>
+													</div>
+												</>
+											) : activeProspect.followerNames &&
 											  activeProspect.followerNames.length > 0 ? (
 												<div className="flex flex-wrap gap-1">
 													{activeProspect.followerNames.map((name) => (
