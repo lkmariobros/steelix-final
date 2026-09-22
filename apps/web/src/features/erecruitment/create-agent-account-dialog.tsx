@@ -35,7 +35,9 @@ import {
 	type RecruitmentFormState,
 	type RecruitmentUploadedDoc,
 } from "./types";
-import { normalizeMalaysianPhone, readFileAsBase64 } from "./utils";
+import { normalizeMalaysianPhone } from "./utils";
+
+const ONBOARDING_MAX_FILE_BYTES = 10 * 1024 * 1024;
 
 type CreateAgentAccountDialogProps = {
 	open: boolean;
@@ -43,6 +45,23 @@ type CreateAgentAccountDialogProps = {
 	isSuperAdmin: boolean;
 	onSuccess?: () => void;
 };
+
+function uploadErrorMessage(error: unknown): string {
+	const msg =
+		error instanceof Error
+			? error.message
+			: typeof error === "string"
+				? error
+				: "Upload failed";
+	if (
+		/Request Entity Too Large/i.test(msg) ||
+		/Unexpected token ['"]?R['"]?/i.test(msg) ||
+		(/not valid JSON/i.test(msg) && /Request En/i.test(msg))
+	) {
+		return "Upload rejected: file too large for the API proxy. Re-select the file to use direct upload.";
+	}
+	return msg;
+}
 
 export function CreateAgentAccountDialog({
 	open,
@@ -59,7 +78,12 @@ export function CreateAgentAccountDialog({
 	const [password, setPassword] = useState("");
 	const [branch, setBranch] = useState("");
 	const [role, setRole] = useState<"agent" | "team_lead" | "admin">("agent");
+	const [uploadingDoc, setUploadingDoc] = useState<RecruitmentDocKey | null>(
+		null,
+	);
 
+	const uploadSessionMutation =
+		trpc.agents.createOnboardingUploadSession.useMutation();
 	const createAgentMutation = trpc.agents.create.useMutation({
 		onSuccess: () => {
 			toast.success("Agent account created");
@@ -67,7 +91,7 @@ export function CreateAgentAccountDialog({
 			onOpenChange(false);
 			onSuccess?.();
 		},
-		onError: (e) => toast.error(e.message || "Failed to create agent"),
+		onError: (e) => toast.error(uploadErrorMessage(e)),
 	});
 
 	const resetForm = () => {
@@ -78,28 +102,61 @@ export function CreateAgentAccountDialog({
 		setPassword("");
 		setBranch("");
 		setRole("agent");
+		setUploadingDoc(null);
 	};
 
 	const setField = (key: keyof RecruitmentFormState, value: string) => {
 		setForm((prev) => ({ ...prev, [key]: value }));
 	};
 
-	const handleDocumentSelect = async (key: RecruitmentDocKey, file: File | null) => {
+	const handleDocumentSelect = async (
+		key: RecruitmentDocKey,
+		file: File | null,
+	) => {
 		if (!file) return;
+		if (file.size > ONBOARDING_MAX_FILE_BYTES) {
+			toast.error("Each file must be under 10MB");
+			return;
+		}
+
+		const fileType = file.type || "application/octet-stream";
+		setUploadingDoc(key);
 		try {
-			const base64Data = await readFileAsBase64(file);
+			const session = await uploadSessionMutation.mutateAsync({
+				category: key,
+				fileName: file.name,
+				fileType,
+				fileSize: file.size,
+			});
+
+			const res = await fetch(session.signedUrl, {
+				method: "PUT",
+				body: file,
+				headers: { "Content-Type": fileType },
+			});
+			if (!res.ok) {
+				const detail = await res.text().catch(() => "");
+				throw new Error(
+					detail
+						? `Direct upload failed (${res.status}): ${detail.slice(0, 120)}`
+						: `Direct upload failed (${res.status})`,
+				);
+			}
+
 			setDocuments((prev) => ({
 				...prev,
 				[key]: {
 					fileName: file.name,
-					fileType: file.type || "application/octet-stream",
-					dataUrl: base64Data,
+					fileType,
+					storagePath: session.storagePath,
 					uploadedAt: new Date().toISOString(),
 				},
 			}));
-			toast.success(`${file.name} added`);
-		} catch {
-			toast.error("Failed to read file");
+			toast.success(`${file.name} uploaded`);
+		} catch (e) {
+			toast.error(uploadErrorMessage(e));
+		} finally {
+			setUploadingDoc(null);
 		}
 	};
 
@@ -111,16 +168,21 @@ export function CreateAgentAccountDialog({
 		password.length >= 8 &&
 		acceptedPolicy &&
 		acceptedNda &&
-		documents.icFront &&
-		documents.icBack &&
-		documents.registrationFeeReceipt;
+		documents.icFront?.storagePath &&
+		documents.icBack?.storagePath &&
+		documents.registrationFeeReceipt?.storagePath &&
+		!uploadingDoc;
 
 	const handleCreate = () => {
 		if (!acceptedPolicy || !acceptedNda) {
 			toast.error("Please accept company policy and NDA");
 			return;
 		}
-		if (!documents.icFront || !documents.icBack || !documents.registrationFeeReceipt) {
+		if (
+			!documents.icFront?.storagePath ||
+			!documents.icBack?.storagePath ||
+			!documents.registrationFeeReceipt?.storagePath
+		) {
 			toast.error("Please upload IC front, IC back, and registration fee receipt");
 			return;
 		}
@@ -149,9 +211,24 @@ export function CreateAgentAccountDialog({
 			bankAccountName: form.bankAccountName.trim() || undefined,
 			incomeTaxNo: form.incomeTaxNo.trim() || undefined,
 			documents: {
-				icFront: documents.icFront,
-				icBack: documents.icBack,
-				registrationFeeReceipt: documents.registrationFeeReceipt,
+				icFront: {
+					fileName: documents.icFront.fileName,
+					fileType: documents.icFront.fileType,
+					storagePath: documents.icFront.storagePath,
+					uploadedAt: documents.icFront.uploadedAt,
+				},
+				icBack: {
+					fileName: documents.icBack.fileName,
+					fileType: documents.icBack.fileType,
+					storagePath: documents.icBack.storagePath,
+					uploadedAt: documents.icBack.uploadedAt,
+				},
+				registrationFeeReceipt: {
+					fileName: documents.registrationFeeReceipt.fileName,
+					fileType: documents.registrationFeeReceipt.fileType,
+					storagePath: documents.registrationFeeReceipt.storagePath,
+					uploadedAt: documents.registrationFeeReceipt.uploadedAt,
+				},
 			},
 			acceptedCompanyPolicy: true,
 			acceptedNda: true,
@@ -173,7 +250,8 @@ export function CreateAgentAccountDialog({
 				<DialogHeader className="shrink-0 border-b bg-muted/20 px-8 py-5">
 					<DialogTitle className="text-xl">Create agent account</DialogTitle>
 					<DialogDescription>
-						Complete the same onboarding form used for eRecruitment.
+						Complete the same onboarding form used for eRecruitment. Each
+						document uploads directly (max 10MB each).
 					</DialogDescription>
 				</DialogHeader>
 
@@ -251,10 +329,19 @@ export function CreateAgentAccountDialog({
 						Cancel
 					</Button>
 					<Button
-						disabled={createAgentMutation.isPending || !canSubmit}
+						disabled={
+							createAgentMutation.isPending ||
+							uploadSessionMutation.isPending ||
+							!!uploadingDoc ||
+							!canSubmit
+						}
 						onClick={handleCreate}
 					>
-						{createAgentMutation.isPending ? "Creating..." : "Create"}
+						{uploadingDoc
+							? "Uploading document…"
+							: createAgentMutation.isPending
+								? "Creating..."
+								: "Create"}
 					</Button>
 				</DialogFooter>
 			</DialogContent>

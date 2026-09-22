@@ -31,7 +31,7 @@ import {
 	TIER_COLORS,
 } from "@/lib/agent-tier-config";
 import { TierBadge } from "./tier-badge";
-import { normalizeMalaysianPhone, readFileAsBase64 } from "@/features/erecruitment/utils";
+import { normalizeMalaysianPhone } from "@/features/erecruitment/utils";
 import type {
 	RecruitmentDocKey,
 	RecruitmentUploadedDoc,
@@ -158,6 +158,8 @@ export function AgentProfilePanel({
 		},
 		onError: (e) => toast.error(e.message || "Failed to update agent"),
 	});
+	const uploadSessionMutation =
+		trpc.agents.createOnboardingUploadSession.useMutation();
 
 	const setField = (key: keyof typeof form, value: string) => {
 		setForm((prev) => ({ ...prev, [key]: value }));
@@ -165,20 +167,39 @@ export function AgentProfilePanel({
 
 	const handleDocumentSelect = async (key: RecruitmentDocKey, file: File | null) => {
 		if (!file) return;
+		if (file.size > 10 * 1024 * 1024) {
+			toast.error("Each file must be under 10MB");
+			return;
+		}
+		const fileType = file.type || "application/octet-stream";
 		try {
-			const base64Data = await readFileAsBase64(file);
+			const session = await uploadSessionMutation.mutateAsync({
+				category: key,
+				fileName: file.name,
+				fileType,
+				fileSize: file.size,
+				agentId: agent.id,
+			});
+			const res = await fetch(session.signedUrl, {
+				method: "PUT",
+				body: file,
+				headers: { "Content-Type": fileType },
+			});
+			if (!res.ok) {
+				throw new Error(`Direct upload failed (${res.status})`);
+			}
 			setDocuments((prev) => ({
 				...prev,
 				[key]: {
 					fileName: file.name,
-					fileType: file.type || "application/octet-stream",
-					dataUrl: base64Data,
+					fileType,
+					storagePath: session.storagePath,
 					uploadedAt: new Date().toISOString(),
 				},
 			}));
 			toast.success(`${file.name} ready to save`);
-		} catch {
-			toast.error("Failed to read file");
+		} catch (e) {
+			toast.error(e instanceof Error ? e.message : "Failed to upload file");
 		}
 	};
 
@@ -190,10 +211,22 @@ export function AgentProfilePanel({
 		}
 
 		const changedDocs = (["icFront", "icBack", "registrationFeeReceipt"] as const)
-			.filter((key) => documents[key]?.dataUrl)
+			.filter((key) => {
+				const doc = documents[key];
+				const original = agent.onboardingDocuments?.[key];
+				if (!doc?.storagePath) return false;
+				return doc.storagePath !== original?.storagePath;
+			})
 			.reduce<OnboardingDocuments>((acc, key) => {
 				const doc = documents[key];
-				if (doc) acc[key] = doc;
+				if (doc?.storagePath) {
+					acc[key] = {
+						fileName: doc.fileName,
+						fileType: doc.fileType,
+						storagePath: doc.storagePath,
+						uploadedAt: doc.uploadedAt,
+					};
+				}
 				return acc;
 			}, {});
 

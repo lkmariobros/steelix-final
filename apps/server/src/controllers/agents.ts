@@ -24,8 +24,11 @@ import { getNextAgentCode } from "../services/sequential-codes";
 import { db } from "../utils/db";
 import { invalidateUserCache } from "../utils/context";
 import { hasSuperAdminAccess } from "../utils/user-roles";
-import { supabaseAdmin } from "../utils/supabase";
+import { supabaseAdmin, assertSupabaseConfigured } from "../utils/supabase";
 import { adminProcedure, protectedProcedure, router, superAdminProcedure } from "../utils/trpc";
+
+const ONBOARDING_DOCS_BUCKET = "transaction-documents";
+const ONBOARDING_MAX_FILE_BYTES = 10 * 1024 * 1024;
 
 const onboardingDocumentFileSchema = z.object({
 	fileName: z.string(),
@@ -35,6 +38,19 @@ const onboardingDocumentFileSchema = z.object({
 	dataUrl: z.string().optional(),
 	uploadedAt: z.string(),
 });
+
+/** Create/update should prefer storage refs — never require base64 in the tRPC body. */
+const onboardingDocumentRefSchema = z.object({
+	fileName: z.string().min(1).max(255),
+	fileType: z.string().min(1),
+	storagePath: z.string().min(1),
+	url: z.string().optional(),
+	uploadedAt: z.string(),
+});
+
+function sanitizeOnboardingFileName(name: string): string {
+	return name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 200);
+}
 
 async function persistOnboardingDocuments(
 	userId: string,
@@ -49,22 +65,62 @@ async function persistOnboardingDocuments(
 		const file = documents[category];
 		if (!file) continue;
 
-		if (file.storagePath || file.url) {
-			stored[category] = file;
+		const uploadedAt = file.uploadedAt || new Date().toISOString();
+
+		// Preferred path: already uploaded via signed URL
+		if (file.storagePath) {
+			if (supabaseAdmin) {
+				const { error: existsError } = await supabaseAdmin.storage
+					.from(ONBOARDING_DOCS_BUCKET)
+					.createSignedUrl(file.storagePath, 60);
+				if (existsError) {
+					throw new Error(
+						`Uploaded file missing for ${category}. Please re-upload.`,
+					);
+				}
+				const { data: urlData } = supabaseAdmin.storage
+					.from(ONBOARDING_DOCS_BUCKET)
+					.getPublicUrl(file.storagePath);
+				stored[category] = {
+					fileName: file.fileName,
+					fileType: file.fileType,
+					url: urlData.publicUrl,
+					storagePath: file.storagePath,
+					uploadedAt,
+				};
+			} else {
+				stored[category] = {
+					fileName: file.fileName,
+					fileType: file.fileType,
+					storagePath: file.storagePath,
+					url: file.url,
+					uploadedAt,
+				};
+			}
 			continue;
 		}
 
+		if (file.url && !file.dataUrl) {
+			stored[category] = { ...file, uploadedAt };
+			continue;
+		}
+
+		// Legacy fallback (local/dev only) — keep for old clients; avoid in production UI
 		if (!file.dataUrl) continue;
 
 		const base64 = file.dataUrl.replace(/^data:[^;]+;base64,/, "");
 		const fileBuffer = Buffer.from(base64, "base64");
-		const uniqueFileName = `${Date.now()}-${file.fileName.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
+		if (fileBuffer.byteLength > ONBOARDING_MAX_FILE_BYTES) {
+			throw new Error(
+				`File for ${category} exceeds ${ONBOARDING_MAX_FILE_BYTES / (1024 * 1024)}MB`,
+			);
+		}
+		const uniqueFileName = `${Date.now()}-${sanitizeOnboardingFileName(file.fileName)}`;
 		const storagePath = `agent-onboarding/${userId}/${category}/${uniqueFileName}`;
-		const uploadedAt = file.uploadedAt || new Date().toISOString();
 
 		if (supabaseAdmin) {
 			const { error } = await supabaseAdmin.storage
-				.from("transaction-documents")
+				.from(ONBOARDING_DOCS_BUCKET)
 				.upload(storagePath, fileBuffer, {
 					contentType: file.fileType,
 					upsert: false,
@@ -75,7 +131,7 @@ async function persistOnboardingDocuments(
 			}
 
 			const { data: urlData } = supabaseAdmin.storage
-				.from("transaction-documents")
+				.from(ONBOARDING_DOCS_BUCKET)
 				.getPublicUrl(storagePath);
 
 			stored[category] = {
@@ -111,7 +167,7 @@ async function enrichOnboardingDocuments(
 		if (file.dataUrl || file.url) return file;
 		if (file.storagePath && supabaseAdmin) {
 			const { data, error } = await supabaseAdmin.storage
-				.from("transaction-documents")
+				.from(ONBOARDING_DOCS_BUCKET)
 				.createSignedUrl(file.storagePath, 3600);
 			if (!error && data?.signedUrl) {
 				return { ...file, url: data.signedUrl };
@@ -240,9 +296,9 @@ const createAgentInput = z.object({
 	incomeTaxNo: z.string().optional(),
 	documents: z
 		.object({
-			icFront: onboardingDocumentFileSchema,
-			icBack: onboardingDocumentFileSchema,
-			registrationFeeReceipt: onboardingDocumentFileSchema,
+			icFront: onboardingDocumentRefSchema,
+			icBack: onboardingDocumentRefSchema,
+			registrationFeeReceipt: onboardingDocumentRefSchema,
 		})
 		.optional(),
 	acceptedCompanyPolicy: z.literal(true),
@@ -754,6 +810,56 @@ export const agentsRouter = router({
 		}),
 
 	// Create new agent/admin account (admin only; role elevation requires super admin)
+	createOnboardingUploadSession: adminProcedure
+		.input(
+			z.object({
+				category: z.enum(["icFront", "icBack", "registrationFeeReceipt"]),
+				fileName: z.string().min(1).max(255),
+				fileType: z.string().min(1),
+				fileSize: z.number().int().positive().max(ONBOARDING_MAX_FILE_BYTES),
+				/** When replacing docs on an existing agent, scope path under their id. */
+				agentId: z.string().optional(),
+			}),
+		)
+		.mutation(async ({ input }) => {
+			try {
+				assertSupabaseConfigured();
+			} catch (e) {
+				throw new TRPCError({
+					code: "INTERNAL_SERVER_ERROR",
+					message: e instanceof Error ? e.message : "Storage not configured",
+				});
+			}
+			if (!supabaseAdmin) {
+				throw new TRPCError({
+					code: "INTERNAL_SERVER_ERROR",
+					message: "Storage not configured",
+				});
+			}
+
+			const ownerSegment =
+				input.agentId?.trim() || `pending-${crypto.randomUUID()}`;
+			const storagePath = `agent-onboarding/${ownerSegment}/${input.category}/${Date.now()}-${sanitizeOnboardingFileName(input.fileName)}`;
+
+			const { data, error } = await supabaseAdmin.storage
+				.from(ONBOARDING_DOCS_BUCKET)
+				.createSignedUploadUrl(storagePath);
+
+			if (error || !data?.signedUrl) {
+				throw new TRPCError({
+					code: "INTERNAL_SERVER_ERROR",
+					message: error?.message ?? "Failed to create upload URL",
+				});
+			}
+
+			return {
+				signedUrl: data.signedUrl,
+				token: data.token,
+				storagePath,
+				maxFileBytes: ONBOARDING_MAX_FILE_BYTES,
+			};
+		}),
+
 	create: adminProcedure.input(createAgentInput).mutation(async ({ ctx, input }) => {
 		const requestedRole = input.role ?? "agent";
 		const actorIsSuperAdmin = hasSuperAdminAccess(
@@ -767,14 +873,35 @@ export const agentsRouter = router({
 			});
 		}
 
+		if (
+			!input.documents?.icFront?.storagePath ||
+			!input.documents?.icBack?.storagePath ||
+			!input.documents?.registrationFeeReceipt?.storagePath
+		) {
+			throw new TRPCError({
+				code: "BAD_REQUEST",
+				message:
+					"IC front, IC back, and registration fee receipt must be uploaded first",
+			});
+		}
+
 		const now = new Date();
 		const userId = crypto.randomUUID();
 		const passwordHash = await hashPassword(input.password);
 		const agentCode = await getNextAgentCode();
-		const onboardingDocuments = await persistOnboardingDocuments(
-			userId,
-			input.documents,
-		);
+
+		let onboardingDocuments: ERecruitmentDocuments | null;
+		try {
+			onboardingDocuments = await persistOnboardingDocuments(
+				userId,
+				input.documents,
+			);
+		} catch (e) {
+			throw new TRPCError({
+				code: "BAD_REQUEST",
+				message: e instanceof Error ? e.message : "Failed to save documents",
+			});
+		}
 
 		const [createdUser] = await db
 			.insert(user)
