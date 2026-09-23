@@ -1,10 +1,10 @@
 import { TRPCError } from "@trpc/server";
-import { and, desc, eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { transactionDocuments, transactions } from "../models/transactions";
 import { writeRecordLog } from "../services/record-log";
 import { db } from "../utils/db";
-import { supabaseAdmin } from "../utils/supabase";
+import { assertSupabaseConfigured, supabaseAdmin } from "../utils/supabase";
 import { getPrimaryRole, hasAdminAccess } from "../utils/user-roles";
 import { protectedProcedure, router } from "../utils/trpc";
 
@@ -25,17 +25,47 @@ const DOCUMENT_CATEGORIES = [
 	"spa",
 ] as const;
 
-const documentUploadSchema = z.object({
-	transactionId: z.string().uuid(),
-	fileName: z.string().min(1).max(255),
-	fileType: z.string(),
-	fileSize: z.number().max(50 * 1024 * 1024),
-	documentCategory: z.enum(DOCUMENT_CATEGORIES),
-	base64Data: z.string(),
-	uploadedFrom: z.string().max(64).optional(),
-});
+const DOCUMENTS_BUCKET = "transaction-documents";
+const MAX_FILE_BYTES = 50 * 1024 * 1024;
+/** Legacy base64 through /api/trpc — keep tiny; large files must use signed upload. */
+const BASE64_MAX_BYTES = 512 * 1024;
+
+const documentCategorySchema = z.enum(DOCUMENT_CATEGORIES);
+
+const documentUploadSchema = z
+	.object({
+		transactionId: z.string().uuid(),
+		fileName: z.string().min(1).max(255),
+		fileType: z.string(),
+		fileSize: z.number().int().positive().max(MAX_FILE_BYTES),
+		documentCategory: documentCategorySchema,
+		/** Preferred: already uploaded via signed URL */
+		storagePath: z.string().min(1).optional(),
+		/** Legacy small-file path — avoid on production for large PDFs */
+		base64Data: z.string().optional(),
+		uploadedFrom: z.string().max(64).optional(),
+	})
+	.refine((v) => Boolean(v.storagePath || v.base64Data), {
+		message: "storagePath or base64Data is required",
+	});
 
 const SIGNED_URL_TTL_SECONDS = 60 * 60;
+
+const ALLOWED_TYPES = [
+	"image/jpeg",
+	"image/png",
+	"image/webp",
+	"application/pdf",
+	"application/msword",
+	"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+	"text/plain",
+] as const;
+
+function assertAllowedFileType(fileType: string) {
+	if (!ALLOWED_TYPES.includes(fileType as (typeof ALLOWED_TYPES)[number])) {
+		throw new Error(`File type ${fileType} is not allowed`);
+	}
+}
 
 async function assertCanAccessTransactionDocuments(
 	transactionId: string,
@@ -78,7 +108,7 @@ async function resolveDocumentViewUrl(doc: {
 
 	if (storagePath && supabaseAdmin) {
 		const { data, error } = await supabaseAdmin.storage
-			.from("transaction-documents")
+			.from(DOCUMENTS_BUCKET)
 			.createSignedUrl(storagePath, SIGNED_URL_TTL_SECONDS);
 
 		if (!error && data?.signedUrl) {
@@ -134,7 +164,170 @@ function mapDocumentRow(doc: {
 	};
 }
 
+async function persistDocumentRecord(opts: {
+	transactionId: string;
+	userId: string;
+	fileName: string;
+	fileType: string;
+	fileSize: number;
+	storagePath: string;
+	documentCategory: (typeof DOCUMENT_CATEGORIES)[number];
+	uploadedFrom?: string;
+	actorRole?: string | null;
+}) {
+	if (!supabaseAdmin) {
+		throw new TRPCError({
+			code: "INTERNAL_SERVER_ERROR",
+			message:
+				"Document upload is unavailable. Supabase configuration is missing.",
+		});
+	}
+
+	const { error: existsError } = await supabaseAdmin.storage
+		.from(DOCUMENTS_BUCKET)
+		.createSignedUrl(opts.storagePath, 60);
+	if (existsError) {
+		throw new Error("Upload not found in storage. Please re-upload the file.");
+	}
+
+	const { data: urlData } = supabaseAdmin.storage
+		.from(DOCUMENTS_BUCKET)
+		.getPublicUrl(opts.storagePath);
+
+	const [documentRecord] = await db
+		.insert(transactionDocuments)
+		.values({
+			transactionId: opts.transactionId,
+			userId: opts.userId,
+			fileName: opts.fileName,
+			fileType: opts.fileType,
+			fileSize: opts.fileSize,
+			storagePath: opts.storagePath,
+			publicUrl: urlData.publicUrl,
+			documentCategory: opts.documentCategory,
+			metadata: {
+				originalName: opts.fileName,
+				uploadedFrom: opts.uploadedFrom ?? "transaction-form",
+			},
+		})
+		.returning();
+
+	await syncTransactionDocumentsJsonb(opts.transactionId);
+
+	const [txRow] = await db
+		.select({ caseNo: transactions.caseNo })
+		.from(transactions)
+		.where(eq(transactions.id, opts.transactionId))
+		.limit(1);
+
+	void writeRecordLog({
+		category: "transaction",
+		action: "upload_document",
+		summary: "Uploaded transaction document",
+		actorId: opts.userId,
+		actorRole: opts.actorRole,
+		entityType: "transaction",
+		entityId: opts.transactionId,
+		caseNo: txRow?.caseNo,
+		detail: opts.fileName,
+		metadata: {
+			documentCategory: opts.documentCategory,
+			fileType: opts.fileType,
+			fileSize: opts.fileSize,
+			documentId: documentRecord.id,
+		},
+	});
+
+	const viewUrl = await resolveDocumentViewUrl({
+		storagePath: opts.storagePath,
+		publicUrl: urlData.publicUrl,
+		fileType: opts.fileType,
+	});
+
+	return {
+		id: documentRecord.id,
+		fileName: opts.fileName,
+		fileType: opts.fileType,
+		fileSize: opts.fileSize,
+		url: viewUrl,
+		documentCategory: opts.documentCategory,
+		uploadedAt: documentRecord.uploadedAt.toISOString(),
+		storagePath: opts.storagePath,
+	};
+}
+
 export const documentsRouter = router({
+	/**
+	 * Create a signed upload URL so the browser can PUT the file directly to
+	 * storage (avoids Vercel /api/trpc body limits).
+	 */
+	createUploadSession: protectedProcedure
+		.input(
+			z.object({
+				transactionId: z.string().uuid().optional(),
+				fileName: z.string().min(1).max(255),
+				fileType: z.string().min(1),
+				fileSize: z.number().int().positive().max(MAX_FILE_BYTES),
+				documentCategory: documentCategorySchema,
+			}),
+		)
+		.mutation(async ({ ctx, input }) => {
+			const userId = ctx.session.user.id;
+			const sessionUser = ctx.session.user as typeof ctx.session.user & {
+				role?: string;
+				roles?: string[];
+			};
+
+			try {
+				assertSupabaseConfigured();
+			} catch (e) {
+				throw new TRPCError({
+					code: "INTERNAL_SERVER_ERROR",
+					message: e instanceof Error ? e.message : "Storage not configured",
+				});
+			}
+			if (!supabaseAdmin) {
+				throw new TRPCError({
+					code: "INTERNAL_SERVER_ERROR",
+					message: "Storage not configured",
+				});
+			}
+
+			assertAllowedFileType(input.fileType);
+
+			if (input.transactionId) {
+				await assertCanAccessTransactionDocuments(
+					input.transactionId,
+					userId,
+					sessionUser.role,
+					sessionUser.roles,
+				);
+			}
+
+			const txSegment = input.transactionId ?? `pending-${crypto.randomUUID()}`;
+			const ext = input.fileName.split(".").pop() || "bin";
+			const uniqueFileName = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+			const storagePath = `${userId}/${txSegment}/${input.documentCategory}/${uniqueFileName}`;
+
+			const { data, error } = await supabaseAdmin.storage
+				.from(DOCUMENTS_BUCKET)
+				.createSignedUploadUrl(storagePath);
+
+			if (error || !data?.signedUrl) {
+				throw new TRPCError({
+					code: "INTERNAL_SERVER_ERROR",
+					message: error?.message ?? "Failed to create upload URL",
+				});
+			}
+
+			return {
+				signedUrl: data.signedUrl,
+				token: data.token,
+				storagePath,
+				maxFileBytes: MAX_FILE_BYTES,
+			};
+		}),
+
 	upload: protectedProcedure
 		.input(documentUploadSchema)
 		.mutation(async ({ ctx, input }) => {
@@ -145,6 +338,7 @@ export const documentsRouter = router({
 				fileType,
 				fileSize,
 				documentCategory,
+				storagePath: inputStoragePath,
 				base64Data,
 				uploadedFrom,
 			} = input;
@@ -169,103 +363,54 @@ export const documentsRouter = router({
 			}
 
 			try {
-				const allowedTypes = [
-					"image/jpeg",
-					"image/png",
-					"image/webp",
-					"application/pdf",
-					"application/msword",
-					"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-					"text/plain",
-				];
+				assertAllowedFileType(fileType);
 
-				if (!allowedTypes.includes(fileType)) {
-					throw new Error(`File type ${fileType} is not allowed`);
+				let storagePath = inputStoragePath;
+
+				if (!storagePath) {
+					if (!base64Data) {
+						throw new Error("Missing file data");
+					}
+					if (fileSize > BASE64_MAX_BYTES) {
+						throw new Error(
+							`Files over ${BASE64_MAX_BYTES / 1024}KB must use direct upload`,
+						);
+					}
+					const fileExtension = fileName.split(".").pop();
+					const uniqueFileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
+					storagePath = `${userId}/${transactionId}/${documentCategory}/${uniqueFileName}`;
+					const fileBuffer = Buffer.from(
+						base64Data.replace(/^data:[^;]+;base64,/, ""),
+						"base64",
+					);
+
+					const { error: uploadError } = await supabaseAdmin.storage
+						.from(DOCUMENTS_BUCKET)
+						.upload(storagePath, fileBuffer, {
+							contentType: fileType,
+							cacheControl: "3600",
+							upsert: false,
+						});
+
+					if (uploadError) {
+						throw new Error(`Upload failed: ${uploadError.message}`);
+					}
 				}
 
-				const fileExtension = fileName.split(".").pop();
-				const uniqueFileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
-				const storagePath = `${userId}/${transactionId}/${documentCategory}/${uniqueFileName}`;
-				const fileBuffer = Buffer.from(base64Data, "base64");
-
-				const { error: uploadError } = await supabaseAdmin.storage
-					.from("transaction-documents")
-					.upload(storagePath, fileBuffer, {
-						contentType: fileType,
-						cacheControl: "3600",
-						upsert: false,
-					});
-
-				if (uploadError) {
-					throw new Error(`Upload failed: ${uploadError.message}`);
-				}
-
-				const { data: urlData } = supabaseAdmin.storage
-					.from("transaction-documents")
-					.getPublicUrl(storagePath);
-
-				const [documentRecord] = await db
-					.insert(transactionDocuments)
-					.values({
-						transactionId,
-						userId,
-						fileName,
-						fileType,
-						fileSize,
-						storagePath,
-						publicUrl: urlData.publicUrl,
-						documentCategory,
-						metadata: {
-							originalName: fileName,
-							uploadedFrom: uploadedFrom ?? "transaction-form",
-						},
-					})
-					.returning();
-
-				await syncTransactionDocumentsJsonb(transactionId);
-
-				const [txRow] = await db
-					.select({ caseNo: transactions.caseNo })
-					.from(transactions)
-					.where(eq(transactions.id, transactionId))
-					.limit(1);
-
-				void writeRecordLog({
-					category: "transaction",
-					action: "upload_document",
-					summary: "Uploaded transaction document",
-					actorId: userId,
+				return await persistDocumentRecord({
+					transactionId,
+					userId,
+					fileName,
+					fileType,
+					fileSize,
+					storagePath,
+					documentCategory,
+					uploadedFrom,
 					actorRole: getPrimaryRole({
 						role: sessionUser.role,
 						roles: sessionUser.roles,
 					}),
-					entityType: "transaction",
-					entityId: transactionId,
-					caseNo: txRow?.caseNo,
-					detail: fileName,
-					metadata: {
-						documentCategory,
-						fileType,
-						fileSize,
-						documentId: documentRecord.id,
-					},
 				});
-
-				const viewUrl = await resolveDocumentViewUrl({
-					storagePath,
-					publicUrl: urlData.publicUrl,
-					fileType,
-				});
-
-				return {
-					id: documentRecord.id,
-					fileName,
-					fileType,
-					fileSize,
-					url: viewUrl,
-					documentCategory,
-					uploadedAt: documentRecord.uploadedAt.toISOString(),
-				};
 			} catch (error) {
 				console.error("Document upload error:", error);
 				throw new TRPCError({
@@ -318,7 +463,6 @@ export const documentsRouter = router({
 			return withUrls;
 		}),
 
-	/** Resolve a viewable URL for a legacy JSONB snapshot entry (public Supabase URL). */
 	resolveLegacyUrl: protectedProcedure
 		.input(
 			z.object({
@@ -423,7 +567,7 @@ export const documentsRouter = router({
 
 			if (supabaseAdmin) {
 				const { error: deleteError } = await supabaseAdmin.storage
-					.from("transaction-documents")
+					.from(DOCUMENTS_BUCKET)
 					.remove([document.storagePath]);
 
 				if (deleteError) {

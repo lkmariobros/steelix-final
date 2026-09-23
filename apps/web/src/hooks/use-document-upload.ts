@@ -28,30 +28,63 @@ export interface DocumentFile {
 	uploadedAt: string;
 	category?: DocumentCategory;
 	isTemp?: boolean;
+	/** @deprecated Prefer storagePath for large files */
 	base64Data?: string;
+	storagePath?: string;
 	fileSize?: number;
 }
 
 const TEMP_DOCUMENTS_KEY = "transaction-temp-documents";
+const MAX_FILE_BYTES = 50 * 1024 * 1024;
 
-const fileToBase64 = (file: File): Promise<string> => {
-	return new Promise((resolve, reject) => {
-		const reader = new FileReader();
-		reader.readAsDataURL(file);
-		reader.onload = () => {
-			const result = reader.result as string;
-			const base64 = result.split(",")[1];
-			resolve(base64);
-		};
-		reader.onerror = (error) => reject(error);
-	});
-};
+function guessMime(name: string): string {
+	const ext = name.split(".").pop()?.toLowerCase();
+	switch (ext) {
+		case "pdf":
+			return "application/pdf";
+		case "jpg":
+		case "jpeg":
+			return "image/jpeg";
+		case "png":
+			return "image/png";
+		case "webp":
+			return "image/webp";
+		case "doc":
+			return "application/msword";
+		case "docx":
+			return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+		case "txt":
+			return "text/plain";
+		default:
+			return "";
+	}
+}
+
+function uploadErrorMessage(error: unknown): string {
+	const msg =
+		error instanceof Error
+			? error.message
+			: typeof error === "string"
+				? error
+				: "Upload failed";
+	if (
+		/Request Entity Too Large/i.test(msg) ||
+		/Unexpected token ['"]?R['"]?/i.test(msg) ||
+		(/not valid JSON/i.test(msg) && /Request En/i.test(msg))
+	) {
+		return "Upload rejected: file too large for the API proxy. Please retry (direct upload is used automatically).";
+	}
+	return msg;
+}
 
 const saveTempDocuments = (docs: DocumentFile[]) => {
 	try {
-		localStorage.setItem(TEMP_DOCUMENTS_KEY, JSON.stringify(docs));
+		// Never persist huge base64 blobs — only metadata + storagePath
+		const slim = docs.map(({ base64Data: _b, ...rest }) => rest);
+		localStorage.setItem(TEMP_DOCUMENTS_KEY, JSON.stringify(slim));
 	} catch (error) {
 		console.error("Failed to save temp documents:", error);
+		toast.error("Could not cache documents locally (storage full). Save draft first.");
 	}
 };
 
@@ -116,6 +149,7 @@ export function useDocumentUpload(transactionId?: string) {
 		);
 	}, [listQuery.data]);
 
+	const sessionMutation = trpc.documents.createUploadSession.useMutation();
 	const uploadMutation = trpc.documents.upload.useMutation();
 	const deleteMutation = trpc.documents.delete.useMutation();
 
@@ -130,36 +164,16 @@ export function useDocumentUpload(transactionId?: string) {
 		}
 
 		try {
-			const guessMime = (name: string): string => {
-				const ext = name.split(".").pop()?.toLowerCase();
-				switch (ext) {
-					case "pdf":
-						return "application/pdf";
-					case "jpg":
-					case "jpeg":
-						return "image/jpeg";
-					case "png":
-						return "image/png";
-					case "doc":
-						return "application/msword";
-					case "docx":
-						return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-					case "txt":
-						return "text/plain";
-					default:
-						return "";
-				}
-			};
-
 			const fileType = file.type || guessMime(file.name);
 
-			if (file.size > 50 * 1024 * 1024) {
+			if (file.size > MAX_FILE_BYTES) {
 				throw new Error("File size exceeds 50MB limit");
 			}
 
 			const allowedTypes = [
 				"image/jpeg",
 				"image/png",
+				"image/webp",
 				"application/pdf",
 				"application/msword",
 				"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -179,24 +193,50 @@ export function useDocumentUpload(transactionId?: string) {
 				[fileId]: { progress: 10, fileName: file.name },
 			}));
 
-			const base64Data = await fileToBase64(file);
+			// Direct-to-storage (works with or without draft id)
+			const session = await sessionMutation.mutateAsync({
+				transactionId: isTempMode ? undefined : transactionId,
+				fileName: file.name,
+				fileType,
+				fileSize: file.size,
+				documentCategory: category,
+			});
 
 			setUploadProgress((prev) => ({
 				...prev,
 				[fileId]: { progress: 40, fileName: file.name },
 			}));
 
-			// New transaction (no draft id yet) — keep files locally until create/migrate
+			const putRes = await fetch(session.signedUrl, {
+				method: "PUT",
+				body: file,
+				headers: { "Content-Type": fileType },
+			});
+			if (!putRes.ok) {
+				const detail = await putRes.text().catch(() => "");
+				throw new Error(
+					detail
+						? `Direct upload failed (${putRes.status}): ${detail.slice(0, 120)}`
+						: `Direct upload failed (${putRes.status})`,
+				);
+			}
+
+			setUploadProgress((prev) => ({
+				...prev,
+				[fileId]: { progress: 75, fileName: file.name },
+			}));
+
+			// No draft yet — keep storage ref until create/migrate
 			if (isTempMode) {
 				const tempDoc: DocumentFile = {
 					id: fileId,
 					name: file.name,
 					type: fileType,
-					url: `data:${fileType};base64,${base64Data}`,
+					url: "",
 					uploadedAt: new Date().toISOString(),
 					category,
 					isTemp: true,
-					base64Data,
+					storagePath: session.storagePath,
 					fileSize: file.size,
 				};
 
@@ -227,18 +267,13 @@ export function useDocumentUpload(transactionId?: string) {
 				throw new Error("Save the draft first, then upload documents.");
 			}
 
-			setUploadProgress((prev) => ({
-				...prev,
-				[fileId]: { progress: 70, fileName: file.name },
-			}));
-
 			const result = await uploadMutation.mutateAsync({
 				transactionId,
 				fileName: file.name,
 				fileType,
 				fileSize: file.size,
 				documentCategory: category,
-				base64Data,
+				storagePath: session.storagePath,
 			});
 
 			if (!result?.id) {
@@ -267,6 +302,8 @@ export function useDocumentUpload(transactionId?: string) {
 				url: result.url,
 				uploadedAt: result.uploadedAt,
 				category: result.documentCategory as DocumentCategory,
+				fileSize: result.fileSize,
+				storagePath: result.storagePath,
 			};
 
 			setDocuments((prev) => {
@@ -283,9 +320,7 @@ export function useDocumentUpload(transactionId?: string) {
 			});
 			setIsUploadingLocal(false);
 
-			const errorMessage =
-				error instanceof Error ? error.message : "Upload failed";
-			toast.error(errorMessage);
+			toast.error(uploadErrorMessage(error));
 			throw error;
 		}
 	};
@@ -328,7 +363,7 @@ export function useDocumentUpload(transactionId?: string) {
 			try {
 				for (const tempDoc of pending) {
 					try {
-						if (!tempDoc.base64Data) {
+						if (!tempDoc.storagePath && !tempDoc.base64Data) {
 							failedDocs.push(tempDoc.name);
 							continue;
 						}
@@ -337,9 +372,11 @@ export function useDocumentUpload(transactionId?: string) {
 							transactionId: newTransactionId,
 							fileName: tempDoc.name,
 							fileType: tempDoc.type || "application/octet-stream",
-							fileSize: tempDoc.fileSize || 0,
+							fileSize: tempDoc.fileSize || 1,
 							documentCategory: tempDoc.category || "miscellaneous",
-							base64Data: tempDoc.base64Data,
+							...(tempDoc.storagePath
+								? { storagePath: tempDoc.storagePath }
+								: { base64Data: tempDoc.base64Data }),
 						});
 
 						if (!result?.id) {
@@ -354,6 +391,7 @@ export function useDocumentUpload(transactionId?: string) {
 							url: result.url,
 							uploadedAt: result.uploadedAt,
 							category: result.documentCategory as DocumentCategory,
+							fileSize: result.fileSize,
 						});
 					} catch (error) {
 						console.error(`Failed to migrate document ${tempDoc.name}:`, error);
@@ -396,11 +434,14 @@ export function useDocumentUpload(transactionId?: string) {
 		deleteFile,
 		documents: allDocuments,
 		tempDocuments,
-		isUploading: uploadMutation.isPending || isUploadingLocal,
+		isUploading:
+			uploadMutation.isPending ||
+			sessionMutation.isPending ||
+			isUploadingLocal,
 		isDeleting: deleteMutation.isPending,
 		isMigrating,
 		uploadProgress,
-		uploadError: uploadMutation.error?.message,
+		uploadError: uploadMutation.error?.message ?? sessionMutation.error?.message,
 		deleteError: deleteMutation.error?.message,
 		isLoadingDocuments: listQuery.isLoading,
 		refetchDocuments: listQuery.refetch,

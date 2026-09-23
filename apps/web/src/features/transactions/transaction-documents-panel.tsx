@@ -84,18 +84,6 @@ function guessMime(fileName: string) {
 	return "";
 }
 
-const fileToBase64 = (file: File): Promise<string> =>
-	new Promise((resolve, reject) => {
-		const reader = new FileReader();
-		reader.onload = () => {
-			const result = String(reader.result ?? "");
-			const base64 = result.includes(",") ? result.split(",")[1]! : result;
-			resolve(base64);
-		};
-		reader.onerror = () => reject(reader.error ?? new Error("Read failed"));
-		reader.readAsDataURL(file);
-	});
-
 function DocumentViewerBody({
 	transactionId,
 	doc,
@@ -207,6 +195,7 @@ export function TransactionDocumentsPanel({
 		{ enabled: Boolean(transactionId) },
 	);
 
+	const uploadSession = trpc.documents.createUploadSession.useMutation();
 	const uploadDocument = trpc.documents.upload.useMutation();
 
 	const documents = useMemo((): DisplayDocument[] => {
@@ -255,21 +244,40 @@ export function TransactionDocumentsPanel({
 					toast.error(`Could not detect type for ${file.name}`);
 					continue;
 				}
-				const base64Data = await fileToBase64(file);
+				const session = await uploadSession.mutateAsync({
+					transactionId,
+					fileName: file.name,
+					fileType,
+					fileSize: file.size,
+					documentCategory: category,
+				});
+				const putRes = await fetch(session.signedUrl, {
+					method: "PUT",
+					body: file,
+					headers: { "Content-Type": fileType },
+				});
+				if (!putRes.ok) {
+					throw new Error(`Direct upload failed (${putRes.status})`);
+				}
 				await uploadDocument.mutateAsync({
 					transactionId,
 					fileName: file.name,
 					fileType,
 					fileSize: file.size,
 					documentCategory: category,
-					base64Data,
+					storagePath: session.storagePath,
 					uploadedFrom: "transaction_detail",
 				});
 			}
 			await utils.documents.list.invalidate({ transactionId });
 			toast.success("Document uploaded");
 		} catch (e) {
-			toast.error(e instanceof Error ? e.message : "Upload failed");
+			const msg = e instanceof Error ? e.message : "Upload failed";
+			toast.error(
+				/Request Entity|Unexpected token ['"]?R/i.test(msg)
+					? "Upload rejected: file too large for API proxy. Retry with direct upload."
+					: msg,
+			);
 		} finally {
 			setIsUploading(false);
 			if (fileInputRef.current) fileInputRef.current.value = "";

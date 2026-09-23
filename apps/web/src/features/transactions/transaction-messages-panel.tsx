@@ -35,17 +35,6 @@ type PendingAttachment = {
 	file: File;
 };
 
-const fileToBase64 = (file: File): Promise<string> =>
-	new Promise((resolve, reject) => {
-		const reader = new FileReader();
-		reader.readAsDataURL(file);
-		reader.onload = () => {
-			const result = reader.result as string;
-			resolve(result.split(",")[1] ?? "");
-		};
-		reader.onerror = (error) => reject(error);
-	});
-
 function guessMime(name: string): string {
 	const ext = name.split(".").pop()?.toLowerCase();
 	switch (ext) {
@@ -87,6 +76,7 @@ export function TransactionMessagesPanel({
 	const { data: messages = [], isLoading } =
 		trpc.transactions.listMessages.useQuery({ id: transactionId });
 
+	const uploadSession = trpc.documents.createUploadSession.useMutation();
 	const uploadDocument = trpc.documents.upload.useMutation();
 	const addMessage = trpc.transactions.addMessage.useMutation({
 		onSuccess: async () => {
@@ -155,14 +145,28 @@ export function TransactionMessagesPanel({
 					toast.error(`Could not detect type for ${file.name}`);
 					return;
 				}
-				const base64Data = await fileToBase64(file);
+				const session = await uploadSession.mutateAsync({
+					transactionId,
+					fileName: file.name,
+					fileType,
+					fileSize: file.size,
+					documentCategory: "other",
+				});
+				const putRes = await fetch(session.signedUrl, {
+					method: "PUT",
+					body: file,
+					headers: { "Content-Type": fileType },
+				});
+				if (!putRes.ok) {
+					throw new Error(`Direct upload failed (${putRes.status})`);
+				}
 				const uploaded = await uploadDocument.mutateAsync({
 					transactionId,
 					fileName: file.name,
 					fileType,
 					fileSize: file.size,
 					documentCategory: "other",
-					base64Data,
+					storagePath: session.storagePath,
 					uploadedFrom: "edit-request",
 				});
 				attachments.push({
@@ -190,7 +194,11 @@ export function TransactionMessagesPanel({
 		}
 	};
 
-	const isBusy = addMessage.isPending || isUploading || uploadDocument.isPending;
+	const isBusy =
+		addMessage.isPending ||
+		isUploading ||
+		uploadDocument.isPending ||
+		uploadSession.isPending;
 
 	return (
 		<div className="space-y-4">
