@@ -330,7 +330,7 @@ export default function AdminApprovalsPage() {
 							<TabsTrigger
 								key={tab.value}
 								value={tab.value}
-								className="rounded-full px-4 text-sm data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
+								className="cursor-pointer rounded-full px-4 text-sm text-muted-foreground transition-colors hover:bg-background/70 hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:hover:bg-background"
 							>
 								{tab.label}
 							</TabsTrigger>
