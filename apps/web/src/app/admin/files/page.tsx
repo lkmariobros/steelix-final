@@ -48,7 +48,7 @@ export default function AdminFilesPage() {
 					<h1 className="font-bold text-2xl tracking-tight">Company Drive</h1>
 					<p className="text-muted-foreground text-sm">
 						Shared company files plus per-agent folders. Upload, download, organise —
-						agents can view only.
+						agents can preview and download.
 					</p>
 				</div>
 

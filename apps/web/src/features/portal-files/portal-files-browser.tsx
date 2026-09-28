@@ -112,6 +112,7 @@ export function PortalFilesBrowser({ mode }: { mode: PortalFilesMode }) {
 	const [moveDestFolderId, setMoveDestFolderId] = useState<string | null>(null);
 	const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 	const [previewMeta, setPreviewMeta] = useState<{
+		fileId: string;
 		fileName: string;
 		fileType: string;
 	} | null>(null);
@@ -125,7 +126,7 @@ export function PortalFilesBrowser({ mode }: { mode: PortalFilesMode }) {
 
 	const { data: capabilities } = trpc.portalFiles.getCapabilities.useQuery();
 	const canUpload = capabilities?.canUpload ?? isAdminMode;
-	const canDownload = capabilities?.canDownload ?? isAdminMode;
+	const canDownload = capabilities?.canDownload ?? true;
 	const canManage = capabilities?.canManage ?? isAdminMode;
 	const canView = capabilities?.canView ?? true;
 
@@ -302,7 +303,7 @@ export function PortalFilesBrowser({ mode }: { mode: PortalFilesMode }) {
 			try {
 				const { url } = await getViewUrl(fileId);
 				setPreviewUrl(url);
-				setPreviewMeta({ fileName, fileType });
+				setPreviewMeta({ fileId, fileName, fileType });
 			} catch (e) {
 				toast.error(e instanceof Error ? e.message : "Preview failed");
 			}
@@ -452,7 +453,7 @@ export function PortalFilesBrowser({ mode }: { mode: PortalFilesMode }) {
 					</Select>
 				) : null}
 
-				{!isAdminMode ? (
+				{!isAdminMode && !canDownload ? (
 					<p className="text-muted-foreground text-xs sm:ml-auto">
 						View only — contact admin to download files
 					</p>
@@ -1276,7 +1277,7 @@ export function PortalFilesBrowser({ mode }: { mode: PortalFilesMode }) {
 				</DialogContent>
 			</Dialog>
 
-			{/* Preview */}
+			{/* Preview — near full-viewport so documents/images stay readable */}
 			<Dialog
 				open={!!previewUrl}
 				onOpenChange={(open) => {
@@ -1286,30 +1287,44 @@ export function PortalFilesBrowser({ mode }: { mode: PortalFilesMode }) {
 					}
 				}}
 			>
-				<DialogContent className="max-h-[90vh] max-w-4xl overflow-auto">
-					<DialogHeader>
-						<DialogTitle>{previewMeta?.fileName ?? "Preview"}</DialogTitle>
+				<DialogContent className="flex max-h-[95vh] w-[min(96vw,90rem)] max-w-[min(96vw,90rem)] flex-col gap-3 overflow-hidden p-4 sm:max-w-[min(96vw,90rem)] sm:p-5">
+					<DialogHeader className="flex-row items-center justify-between gap-3 space-y-0 pr-8">
+						<DialogTitle className="truncate text-left">
+							{previewMeta?.fileName ?? "Preview"}
+						</DialogTitle>
+						{canDownload && previewMeta?.fileId ? (
+							<Button
+								type="button"
+								variant="outline"
+								size="sm"
+								className="shrink-0 gap-1.5"
+								onClick={() => void handleDownload(previewMeta.fileId)}
+							>
+								<RiDownloadLine className="size-4" />
+								Download
+							</Button>
+						) : null}
 					</DialogHeader>
 					{previewUrl && previewMeta ? (
-						<div className="flex justify-center">
+						<div className="flex min-h-0 flex-1 items-center justify-center overflow-auto">
 							{previewMeta.fileType.startsWith("image/") ? (
 								// eslint-disable-next-line @next/next/no-img-element
 								<img
 									src={previewUrl}
 									alt={previewMeta.fileName}
-									className="max-h-[70vh] max-w-full object-contain"
+									className="max-h-[min(85vh,900px)] w-auto max-w-full object-contain"
 								/>
 							) : previewMeta.fileType.startsWith("video/") ? (
 								<video
 									src={previewUrl}
 									controls
-									className="max-h-[70vh] max-w-full"
+									className="max-h-[min(85vh,900px)] w-full max-w-full"
 								/>
 							) : (
 								<iframe
 									src={previewUrl}
 									title={previewMeta.fileName}
-									className="h-[70vh] w-full rounded border"
+									className="h-[min(85vh,900px)] w-full rounded border bg-background"
 								/>
 							)}
 						</div>

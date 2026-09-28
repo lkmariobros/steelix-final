@@ -69,7 +69,8 @@ export function getPortalFileCapabilities(user: SessionUser): PortalFileCapabili
 	const isAdmin = hasAdminAccess({ role: user.role, roles: user.roles ?? [] });
 	return {
 		canUpload: isAdmin,
-		canDownload: isAdmin,
+		// Agents may download company / shared files; upload & manage stay admin-only
+		canDownload: true,
 		canManage: isAdmin,
 		canView: true,
 	};
@@ -88,7 +89,7 @@ export function assertCanDownloadPortalFiles(user: SessionUser) {
 	if (!getPortalFileCapabilities(user).canDownload) {
 		throw new TRPCError({
 			code: "FORBIDDEN",
-			message: "Only admins can download files",
+			message: "You do not have permission to download files",
 		});
 	}
 }

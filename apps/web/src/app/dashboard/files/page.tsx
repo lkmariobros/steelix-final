@@ -56,8 +56,8 @@ export default function AgentFilesPage() {
 				<div>
 					<h1 className="font-bold text-2xl tracking-tight">Company Drive</h1>
 					<p className="text-muted-foreground text-sm">
-						Browse company documents and files shared to your folder. View only —
-						ask an admin if you need a download.
+						Browse company documents and files shared to your folder. Preview or
+						download from Actions.
 					</p>
 				</div>
 
@@ -66,7 +66,8 @@ export default function AgentFilesPage() {
 						<CardTitle>Drive</CardTitle>
 						<CardDescription>
 							Switch between <strong>Company</strong> (everyone) and{" "}
-							<strong>My files</strong> (shared with you). Preview in browser.
+							<strong>My files</strong> (shared with you). Preview or download
+							files.
 						</CardDescription>
 					</CardHeader>
 					<CardContent>
