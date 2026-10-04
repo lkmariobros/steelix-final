@@ -19,6 +19,7 @@ import {
 	assertPortalQuota,
 	buildPortalStoragePath,
 	createPortalSignedUrl,
+	ensurePortalFolderPath,
 	getPortalFileCapabilities,
 	getPortalFileForAccess,
 	getPortalFolderBreadcrumb,
@@ -270,6 +271,34 @@ export const portalFilesRouter = router({
 				parentFolderId: folder.parentFolderId,
 				createdAt: folder.createdAt.toISOString(),
 			};
+		}),
+
+	/** Find-or-create nested folders (used by folder upload). */
+	ensureFolderPath: protectedProcedure
+		.input(
+			z.object({
+				ownerUserId: z.string().optional(),
+				parentFolderId: z.string().uuid().nullable().optional(),
+				segments: z.array(z.string().min(1).max(120)).max(20),
+			}),
+		)
+		.mutation(async ({ ctx, input }) => {
+			const user = sessionUser(ctx);
+			assertCanUploadPortalFiles(user);
+			const ownerUserId = resolvePortalOwnerUserId(user, input.ownerUserId);
+			const parentFolderId = input.parentFolderId ?? null;
+
+			if (parentFolderId) {
+				await assertPortalFolderAccess(ownerUserId, parentFolderId);
+			}
+
+			const folderId = await ensurePortalFolderPath({
+				ownerUserId,
+				parentFolderId,
+				segments: input.segments,
+			});
+
+			return { folderId };
 		}),
 
 	upload: protectedProcedure

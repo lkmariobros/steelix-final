@@ -11,8 +11,9 @@ export const PORTAL_SHARED_OWNER_ALIAS = "__shared__";
 
 export const PORTAL_FILES_BUCKET =
 	process.env.PORTAL_FILES_BUCKET?.trim() || "portal-files";
-export const PORTAL_FILE_QUOTA_BYTES = 5 * 1024 * 1024 * 1024;
-export const PORTAL_MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024;
+export const PORTAL_FILE_QUOTA_BYTES = 50 * 1024 * 1024 * 1024;
+/** Per-file limit: 2GB (show-unit videos). */
+export const PORTAL_MAX_FILE_SIZE_BYTES = 2 * 1024 * 1024 * 1024;
 /** Legacy base64 path only — keep tiny; large payloads hit Vercel/proxy 413. */
 export const PORTAL_BASE64_MAX_BYTES = 512 * 1024;
 export const PORTAL_SIGNED_URL_TTL_SECONDS = 60 * 60;
@@ -22,6 +23,8 @@ export const ALLOWED_PORTAL_MIME_TYPES = [
 	"image/png",
 	"image/webp",
 	"image/gif",
+	"image/heic",
+	"image/heif",
 	"application/pdf",
 	"application/msword",
 	"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -157,11 +160,68 @@ export function assertAllowedPortalMimeType(fileType: string) {
 
 export function assertPortalFileSize(fileSize: number) {
 	if (fileSize > PORTAL_MAX_FILE_SIZE_BYTES) {
+		const gb = PORTAL_MAX_FILE_SIZE_BYTES / (1024 * 1024 * 1024);
 		throw new TRPCError({
 			code: "BAD_REQUEST",
-			message: `File exceeds maximum size of ${PORTAL_MAX_FILE_SIZE_BYTES / (1024 * 1024)}MB`,
+			message: `File exceeds maximum size of ${gb}GB`,
 		});
 	}
+}
+
+/**
+ * Find-or-create nested folders under parentFolderId.
+ * segments e.g. ["Actual Show Unit", "Pictures"] → returns leaf folder id.
+ */
+export async function ensurePortalFolderPath(opts: {
+	ownerUserId: string;
+	parentFolderId: string | null;
+	segments: string[];
+}): Promise<string | null> {
+	let currentParent = opts.parentFolderId;
+	const clean = opts.segments
+		.map((s) => s.trim())
+		.filter((s) => s.length > 0 && s !== "." && s !== "..");
+
+	for (const name of clean) {
+		const safeName = name.slice(0, 120);
+		const [existing] = await db
+			.select()
+			.from(portalFolders)
+			.where(
+				and(
+					eq(portalFolders.ownerUserId, opts.ownerUserId),
+					eq(portalFolders.name, safeName),
+					currentParent
+						? eq(portalFolders.parentFolderId, currentParent)
+						: isNull(portalFolders.parentFolderId),
+				),
+			)
+			.limit(1);
+
+		if (existing) {
+			currentParent = existing.id;
+			continue;
+		}
+
+		const [created] = await db
+			.insert(portalFolders)
+			.values({
+				ownerUserId: opts.ownerUserId,
+				parentFolderId: currentParent,
+				name: safeName,
+			})
+			.returning();
+
+		if (!created) {
+			throw new TRPCError({
+				code: "INTERNAL_SERVER_ERROR",
+				message: `Failed to create folder "${safeName}"`,
+			});
+		}
+		currentParent = created.id;
+	}
+
+	return currentParent;
 }
 
 export async function assertPortalFolderAccess(

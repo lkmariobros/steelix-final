@@ -73,10 +73,14 @@ import {
 	PORTAL_SHARED_OWNER_SELECT_VALUE,
 	fileIconClass,
 	formatFileSize,
+	formatPortalMaxSizeLabel,
 	getFileTypeIcon,
 	isPreviewableType,
 } from "./portal-files-utils";
-import { usePortalFileUpload } from "./use-portal-file-upload";
+import {
+	collectEntriesFromDataTransfer,
+	usePortalFileUpload,
+} from "./use-portal-file-upload";
 
 export { PORTAL_SHARED_OWNER_SELECT_VALUE };
 
@@ -123,6 +127,7 @@ export function PortalFilesBrowser({ mode }: { mode: PortalFilesMode }) {
 		| null
 	>(null);
 	const fileInputRef = useRef<HTMLInputElement>(null);
+	const folderInputRef = useRef<HTMLInputElement>(null);
 
 	const { data: capabilities } = trpc.portalFiles.getCapabilities.useQuery();
 	const canUpload = capabilities?.canUpload ?? isAdminMode;
@@ -292,6 +297,7 @@ export function PortalFilesBrowser({ mode }: { mode: PortalFilesMode }) {
 		ownerUserId: effectiveOwner,
 		folderId,
 		onComplete: () => {
+			void foldersQuery.refetch();
 			void filesQuery.refetch();
 			void usageQuery.refetch();
 		},
@@ -315,9 +321,12 @@ export function PortalFilesBrowser({ mode }: { mode: PortalFilesMode }) {
 		(e: React.DragEvent) => {
 			e.preventDefault();
 			if (!canUpload) return;
-			if (e.dataTransfer.files?.length) {
-				void uploadFiles(e.dataTransfer.files);
-			}
+			void (async () => {
+				const entries = await collectEntriesFromDataTransfer(e.dataTransfer);
+				if (entries.length > 0) {
+					await uploadFiles(entries);
+				}
+			})();
 		},
 		[canUpload, uploadFiles],
 	);
@@ -523,6 +532,16 @@ export function PortalFilesBrowser({ mode }: { mode: PortalFilesMode }) {
 							type="button"
 							size="sm"
 							variant="outline"
+							onClick={() => folderInputRef.current?.click()}
+							disabled={uploading || (space === "agent" && !agentId)}
+						>
+							<RiFolderTransferLine className="mr-1.5 size-4" />
+							Upload folder
+						</Button>
+						<Button
+							type="button"
+							size="sm"
+							variant="outline"
 							onClick={() => setNewFolderOpen(true)}
 							disabled={space === "agent" && !agentId}
 						>
@@ -635,19 +654,39 @@ export function PortalFilesBrowser({ mode }: { mode: PortalFilesMode }) {
 			</div>
 
 			{canUpload ? (
-				<input
-					ref={fileInputRef}
-					type="file"
-					multiple
-					className="hidden"
-					accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.jpg,.jpeg,.png,.webp,.gif,.mp4,.mov,.webm"
-					onChange={(e) => {
-						if (e.target.files?.length) {
-							void uploadFiles(e.target.files);
-							e.target.value = "";
-						}
-					}}
-				/>
+				<>
+					<input
+						ref={fileInputRef}
+						type="file"
+						multiple
+						className="hidden"
+						accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.jpg,.jpeg,.png,.webp,.gif,.heic,.heif,.mp4,.mov,.webm"
+						onChange={(e) => {
+							if (e.target.files?.length) {
+								void uploadFiles(e.target.files);
+								e.target.value = "";
+							}
+						}}
+					/>
+					<input
+						ref={(el) => {
+							folderInputRef.current = el;
+							if (el) {
+								el.setAttribute("webkitdirectory", "");
+								el.setAttribute("directory", "");
+							}
+						}}
+						type="file"
+						multiple
+						className="hidden"
+						onChange={(e) => {
+							if (e.target.files?.length) {
+								void uploadFiles(e.target.files);
+								e.target.value = "";
+							}
+						}}
+					/>
+				</>
 			) : null}
 
 			{canUpload ? (
@@ -656,8 +695,9 @@ export function PortalFilesBrowser({ mode }: { mode: PortalFilesMode }) {
 					onDragOver={(e) => e.preventDefault()}
 					onDrop={onDrop}
 				>
-					Drag and drop files here, or use Upload (PDF, Office, images, video up
-					to 100MB)
+					Drag and drop files or folders here, or use Upload / Upload folder
+					(PDF, Office, images including HEIC, video — up to{" "}
+					{formatPortalMaxSizeLabel()} per file)
 				</div>
 			) : null}
 

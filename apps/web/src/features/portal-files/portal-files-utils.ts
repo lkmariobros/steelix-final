@@ -28,6 +28,8 @@ export function isPreviewableType(fileType: string): boolean {
 }
 
 export const PORTAL_BASE64_MAX_BYTES = 512 * 1024;
+/** Must match server PORTAL_MAX_FILE_SIZE_BYTES (2GB). */
+export const PORTAL_MAX_FILE_BYTES = 2 * 1024 * 1024 * 1024;
 
 const EXT_MIME: Record<string, string> = {
 	pdf: "application/pdf",
@@ -43,10 +45,30 @@ const EXT_MIME: Record<string, string> = {
 	png: "image/png",
 	webp: "image/webp",
 	gif: "image/gif",
+	heic: "image/heic",
+	heif: "image/heif",
 	mp4: "video/mp4",
 	mov: "video/quicktime",
 	webm: "video/webm",
 };
+
+export type PortalUploadEntry = {
+	file: File;
+	/** Relative path within selected folder, e.g. "Pictures/IMG_1.HEIC" */
+	relativePath: string;
+};
+
+/** Parse webkitRelativePath / relativePath into folder segments (exclude filename). */
+export function folderSegmentsFromRelativePath(relativePath: string): string[] {
+	const normalised = relativePath.replace(/\\/g, "/").replace(/^\/+/, "");
+	const parts = normalised.split("/").filter(Boolean);
+	if (parts.length <= 1) return [];
+	return parts.slice(0, -1);
+}
+
+export function formatPortalMaxSizeLabel(): string {
+	return "2GB";
+}
 
 /** Prefer browser MIME; fall back to extension (Windows often sends empty type). */
 export function resolvePortalFileMimeType(file: File): string {
@@ -106,7 +128,13 @@ export function getFileIconKind(fileType: string, fileName?: string): FileIconKi
 	) {
 		return "ppt";
 	}
-	if (fileType.startsWith("image/")) return "image";
+	if (
+		fileType.startsWith("image/") ||
+		lower.endsWith(".heic") ||
+		lower.endsWith(".heif")
+	) {
+		return "image";
+	}
 	if (fileType.startsWith("video/")) return "video";
 	if (fileType.startsWith("text/")) return "text";
 	return "other";
