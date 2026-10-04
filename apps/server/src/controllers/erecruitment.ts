@@ -5,6 +5,7 @@ import { user } from "../models/auth";
 import { erecruitmentSubmitSchema } from "../models/erecruitment";
 import {
 	approveRecruitmentApplication,
+	backfillApprovedAgentProfiles,
 	createRecruitmentLink,
 	listRecruitmentApplications,
 	listRecruitmentLinks,
@@ -202,4 +203,16 @@ export const erecruitmentRouter = router({
 		.query(async ({ input }) => {
 			return listRecruitmentLinks(input);
 		}),
+
+	/** One-time / ops: copy missing eRecruitment details+docs onto approved agent profiles. */
+	backfillApprovedProfiles: adminProcedure.mutation(async () => {
+		try {
+			return await backfillApprovedAgentProfiles();
+		} catch (e) {
+			throw new TRPCError({
+				code: "INTERNAL_SERVER_ERROR",
+				message: e instanceof Error ? e.message : "Backfill failed",
+			});
+		}
+	}),
 });

@@ -20,6 +20,7 @@ import { reports } from "../models/reports";
 import { performanceMetrics } from "../models/reports";
 import type { ERecruitmentDocuments } from "../models/erecruitment";
 import { transactions } from "../models/transactions";
+import { syncAgentProfileFromRecruitmentUserId } from "../services/erecruitment";
 import { getNextAgentCode } from "../services/sequential-codes";
 import { db } from "../utils/db";
 import { invalidateUserCache } from "../utils/context";
@@ -559,6 +560,13 @@ export const agentsRouter = router({
 
 	// Get agent details (admin only)
 	getById: adminProcedure.input(agentIdInput).query(async ({ input }) => {
+		// Lazy backfill: approved eRecruitment agents may be missing copied profile/docs
+		try {
+			await syncAgentProfileFromRecruitmentUserId(input.id);
+		} catch {
+			// Non-blocking — profile still returns even if sync fails
+		}
+
 		const [agentData] = await db
 			.select({
 				agent: user,

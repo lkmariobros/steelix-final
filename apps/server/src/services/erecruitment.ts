@@ -51,6 +51,225 @@ async function enrichRecruitmentDocuments(
 	};
 }
 
+const ONBOARDING_DOC_CATEGORIES = [
+	"icFront",
+	"icBack",
+	"registrationFeeReceipt",
+] as const;
+
+/** Persist stable document refs onto the agent (prefer storagePath; drop short-lived signed URLs). */
+export function normalizeOnboardingDocuments(
+	docs: ERecruitmentDocuments | null | undefined,
+): ERecruitmentDocuments | null {
+	if (!docs) return null;
+
+	const stored: ERecruitmentDocuments = {};
+	for (const category of ONBOARDING_DOC_CATEGORIES) {
+		const file = docs[category];
+		if (!file?.fileName || !file.fileType) continue;
+		if (!file.storagePath && !file.dataUrl && !file.url) continue;
+
+		const uploadedAt = file.uploadedAt || new Date().toISOString();
+		if (file.storagePath) {
+			stored[category] = {
+				fileName: file.fileName,
+				fileType: file.fileType,
+				storagePath: file.storagePath,
+				uploadedAt,
+				...(file.url && !file.url.includes("token=") ? { url: file.url } : {}),
+			};
+			continue;
+		}
+		if (file.dataUrl) {
+			stored[category] = {
+				fileName: file.fileName,
+				fileType: file.fileType,
+				dataUrl: file.dataUrl,
+				uploadedAt,
+			};
+			continue;
+		}
+		stored[category] = {
+			fileName: file.fileName,
+			fileType: file.fileType,
+			url: file.url,
+			uploadedAt,
+		};
+	}
+
+	return Object.keys(stored).length > 0 ? stored : null;
+}
+
+type RecruitmentApplicationRow = typeof erecruitmentApplications.$inferSelect;
+
+function agentProfileFieldsFromApplication(application: RecruitmentApplicationRow) {
+	return {
+		name: application.fullName.trim(),
+		phone: application.contactNo?.trim() || null,
+		nickName: application.nickName?.trim() || null,
+		nric: application.nric?.trim() || null,
+		registrationFee: application.registrationFee?.trim() || null,
+		paymentMethod: application.paymentMethod?.trim() || null,
+		address: application.address?.trim() || null,
+		maritalStatus: application.maritalStatus?.trim() || null,
+		emergencyName: application.emergencyName?.trim() || null,
+		emergencyContactNo: application.emergencyContactNo?.trim() || null,
+		emergencyRelationship: application.emergencyRelationship?.trim() || null,
+		bankName: application.bankName?.trim() || null,
+		bankAccountNo: application.bankAccountNo?.trim() || null,
+		bankAccountName: application.bankAccountName?.trim() || null,
+		incomeTaxNo: application.incomeTaxNo?.trim() || null,
+		onboardingDocuments: normalizeOnboardingDocuments(application.documents),
+	};
+}
+
+function hasOnboardingDoc(
+	docs: ERecruitmentDocuments | null | undefined,
+	category: (typeof ONBOARDING_DOC_CATEGORIES)[number],
+) {
+	const file = docs?.[category];
+	return Boolean(file?.storagePath || file?.dataUrl || file?.url);
+}
+
+/** Fill missing agent profile fields/docs from a linked approved eRecruitment application. */
+export async function syncAgentProfileFromRecruitmentUserId(userId: string) {
+	const [application] = await db
+		.select()
+		.from(erecruitmentApplications)
+		.where(
+			and(
+				eq(erecruitmentApplications.createdUserId, userId),
+				eq(erecruitmentApplications.status, "approved"),
+			),
+		)
+		.orderBy(desc(erecruitmentApplications.reviewedAt))
+		.limit(1);
+
+	if (!application) return null;
+
+	const [agent] = await db
+		.select()
+		.from(user)
+		.where(eq(user.id, userId))
+		.limit(1);
+	if (!agent) return null;
+
+	const fromApp = agentProfileFieldsFromApplication(application);
+	const appDocs = fromApp.onboardingDocuments;
+	const existingDocs = (agent.onboardingDocuments ?? {}) as ERecruitmentDocuments;
+	const mergedDocs: ERecruitmentDocuments = {
+		icFront: hasOnboardingDoc(existingDocs, "icFront")
+			? existingDocs.icFront
+			: appDocs?.icFront,
+		icBack: hasOnboardingDoc(existingDocs, "icBack")
+			? existingDocs.icBack
+			: appDocs?.icBack,
+		registrationFeeReceipt: hasOnboardingDoc(existingDocs, "registrationFeeReceipt")
+			? existingDocs.registrationFeeReceipt
+			: appDocs?.registrationFeeReceipt,
+	};
+	const onboardingDocuments = Object.values(mergedDocs).some(Boolean)
+		? {
+				...(mergedDocs.icFront ? { icFront: mergedDocs.icFront } : {}),
+				...(mergedDocs.icBack ? { icBack: mergedDocs.icBack } : {}),
+				...(mergedDocs.registrationFeeReceipt
+					? { registrationFeeReceipt: mergedDocs.registrationFeeReceipt }
+					: {}),
+			}
+		: agent.onboardingDocuments;
+
+	const patch = {
+		name: agent.name?.trim() ? agent.name : fromApp.name,
+		phone: agent.phone?.trim() ? agent.phone : fromApp.phone,
+		nickName: agent.nickName?.trim() ? agent.nickName : fromApp.nickName,
+		nric: agent.nric?.trim() ? agent.nric : fromApp.nric,
+		registrationFee: agent.registrationFee?.trim()
+			? agent.registrationFee
+			: fromApp.registrationFee,
+		paymentMethod: agent.paymentMethod?.trim()
+			? agent.paymentMethod
+			: fromApp.paymentMethod,
+		address: agent.address?.trim() ? agent.address : fromApp.address,
+		maritalStatus: agent.maritalStatus?.trim()
+			? agent.maritalStatus
+			: fromApp.maritalStatus,
+		emergencyName: agent.emergencyName?.trim()
+			? agent.emergencyName
+			: fromApp.emergencyName,
+		emergencyContactNo: agent.emergencyContactNo?.trim()
+			? agent.emergencyContactNo
+			: fromApp.emergencyContactNo,
+		emergencyRelationship: agent.emergencyRelationship?.trim()
+			? agent.emergencyRelationship
+			: fromApp.emergencyRelationship,
+		bankName: agent.bankName?.trim() ? agent.bankName : fromApp.bankName,
+		bankAccountNo: agent.bankAccountNo?.trim()
+			? agent.bankAccountNo
+			: fromApp.bankAccountNo,
+		bankAccountName: agent.bankAccountName?.trim()
+			? agent.bankAccountName
+			: fromApp.bankAccountName,
+		incomeTaxNo: agent.incomeTaxNo?.trim()
+			? agent.incomeTaxNo
+			: fromApp.incomeTaxNo,
+		onboardingDocuments,
+		updatedAt: new Date(),
+	};
+
+	const unchanged =
+		patch.nickName === agent.nickName &&
+		patch.nric === agent.nric &&
+		patch.registrationFee === agent.registrationFee &&
+		patch.paymentMethod === agent.paymentMethod &&
+		patch.address === agent.address &&
+		patch.maritalStatus === agent.maritalStatus &&
+		patch.emergencyName === agent.emergencyName &&
+		patch.emergencyContactNo === agent.emergencyContactNo &&
+		patch.emergencyRelationship === agent.emergencyRelationship &&
+		patch.bankAccountName === agent.bankAccountName &&
+		patch.incomeTaxNo === agent.incomeTaxNo &&
+		JSON.stringify(patch.onboardingDocuments ?? null) ===
+			JSON.stringify(agent.onboardingDocuments ?? null) &&
+		patch.phone === agent.phone &&
+		patch.bankName === agent.bankName &&
+		patch.bankAccountNo === agent.bankAccountNo;
+
+	if (unchanged) return agent;
+
+	const [updated] = await db
+		.update(user)
+		.set(patch)
+		.where(eq(user.id, userId))
+		.returning();
+
+	return updated ?? null;
+}
+
+/** Backfill all approved eRecruitment agents that are missing copied profile/docs. */
+export async function backfillApprovedAgentProfiles() {
+	const rows = await db
+		.select({
+			id: erecruitmentApplications.id,
+			createdUserId: erecruitmentApplications.createdUserId,
+		})
+		.from(erecruitmentApplications)
+		.where(
+			and(
+				eq(erecruitmentApplications.status, "approved"),
+				sql`${erecruitmentApplications.createdUserId} IS NOT NULL`,
+			),
+		);
+
+	let synced = 0;
+	for (const row of rows) {
+		if (!row.createdUserId) continue;
+		const updated = await syncAgentProfileFromRecruitmentUserId(row.createdUserId);
+		if (updated) synced += 1;
+	}
+
+	return { total: rows.length, synced };
+}
+
 async function assertAgentCodeAvailable(
 	agentCode: string,
 	excludeUserId?: string,
@@ -304,15 +523,37 @@ export async function approveRecruitmentApplication(opts: {
 		opts.agentCode?.trim() || (await getNextAgentCode());
 	await assertAgentCodeAvailable(agentCode);
 
+	// Re-read raw row so document refs stay durable (not short-lived signed URLs)
+	const [rawApplication] = await db
+		.select()
+		.from(erecruitmentApplications)
+		.where(eq(erecruitmentApplications.id, application.id))
+		.limit(1);
+	if (!rawApplication) throw new Error("Application not found");
+
+	const profile = agentProfileFieldsFromApplication(rawApplication);
+
 	const [createdUser] = await db
 		.insert(user)
 		.values({
 			id: userId,
-			name: application.fullName,
+			name: profile.name,
 			email: application.email,
-			phone: application.contactNo,
-			bankName: application.bankName,
-			bankAccountNo: application.bankAccountNo,
+			phone: profile.phone,
+			nickName: profile.nickName,
+			nric: profile.nric,
+			registrationFee: profile.registrationFee,
+			paymentMethod: profile.paymentMethod,
+			address: profile.address,
+			maritalStatus: profile.maritalStatus,
+			emergencyName: profile.emergencyName,
+			emergencyContactNo: profile.emergencyContactNo,
+			emergencyRelationship: profile.emergencyRelationship,
+			bankName: profile.bankName,
+			bankAccountNo: profile.bankAccountNo,
+			bankAccountName: profile.bankAccountName,
+			incomeTaxNo: profile.incomeTaxNo,
+			onboardingDocuments: profile.onboardingDocuments,
 			emailVerified: false,
 			image: null,
 			isActive: true,
