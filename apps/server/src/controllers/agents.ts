@@ -53,6 +53,16 @@ function sanitizeOnboardingFileName(name: string): string {
 	return name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 200);
 }
 
+/** Older rows saved a public URL; the bucket is private, so recover the path and sign it instead. */
+function extractOnboardingStoragePath(url: string | undefined): string | null {
+	if (!url) return null;
+	const marker = `/${ONBOARDING_DOCS_BUCKET}/`;
+	const idx = url.indexOf(marker);
+	if (idx === -1) return null;
+	const path = url.slice(idx + marker.length).split("?")[0];
+	return path ? decodeURIComponent(path) : null;
+}
+
 async function persistOnboardingDocuments(
 	userId: string,
 	documents: ERecruitmentDocuments | undefined,
@@ -79,25 +89,13 @@ async function persistOnboardingDocuments(
 						`Uploaded file missing for ${category}. Please re-upload.`,
 					);
 				}
-				const { data: urlData } = supabaseAdmin.storage
-					.from(ONBOARDING_DOCS_BUCKET)
-					.getPublicUrl(file.storagePath);
-				stored[category] = {
-					fileName: file.fileName,
-					fileType: file.fileType,
-					url: urlData.publicUrl,
-					storagePath: file.storagePath,
-					uploadedAt,
-				};
-			} else {
-				stored[category] = {
-					fileName: file.fileName,
-					fileType: file.fileType,
-					storagePath: file.storagePath,
-					url: file.url,
-					uploadedAt,
-				};
 			}
+			stored[category] = {
+				fileName: file.fileName,
+				fileType: file.fileType,
+				storagePath: file.storagePath,
+				uploadedAt,
+			};
 			continue;
 		}
 
@@ -131,14 +129,9 @@ async function persistOnboardingDocuments(
 				throw new Error(`Upload failed for ${category}: ${error.message}`);
 			}
 
-			const { data: urlData } = supabaseAdmin.storage
-				.from(ONBOARDING_DOCS_BUCKET)
-				.getPublicUrl(storagePath);
-
 			stored[category] = {
 				fileName: file.fileName,
 				fileType: file.fileType,
-				url: urlData.publicUrl,
 				storagePath,
 				uploadedAt,
 			};
@@ -165,14 +158,22 @@ async function enrichOnboardingDocuments(
 		file: ERecruitmentDocuments[keyof ERecruitmentDocuments],
 	) => {
 		if (!file) return undefined;
-		if (file.dataUrl || file.url) return file;
-		if (file.storagePath && supabaseAdmin) {
+		if (file.dataUrl) return file;
+
+		const storagePath =
+			file.storagePath || extractOnboardingStoragePath(file.url);
+		if (storagePath && supabaseAdmin) {
 			const { data, error } = await supabaseAdmin.storage
 				.from(ONBOARDING_DOCS_BUCKET)
-				.createSignedUrl(file.storagePath, 3600);
+				.createSignedUrl(storagePath, 3600);
 			if (!error && data?.signedUrl) {
-				return { ...file, url: data.signedUrl };
+				return { ...file, storagePath, url: data.signedUrl };
 			}
+		}
+
+		// Public URLs on the private bucket always 404, so don't hand them to the UI
+		if (storagePath) {
+			return { ...file, storagePath, url: undefined };
 		}
 		return file.url ? file : undefined;
 	};

@@ -219,6 +219,38 @@ export default function TransactionsPage() {
 		};
 	};
 
+	const getClientDisplay = (transaction: {
+		marketType?: string | null;
+		transactionType?: string | null;
+		clientData?: {
+			name?: string | null;
+			type?: string | null;
+			vendors?: Array<{ name?: string | null }> | null;
+		} | null;
+	}) => {
+		// Subsale: root clientData is the purchaser; the owner is the first vendor
+		if (
+			transaction.marketType === "secondary" &&
+			transaction.transactionType === "sale"
+		) {
+			const owners = (transaction.clientData?.vendors ?? [])
+				.map((v) => v.name?.trim())
+				.filter((name): name is string => Boolean(name));
+			return {
+				title: owners[0]
+					? owners.length > 1
+						? `${owners[0]} +${owners.length - 1}`
+						: owners[0]
+					: "N/A",
+				subtitle: "Owner",
+			};
+		}
+		return {
+			title: transaction.clientData?.name || "N/A",
+			subtitle: transaction.clientData?.type ?? null,
+		};
+	};
+
 	// Format currency (MYR / RM)
 	const formatCurrency = (amount: string | number) => {
 		const num = typeof amount === "string" ? Number.parseFloat(amount) : amount;
@@ -683,12 +715,19 @@ export default function TransactionsPage() {
 														})()}
 													</TableCell>
 													<TableCell>
-														<div className="font-medium">
-															{transaction.clientData?.name || "N/A"}
-														</div>
-														<div className="text-muted-foreground text-sm">
-															{transaction.clientData?.type}
-														</div>
+														{(() => {
+															const client = getClientDisplay(transaction);
+															return (
+																<>
+																	<div className="font-medium">{client.title}</div>
+																	{client.subtitle ? (
+																		<div className="text-muted-foreground text-sm">
+																			{client.subtitle}
+																		</div>
+																	) : null}
+																</>
+															);
+														})()}
 													</TableCell>
 													<TableCell>
 														<div className="capitalize">

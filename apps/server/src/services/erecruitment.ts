@@ -17,18 +17,31 @@ function generateToken(): string {
 	return crypto.randomUUID().replace(/-/g, "");
 }
 
+const RECRUITMENT_DOCS_BUCKET = "transaction-documents";
+
+function extractRecruitmentStoragePath(url: string | undefined): string | null {
+	if (!url) return null;
+	const marker = `/${RECRUITMENT_DOCS_BUCKET}/`;
+	const idx = url.indexOf(marker);
+	if (idx === -1) return null;
+	const path = url.slice(idx + marker.length).split("?")[0];
+	return path ? decodeURIComponent(path) : null;
+}
+
 async function resolveDocumentUrl(
 	file: ERecruitmentDocumentFile | undefined,
 ): Promise<ERecruitmentDocumentFile | undefined> {
 	if (!file) return undefined;
 	if (file.dataUrl) return file;
 
-	if (file.storagePath && supabaseAdmin) {
+	const storagePath =
+		file.storagePath || extractRecruitmentStoragePath(file.url);
+	if (storagePath && supabaseAdmin) {
 		const { data, error } = await supabaseAdmin.storage
-			.from("transaction-documents")
-			.createSignedUrl(file.storagePath, 3600);
+			.from(RECRUITMENT_DOCS_BUCKET)
+			.createSignedUrl(storagePath, 3600);
 		if (!error && data?.signedUrl) {
-			return { ...file, url: data.signedUrl };
+			return { ...file, storagePath, url: data.signedUrl };
 		}
 	}
 
@@ -70,13 +83,14 @@ export function normalizeOnboardingDocuments(
 		if (!file.storagePath && !file.dataUrl && !file.url) continue;
 
 		const uploadedAt = file.uploadedAt || new Date().toISOString();
-		if (file.storagePath) {
+		const storagePath =
+			file.storagePath || extractRecruitmentStoragePath(file.url);
+		if (storagePath) {
 			stored[category] = {
 				fileName: file.fileName,
 				fileType: file.fileType,
-				storagePath: file.storagePath,
+				storagePath,
 				uploadedAt,
-				...(file.url && !file.url.includes("token=") ? { url: file.url } : {}),
 			};
 			continue;
 		}
@@ -357,7 +371,7 @@ export async function uploadRecruitmentDocument(opts: {
 
 	if (supabaseAdmin) {
 		const { error } = await supabaseAdmin.storage
-			.from("transaction-documents")
+			.from(RECRUITMENT_DOCS_BUCKET)
 			.upload(storagePath, fileBuffer, {
 				contentType: opts.fileType,
 				upsert: false,
@@ -367,14 +381,9 @@ export async function uploadRecruitmentDocument(opts: {
 			throw new Error(`Upload failed: ${error.message}`);
 		}
 
-		const { data: urlData } = supabaseAdmin.storage
-			.from("transaction-documents")
-			.getPublicUrl(storagePath);
-
 		return {
 			fileName: opts.fileName,
 			fileType: opts.fileType,
-			url: urlData.publicUrl,
 			storagePath,
 			uploadedAt,
 		};
