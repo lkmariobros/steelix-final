@@ -1,4 +1,4 @@
-import { sql } from "drizzle-orm";
+import { and, asc, eq, isNull, or, sql } from "drizzle-orm";
 import { user } from "../models/auth";
 import { transactions } from "../models/transactions";
 import { db } from "../utils/db";
@@ -62,4 +62,96 @@ export async function getNextCaseNumber(
 
 	const next = Math.max(CASE_NUMBER_START, Number(row?.maxNum ?? 0) + 1);
 	return `${prefix}${String(next).padStart(CASE_NUMBER_PAD, "0")}`;
+}
+
+const SYSTEM_CASE_NUMBER = /^[PSR][0-9]{6}$/;
+
+/**
+ * Whether a draft needs a (new) system case number: none yet, or a system number whose
+ * prefix no longer matches the deal type. Manually keyed numbers are never replaced.
+ */
+export function draftNeedsCaseNumber(
+	currentCaseNo: string | null | undefined,
+	prefix: CaseNumberPrefix,
+): boolean {
+	const current = currentCaseNo?.trim();
+	if (!current) return true;
+	return SYSTEM_CASE_NUMBER.test(current) && !current.startsWith(prefix);
+}
+
+function isCaseNumberConflict(err: unknown): boolean {
+	for (let e: unknown = err, depth = 0; e && depth < 4; depth++) {
+		if (typeof e !== "object") break;
+		const { code, constraint, message, detail } = e as {
+			code?: unknown;
+			constraint?: unknown;
+			message?: unknown;
+			detail?: unknown;
+		};
+		if (String(code) === "23505") {
+			const text = `${constraint ?? ""} ${message ?? ""} ${detail ?? ""}`;
+			return text.includes("case_no");
+		}
+		e = (e as { cause?: unknown }).cause;
+	}
+	return false;
+}
+
+/**
+ * Runs `write` with the next case number, retrying when a concurrent save
+ * takes the same number first (unique index on case_no).
+ */
+export async function withNextCaseNumber<T>(
+	prefix: CaseNumberPrefix,
+	write: (caseNo: string) => Promise<T>,
+	attempts = 5,
+): Promise<T> {
+	for (let i = 1; ; i++) {
+		const caseNo = await getNextCaseNumber(prefix);
+		try {
+			return await write(caseNo);
+		} catch (e) {
+			if (i >= attempts || !isCaseNumberConflict(e)) throw e;
+		}
+	}
+}
+
+/** Gives existing drafts without a case number their running number (oldest first). */
+export async function backfillDraftCaseNumbers(): Promise<number> {
+	const drafts = await db
+		.select({
+			id: transactions.id,
+			marketType: transactions.marketType,
+			transactionType: transactions.transactionType,
+		})
+		.from(transactions)
+		.where(
+			and(
+				eq(transactions.status, "draft"),
+				or(isNull(transactions.caseNo), eq(sql`trim(${transactions.caseNo})`, "")),
+			),
+		)
+		.orderBy(asc(transactions.createdAt));
+
+	let assigned = 0;
+	for (const draft of drafts) {
+		const prefix = resolveCaseNumberPrefix(
+			draft.marketType ?? "secondary",
+			draft.transactionType ?? "sale",
+		);
+		const rows = await withNextCaseNumber(prefix, (caseNo) =>
+			db
+				.update(transactions)
+				.set({ caseNo })
+				.where(
+					and(
+						eq(transactions.id, draft.id),
+						or(isNull(transactions.caseNo), eq(sql`trim(${transactions.caseNo})`, "")),
+					),
+				)
+				.returning({ id: transactions.id }),
+		);
+		assigned += rows.length;
+	}
+	return assigned;
 }

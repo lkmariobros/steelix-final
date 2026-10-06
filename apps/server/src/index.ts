@@ -15,6 +15,7 @@ import { ensureDocumentCategoryEnumValues } from "./utils/document-category-sche
 import { ensureTransactionStatusEnumValues } from "./utils/transaction-status-schema";
 import { ensureTransactionListIndexes } from "./utils/transaction-indexes";
 import { ensureLeadListIndexes } from "./utils/lead-indexes";
+import { backfillDraftCaseNumbers } from "./services/sequential-codes";
 import {
 	ensurePortalRecordLogTable,
 	purgeExpiredRecordLogs,
@@ -129,6 +130,17 @@ void ensureTransactionListIndexes()
 	.catch((e) =>
 		console.warn(
 			"⚠️ Transaction list index bootstrap failed:",
+			e instanceof Error ? e.message : e,
+		),
+	);
+
+void backfillDraftCaseNumbers()
+	.then((n) => {
+		if (n) console.log(`✅ Assigned case numbers to ${n} existing draft(s)`);
+	})
+	.catch((e) =>
+		console.warn(
+			"⚠️ Draft case number backfill failed:",
 			e instanceof Error ? e.message : e,
 		),
 	);

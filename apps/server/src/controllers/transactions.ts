@@ -21,8 +21,9 @@ import {
 } from "../services/agent-tier";
 import { lockCommissionOnSubmit } from "../services/commission-calculation";
 import {
-	getNextCaseNumber,
+	draftNeedsCaseNumber,
 	resolveCaseNumberPrefix,
+	withNextCaseNumber,
 } from "../services/sequential-codes";
 import {
 	addTransactionMessage,
@@ -58,6 +59,32 @@ function actorRoleFromSession(ctx: {
 		role: u.role ?? undefined,
 		roles: u.roles ?? undefined,
 	});
+}
+
+/** Admin status change; a case without a number gets the next running number. */
+function updateStatusWithCaseNo(
+	id: string,
+	existing: {
+		caseNo: string | null;
+		marketType: string | null;
+		transactionType: string | null;
+	},
+	patch: Record<string, unknown>,
+) {
+	const run = (caseNo?: string) =>
+		db
+			.update(transactions)
+			.set(caseNo ? { ...patch, caseNo } : patch)
+			.where(eq(transactions.id, id))
+			.returning();
+	if (existing.caseNo?.trim()) return run();
+	return withNextCaseNumber(
+		resolveCaseNumberPrefix(
+			existing.marketType ?? "secondary",
+			existing.transactionType ?? "sale",
+		),
+		run,
+	);
 }
 
 // Base transaction input schema (without validation)
@@ -444,10 +471,20 @@ export const transactionsRouter = router({
 					documents: [],
 				};
 
-				const [transaction] = await db
-					.insert(transactions)
-					.values(newTransaction)
-					.returning();
+				const insertDraft = (caseNo?: string) =>
+					db
+						.insert(transactions)
+						.values(caseNo ? { ...newTransaction, caseNo } : newTransaction)
+						.returning();
+				const [transaction] = newTransaction.caseNo?.trim()
+					? await insertDraft()
+					: await withNextCaseNumber(
+							resolveCaseNumberPrefix(
+								newTransaction.marketType,
+								newTransaction.transactionType,
+							),
+							insertDraft,
+						);
 
 				void writeRecordLog({
 					category: "transaction",
@@ -539,12 +576,26 @@ export const transactionsRouter = router({
 					updateData.commissionAmount.toString();
 			}
 
+			const current = existingTransaction[0];
+			const draftPrefix = resolveCaseNumberPrefix(
+				updateData.marketType ?? current.marketType ?? "secondary",
+				updateData.transactionType ?? current.transactionType ?? "sale",
+			);
+			const assignCaseNo =
+				normalizeTransactionStatus(current.status) === "draft" &&
+				!updateData.caseNo?.trim() &&
+				draftNeedsCaseNumber(current.caseNo, draftPrefix);
+
 			try {
-				const [updatedTransaction] = await db
-					.update(transactions)
-					.set(processedUpdateData)
-					.where(eq(transactions.id, id))
-					.returning();
+				const runUpdate = (caseNo?: string) =>
+					db
+						.update(transactions)
+						.set(caseNo ? { ...processedUpdateData, caseNo } : processedUpdateData)
+						.where(eq(transactions.id, id))
+						.returning();
+				const [updatedTransaction] = assignCaseNo
+					? await withNextCaseNumber(draftPrefix, runUpdate)
+					: await runUpdate();
 
 				const priorStatus = normalizeTransactionStatus(existing.status);
 				const isDraftSave = priorStatus === "draft";
@@ -968,27 +1019,30 @@ export const transactionsRouter = router({
 				// If commission tables aren't migrated yet, submission should still work.
 			}
 
-			let caseNo = existingTransaction.caseNo?.trim();
-			if (!caseNo) {
-				const prefix = resolveCaseNumberPrefix(
-					existingTransaction.marketType ?? "secondary",
-					existingTransaction.transactionType ?? "sale",
-				);
-				caseNo = await getNextCaseNumber(prefix);
-			}
-
-			const [updatedTransaction] = await db
-				.update(transactions)
-				.set({
-					status: "pending",
-					submittedAt: new Date(),
-					agentEditAllowed: false,
-					caseNo,
-					...schemePatch,
-					updatedAt: new Date(),
-				})
-				.where(eq(transactions.id, input.id))
-				.returning();
+			const prefix = resolveCaseNumberPrefix(
+				existingTransaction.marketType ?? "secondary",
+				existingTransaction.transactionType ?? "sale",
+			);
+			const runSubmit = (caseNo?: string) =>
+				db
+					.update(transactions)
+					.set({
+						status: "pending",
+						submittedAt: new Date(),
+						agentEditAllowed: false,
+						...(caseNo ? { caseNo } : {}),
+						...schemePatch,
+						updatedAt: new Date(),
+					})
+					.where(eq(transactions.id, input.id))
+					.returning();
+			const [updatedTransaction] = draftNeedsCaseNumber(
+				existingTransaction.caseNo,
+				prefix,
+			)
+				? await withNextCaseNumber(prefix, runSubmit)
+				: await runSubmit();
+			const caseNo = updatedTransaction?.caseNo ?? existingTransaction.caseNo;
 
 			void writeRecordLog({
 				category: "transaction",
@@ -998,7 +1052,7 @@ export const transactionsRouter = router({
 				actorRole: actorRoleFromSession(ctx),
 				entityType: "transaction",
 				entityId: input.id,
-				caseNo: updatedTransaction?.caseNo ?? caseNo,
+				caseNo,
 				detail: `Case ${caseNo}`,
 				metadata: { status: "pending" },
 			});
@@ -1042,14 +1096,6 @@ export const transactionsRouter = router({
 				patch.convertedAt = new Date();
 			}
 
-			if (!existing.caseNo?.trim() && mappedStatus !== "draft") {
-				const prefix = resolveCaseNumberPrefix(
-					existing.marketType ?? "secondary",
-					existing.transactionType ?? "sale",
-				);
-				patch.caseNo = await getNextCaseNumber(prefix);
-			}
-
 			if (input.allowAgentEdit !== undefined) {
 				patch.agentEditAllowed = input.allowAgentEdit;
 			} else if (mappedStatus === "pending") {
@@ -1058,11 +1104,11 @@ export const transactionsRouter = router({
 				patch.agentEditAllowed = true;
 			}
 
-			const [updatedTransaction] = await db
-				.update(transactions)
-				.set(patch)
-				.where(eq(transactions.id, input.id))
-				.returning();
+			const [updatedTransaction] = await updateStatusWithCaseNo(
+				input.id,
+				existing,
+				patch,
+			);
 
 			if (!updatedTransaction) {
 				throw new TRPCError({
@@ -1110,19 +1156,11 @@ export const transactionsRouter = router({
 				patch.convertedAt = new Date();
 			}
 
-			if (!existing.caseNo?.trim() && mappedStatus !== "draft") {
-				const prefix = resolveCaseNumberPrefix(
-					existing.marketType ?? "secondary",
-					existing.transactionType ?? "sale",
-				);
-				patch.caseNo = await getNextCaseNumber(prefix);
-			}
-
-			const [updatedTransaction] = await db
-				.update(transactions)
-				.set(patch)
-				.where(eq(transactions.id, input.id))
-				.returning();
+			const [updatedTransaction] = await updateStatusWithCaseNo(
+				input.id,
+				existing,
+				patch,
+			);
 
 			if (!updatedTransaction) {
 				throw new Error("Transaction not found");
@@ -1587,10 +1625,20 @@ export const transactionsRouter = router({
 				commissionType: input.commissionType ?? "percentage",
 			};
 
-			const [transaction] = await db
-				.insert(transactions)
-				.values(newTransaction)
-				.returning();
+			const insertDraft = (caseNo?: string) =>
+				db
+					.insert(transactions)
+					.values(caseNo ? { ...newTransaction, caseNo } : newTransaction)
+					.returning();
+			const [transaction] = newTransaction.caseNo?.trim()
+				? await insertDraft()
+				: await withNextCaseNumber(
+						resolveCaseNumberPrefix(
+							newTransaction.marketType,
+							newTransaction.transactionType,
+						),
+						insertDraft,
+					);
 
 			// Log commission calculation for audit
 			await logCommissionAudit(
