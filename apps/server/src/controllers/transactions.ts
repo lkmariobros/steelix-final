@@ -872,6 +872,8 @@ export const transactionsRouter = router({
 					status: transactions.status,
 					agentEditAllowed: transactions.agentEditAllowed,
 					pendingEditRequest: transactions.pendingEditRequest,
+					requestItem: transactions.requestItem,
+					requestSubmittedAt: transactions.requestSubmittedAt,
 					submittedAt: transactions.submittedAt,
 					reviewedAt: transactions.reviewedAt,
 					convertedAt: transactions.convertedAt,
