@@ -31,6 +31,8 @@ interface PartyPersonFieldsProps<T extends FieldValues> {
 	title?: string;
 	onRemove?: () => void;
 	required?: boolean;
+	/** Defaults to `required`; set false to make Phone & Address optional only. */
+	contactRequired?: boolean;
 }
 
 export function PartyPersonFields<T extends FieldValues>({
@@ -40,9 +42,11 @@ export function PartyPersonFields<T extends FieldValues>({
 	title,
 	onRemove,
 	required = true,
+	contactRequired = required,
 }: PartyPersonFieldsProps<T>) {
 	const path = (key: string) => `${namePrefix}.${key}` as FieldPath<T>;
 	const Label = required ? RequiredLabel : FormLabel;
+	const ContactLabel = contactRequired ? RequiredLabel : FormLabel;
 
 	return (
 		<div className="space-y-4">
@@ -117,7 +121,7 @@ export function PartyPersonFields<T extends FieldValues>({
 					name={path("phone")}
 					render={({ field }) => (
 						<FormItem>
-							<Label>Phone</Label>
+							<ContactLabel>Phone</ContactLabel>
 							<FormControl>
 								<Input {...field} value={field.value ?? ""} onBlur={onBlurSync} />
 							</FormControl>
@@ -130,7 +134,7 @@ export function PartyPersonFields<T extends FieldValues>({
 					name={path("address")}
 					render={({ field }) => (
 						<FormItem className="md:col-span-2">
-							<Label>Correspondence Address</Label>
+							<ContactLabel>Correspondence Address</ContactLabel>
 							<FormControl>
 								<Textarea
 									{...field}

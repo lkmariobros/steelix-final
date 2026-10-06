@@ -71,6 +71,21 @@ export function normalizeTransactionStatus(
 	return status;
 }
 
+/** Admin may permanently delete only cases that were never approved. */
+export const ADMIN_DELETABLE_STATUSES: readonly CanonicalTransactionStatus[] = [
+	"draft",
+	"pending",
+	"cancelled",
+];
+
+export function adminCanDeleteTransaction(
+	status: string | null | undefined,
+): boolean {
+	return ADMIN_DELETABLE_STATUSES.includes(
+		normalizeTransactionStatus(status) as CanonicalTransactionStatus,
+	);
+}
+
 export function agentCanEditTransaction(
 	status: string | null | undefined,
 	_agentEditAllowed?: boolean | null,

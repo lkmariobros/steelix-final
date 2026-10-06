@@ -978,6 +978,7 @@ export function StepDetails({
 														: `Vendor ${index + 1}`
 													: undefined
 											}
+											contactRequired={!isSecondaryDeal}
 											onBlurSync={syncToParent}
 											onRemove={() => {
 												removeVendor(index);

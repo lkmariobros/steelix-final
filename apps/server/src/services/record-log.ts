@@ -13,7 +13,8 @@ export type RecordLogAction =
 	| "save_draft"
 	| "update"
 	| "upload_document"
-	| "submit";
+	| "submit"
+	| "delete";
 
 export type WriteRecordLogInput = {
 	category: RecordLogCategory;

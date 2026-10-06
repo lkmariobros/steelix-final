@@ -23,6 +23,10 @@ import {
 	TableRow,
 } from "@/components/table";
 import { useTransactionModalActions } from "@/contexts/transaction-modal-context";
+import {
+	AdminDeleteCaseDialog,
+	adminCanDeleteCase,
+} from "@/features/admin-transactions/admin-delete-case-dialog";
 import type { AdminTransactionSegmentConfig } from "@/features/admin-transactions/segment-config";
 import { getSegmentPageUrl } from "@/features/admin-transactions/segment-config";
 import { stashTransactionPrefillOnce } from "@/features/sales-entry/prefill-stash";
@@ -42,6 +46,7 @@ import { trpc } from "@/utils/trpc";
 import {
 	RiAddLine,
 	RiDashboardLine,
+	RiDeleteBinLine,
 	RiFileList3Line,
 	RiSearchLine,
 	RiUserLine,
@@ -141,6 +146,7 @@ export function AdminTransactionSegmentPage({
 	const [search, setSearch] = useState("");
 	const debouncedSearch = useDebouncedValue(search, 300);
 	const [page, setPage] = useState(0);
+	const [deleteTarget, setDeleteTarget] = useState<AdminTxRow | null>(null);
 	const { openCreateModal } = useTransactionModalActions();
 
 	const queryInput = useMemo(
@@ -314,8 +320,9 @@ export function AdminTransactionSegmentPage({
 												<TableHead className={thClass}>
 													{paymentMethodColumnLabel(undefined, config.segment)}
 												</TableHead>
-												<TableHead className={cn(thClass, "pr-5")}>
-													Agent(s)
+												<TableHead className={thClass}>Agent(s)</TableHead>
+												<TableHead className={cn(thClass, "pr-5 text-right")}>
+													Actions
 												</TableHead>
 											</TableRow>
 										</TableHeader>
@@ -435,8 +442,25 @@ export function AdminTransactionSegmentPage({
 																)}
 															</span>
 														</TableCell>
-														<TableCell className={cn(tdClass, "pr-5")}>
+														<TableCell className={tdClass}>
 															<AgentsCell row={row} />
+														</TableCell>
+														<TableCell className={cn(tdClass, "pr-5 text-right")}>
+															{adminCanDeleteCase(row.status) ? (
+																<Button
+																	type="button"
+																	variant="ghost"
+																	size="sm"
+																	className="size-8 p-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
+																	title="Delete case"
+																	aria-label={`Delete case ${row.caseNo ?? ""}`}
+																	onClick={() => setDeleteTarget(row)}
+																>
+																	<RiDeleteBinLine className="size-4" />
+																</Button>
+															) : (
+																<span className="text-muted-foreground text-xs">—</span>
+															)}
 														</TableCell>
 													</TableRow>
 												);
@@ -492,6 +516,17 @@ export function AdminTransactionSegmentPage({
 					</CardContent>
 				</Card>
 			</div>
+
+			<AdminDeleteCaseDialog
+				open={!!deleteTarget}
+				onOpenChange={(open) => {
+					if (!open) setDeleteTarget(null);
+				}}
+				transaction={deleteTarget}
+				onDeleted={() => {
+					if (rows.length === 1 && page > 0) setPage((p) => p - 1);
+				}}
+			/>
 		</>
 	);
 }

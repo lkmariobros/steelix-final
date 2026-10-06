@@ -1,12 +1,18 @@
 import { TRPCError } from "@trpc/server";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
-import { user } from "../models/auth";
+import {
+	commissionAuditLog,
+	leadershipBonusPayments,
+	user,
+} from "../models/auth";
+import { commissionPayouts } from "../models/commission-payouts";
 import {
 	type NewTransaction,
 	type Transaction,
 	insertTransactionSchema,
 	selectTransactionSchema,
+	transactionDocuments,
 	transactions,
 } from "../models/transactions";
 import {
@@ -29,9 +35,12 @@ import {
 	transactionRequestItemSchema,
 } from "../utils/transaction-request-items";
 import { db } from "../utils/db";
+import { supabaseAdmin } from "../utils/supabase";
 import {
+	adminCanDeleteTransaction,
 	agentCanEditTransaction,
 	dbStatusesForCanonicalFilter,
+	formatTransactionStatusLabel,
 	normalizeTransactionStatus,
 } from "../utils/transaction-status";
 import {
@@ -1318,6 +1327,141 @@ export const transactionsRouter = router({
 			await db.delete(transactions).where(eq(transactions.id, input.id));
 
 			return { success: true };
+		}),
+
+	/**
+	 * Admin / super admin: permanently delete a case that was never approved
+	 * (Draft, Pending, Cancelled). Not recoverable; case number may be reused.
+	 */
+	adminDelete: adminProcedure
+		.input(
+			z.object({
+				id: z.string().uuid(),
+				confirmCaseNo: z.string().optional(),
+			}),
+		)
+		.mutation(async ({ ctx, input }) => {
+			const [existing] = await db
+				.select({
+					id: transactions.id,
+					caseNo: transactions.caseNo,
+					status: transactions.status,
+					marketType: transactions.marketType,
+					transactionType: transactions.transactionType,
+					agentId: transactions.agentId,
+					projectName: transactions.projectName,
+					unitNo: transactions.unitNo,
+				})
+				.from(transactions)
+				.where(eq(transactions.id, input.id))
+				.limit(1);
+
+			if (!existing) {
+				throw new TRPCError({
+					code: "NOT_FOUND",
+					message: "Case not found",
+				});
+			}
+
+			if (
+				existing.caseNo &&
+				input.confirmCaseNo !== undefined &&
+				input.confirmCaseNo.trim().toUpperCase() !== existing.caseNo.toUpperCase()
+			) {
+				throw new TRPCError({
+					code: "BAD_REQUEST",
+					message: "Case number does not match",
+				});
+			}
+
+			if (!adminCanDeleteTransaction(existing.status)) {
+				throw new TRPCError({
+					code: "BAD_REQUEST",
+					message: `${formatTransactionStatusLabel(existing.status)} cases cannot be deleted. Only Draft, Pending or Cancel cases can be deleted.`,
+				});
+			}
+
+			const [paidPayout] = await db
+				.select({ id: commissionPayouts.id })
+				.from(commissionPayouts)
+				.where(
+					and(
+						eq(commissionPayouts.transactionId, input.id),
+						inArray(commissionPayouts.status, ["released", "paid"]),
+					),
+				)
+				.limit(1);
+			const [paidBonus] = await db
+				.select({ id: leadershipBonusPayments.id })
+				.from(leadershipBonusPayments)
+				.where(
+					and(
+						eq(leadershipBonusPayments.transactionId, input.id),
+						eq(leadershipBonusPayments.status, "paid"),
+					),
+				)
+				.limit(1);
+			if (paidPayout || paidBonus) {
+				throw new TRPCError({
+					code: "BAD_REQUEST",
+					message: "This case has commission already released or paid and cannot be deleted.",
+				});
+			}
+
+			const docs = await db
+				.select({ storagePath: transactionDocuments.storagePath })
+				.from(transactionDocuments)
+				.where(eq(transactionDocuments.transactionId, input.id));
+			const storagePaths = docs
+				.map((d) => d.storagePath)
+				.filter((p): p is string => Boolean(p));
+
+			// Documents, messages, payouts and approvals cascade via FK; these two have no FK.
+			await db.transaction(async (tx) => {
+				await tx
+					.delete(leadershipBonusPayments)
+					.where(eq(leadershipBonusPayments.transactionId, input.id));
+				await tx
+					.delete(commissionAuditLog)
+					.where(eq(commissionAuditLog.transactionId, input.id));
+				await tx.delete(transactions).where(eq(transactions.id, input.id));
+			});
+
+			if (storagePaths.length > 0 && supabaseAdmin) {
+				const { error } = await supabaseAdmin.storage
+					.from("transaction-documents")
+					.remove(storagePaths);
+				if (error) {
+					console.warn(
+						"[adminDelete] storage cleanup failed:",
+						existing.caseNo ?? existing.id,
+						error.message,
+					);
+				}
+			}
+
+			void writeRecordLog({
+				category: "transaction",
+				action: "delete",
+				summary: "Permanently deleted transaction case",
+				actorId: ctx.session.user.id,
+				actorRole: actorRoleFromSession(ctx),
+				entityType: "transaction",
+				entityId: existing.id,
+				caseNo: existing.caseNo,
+				detail: existing.caseNo ? `Case ${existing.caseNo}` : undefined,
+				metadata: {
+					status: existing.status,
+					marketType: existing.marketType,
+					transactionType: existing.transactionType,
+					agentId: existing.agentId,
+					projectName: existing.projectName,
+					unitNo: existing.unitNo,
+					documentsRemoved: storagePaths.length,
+				},
+			});
+
+			return { success: true, caseNo: existing.caseNo };
 		}),
 
 	// Calculate enhanced commission with agent tier

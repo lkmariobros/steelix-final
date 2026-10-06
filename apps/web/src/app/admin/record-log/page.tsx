@@ -52,6 +52,8 @@ function actionBadgeClass(action: string) {
 			return "bg-violet-100 text-violet-800 dark:bg-violet-900/35 dark:text-violet-300";
 		case "submit":
 			return "bg-amber-100 text-amber-800 dark:bg-amber-900/35 dark:text-amber-300";
+		case "delete":
+			return "bg-rose-100 text-rose-800 dark:bg-rose-900/35 dark:text-rose-300";
 		default:
 			return "bg-muted text-muted-foreground";
 	}
@@ -69,6 +71,8 @@ function formatActionLabel(action: string) {
 			return "Upload document";
 		case "submit":
 			return "Submit";
+		case "delete":
+			return "Delete";
 		case "tier_config_create":
 			return "Tier create";
 		case "tier_config_update":

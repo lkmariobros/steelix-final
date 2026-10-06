@@ -95,13 +95,19 @@ export const emptyPartyPerson = (): PartyPerson => ({
 	emergencyContact: "",
 });
 
+/** Vendor (subsale) / Tenant (rental): phone & address optional; primary still requires them via detailsStepSchema. */
+export const vendorPersonSchema = partyPersonSchema.extend({
+	phone: z.string().optional().or(z.literal("")),
+	address: z.string().optional().or(z.literal("")),
+});
+
 // Step 3: Purchaser Schema (primary purchaser + optional extras / vendors)
 export const clientSchema = partyPersonSchema.extend({
 	type: z.enum(["buyer", "seller", "tenant", "landlord"]).optional(),
 	source: z.string().optional(),
 	notes: z.string().optional(),
 	additionalPurchasers: z.array(partyPersonSchema).optional(),
-	vendors: z.array(partyPersonSchema).optional(),
+	vendors: z.array(vendorPersonSchema).optional(),
 });
 
 // Step 4: Representation & Co-Broking Schema
@@ -334,6 +340,22 @@ export const detailsStepSchema = z
 					path: ["propertyData", "price"],
 				});
 			}
+			(data.clientData?.vendors ?? []).forEach((p, i) => {
+				if (!p.phone?.trim()) {
+					ctx.addIssue({
+						code: z.ZodIssueCode.custom,
+						message: "Phone number is required",
+						path: ["clientData", "vendors", i, "phone"],
+					});
+				}
+				if (!p.address?.trim()) {
+					ctx.addIssue({
+						code: z.ZodIssueCode.custom,
+						message: "Correspondence address is required",
+						path: ["clientData", "vendors", i, "address"],
+					});
+				}
+			});
 		} else {
 			if (!data.propertyData?.address?.trim()) {
 				ctx.addIssue({

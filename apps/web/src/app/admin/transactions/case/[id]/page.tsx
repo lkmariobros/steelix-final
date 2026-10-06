@@ -17,6 +17,10 @@ import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useTransactionModalActions } from "@/contexts/transaction-modal-context";
+import {
+	AdminDeleteCaseDialog,
+	adminCanDeleteCase,
+} from "@/features/admin-transactions/admin-delete-case-dialog";
 import { TransactionDetailView } from "@/features/transactions/transaction-detail-view";
 import { AdminTransactionStatusPanel } from "@/features/transactions/admin-transaction-status-panel";
 import { TransactionMessagesPanel } from "@/features/transactions/transaction-messages-panel";
@@ -28,17 +32,29 @@ import { trpc } from "@/utils/trpc";
 import {
 	RiArrowLeftLine,
 	RiDashboardLine,
+	RiDeleteBinLine,
 	RiEditLine,
 	RiFileTextLine,
 } from "@remixicon/react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
+import { useState } from "react";
+
+function segmentListUrl(tx: {
+	marketType?: string | null;
+	transactionType?: string | null;
+}): string {
+	if (tx.marketType === "primary") return "/admin/transactions/new-project/sold-units";
+	if (tx.transactionType === "sale") return "/admin/transactions/subsale/units";
+	return "/admin/transactions/rental/units";
+}
 
 export default function AdminTransactionDetailPage() {
 	const params = useParams<{ id: string }>();
 	const router = useRouter();
 	const transactionId = params.id;
 	const { openEditModal } = useTransactionModalActions();
+	const [deleteOpen, setDeleteOpen] = useState(false);
 
 	const { data: tx, isLoading, error } =
 		trpc.transactions.adminGetById.useQuery(
@@ -105,12 +121,36 @@ export default function AdminTransactionDetailPage() {
 						</Button>
 					</div>
 					{tx ? (
-						<Button size="sm" onClick={() => openEditModal(tx.id)}>
-							<RiEditLine className="mr-1 size-4" />
-							Edit case
-						</Button>
+						<div className="flex flex-wrap items-center gap-2">
+							{adminCanDeleteCase(tx.status) ? (
+								<Button
+									size="sm"
+									variant="outline"
+									className="border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+									onClick={() => setDeleteOpen(true)}
+								>
+									<RiDeleteBinLine className="mr-1 size-4" />
+									Delete case
+								</Button>
+							) : null}
+							<Button size="sm" onClick={() => openEditModal(tx.id)}>
+								<RiEditLine className="mr-1 size-4" />
+								Edit case
+							</Button>
+						</div>
 					) : null}
 				</div>
+
+				<AdminDeleteCaseDialog
+					open={deleteOpen}
+					onOpenChange={setDeleteOpen}
+					transaction={
+						tx ? { id: tx.id, caseNo: tx.caseNo, status: tx.status } : null
+					}
+					onDeleted={() => {
+						if (tx) router.replace(segmentListUrl(tx));
+					}}
+				/>
 
 				{tx && !isLoading && !error ? (
 					<AdminTransactionStatusPanel

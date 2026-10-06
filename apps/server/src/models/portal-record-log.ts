@@ -20,7 +20,7 @@ export const portalRecordLog = pgTable(
 		category: text("category").notNull(),
 		/**
 		 * configuration: tier_config_create | tier_config_update
-		 * transaction: create | save_draft | update | upload_document | submit
+		 * transaction: create | save_draft | update | upload_document | submit | delete
 		 */
 		action: text("action").notNull(),
 		summary: text("summary").notNull(),
