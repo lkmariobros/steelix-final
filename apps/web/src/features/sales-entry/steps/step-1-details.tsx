@@ -462,6 +462,7 @@ export function StepDetails({
 			errors.unitNo?.message ??
 			errors.bookingDate?.message ??
 			errors.propertyData?.price?.message ??
+			errors.propertyData?.purchasingMethod?.message ??
 			errors.clientData?.name?.message ??
 			errors.clientData?.icNo?.message ??
 			errors.clientData?.phone?.message ??
@@ -522,6 +523,12 @@ export function StepDetails({
 																	form.getValues("propertyData.sstPercent") ??
 																		8,
 																);
+																if (form.getValues("transactionType") === "lease") {
+																	form.setValue(
+																		"propertyData.purchasingMethod",
+																		undefined,
+																	);
+																}
 															}
 															syncToParent();
 														}}

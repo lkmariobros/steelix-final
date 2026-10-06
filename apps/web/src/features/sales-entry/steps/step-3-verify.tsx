@@ -81,23 +81,23 @@ export function StepVerify({
 		representationTypeOptions.find((o) => o.value === data.representationType)
 			?.label ?? "Direct";
 
-	const getPurchasingLabel = () => {
-		if (
-			data.marketType === "secondary" ||
-			isRentalTransactionType(data.transactionType)
-		) {
-			const sst = data.propertyData?.sstPayBy;
-			if (sst === "client") return "Client";
-			return (
-				sstPayByOptions.find((o) => o.value === sst)?.label ?? "—"
-			);
-		}
-		return (
-			purchasingMethodOptions.find(
-				(o) => o.value === data.propertyData?.purchasingMethod,
-			)?.label ?? "—"
-		);
+	const isSecondaryDeal =
+		data.marketType === "secondary" ||
+		isRentalTransactionType(data.transactionType);
+	const isSubsaleDeal =
+		data.marketType === "secondary" &&
+		!isRentalTransactionType(data.transactionType);
+
+	const getSstPayByLabel = () => {
+		const sst = data.propertyData?.sstPayBy;
+		if (sst === "client") return "Client";
+		return sstPayByOptions.find((o) => o.value === sst)?.label ?? "—";
 	};
+
+	const getPurchasingMethodLabel = () =>
+		purchasingMethodOptions.find(
+			(o) => o.value === data.propertyData?.purchasingMethod,
+		)?.label ?? "—";
 
 	const validate = (): ValidationError[] => {
 		const errors: ValidationError[] = [];
@@ -377,15 +377,18 @@ export function StepVerify({
 										: "—"}
 								</dd>
 							</div>
-							<div>
-								<dt className="text-muted-foreground">
-									{data.marketType === "secondary" ||
-									isRentalTransactionType(data.transactionType)
-										? "SST Pay By"
-										: "Purchasing Method"}
-								</dt>
-								<dd>{getPurchasingLabel()}</dd>
-							</div>
+							{!isSecondaryDeal || isSubsaleDeal ? (
+								<div>
+									<dt className="text-muted-foreground">Purchasing Method</dt>
+									<dd>{getPurchasingMethodLabel()}</dd>
+								</div>
+							) : null}
+							{isSecondaryDeal ? (
+								<div>
+									<dt className="text-muted-foreground">SST Pay By</dt>
+									<dd>{getSstPayByLabel()}</dd>
+								</div>
+							) : null}
 							<div>
 								<dt className="text-muted-foreground">Representation</dt>
 								<dd>{getRepLabel()}</dd>

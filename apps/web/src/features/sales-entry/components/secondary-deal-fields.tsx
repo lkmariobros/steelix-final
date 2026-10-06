@@ -22,6 +22,7 @@ import { z } from "zod";
 
 import {
 	detailsStepSchema,
+	purchasingMethodOptions,
 	secondaryPropertyTypeOptions,
 	sstPayBySubsaleOptions,
 	transactionTypeOptions,
@@ -129,6 +130,7 @@ export function SecondaryDealFields({
 											);
 											if (opt.value === "lease") {
 												form.setValue("commissionType", "fixed");
+												form.setValue("propertyData.purchasingMethod", undefined);
 											} else {
 												form.setValue("commissionType", "percentage");
 											}
@@ -459,6 +461,39 @@ export function SecondaryDealFields({
 						</FormItem>
 					)}
 				/>
+
+				{isSubsale ? (
+					<FormField
+						control={control}
+						name="propertyData.purchasingMethod"
+						render={({ field }) => (
+							<FormItem data-field="purchasing-method">
+								<RequiredLabel>Purchasing Method</RequiredLabel>
+								<Select
+									value={field.value ?? ""}
+									onValueChange={(v) => {
+										field.onChange(v as "cash" | "loan");
+										syncToParent();
+									}}
+								>
+									<FormControl>
+										<SelectTrigger>
+											<SelectValue placeholder="Cash or Loan" />
+										</SelectTrigger>
+									</FormControl>
+									<SelectContent>
+										{purchasingMethodOptions.map((o) => (
+											<SelectItem key={o.value} value={o.value}>
+												{o.label}
+											</SelectItem>
+										))}
+									</SelectContent>
+								</Select>
+								<FormMessage />
+							</FormItem>
+						)}
+					/>
+				) : null}
 			</div>
 		</>
 	);

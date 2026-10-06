@@ -432,6 +432,13 @@ export const detailsStepSchema = z
 						path: ["propertyData", "earnestDeposit"],
 					});
 				}
+				if (!data.propertyData?.purchasingMethod) {
+					ctx.addIssue({
+						code: z.ZodIssueCode.custom,
+						message: "Purchasing method is required",
+						path: ["propertyData", "purchasingMethod"],
+					});
+				}
 			} else {
 				const pd = data.propertyData;
 				if (!pd?.offerDate?.trim()) {
