@@ -98,6 +98,8 @@ console.log(
 	`🚀 Starting on port ${process.env.PORT || 8080} [${process.env.NODE_ENV}]`,
 );
 console.log(`   DB: ${process.env.DATABASE_URL ? "✓" : "✗ NOT SET"}`);
+// Forgot Password emails are sent via Resend (HTTPS). Requires RESEND_API_KEY on Railway.
+// EMAIL_FROM / PORTAL_URL are used when composing the reset message and link.
 console.log(
 	`   Email: ${isEmailConfigured() ? "✓" : "✗ RESEND_API_KEY not set — Forgot Password emails will not be sent"}`,
 );
