@@ -2,8 +2,15 @@ import { Hono } from "hono";
 import type { Context } from "hono";
 import { deleteCookie, setCookie } from "hono/cookie";
 import { and, count, eq, gt, sql } from "drizzle-orm";
-import { account, user, verification } from "../models/auth";
+import {
+	account,
+	session as sessionTable,
+	user,
+	verification,
+} from "../models/auth";
+import { passwordResetEmail, sendEmail } from "../services/mailer";
 import { evaluateAccountSignInAccess } from "../utils/account-access";
+import { getAllowedOrigins } from "../utils/allowed-origins";
 import { db } from "../utils/db";
 import { hashPassword, verifyPassword } from "../utils/password";
 import { isAppRole } from "../utils/rbac";
@@ -286,33 +293,85 @@ authRoutes.post("/api/auth/sign-out", async (c) => {
 	return c.json({ success: true });
 });
 
+const RESET_TOKEN_TTL_MINUTES = 60;
+const RESET_RESEND_COOLDOWN_MS = 60 * 1000;
+const DEFAULT_PORTAL_URL = "https://portal.devots.com.my";
+
+/** Only build reset links for known portal origins (never trust arbitrary Origin headers). */
+function resolvePortalBaseUrl(originHeader: string | undefined): string {
+	const origin = originHeader?.trim().replace(/\/$/, "");
+	if (origin && /^https?:\/\//.test(origin) && getAllowedOrigins().includes(origin)) {
+		return origin;
+	}
+	return (process.env.PORTAL_URL?.trim() || DEFAULT_PORTAL_URL).replace(/\/$/, "");
+}
+
 authRoutes.post("/api/auth/forget-password", async (c) => {
 	try {
 		const body = await c.req.json<{ email?: string }>().catch(() => ({} as { email?: string }));
 		const email = String(body.email ?? "").toLowerCase().trim();
-		if (email) {
-			const [record] = await db
-				.select({ id: user.id })
-				.from(user)
-				.where(sql`lower(${user.email}) = ${email}`)
-				.limit(1);
-			if (record) {
-				const tokenBytes = new Uint8Array(32);
-				crypto.getRandomValues(tokenBytes);
-				const token = [...tokenBytes]
-					.map((b) => b.toString(16).padStart(2, "0"))
-					.join("");
-				const now = new Date();
-				await db.insert(verification).values({
-					id: crypto.randomUUID(),
-					identifier: `reset:${email}`,
-					value: token,
-					expiresAt: new Date(now.getTime() + 60 * 60 * 1000),
-					createdAt: now,
-					updatedAt: now,
-				});
-				console.log(`🔐 password reset token created for ${email}`);
-			}
+		if (!email) return c.json({ status: true });
+
+		const [record] = await db
+			.select({ id: user.id, name: user.name, email: user.email })
+			.from(user)
+			.where(sql`lower(${user.email}) = ${email}`)
+			.limit(1);
+
+		// Same response whether or not the account exists, so emails cannot be probed.
+		if (!record) {
+			console.log("🔐 forget-password: no account for requested email");
+			return c.json({ status: true });
+		}
+
+		const identifier = `reset:${email}`;
+		const now = new Date();
+
+		const [recent] = await db
+			.select({ id: verification.id })
+			.from(verification)
+			.where(
+				and(
+					eq(verification.identifier, identifier),
+					gt(verification.createdAt, new Date(now.getTime() - RESET_RESEND_COOLDOWN_MS)),
+				),
+			)
+			.limit(1);
+		if (recent) {
+			console.log(`🔐 forget-password: cooldown active for ${email}`);
+			return c.json({ status: true });
+		}
+
+		const tokenBytes = new Uint8Array(32);
+		crypto.getRandomValues(tokenBytes);
+		const token = [...tokenBytes]
+			.map((b) => b.toString(16).padStart(2, "0"))
+			.join("");
+
+		await db.delete(verification).where(eq(verification.identifier, identifier));
+		await db.insert(verification).values({
+			id: crypto.randomUUID(),
+			identifier,
+			value: token,
+			expiresAt: new Date(now.getTime() + RESET_TOKEN_TTL_MINUTES * 60 * 1000),
+			createdAt: now,
+			updatedAt: now,
+		});
+
+		const resetUrl = `${resolvePortalBaseUrl(c.req.header("origin"))}/reset-password?token=${token}`;
+		const result = await sendEmail({
+			to: record.email,
+			...passwordResetEmail({
+				name: record.name,
+				resetUrl,
+				expiresInMinutes: RESET_TOKEN_TTL_MINUTES,
+			}),
+		});
+
+		if (result.sent) {
+			console.log(`🔐 forget-password: reset email sent to ${email} (id=${result.id ?? "n/a"})`);
+		} else {
+			console.error(`❌ forget-password: reset email NOT sent to ${email}: ${result.reason}`);
 		}
 		return c.json({ status: true });
 	} catch (error) {
@@ -359,13 +418,29 @@ authRoutes.post("/api/auth/reset-password", async (c) => {
 		}
 
 		const passwordHash = await hashPassword(newPassword);
-		await db
+		const now = new Date();
+		const updated = await db
 			.update(account)
-			.set({ password: passwordHash, updatedAt: new Date() })
+			.set({ password: passwordHash, updatedAt: now })
 			.where(
 				and(eq(account.userId, record.id), eq(account.providerId, "credential")),
-			);
-		await db.delete(verification).where(eq(verification.id, row.id));
+			)
+			.returning({ id: account.id });
+		if (updated.length === 0) {
+			await db.insert(account).values({
+				id: crypto.randomUUID(),
+				accountId: email,
+				providerId: "credential",
+				userId: record.id,
+				password: passwordHash,
+				createdAt: now,
+				updatedAt: now,
+			});
+		}
+		await db.delete(verification).where(eq(verification.identifier, row.identifier));
+		// Sign out every device so an old session cannot outlive the password change.
+		await db.delete(sessionTable).where(eq(sessionTable.userId, record.id));
+		console.log(`🔐 reset-password: password updated for ${email}`);
 		return c.json({ status: true });
 	} catch (error) {
 		console.error("❌ reset-password error:", error);

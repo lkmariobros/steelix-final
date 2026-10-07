@@ -30,7 +30,7 @@ export function ForgotPasswordForm({ onBackToSignIn }: ForgotPasswordFormProps) 
         })
         setSentEmail(value.email)
         setEmailSent(true)
-        toast.success("Password reset email sent!")
+        toast.success("Reset link requested. Please check your email.")
       } catch (error) {
         console.error("Forgot password error:", error)
         toast.error("Failed to send reset email. Please try again.")
@@ -55,10 +55,13 @@ export function ForgotPasswordForm({ onBackToSignIn }: ForgotPasswordFormProps) 
             Check your email
           </h3>
           <p className="text-sm text-slate-600 dark:text-slate-400">
-            We've sent a password reset link to
+            If an account exists for this email, a password reset link has been sent to
           </p>
           <p className="font-medium text-slate-900 dark:text-white">
             {sentEmail}
+          </p>
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            The link is valid for 60 minutes.
           </p>
         </div>
 

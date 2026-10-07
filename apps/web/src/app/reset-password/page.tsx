@@ -35,7 +35,12 @@ function ResetPasswordForm() {
 				window.location.href = "/login";
 			} catch (error) {
 				console.error("Reset password error:", error);
-				toast.error("Failed to reset password. Please request a new link.");
+				const message = error instanceof Error ? error.message : "";
+				toast.error(
+					/invalid|expired/i.test(message)
+						? "This reset link is invalid or has expired. Please request a new one."
+						: "Failed to reset password. Please request a new link.",
+				);
 			}
 		},
 		validators: {

@@ -16,6 +16,7 @@ import { ensureTransactionStatusEnumValues } from "./utils/transaction-status-sc
 import { ensureTransactionListIndexes } from "./utils/transaction-indexes";
 import { ensureLeadListIndexes } from "./utils/lead-indexes";
 import { backfillDraftCaseNumbers } from "./services/sequential-codes";
+import { isEmailConfigured } from "./services/mailer";
 import {
 	ensurePortalRecordLogTable,
 	purgeExpiredRecordLogs,
@@ -97,6 +98,9 @@ console.log(
 	`🚀 Starting on port ${process.env.PORT || 8080} [${process.env.NODE_ENV}]`,
 );
 console.log(`   DB: ${process.env.DATABASE_URL ? "✓" : "✗ NOT SET"}`);
+console.log(
+	`   Email: ${isEmailConfigured() ? "✓" : "✗ RESEND_API_KEY not set — Forgot Password emails will not be sent"}`,
+);
 
 void ensurePipelineStageEnumValues()
 	.then(() => console.log("✅ Pipeline stage enum values ready"))
