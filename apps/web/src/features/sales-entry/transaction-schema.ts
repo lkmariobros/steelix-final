@@ -95,20 +95,44 @@ export const emptyPartyPerson = (): PartyPerson => ({
 	emergencyContact: "",
 });
 
-/** Vendor (subsale) / Tenant (rental): phone & address optional; primary still requires them via detailsStepSchema. */
+/**
+ * Phone & address optional at the person level.
+ * New Project still enforces them in detailsStepSchema; Subsales/Rental do not.
+ */
 export const vendorPersonSchema = partyPersonSchema.extend({
 	phone: z.string().optional().or(z.literal("")),
 	address: z.string().optional().or(z.literal("")),
 });
 
-// Step 3: Purchaser Schema (primary purchaser + optional extras / vendors)
-export const clientSchema = partyPersonSchema.extend({
+// Step 3: Purchaser / Landlord (+ optional extras / vendors / tenants)
+export const clientSchema = vendorPersonSchema.extend({
 	type: z.enum(["buyer", "seller", "tenant", "landlord"]).optional(),
 	source: z.string().optional(),
 	notes: z.string().optional(),
-	additionalPurchasers: z.array(partyPersonSchema).optional(),
+	additionalPurchasers: z.array(vendorPersonSchema).optional(),
 	vendors: z.array(vendorPersonSchema).optional(),
 });
+
+function requirePersonPhoneAddress(
+	ctx: z.RefinementCtx,
+	person: { phone?: string | null; address?: string | null } | undefined,
+	path: (string | number)[],
+) {
+	if (!person?.phone?.trim()) {
+		ctx.addIssue({
+			code: z.ZodIssueCode.custom,
+			message: "Phone number is required",
+			path: [...path, "phone"],
+		});
+	}
+	if (!person?.address?.trim()) {
+		ctx.addIssue({
+			code: z.ZodIssueCode.custom,
+			message: "Correspondence address is required",
+			path: [...path, "address"],
+		});
+	}
+}
 
 // Step 4: Representation & Co-Broking Schema
 // Simplified to 2 options: direct representation or co-broking
@@ -340,21 +364,17 @@ export const detailsStepSchema = z
 					path: ["propertyData", "price"],
 				});
 			}
+			// New Project: Purchaser (+ extras) and Vendor phone & address stay required.
+			requirePersonPhoneAddress(ctx, data.clientData, ["clientData"]);
+			(data.clientData?.additionalPurchasers ?? []).forEach((p, i) => {
+				requirePersonPhoneAddress(ctx, p, [
+					"clientData",
+					"additionalPurchasers",
+					i,
+				]);
+			});
 			(data.clientData?.vendors ?? []).forEach((p, i) => {
-				if (!p.phone?.trim()) {
-					ctx.addIssue({
-						code: z.ZodIssueCode.custom,
-						message: "Phone number is required",
-						path: ["clientData", "vendors", i, "phone"],
-					});
-				}
-				if (!p.address?.trim()) {
-					ctx.addIssue({
-						code: z.ZodIssueCode.custom,
-						message: "Correspondence address is required",
-						path: ["clientData", "vendors", i, "address"],
-					});
-				}
+				requirePersonPhoneAddress(ctx, p, ["clientData", "vendors", i]);
 			});
 		} else {
 			if (!data.propertyData?.address?.trim()) {

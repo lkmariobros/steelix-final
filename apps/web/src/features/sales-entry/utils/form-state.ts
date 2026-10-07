@@ -413,14 +413,18 @@ export function getCompletedSteps(
 ): FormStep[] {
 	const completed: FormStep[] = [];
 
+	const isSecondary = formData.marketType === "secondary";
+	const primaryContactOk =
+		isSecondary ||
+		(Boolean(formData.clientData?.phone?.trim()) &&
+			Boolean(formData.clientData?.address?.trim()));
 	const detailsComplete =
 		formData.propertyData?.price &&
 		formData.clientData?.name?.trim() &&
 		formData.clientData?.icNo?.trim() &&
-		formData.clientData?.phone?.trim() &&
-		formData.clientData?.address?.trim() &&
+		primaryContactOk &&
 		(formData.bookingDate || formData.transactionDate) &&
-		(formData.marketType === "secondary"
+		(isSecondary
 			? Boolean(formData.propertyData?.address?.trim()) &&
 				(formData.transactionType === "lease"
 					? (formData.commissionAmount ?? 0) > 0

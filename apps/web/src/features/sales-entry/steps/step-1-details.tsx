@@ -914,6 +914,7 @@ export function StepDetails({
 								<PartyPersonFields
 									control={form.control}
 									namePrefix="clientData"
+									contactRequired={!isSecondaryDeal}
 									onBlurSync={syncToParent}
 								/>
 								{extraPurchaserFields.map((item, index) => (
@@ -929,6 +930,7 @@ export function StepDetails({
 													? `Landlord ${index + 2}`
 													: `Purchaser ${index + 2}`
 											}
+											contactRequired={!isSecondaryDeal}
 											onBlurSync={syncToParent}
 											onRemove={() => {
 												removePurchaser(index);
