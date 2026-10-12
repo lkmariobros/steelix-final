@@ -231,6 +231,14 @@ export async function buildPrimaryCommissionPatch(
 		0,
 	);
 
+	// Leadership Bonus (tier rules): same formula as secondary — % of notional company
+	// share using the selling agent's companyCommissionSplit. Agent still receives 100%
+	// of scheme net; LB is paid separately to the upline after verify.
+	const leadershipBonus = await resolveLeadershipBonusForAgent(
+		tx.agentId,
+		breakdown.grossCommission,
+	);
+
 	return {
 		commissionType: "percentage" as const,
 		commissionValue: tier.commissionPercent.toFixed(2),
@@ -271,7 +279,44 @@ export async function buildPrimaryCommissionPatch(
 			overrideGrossCommission,
 			overrideNetCommission,
 			overrideLayers,
+			...(leadershipBonus ? { leadershipBonus } : {}),
 		},
+	};
+}
+
+/** Notional company share × upline Leadership Bonus % (tier rules). */
+async function resolveLeadershipBonusForAgent(
+	agentId: string,
+	grossCommission: number,
+): Promise<{
+	uplineId: string | null;
+	uplineTier: AgentTier;
+	bonusRate: number;
+	bonusAmount: number;
+	fromCompanyShare: number;
+} | null> {
+	if (grossCommission <= 0) return null;
+	const upline = await getUplineInfo(agentId);
+	if (!upline?.uplineId || upline.leadershipBonusRate <= 0) return null;
+
+	const agentInfo = await getAgentTierInfo(agentId);
+	const agentTier = (agentInfo.agentTier ?? "advisor") as AgentTier;
+	const tierConfig = await resolveTierConfig(agentTier);
+	const agentSharePct =
+		agentInfo.companyCommissionSplit ?? tierConfig.commissionSplit;
+	const companyShare = grossCommission * (1 - agentSharePct / 100);
+	if (companyShare <= 0) return null;
+
+	const bonusAmount =
+		Math.round(companyShare * (upline.leadershipBonusRate / 100) * 100) / 100;
+	if (bonusAmount <= 0) return null;
+
+	return {
+		uplineId: upline.uplineId,
+		uplineTier: (upline.uplineTier ?? "advisor") as AgentTier,
+		bonusRate: upline.leadershipBonusRate,
+		bonusAmount,
+		fromCompanyShare: Math.round(companyShare * 100) / 100,
 	};
 }
 
@@ -384,7 +429,8 @@ export async function resolvePrimaryOverridePayeeAgentId(
 }
 
 /**
- * Secondary leadership bonus: paid from company share after tier split.
+ * Leadership bonus payment (secondary + primary): paid from company share after tier split.
+ * Idempotent per transaction. Called when the case is verified.
  */
 export async function recordSecondaryLeadershipBonus(
 	tx: TxRow,
@@ -407,7 +453,16 @@ export async function recordSecondaryLeadershipBonus(
 		.limit(1);
 	if (existing) return;
 
-	const lb = breakdown.leadershipBonus;
+	let lb = breakdown.leadershipBonus;
+	// Backfill if locked before primary LB support, or upline was set after submit.
+	if ((!lb?.uplineId || !lb.bonusAmount || lb.bonusAmount <= 0) && tx.agentId) {
+		const resolved = await resolveLeadershipBonusForAgent(
+			tx.agentId,
+			breakdown.grossCommission ?? Number(tx.commissionAmount) ?? 0,
+		);
+		if (resolved) lb = resolved;
+	}
+
 	if (!lb?.uplineId || !lb.bonusAmount || lb.bonusAmount <= 0) return;
 
 	const uplineTier = (lb.uplineTier ?? "advisor") as AgentTier;

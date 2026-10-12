@@ -1,8 +1,12 @@
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { agencies, dashboardPreferences, teams, user } from "../models/auth";
 import { transactions } from "../models/transactions";
 import { db } from "../utils/db";
+import {
+	agentVisibleTransactionsSql,
+	resolveViewerCommission,
+} from "../utils/transaction-visibility";
 import { protectedProcedure, router } from "../utils/trpc";
 
 // Input schemas
@@ -126,7 +130,6 @@ export const dashboardRouter = router({
 			const userId = ctx.session.user.id;
 			const { startDate, endDate } = input;
 
-			// Build date filter conditions
 			const dateConditions = [];
 			if (startDate) {
 				dateConditions.push(
@@ -137,18 +140,68 @@ export const dashboardRouter = router({
 				dateConditions.push(sql`${transactions.transactionDate} <= ${endDate}`);
 			}
 
-			const overviewSelect = {
-				totalCommission: sql<string>`COALESCE(SUM(${transactions.commissionAmount}), 0)`,
-				completedDeals: sql<string>`COUNT(CASE WHEN ${transactions.status} = 'completed' THEN 1 END)`,
-				pendingCommission: sql<string>`COALESCE(SUM(CASE WHEN ${transactions.status} IN ('approved', 'under_review', 'verified', 'pending') THEN ${transactions.commissionAmount} ELSE 0 END), 0)`,
-				averageDealValue: sql<string>`COALESCE(AVG(CASE WHEN ${transactions.propertyData}->>'price' IS NOT NULL THEN CAST(${transactions.propertyData}->>'price' AS DECIMAL) END), 0)`,
-			};
+			const visibility = agentVisibleTransactionsSql(userId);
 
-			// Get commission data (PostgreSQL returns strings for aggregates)
-			const rawCommissionData = await db
-				.select(overviewSelect)
+			const visibleRows = await db
+				.select({
+					agentId: transactions.agentId,
+					status: transactions.status,
+					commissionAmount: transactions.commissionAmount,
+					coBrokingData: transactions.coBrokingData,
+					commissionBreakdown: transactions.commissionBreakdown,
+					propertyData: transactions.propertyData,
+					transactionDate: transactions.transactionDate,
+				})
 				.from(transactions)
-				.where(and(eq(transactions.agentId, userId), ...dateConditions));
+				.where(and(visibility, ...dateConditions));
+
+			const shareOf = (row: (typeof visibleRows)[number]) =>
+				resolveViewerCommission({
+					viewerId: userId,
+					agentId: row.agentId,
+					commissionAmount: row.commissionAmount,
+					coBrokingData: row.coBrokingData,
+					commissionBreakdown: row.commissionBreakdown,
+				}).myCommissionAmount;
+
+			const PENDING_STATUSES = new Set([
+				"approved",
+				"under_review",
+				"verified",
+				"pending",
+				"submitted",
+			]);
+
+			let totalCommission = 0;
+			let pendingCommission = 0;
+			let completedDeals = 0;
+			let dealValueSum = 0;
+			let dealValueCount = 0;
+			for (const row of visibleRows) {
+				const mine = shareOf(row);
+				totalCommission += mine;
+				if (row.status && PENDING_STATUSES.has(row.status)) {
+					pendingCommission += mine;
+				}
+				if (row.status === "completed" || row.status === "converted") {
+					completedDeals += 1;
+				}
+				const price = (row.propertyData as { price?: number } | null)?.price;
+				if (price != null && Number(price) > 0) {
+					dealValueSum += Number(price);
+					dealValueCount += 1;
+				}
+			}
+
+			const overview: OverviewTotals = {
+				totalCommission: Math.round(totalCommission * 100) / 100,
+				completedDeals,
+				pendingCommission: Math.round(pendingCommission * 100) / 100,
+				averageDealValue:
+					dealValueCount > 0
+						? Math.round((dealValueSum / dealValueCount) * 100) / 100
+						: 0,
+			};
 
 			// Prior equal window when a date range is set; otherwise MoM from monthly trend
 			let previousOverview: OverviewTotals | null = null;
@@ -161,36 +214,95 @@ export const dashboardRouter = router({
 				const prevEnd = new Date(startDate.getTime() - 1);
 				const prevStart = new Date(prevEnd.getTime() - durationMs);
 				const prevRows = await db
-					.select(overviewSelect)
+					.select({
+						agentId: transactions.agentId,
+						status: transactions.status,
+						commissionAmount: transactions.commissionAmount,
+						coBrokingData: transactions.coBrokingData,
+						commissionBreakdown: transactions.commissionBreakdown,
+						propertyData: transactions.propertyData,
+					})
 					.from(transactions)
 					.where(
 						and(
-							eq(transactions.agentId, userId),
+							visibility,
 							sql`${transactions.transactionDate} >= ${prevStart}`,
 							sql`${transactions.transactionDate} <= ${prevEnd}`,
 						),
 					);
-				previousOverview = parseOverviewRow(prevRows[0]);
+				let prevTotal = 0;
+				let prevPending = 0;
+				let prevCompleted = 0;
+				let prevDealSum = 0;
+				let prevDealCount = 0;
+				for (const row of prevRows) {
+					const mine = resolveViewerCommission({
+						viewerId: userId,
+						agentId: row.agentId,
+						commissionAmount: row.commissionAmount,
+						coBrokingData: row.coBrokingData,
+						commissionBreakdown: row.commissionBreakdown,
+					}).myCommissionAmount;
+					prevTotal += mine;
+					if (row.status && PENDING_STATUSES.has(row.status)) prevPending += mine;
+					if (row.status === "completed" || row.status === "converted") {
+						prevCompleted += 1;
+					}
+					const price = (row.propertyData as { price?: number } | null)?.price;
+					if (price != null && Number(price) > 0) {
+						prevDealSum += Number(price);
+						prevDealCount += 1;
+					}
+				}
+				previousOverview = {
+					totalCommission: Math.round(prevTotal * 100) / 100,
+					completedDeals: prevCompleted,
+					pendingCommission: Math.round(prevPending * 100) / 100,
+					averageDealValue:
+						prevDealCount > 0
+							? Math.round((prevDealSum / prevDealCount) * 100) / 100
+							: 0,
+				};
 			}
 
-			// Get monthly trend data
-			const rawMonthlyTrend = await db
+			// Get monthly trend data (owner cases + co-broker share attributed in JS)
+			const trendRows = await db
 				.select({
 					month: sql<string>`TO_CHAR(${transactions.transactionDate}, 'YYYY-MM')`,
-					commission: sql<string>`COALESCE(SUM(${transactions.commissionAmount}), 0)`,
-					deals: sql<string>`COUNT(*)`,
+					agentId: transactions.agentId,
+					commissionAmount: transactions.commissionAmount,
+					coBrokingData: transactions.coBrokingData,
+					commissionBreakdown: transactions.commissionBreakdown,
 				})
 				.from(transactions)
 				.where(
 					and(
-						eq(transactions.agentId, userId),
+						visibility,
 						sql`${transactions.transactionDate} >= NOW() - INTERVAL '12 months'`,
 					),
-				)
-				.groupBy(sql`TO_CHAR(${transactions.transactionDate}, 'YYYY-MM')`)
-				.orderBy(sql`TO_CHAR(${transactions.transactionDate}, 'YYYY-MM')`);
+				);
 
-			const overview = parseOverviewRow(rawCommissionData[0]);
+			const trendMap = new Map<string, { commission: number; deals: number }>();
+			for (const row of trendRows) {
+				const month = row.month;
+				const cur = trendMap.get(month) ?? { commission: 0, deals: 0 };
+				cur.commission += resolveViewerCommission({
+					viewerId: userId,
+					agentId: row.agentId,
+					commissionAmount: row.commissionAmount,
+					coBrokingData: row.coBrokingData,
+					commissionBreakdown: row.commissionBreakdown,
+				}).myCommissionAmount;
+				cur.deals += 1;
+				trendMap.set(month, cur);
+			}
+			const rawMonthlyTrend = [...trendMap.entries()]
+				.sort(([a], [b]) => a.localeCompare(b))
+				.map(([month, v]) => ({
+					month,
+					commission: String(Math.round(v.commission * 100) / 100),
+					deals: String(v.deals),
+				}));
 
 			const monthlyTrend = rawMonthlyTrend.map((item) => ({
 				month: item.month,
@@ -285,51 +397,71 @@ export const dashboardRouter = router({
 	// Get sales pipeline data
 	getSalesPipeline: protectedProcedure.query(async ({ ctx }) => {
 		const userId = ctx.session.user.id;
+		const visibility = agentVisibleTransactionsSql(userId);
 
-		// Get pipeline status breakdown
-		// Note: Use commission_amount for total value, not property price
-		const rawPipelineData = await db
-			.select({
-				status: transactions.status,
-				count: sql<string>`COUNT(*)`,
-				totalValue: sql<string>`COALESCE(SUM(${transactions.commissionAmount}), 0)`,
-			})
-			.from(transactions)
-			.where(
-				and(
-					eq(transactions.agentId, userId),
-					sql`${transactions.status} NOT IN ('completed', 'rejected')`,
-				),
-			)
-			.groupBy(transactions.status);
-
-		// Convert string values to numbers (PostgreSQL returns strings for aggregates)
-		const pipelineData = rawPipelineData.map((item) => ({
-			status: item.status,
-			count: Number(item.count) || 0,
-			totalValue: Number(item.totalValue) || 0,
-		}));
-
-		// Get active transactions
-		const activeTransactions = await db
+		const activeRows = await db
 			.select({
 				id: transactions.id,
+				agentId: transactions.agentId,
+				status: transactions.status,
+				transactionDate: transactions.transactionDate,
+				updatedAt: transactions.updatedAt,
+				commissionAmount: transactions.commissionAmount,
+				coBrokingData: transactions.coBrokingData,
+				commissionBreakdown: transactions.commissionBreakdown,
 				propertyAddress: propertyLabelSql,
 				propertyPrice: sql<number>`CAST(${transactions.propertyData}->>'price' AS DECIMAL)`,
 				clientName: sql<string>`${transactions.clientData}->>'name'`,
-				status: transactions.status,
-				transactionDate: transactions.transactionDate,
-				commissionAmount: transactions.commissionAmount,
 			})
 			.from(transactions)
 			.where(
 				and(
-					eq(transactions.agentId, userId),
-					sql`${transactions.status} NOT IN ('completed', 'rejected')`,
+					visibility,
+					sql`${transactions.status} NOT IN ('completed', 'rejected', 'converted', 'cancelled')`,
 				),
 			)
-			.orderBy(desc(transactions.updatedAt))
-			.limit(10);
+			.orderBy(desc(transactions.updatedAt));
+
+		const byStatus = new Map<string, { count: number; totalValue: number }>();
+		for (const row of activeRows) {
+			const status = row.status ?? "draft";
+			const mine = resolveViewerCommission({
+				viewerId: userId,
+				agentId: row.agentId,
+				commissionAmount: row.commissionAmount,
+				coBrokingData: row.coBrokingData,
+				commissionBreakdown: row.commissionBreakdown,
+			}).myCommissionAmount;
+			const cur = byStatus.get(status) ?? { count: 0, totalValue: 0 };
+			cur.count += 1;
+			cur.totalValue += mine;
+			byStatus.set(status, cur);
+		}
+
+		const pipelineData = [...byStatus.entries()].map(([status, v]) => ({
+			status,
+			count: v.count,
+			totalValue: Math.round(v.totalValue * 100) / 100,
+		}));
+
+		const activeTransactions = activeRows.slice(0, 10).map((row) => {
+			const share = resolveViewerCommission({
+				viewerId: userId,
+				agentId: row.agentId,
+				commissionAmount: row.commissionAmount,
+				coBrokingData: row.coBrokingData,
+				commissionBreakdown: row.commissionBreakdown,
+			});
+			return {
+				id: row.id,
+				propertyAddress: row.propertyAddress,
+				propertyPrice: row.propertyPrice,
+				clientName: row.clientName,
+				status: row.status,
+				transactionDate: row.transactionDate,
+				commissionAmount: String(share.myCommissionAmount),
+			};
+		});
 
 		return {
 			pipeline: pipelineData,
@@ -348,7 +480,7 @@ export const dashboardRouter = router({
 				percentage: sql<string>`ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER(), 2)`,
 			})
 			.from(transactions)
-			.where(eq(transactions.agentId, userId))
+			.where(agentVisibleTransactionsSql(userId))
 			.groupBy(transactions.status)
 			.orderBy(sql`COUNT(*) DESC`);
 
@@ -379,7 +511,7 @@ export const dashboardRouter = router({
 				.limit(1);
 
 			if (!userInfo[0]?.teamId) {
-				// If user has no team, return only their transactions
+				// Owner cases + cases where this agent is an internal co-broker
 				const userTransactions = await db
 					.select({
 						id: transactions.id,
@@ -395,14 +527,14 @@ export const dashboardRouter = router({
 					})
 					.from(transactions)
 					.innerJoin(user, eq(transactions.agentId, user.id))
-					.where(eq(transactions.agentId, userId))
+					.where(agentVisibleTransactionsSql(userId))
 					.orderBy(desc(transactions.updatedAt))
 					.limit(input.limit);
 
 				return userTransactions;
 			}
 
-			// Get team transactions
+			// Team feed, plus any co-broker cases for this user outside the team
 			const teamTransactions = await db
 				.select({
 					id: transactions.id,
@@ -418,7 +550,12 @@ export const dashboardRouter = router({
 				})
 				.from(transactions)
 				.innerJoin(user, eq(transactions.agentId, user.id))
-				.where(eq(user.teamId, userInfo[0].teamId))
+				.where(
+					or(
+						eq(user.teamId, userInfo[0].teamId),
+						agentVisibleTransactionsSql(userId),
+					),
+				)
 				.orderBy(desc(transactions.updatedAt))
 				.limit(input.limit);
 

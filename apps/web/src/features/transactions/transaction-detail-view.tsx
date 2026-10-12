@@ -30,6 +30,8 @@ export type TransactionDetailRecord = {
 	commissionAmount?: string | number | null;
 	commissionValue?: string | number | null;
 	commissionType?: string | null;
+	viewerRole?: "owner" | "co_broker" | null;
+	myCommissionAmount?: number | null;
 	notes?: string | null;
 	isCoBroking?: boolean | null;
 	propertyData?: {
@@ -283,7 +285,9 @@ export function TransactionDetailView({
 								label="Commission split"
 								value={
 									coBroking.commissionSplit != null
-										? `Co-broker ${coBroking.commissionSplit}% / You ${100 - coBroking.commissionSplit}%`
+										? tx.viewerRole === "co_broker"
+											? `Your share ${coBroking.commissionSplit}% / Case owner ${100 - coBroking.commissionSplit}%`
+											: `Co-broker ${coBroking.commissionSplit}% / You ${100 - coBroking.commissionSplit}%`
 										: undefined
 								}
 							/>
@@ -315,6 +319,16 @@ export function TransactionDetailView({
 								: undefined
 						}
 					/>
+					{tx.myCommissionAmount != null ? (
+						<DetailRow
+							label={
+								tx.viewerRole === "co_broker"
+									? "Your co-broker share"
+									: "Your commission"
+							}
+							value={formatRm(tx.myCommissionAmount)}
+						/>
+					) : null}
 				</div>
 				{bd && Object.keys(bd).length > 0 ? (
 					<div className="mt-3 rounded-lg border bg-muted/20 p-4">

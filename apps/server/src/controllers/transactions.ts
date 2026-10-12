@@ -48,6 +48,10 @@ import {
 	isTransactionsSchemaOutdatedError,
 	transactionsSchemaOutdatedMessage,
 } from "../utils/transactions-schema-hint";
+import {
+	agentVisibleTransactionsSql,
+	resolveViewerCommission,
+} from "../utils/transaction-visibility";
 import { getPrimaryRole, hasAdminAccess } from "../utils/user-roles";
 import { adminProcedure, protectedProcedure, router } from "../utils/trpc";
 
@@ -399,6 +403,21 @@ async function resolveTransactionAgentId(
 	return ctx.session.user.id;
 }
 
+/** Read access: case owner or internal co-broker (admins: any). */
+function transactionVisibilityCondition(
+	ctx: { session: { user: { id: string; role?: string | null; roles?: string[] | null } } },
+	transactionId: string,
+) {
+	if (sessionIsAdmin(ctx)) {
+		return eq(transactions.id, transactionId);
+	}
+	return and(
+		eq(transactions.id, transactionId),
+		agentVisibleTransactionsSql(ctx.session.user.id),
+	);
+}
+
+/** Write access: case owner only (admins: any). Co-brokers may view, not edit/submit. */
 function transactionOwnershipCondition(
 	ctx: { session: { user: { id: string; role?: string | null; roles?: string[] | null } } },
 	transactionId: string,
@@ -634,7 +653,7 @@ export const transactionsRouter = router({
 			}
 		}),
 
-	// Get a transaction by ID
+	// Get a transaction by ID (owner or internal co-broker)
 	getById: protectedProcedure
 		.input(transactionIdInput)
 		.query(async ({ ctx, input }) => {
@@ -642,14 +661,26 @@ export const transactionsRouter = router({
 				const [transaction] = await db
 					.select()
 					.from(transactions)
-					.where(transactionOwnershipCondition(ctx, input.id))
+					.where(transactionVisibilityCondition(ctx, input.id))
 					.limit(1);
 
 				if (!transaction) {
 					throw new Error("Transaction not found or access denied");
 				}
 
-				return transaction;
+				const share = resolveViewerCommission({
+					viewerId: ctx.session.user.id,
+					agentId: transaction.agentId,
+					commissionAmount: transaction.commissionAmount,
+					coBrokingData: transaction.coBrokingData,
+					commissionBreakdown: transaction.commissionBreakdown,
+				});
+
+				return {
+					...transaction,
+					viewerRole: share.viewerRole,
+					myCommissionAmount: share.myCommissionAmount,
+				};
 			} catch (e) {
 				if (isTransactionsSchemaOutdatedError(e)) {
 					throw new TRPCError({
@@ -671,7 +702,7 @@ export const transactionsRouter = router({
 			const [transaction] = await db
 				.select({ id: transactions.id })
 				.from(transactions)
-				.where(transactionOwnershipCondition(ctx, input.id))
+				.where(transactionVisibilityCondition(ctx, input.id))
 				.limit(1);
 
 			if (!transaction) {
@@ -692,11 +723,12 @@ export const transactionsRouter = router({
 			}
 		}),
 
-	// List transactions for the current user
+	// List transactions for the current user (owner + internal co-broker cases)
 	list: protectedProcedure
 		.input(listTransactionsInput)
 		.query(async ({ ctx, input }) => {
-			const conditions = [eq(transactions.agentId, ctx.session.user.id)];
+			const viewerId = ctx.session.user.id;
+			const conditions = [agentVisibleTransactionsSql(viewerId)];
 
 			if (input.status) {
 				conditions.push(eq(transactions.status, input.status));
@@ -719,7 +751,6 @@ export const transactionsRouter = router({
 			try {
 				// Fixed Case No sequence (latest first). Do not sort by updatedAt —
 				// edits must not move a case from its creation/sequence position.
-				// Slim list DTO — exclude heavy JSONB (scheme snapshot, breakdown, documents).
 				const transactionList = await db
 					.select({
 						id: transactions.id,
@@ -738,6 +769,7 @@ export const transactionsRouter = router({
 						commissionType: transactions.commissionType,
 						commissionValue: transactions.commissionValue,
 						commissionAmount: transactions.commissionAmount,
+						commissionBreakdown: transactions.commissionBreakdown,
 						status: transactions.status,
 						agentEditAllowed: transactions.agentEditAllowed,
 						pendingEditRequest: transactions.pendingEditRequest,
@@ -762,10 +794,22 @@ export const transactionsRouter = router({
 					.where(and(...conditions));
 
 				return {
-					transactions: transactionList.map((t: any) => ({
-						...t,
-						status: normalizeLegacyStatus(t.status),
-					})),
+					transactions: transactionList.map((t) => {
+						const share = resolveViewerCommission({
+							viewerId,
+							agentId: t.agentId,
+							commissionAmount: t.commissionAmount,
+							coBrokingData: t.coBrokingData,
+							commissionBreakdown: t.commissionBreakdown,
+						});
+						const { commissionBreakdown: _omitBreakdown, ...rest } = t;
+						return {
+							...rest,
+							status: normalizeLegacyStatus(t.status),
+							viewerRole: share.viewerRole,
+							myCommissionAmount: share.myCommissionAmount,
+						};
+					}),
 					total: count,
 					hasMore: input.offset + input.limit < count,
 				};

@@ -8,6 +8,7 @@ import {
 import { transactions } from "../models/transactions";
 import { db } from "../utils/db";
 import { isTransactionsSchemaOutdatedError } from "../utils/transactions-schema-hint";
+import { isInternalCoBroker } from "../utils/transaction-visibility";
 import { hasAdminAccess } from "../utils/user-roles";
 
 const ATTACHMENTS_SQL_HINT =
@@ -132,7 +133,10 @@ export async function assertCanAccessTransactionMessages(
 	userRoles?: string[] | null,
 ) {
 	const [tx] = await db
-		.select({ agentId: transactions.agentId })
+		.select({
+			agentId: transactions.agentId,
+			coBrokingData: transactions.coBrokingData,
+		})
 		.from(transactions)
 		.where(eq(transactions.id, transactionId))
 		.limit(1);
@@ -140,7 +144,9 @@ export async function assertCanAccessTransactionMessages(
 	if (!tx) throw new Error("Transaction not found");
 
 	const isAdmin = hasAdminAccess({ role: userRole, roles: userRoles ?? [] });
-	if (!isAdmin && tx.agentId !== userId) {
-		throw new Error("Access denied");
-	}
+	if (isAdmin) return;
+
+	if (tx.agentId === userId) return;
+	if (isInternalCoBroker(tx.coBrokingData, userId)) return;
+	throw new Error("Access denied");
 }

@@ -150,12 +150,19 @@ export default function TransactionsPage() {
 	] as const;
 
 	const allTxRows = transactionsData?.transactions ?? [];
+	const myCommissionOf = (t: {
+		commissionAmount?: string | null;
+		myCommissionAmount?: number | null;
+	}) =>
+		typeof t.myCommissionAmount === "number"
+			? t.myCommissionAmount
+			: Number.parseFloat(t.commissionAmount || "0") || 0;
 	const totalTransactionValue = allTxRows.reduce((sum, t) => {
 		const price = t.propertyData?.nettPrice ?? t.propertyData?.price ?? 0;
 		return sum + (typeof price === "number" ? price : Number(price) || 0);
 	}, 0);
 	const totalCommission = allTxRows.reduce(
-		(sum, t) => sum + Number.parseFloat(t.commissionAmount || "0"),
+		(sum, t) => sum + myCommissionOf(t),
 		0,
 	);
 	const pendingCommission = allTxRows.reduce((sum, t) => {
@@ -167,7 +174,7 @@ export default function TransactionsPage() {
 		) {
 			return sum;
 		}
-		return sum + Number.parseFloat(t.commissionAmount || "0");
+		return sum + myCommissionOf(t);
 	}, 0);
 	const leaderBonus = leadershipBonusSummary?.totalEarnings ?? 0;
 
@@ -739,10 +746,16 @@ export default function TransactionsPage() {
 													</TableCell>
 													<TableCell>
 														<div className="font-medium">
-															{formatCurrency(transaction.commissionAmount)}
+															{formatCurrency(myCommissionOf(transaction))}
 														</div>
 														<div className="text-muted-foreground text-sm">
-															{transaction.commissionType}
+															{(
+																transaction as {
+																	viewerRole?: string;
+																}
+															).viewerRole === "co_broker"
+																? "Co-broker share"
+																: transaction.commissionType}
 														</div>
 													</TableCell>
 													<TableCell>
@@ -766,7 +779,12 @@ export default function TransactionsPage() {
 															>
 																<RiEyeLine className="h-4 w-4" />
 															</Button>
-															{agentCanEditTransaction(
+															{(
+																transaction as {
+																	viewerRole?: string;
+																}
+															).viewerRole !== "co_broker" &&
+															agentCanEditTransaction(
 																transaction.status,
 																(
 																	transaction as {

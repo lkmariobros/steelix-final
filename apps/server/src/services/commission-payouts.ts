@@ -61,13 +61,6 @@ function appendAudit(
 export async function ensurePayoutsForApprovedTransaction(tx: TxRow) {
 	if (tx.status !== "approved" && tx.status !== "verified") return [];
 
-	const existing = await db
-		.select({ id: commissionPayouts.id })
-		.from(commissionPayouts)
-		.where(eq(commissionPayouts.transactionId, tx.id))
-		.limit(1);
-	if (existing.length > 0) return [];
-
 	const breakdown = tx.commissionBreakdown as {
 		marketType?: "primary" | "secondary";
 		spaPrice?: number;
@@ -155,119 +148,143 @@ export async function ensurePayoutsForApprovedTransaction(tx: TxRow) {
 		pctN = tierPct;
 	}
 
-	const nowIso = new Date().toISOString();
-	const baseAudit: PayoutAuditEntry = {
-		at: nowIso,
-		byUserId: "system",
-		action: "created_from_transaction_approval",
-		notes: "Commission payout created when transaction was approved",
-	};
+	const existing = await db
+		.select({ id: commissionPayouts.id })
+		.from(commissionPayouts)
+		.where(eq(commissionPayouts.transactionId, tx.id))
+		.limit(1);
 
-	const blockLabel =
-		schemeSnap?.blockListingTitle ?? prop?.listingTitle ?? null;
+	const created: (typeof commissionPayouts.$inferSelect)[] = [];
 
-	const [negotiator] = await db
-		.insert(commissionPayouts)
-		.values({
-			transactionId: tx.id,
-			payeeAgentId: tx.agentId,
-			payoutType: "negotiator",
-			status: "pending_approval",
-			caseNo: tx.caseNo ?? null,
-			projectName: tx.projectName ?? schemeSnap?.projectName ?? null,
-			blockLabel,
-			unitNo: tx.unitNo ?? null,
-			bookingDate: tx.bookingDate ?? tx.transactionDate,
-			spaPrice: dec(spa),
-			nettPrice: dec(nett),
-			commissionPercent: dec(pctN),
-			grossCommission: dec(grossN),
-			sstAmount: dec(sstN),
-			netCommission: dec(netN),
-			commissionSchemeSnapshot: schemeSnap,
-			claimStageLabel: claim?.claimStage ?? null,
-			claimStagePercent: claim ? dec(Number(claim.percentPayable)) : null,
-			auditLog: [baseAudit],
-		})
-		.returning();
+	if (existing.length === 0) {
+		const nowIso = new Date().toISOString();
+		const baseAudit: PayoutAuditEntry = {
+			at: nowIso,
+			byUserId: "system",
+			action: "created_from_transaction_approval",
+			notes: "Commission payout created when transaction was approved",
+		};
 
-	const created = [negotiator];
+		const blockLabel =
+			schemeSnap?.blockListingTitle ?? prop?.listingTitle ?? null;
 
-	if (!isSecondary) {
-		const rates = resolveOverrideLayerRates({
-			overridePercent: schemeSnap?.overridePercent,
-			immediateUplineOverridePercent:
-				schemeSnap?.immediateUplineOverridePercent,
-			teamManagerOverridePercent: schemeSnap?.teamManagerOverridePercent,
-			groupManagerOverridePercent: schemeSnap?.groupManagerOverridePercent,
-			directorOverridePercent: schemeSnap?.directorOverridePercent,
-		});
+		const [negotiator] = await db
+			.insert(commissionPayouts)
+			.values({
+				transactionId: tx.id,
+				payeeAgentId: tx.agentId,
+				payoutType: "negotiator",
+				status: "pending_approval",
+				caseNo: tx.caseNo ?? null,
+				projectName: tx.projectName ?? schemeSnap?.projectName ?? null,
+				blockLabel,
+				unitNo: tx.unitNo ?? null,
+				bookingDate: tx.bookingDate ?? tx.transactionDate,
+				spaPrice: dec(spa),
+				nettPrice: dec(nett),
+				commissionPercent: dec(pctN),
+				grossCommission: dec(grossN),
+				sstAmount: dec(sstN),
+				netCommission: dec(netN),
+				commissionSchemeSnapshot: schemeSnap,
+				claimStageLabel: claim?.claimStage ?? null,
+				claimStagePercent: claim ? dec(Number(claim.percentPayable)) : null,
+				auditLog: [baseAudit],
+			})
+			.returning();
 
-		const snapLayers = schemeSnap?.overrideLayers;
-		const payees =
-			snapLayers && snapLayers.length > 0
-				? snapLayers.map((l) =>
-						l.payeeAgentId
-							? { agentId: l.payeeAgentId, name: l.payeeName ?? "" }
-							: null,
-					)
-				: await resolvePrimaryOverridePayees(
-						tx.agentId,
-						tx.teamLeaderAgentId,
-					);
+		created.push(negotiator);
 
-		for (let i = 0; i < PRIMARY_OVERRIDE_LAYERS.length; i++) {
-			const meta = PRIMARY_OVERRIDE_LAYERS[i];
-			const percent = rates[meta.rateKey];
-			const payee = payees[i] ?? null;
-			if (percent <= 0 || !payee?.agentId) continue;
-
-			const oCalc = calculateSchemeCommission({
-				nettPrice: nett,
-				commissionPercent: percent,
-				incSst,
-				sstPercent: sstPct,
-				sstBorneBy: sstBorne,
+		if (!isSecondary) {
+			const rates = resolveOverrideLayerRates({
+				overridePercent: schemeSnap?.overridePercent,
+				immediateUplineOverridePercent:
+					schemeSnap?.immediateUplineOverridePercent,
+				teamManagerOverridePercent: schemeSnap?.teamManagerOverridePercent,
+				groupManagerOverridePercent: schemeSnap?.groupManagerOverridePercent,
+				directorOverridePercent: schemeSnap?.directorOverridePercent,
 			});
-			const [overrideRow] = await db
-				.insert(commissionPayouts)
-				.values({
-					transactionId: tx.id,
-					payeeAgentId: payee.agentId,
-					payoutType: "override",
-					status: "pending_approval",
-					caseNo: tx.caseNo ?? null,
-					projectName: tx.projectName ?? schemeSnap?.projectName ?? null,
-					blockLabel,
-					unitNo: tx.unitNo ?? null,
-					bookingDate: tx.bookingDate ?? tx.transactionDate,
-					spaPrice: dec(spa),
-					nettPrice: dec(nett),
-					commissionPercent: dec(percent),
-					grossCommission: dec(oCalc.grossCommission),
-					sstAmount: dec(oCalc.sstAmount),
-					netCommission: dec(oCalc.agentNetCommission),
-					commissionSchemeSnapshot: schemeSnap,
-					claimStageLabel: claim?.claimStage ?? null,
-					claimStagePercent: claim ? dec(Number(claim.percentPayable)) : null,
-					auditLog: [
-						{
-							...baseAudit,
-							notes: `${meta.label} override (${percent}%) — paid separately; not deducted from agent`,
-						},
-					],
-				})
-				.returning();
-			created.push(overrideRow);
+
+			const snapLayers = schemeSnap?.overrideLayers;
+			const payees =
+				snapLayers && snapLayers.length > 0
+					? snapLayers.map((l) =>
+							l.payeeAgentId
+								? { agentId: l.payeeAgentId, name: l.payeeName ?? "" }
+								: null,
+						)
+					: await resolvePrimaryOverridePayees(
+							tx.agentId,
+							tx.teamLeaderAgentId,
+						);
+
+			for (let i = 0; i < PRIMARY_OVERRIDE_LAYERS.length; i++) {
+				const meta = PRIMARY_OVERRIDE_LAYERS[i];
+				const percent = rates[meta.rateKey];
+				const payee = payees[i] ?? null;
+				if (percent <= 0 || !payee?.agentId) continue;
+
+				const oCalc = calculateSchemeCommission({
+					nettPrice: nett,
+					commissionPercent: percent,
+					incSst,
+					sstPercent: sstPct,
+					sstBorneBy: sstBorne,
+				});
+				const [overrideRow] = await db
+					.insert(commissionPayouts)
+					.values({
+						transactionId: tx.id,
+						payeeAgentId: payee.agentId,
+						payoutType: "override",
+						status: "pending_approval",
+						caseNo: tx.caseNo ?? null,
+						projectName: tx.projectName ?? schemeSnap?.projectName ?? null,
+						blockLabel,
+						unitNo: tx.unitNo ?? null,
+						bookingDate: tx.bookingDate ?? tx.transactionDate,
+						spaPrice: dec(spa),
+						nettPrice: dec(nett),
+						commissionPercent: dec(percent),
+						grossCommission: dec(oCalc.grossCommission),
+						sstAmount: dec(oCalc.sstAmount),
+						netCommission: dec(oCalc.agentNetCommission),
+						commissionSchemeSnapshot: schemeSnap,
+						claimStageLabel: claim?.claimStage ?? null,
+						claimStagePercent: claim
+							? dec(Number(claim.percentPayable))
+							: null,
+						auditLog: [
+							{
+								...baseAudit,
+								notes: `${meta.label} override (${percent}%) — paid separately; not deducted from agent`,
+							},
+						],
+					})
+					.returning();
+				created.push(overrideRow);
+			}
 		}
 	}
 
-	try {
-		if (isSecondary && breakdown) {
-			await recordSecondaryLeadershipBonus(tx, breakdown);
+	// Leadership Bonus only after Verified (idempotent). Runs even when payout
+	// rows already exist so re-verify / legacy cases still get LB for New Project.
+	if (tx.status === "verified") {
+		try {
+			if (breakdown) {
+				await recordSecondaryLeadershipBonus(tx, breakdown);
+			} else {
+				await recordSecondaryLeadershipBonus(tx, {
+					grossCommission: grossN,
+				});
+			}
+		} catch (e) {
+			console.warn(
+				"[ensurePayouts] leadership bonus record failed:",
+				tx.caseNo ?? tx.id,
+				e instanceof Error ? e.message : e,
+			);
 		}
-	} catch {
-		// Leadership bonus tables may not be migrated yet
 	}
 
 	return created;
