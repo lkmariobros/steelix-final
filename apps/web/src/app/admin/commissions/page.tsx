@@ -11,7 +11,6 @@ import { HeaderActions } from "@/components/header-actions";
 import { Separator } from "@/components/separator";
 import { SidebarTrigger } from "@/components/sidebar";
 import {
-	Table,
 	TableBody,
 	TableCell,
 	TableHead,
@@ -48,6 +47,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/tooltip";
 import { MetricCard } from "@/dashboards/admin/widgets/metric-card";
 import { authClient } from "@/lib/auth-client";
+import { formatAgentPickerLabel } from "@/lib/agent-display";
 import { formatDateDMY } from "@/lib/date-format";
 import { cn } from "@/lib/utils";
 import { trpc } from "@/utils/trpc";
@@ -206,8 +206,38 @@ function FilterDatePicker({
 }
 
 const thClass =
-	"h-11 bg-muted/50 px-3 font-semibold text-foreground/80 text-xs tracking-wide";
+	"sticky top-0 z-20 h-11 whitespace-nowrap border-b border-border/60 bg-muted px-3 font-semibold text-foreground/80 text-xs tracking-wide shadow-[0_1px_0_0_hsl(var(--border)/0.6)]";
 const tdClass = "px-3 py-3 align-middle text-sm";
+
+type CommissionRow = {
+	projectName: string | null;
+	unitNo: string | null;
+	marketType: "primary" | "secondary" | null;
+	propertyAddress: string | null;
+};
+
+/** Primary (or project-backed) → Project + Unit No stacked; secondary/rental → address. */
+function LocationCell({ r }: { r: CommissionRow }) {
+	const isPrimary = r.marketType === "primary" || (r.marketType == null && !!r.projectName);
+	if (isPrimary || (!r.propertyAddress && r.projectName)) {
+		if (!r.projectName && !r.unitNo) return <>—</>;
+		return (
+			<div className="min-w-0">
+				<p className="truncate font-medium">{r.projectName ?? "—"}</p>
+				{r.unitNo ? (
+					<p className="truncate text-muted-foreground text-xs">
+						Unit {r.unitNo}
+					</p>
+				) : null}
+			</div>
+		);
+	}
+	return (
+		<p className="line-clamp-2 break-words" title={r.propertyAddress ?? undefined}>
+			{r.propertyAddress ?? "—"}
+		</p>
+	);
+}
 
 export default function AdminCommissionsPage() {
 	const { data: session } = authClient.useSession();
@@ -318,9 +348,11 @@ export default function AdminCommissionsPage() {
 	const exportCsv = () => {
 		const items = listQuery.data?.items ?? [];
 		const headers = [
-			"Agent",
-			"Project",
 			"Case No",
+			"Submit Date",
+			"Agent",
+			"Project / Address",
+			"Unit No",
 			"Nett Price (RM)",
 			"Commission %",
 			"Gross (RM)",
@@ -334,9 +366,21 @@ export default function AdminCommissionsPage() {
 			headers.join(","),
 			...items.map((r) =>
 				[
-					esc(r.agentName ?? ""),
-					esc(r.projectName ?? ""),
 					esc(r.caseNo ?? ""),
+					esc(formatDateDMY(r.createdAt)),
+					esc(
+						formatAgentPickerLabel({
+							name: r.agentName,
+							nickName: r.agentNickName,
+							agentCode: r.agentCode,
+						}),
+					),
+					esc(
+						r.marketType === "secondary" && r.propertyAddress
+							? r.propertyAddress
+							: (r.projectName ?? r.propertyAddress ?? ""),
+					),
+					esc(r.unitNo ?? ""),
 					r.nettPrice,
 					r.commissionPercent,
 					r.grossCommission,
@@ -391,7 +435,7 @@ export default function AdminCommissionsPage() {
 									<span className="flex size-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
 										<RiMoneyDollarCircleLine size={16} />
 									</span>
-									Commissions &amp; payout
+									Commissions Approval
 								</BreadcrumbPage>
 							</BreadcrumbItem>
 						</BreadcrumbList>
@@ -406,7 +450,7 @@ export default function AdminCommissionsPage() {
 				<div className="flex flex-wrap items-start justify-between gap-3">
 					<div className="min-w-0">
 						<h1 className="font-bold text-2xl tracking-tight">
-							Commissions &amp; payout
+							Commissions Approval
 						</h1>
 						<p className="mt-0.5 text-muted-foreground text-sm">
 							Approve, release, and track agent commission payments (RM).
@@ -479,7 +523,7 @@ export default function AdminCommissionsPage() {
 								<RiSearchLine className="-translate-y-1/2 absolute top-1/2 left-3 size-4 text-muted-foreground" />
 								<Input
 									className="h-10 rounded-xl border-border/70 bg-muted/30 pl-9 shadow-none focus-visible:bg-background"
-									placeholder="Search agent or case no…"
+									placeholder="Search agent, case no, Project / Unit no…"
 									value={search}
 									onChange={(e) => {
 										setSearch(e.target.value);
@@ -600,7 +644,8 @@ export default function AdminCommissionsPage() {
 						)}
 
 						<div className="overflow-x-auto rounded-xl border border-border/70">
-							<Table>
+							<div className="max-h-[min(70vh,720px)] overflow-y-auto [scrollbar-gutter:stable] [scrollbar-width:thin]">
+							<table className="w-full min-w-[1100px] caption-bottom border-collapse text-sm">
 								<TableHeader>
 									<TableRow className="border-border/60 hover:bg-transparent">
 										<TableHead className={cn(thClass, "w-10")}>
@@ -618,9 +663,14 @@ export default function AdminCommissionsPage() {
 												}}
 											/>
 										</TableHead>
-										<TableHead className={cn(thClass, "w-[120px]")}>Agent</TableHead>
-										<TableHead className={cn(thClass, "w-[120px]")}>Project</TableHead>
-										<TableHead className={cn(thClass, "w-[88px]")}>Case</TableHead>
+										<TableHead className={cn(thClass, "w-[96px]")}>Case No</TableHead>
+										<TableHead className={cn(thClass, "w-[100px]")}>
+											Submit Date
+										</TableHead>
+										<TableHead className={cn(thClass, "w-[160px]")}>Agent</TableHead>
+										<TableHead className={cn(thClass, "w-[180px]")}>
+											Project/Address
+										</TableHead>
 										<TableHead className={cn(thClass, "w-[96px] text-right")}>
 											Nett
 										</TableHead>
@@ -652,16 +702,22 @@ export default function AdminCommissionsPage() {
 														<Skeleton className="size-4 rounded" />
 													</TableCell>
 													<TableCell className={tdClass}>
+														<Skeleton className="h-3.5 w-16" />
+													</TableCell>
+													<TableCell className={tdClass}>
+														<Skeleton className="h-3.5 w-20" />
+													</TableCell>
+													<TableCell className={tdClass}>
 														<div className="space-y-1.5">
 															<Skeleton className="h-4 w-28" />
 															<Skeleton className="h-3 w-14" />
 														</div>
 													</TableCell>
 													<TableCell className={tdClass}>
-														<Skeleton className="h-3.5 w-24" />
-													</TableCell>
-													<TableCell className={tdClass}>
-														<Skeleton className="h-3.5 w-16" />
+														<div className="space-y-1.5">
+															<Skeleton className="h-3.5 w-24" />
+															<Skeleton className="h-3 w-14" />
+														</div>
 													</TableCell>
 													<TableCell className={cn(tdClass, "text-right")}>
 														<Skeleton className="ml-auto h-3.5 w-16" />
@@ -690,7 +746,7 @@ export default function AdminCommissionsPage() {
 									) : items.length === 0 ? (
 										<TableRow>
 											<TableCell
-												colSpan={11}
+												colSpan={12}
 												className="py-10 text-center text-muted-foreground"
 											>
 												No commission rows yet. Approve a transaction first.
@@ -718,10 +774,22 @@ export default function AdminCommissionsPage() {
 														/>
 													)}
 												</TableCell>
+												<TableCell
+													className={cn(tdClass, "font-mono text-xs")}
+												>
+													{r.caseNo ?? "—"}
+												</TableCell>
+												<TableCell className={cn(tdClass, "whitespace-nowrap")}>
+													{formatDateDMY(r.createdAt)}
+												</TableCell>
 												<TableCell className={tdClass}>
 													<div className="min-w-0">
-														<p className="truncate font-semibold text-sm">
-															{r.agentName}
+														<p className="font-semibold text-sm">
+															{formatAgentPickerLabel({
+																name: r.agentName,
+																nickName: r.agentNickName,
+																agentCode: r.agentCode,
+															})}
 														</p>
 														<Button
 															variant="link"
@@ -736,16 +804,8 @@ export default function AdminCommissionsPage() {
 														</Button>
 													</div>
 												</TableCell>
-												<TableCell
-													className={cn(tdClass, "max-w-[140px] truncate")}
-													title={r.projectName ?? undefined}
-												>
-													{r.projectName ?? "—"}
-												</TableCell>
-												<TableCell
-													className={cn(tdClass, "font-mono text-xs")}
-												>
-													{r.caseNo ?? "—"}
+												<TableCell className={cn(tdClass, "max-w-[220px]")}>
+													<LocationCell r={r} />
 												</TableCell>
 												<TableCell
 													className={cn(tdClass, "text-right tabular-nums")}
@@ -801,7 +861,8 @@ export default function AdminCommissionsPage() {
 										))
 									)}
 								</TableBody>
-							</Table>
+							</table>
+							</div>
 						</div>
 
 						<div className="flex flex-wrap items-center justify-between gap-3 border-border/60 border-t pt-3 text-muted-foreground text-sm">

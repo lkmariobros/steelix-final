@@ -41,6 +41,7 @@ import {
 	formatTransactionDate,
 	getStatusBadgeClass,
 } from "@/features/transactions/transaction-detail-utils";
+import { formatAgentPickerLabel } from "@/lib/agent-display";
 import { cn } from "@/lib/utils";
 import { trpc } from "@/utils/trpc";
 import {
@@ -71,8 +72,10 @@ type AdminTxRow = {
 	commissionAmount: string | null;
 	isCoBroking?: boolean | null;
 	agentName?: string | null;
+	agentNickName?: string | null;
 	agentCode?: string | null;
 	coAgentName?: string | null;
+	coAgentNickName?: string | null;
 	coAgentCode?: string | null;
 	propertyData?: {
 		address?: string;
@@ -86,15 +89,18 @@ type AdminTxRow = {
 
 function AgentCell({
 	name,
+	nickName,
 	code,
 }: {
 	name?: string | null;
+	nickName?: string | null;
 	code?: string | null;
 }) {
-	if (!name && !code) {
+	if (!name && !code && !nickName) {
 		return <span className="text-muted-foreground text-sm">—</span>;
 	}
-	const initials = (name ?? "?")
+	const label = formatAgentPickerLabel({ name, nickName, agentCode: code });
+	const initials = (name ?? nickName ?? "?")
 		.trim()
 		.split(/\s+/)
 		.filter(Boolean)
@@ -109,7 +115,7 @@ function AgentCell({
 			</span>
 			<div className="min-w-0">
 				<p className="truncate font-medium text-foreground text-sm leading-snug">
-					{name ?? "—"}
+					{label}
 				</p>
 				{code ? (
 					<p className="truncate font-mono text-muted-foreground text-[11px]">
@@ -125,16 +131,24 @@ function AgentsCell({ row }: { row: AdminTxRow }) {
 	const isCo = row.isCoBroking;
 	return (
 		<div className="flex min-w-[160px] flex-col gap-2.5 py-0.5">
-			<AgentCell name={row.agentName} code={row.agentCode} />
+			<AgentCell
+				name={row.agentName}
+				nickName={row.agentNickName}
+				code={row.agentCode}
+			/>
 			{isCo ? (
-				<AgentCell name={row.coAgentName} code={row.coAgentCode} />
+				<AgentCell
+					name={row.coAgentName}
+					nickName={row.coAgentNickName}
+					code={row.coAgentCode}
+				/>
 			) : null}
 		</div>
 	);
 }
 
 const thClass =
-	"h-11 whitespace-nowrap border-b border-border/60 bg-muted px-4 text-left font-semibold text-foreground/80 text-xs tracking-wide";
+	"sticky top-0 z-20 h-11 whitespace-nowrap border-b border-border/60 bg-muted px-4 text-left font-semibold text-foreground/80 text-xs tracking-wide shadow-[0_1px_0_0_hsl(var(--border)/0.6)]";
 const tdClass =
 	"border-b border-border/50 px-4 py-3.5 align-middle text-sm text-foreground/90";
 

@@ -499,13 +499,45 @@ export const agentsRouter = router({
 						)
 				: [];
 
-		// Combine agent data with performance metrics
+		const recruiterIds = [
+			...new Set(
+				agentsList
+					.map((a) => a.agent.recruitedBy)
+					.filter((id): id is string => Boolean(id)),
+			),
+		];
+		const recruiters =
+			recruiterIds.length > 0
+				? await db
+						.select({
+							id: user.id,
+							name: user.name,
+							nickName: user.nickName,
+							agentCode: user.agentCode,
+						})
+						.from(user)
+						.where(inArray(user.id, recruiterIds))
+				: [];
+		const recruiterMap = new Map(recruiters.map((r) => [r.id, r]));
+
+		// Combine agent data with performance metrics + recruiter
 		const agentsWithPerformance = agentsList.map((agentData) => {
 			const performance = performanceData.find(
 				(p) => p.agentId === agentData.agent.id,
 			);
+			const recruiter = agentData.agent.recruitedBy
+				? recruiterMap.get(agentData.agent.recruitedBy)
+				: null;
 			return {
 				...agentData,
+				recruiter: recruiter
+					? {
+							id: recruiter.id,
+							name: recruiter.name,
+							nickName: recruiter.nickName,
+							agentCode: recruiter.agentCode,
+						}
+					: null,
 				performance: performance || {
 					totalTransactions: 0,
 					totalCommission: "0",
@@ -1095,6 +1127,16 @@ export const agentsRouter = router({
 				throw new TRPCError({ code: "NOT_FOUND", message: "Agent not found" });
 			}
 
+			// Protected staff account — keep active; never hard-delete.
+			if (
+				target.email?.toLowerCase() === "igorkuzmenko0412@gmail.com"
+			) {
+				throw new TRPCError({
+					code: "FORBIDDEN",
+					message: "This account is protected and cannot be deleted",
+				});
+			}
+
 			if (target.role === "super_admin") {
 				// Super admin delete is allowed only if at least one super admin remains.
 				// (Self-delete is already blocked above.)
@@ -1320,8 +1362,8 @@ export const agentsRouter = router({
 				monthlyAgents: sql<number>`count(*) filter (where role in ('agent', 'team_lead') and created_at >= ${startOfMonth})`,
 				yearlyAgents: sql<number>`count(*) filter (where role in ('agent', 'team_lead') and created_at >= ${startOfYear})`,
 				pendingApprovals: sql<number>`count(*) filter (where agent_status = 'pending_approval')`,
-				gentingAgents: sql<number>`count(*) filter (where role = 'agent' and branch = 'GENTING')`,
-				puchongAgents: sql<number>`count(*) filter (where role = 'agent' and branch = 'PUCHONG')`,
+				gentingAgents: sql<number>`count(*) filter (where role = 'agent' and is_active = true and branch = 'GENTING')`,
+				puchongAgents: sql<number>`count(*) filter (where role = 'agent' and is_active = true and branch = 'PUCHONG')`,
 			})
 			.from(user);
 

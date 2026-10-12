@@ -85,7 +85,7 @@ const FINANCE_ICONS: Record<
 	(typeof FINANCE_SIDEBAR_ITEMS)[number]["title"],
 	NavIcon
 > = {
-	"Commission approvals": RiHandCoinLine,
+	"Commissions Approval": RiHandCoinLine,
 	Incentive: RiGiftLine,
 	"Commission payout": RiWallet3Line,
 };

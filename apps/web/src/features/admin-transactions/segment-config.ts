@@ -171,7 +171,7 @@ export const TRANSACTIONS_SIDEBAR_SECTIONS = TRANSACTIONS_SIDEBAR_ITEMS;
 
 export const FINANCE_SIDEBAR_ITEMS = [
 	{
-		title: "Commission approvals",
+		title: "Commissions Approval",
 		url: "/admin/commissions?status=pending_approval",
 	},
 	{

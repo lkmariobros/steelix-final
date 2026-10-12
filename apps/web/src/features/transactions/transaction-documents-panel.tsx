@@ -9,6 +9,7 @@ import {
 	DialogTitle,
 } from "@/components/ui/dialog";
 import { DocumentListSkeleton } from "@/components/loading-skeletons";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
 	Select,
 	SelectContent,
@@ -17,8 +18,16 @@ import {
 	SelectValue,
 } from "@/components/ui/select";
 import type { DocumentCategory } from "@/hooks/use-document-upload";
+import { formatDateTimeSecondsDMY } from "@/lib/date-format";
 import { trpc } from "@/utils/trpc";
-import { ExternalLink, FileText, Loader2, Upload } from "lucide-react";
+import {
+	Download,
+	ExternalLink,
+	FileText,
+	Loader2,
+	Trash2,
+	Upload,
+} from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -50,8 +59,14 @@ const UPLOAD_CATEGORIES: { value: DocumentCategory; label: string }[] = [
 	{ value: "spa", label: "SPA" },
 	{ value: "tenancy_agreement", label: "Tenancy agreement" },
 	{ value: "co_broke_letter", label: "Co-broke letter" },
+	{ value: "co_agency_invoice", label: "Co-Agency Invoice" },
+	{ value: "invoice", label: "Invoice" },
+	{ value: "lo_draft", label: "LO Draft" },
+	{ value: "lo_signed", label: "LO Signed" },
 	{ value: "other", label: "Other" },
 ];
+
+const UUID_RE = /^[0-9a-f-]{36}$/i;
 
 function isImageType(fileType?: string) {
 	if (!fileType) return false;
@@ -65,6 +80,8 @@ function isPdfType(fileType?: string, fileName?: string) {
 
 function formatCategory(category?: string) {
 	if (!category) return "Document";
+	const known = UPLOAD_CATEGORIES.find((c) => c.value === category);
+	if (known) return known.label;
 	return category.replace(/_/g, " ");
 }
 
@@ -197,6 +214,13 @@ export function TransactionDocumentsPanel({
 
 	const uploadSession = trpc.documents.createUploadSession.useMutation();
 	const uploadDocument = trpc.documents.upload.useMutation();
+	const deleteDocument = trpc.documents.delete.useMutation();
+
+	const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+	const [deletedIds, setDeletedIds] = useState<Set<string>>(new Set());
+	const [busyAction, setBusyAction] = useState<
+		"delete" | "download" | null
+	>(null);
 
 	const documents = useMemo((): DisplayDocument[] => {
 		const merged: DisplayDocument[] = apiDocs.map((d) => ({
@@ -227,8 +251,132 @@ export function TransactionDocumentsPanel({
 			});
 		}
 
-		return merged.filter((d) => d.url || d.fileName);
-	}, [apiDocs, fallbackDocuments]);
+		return merged.filter(
+			(d) => (d.url || d.fileName) && !deletedIds.has(d.id),
+		);
+	}, [apiDocs, fallbackDocuments, deletedIds]);
+
+	const selectedDocs = documents.filter((d) => selectedIds.has(d.id));
+	const allSelected =
+		documents.length > 0 && documents.every((d) => selectedIds.has(d.id));
+
+	const toggleSelected = (id: string, checked: boolean) => {
+		setSelectedIds((prev) => {
+			const next = new Set(prev);
+			if (checked) next.add(id);
+			else next.delete(id);
+			return next;
+		});
+	};
+
+	const resolveDownloadUrl = async (doc: DisplayDocument): Promise<string> => {
+		if (UUID_RE.test(doc.id) && !doc.needsLegacyResolve) {
+			const res = await utils.documents.getViewUrl.fetch({
+				documentId: doc.id,
+			});
+			return res.url || doc.url;
+		}
+		if (doc.url.startsWith("data:")) return doc.url;
+		if (doc.url) {
+			const res = await utils.documents.resolveLegacyUrl.fetch({
+				transactionId,
+				publicUrl: doc.url,
+			});
+			return res.url || doc.url;
+		}
+		return "";
+	};
+
+	const downloadDocument = async (doc: DisplayDocument) => {
+		const url = await resolveDownloadUrl(doc);
+		if (!url) throw new Error(`No file available for ${doc.fileName}`);
+		const triggerDownload = (href: string) => {
+			const a = document.createElement("a");
+			a.href = href;
+			a.download = doc.fileName;
+			a.rel = "noopener noreferrer";
+			document.body.appendChild(a);
+			a.click();
+			a.remove();
+		};
+		try {
+			const res = await fetch(url);
+			if (!res.ok) throw new Error(`HTTP ${res.status}`);
+			const blobUrl = URL.createObjectURL(await res.blob());
+			triggerDownload(blobUrl);
+			setTimeout(() => URL.revokeObjectURL(blobUrl), 10_000);
+		} catch {
+			// Cross-origin/CORS fallback: let the browser handle the signed URL directly
+			triggerDownload(url);
+		}
+	};
+
+	const handleDownload = async (docs: DisplayDocument[]) => {
+		if (docs.length === 0) return;
+		setBusyAction("download");
+		let failed = 0;
+		for (const doc of docs) {
+			try {
+				await downloadDocument(doc);
+			} catch (e) {
+				failed += 1;
+				toast.error(e instanceof Error ? e.message : "Download failed");
+			}
+		}
+		setBusyAction(null);
+		if (failed === 0 && docs.length > 1) {
+			toast.success(`Downloading ${docs.length} documents`);
+		}
+	};
+
+	const handleDelete = async (docs: DisplayDocument[]) => {
+		const deletable = docs.filter(
+			(d) => UUID_RE.test(d.id) && !d.needsLegacyResolve,
+		);
+		if (deletable.length === 0) {
+			toast.error("These documents cannot be deleted");
+			return;
+		}
+		const skipped = docs.length - deletable.length;
+		const confirmed = window.confirm(
+			deletable.length === 1
+				? `Delete "${deletable[0].fileName}"? This cannot be undone.`
+				: `Delete ${deletable.length} documents? This cannot be undone.`,
+		);
+		if (!confirmed) return;
+
+		setBusyAction("delete");
+		const removed: string[] = [];
+		for (const doc of deletable) {
+			try {
+				await deleteDocument.mutateAsync({ documentId: doc.id });
+				removed.push(doc.id);
+			} catch (e) {
+				toast.error(
+					`${doc.fileName}: ${e instanceof Error ? e.message : "Delete failed"}`,
+				);
+			}
+		}
+		setBusyAction(null);
+		if (removed.length > 0) {
+			setDeletedIds((prev) => new Set([...prev, ...removed]));
+			setSelectedIds((prev) => {
+				const next = new Set(prev);
+				for (const id of removed) next.delete(id);
+				return next;
+			});
+			toast.success(
+				removed.length === 1
+					? "Document deleted"
+					: `${removed.length} documents deleted`,
+			);
+			await utils.documents.list.invalidate({ transactionId });
+			void utils.transactions.invalidate();
+		}
+		if (skipped > 0) {
+			toast.message(`${skipped} legacy file(s) skipped (cannot be deleted)`);
+		}
+	};
 
 	const handleUpload = async (fileList: FileList | null) => {
 		if (!fileList?.length) return;
@@ -337,36 +485,122 @@ export function TransactionDocumentsPanel({
 			{documents.length === 0 ? (
 				<p className="text-muted-foreground text-sm">No documents uploaded.</p>
 			) : (
-				<ul className="space-y-2">
-					{documents.map((doc) => {
-						const sizeLabel = formatFileSize(doc.fileSize);
-						return (
-							<li key={doc.id}>
-								<button
+				<div className="space-y-2">
+					<div className="flex min-h-9 flex-wrap items-center gap-2 px-1">
+						<label className="flex cursor-pointer items-center gap-2 text-muted-foreground text-xs">
+							<Checkbox
+								checked={allSelected}
+								onCheckedChange={(c) =>
+									setSelectedIds(
+										c ? new Set(documents.map((d) => d.id)) : new Set(),
+									)
+								}
+								aria-label="Select all documents"
+							/>
+							{selectedDocs.length > 0
+								? `${selectedDocs.length} selected`
+								: "Select all"}
+						</label>
+						{selectedDocs.length > 0 ? (
+							<div className="ml-auto flex items-center gap-2">
+								<Button
 									type="button"
-									onClick={() => setSelectedDoc(doc)}
-									className="flex w-full items-center gap-3 rounded-lg border bg-background px-3 py-2.5 text-left transition-colors hover:bg-muted/50"
+									size="sm"
+									variant="outline"
+									disabled={busyAction !== null}
+									onClick={() => void handleDownload(selectedDocs)}
 								>
-									<FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
-									<div className="min-w-0 flex-1">
-										<p className="truncate font-medium text-primary text-sm underline-offset-2 hover:underline">
-											{doc.fileName}
-										</p>
-										<p className="text-muted-foreground text-xs">
-											{sizeLabel ?? doc.fileType}
-										</p>
-									</div>
-									<Badge
-										variant="secondary"
-										className="shrink-0 text-xs capitalize"
+									{busyAction === "download" ? (
+										<Loader2 className="mr-1 h-4 w-4 animate-spin" />
+									) : (
+										<Download className="mr-1 h-4 w-4" />
+									)}
+									Download all
+								</Button>
+								<Button
+									type="button"
+									size="sm"
+									variant="destructive"
+									disabled={busyAction !== null}
+									onClick={() => void handleDelete(selectedDocs)}
+								>
+									{busyAction === "delete" ? (
+										<Loader2 className="mr-1 h-4 w-4 animate-spin" />
+									) : (
+										<Trash2 className="mr-1 h-4 w-4" />
+									)}
+									Delete all
+								</Button>
+							</div>
+						) : null}
+					</div>
+					<ul className="space-y-2">
+						{documents.map((doc) => {
+							const sizeLabel = formatFileSize(doc.fileSize);
+							return (
+								<li
+									key={doc.id}
+									className="flex items-center gap-3 rounded-lg border bg-background px-3 py-2.5 transition-colors hover:bg-muted/50"
+								>
+									<Checkbox
+										checked={selectedIds.has(doc.id)}
+										onCheckedChange={(c) => toggleSelected(doc.id, c === true)}
+										aria-label={`Select ${doc.fileName}`}
+									/>
+									<button
+										type="button"
+										onClick={() => setSelectedDoc(doc)}
+										className="flex min-w-0 flex-1 items-center gap-3 text-left"
 									>
-										{formatCategory(doc.documentCategory)}
-									</Badge>
-								</button>
-							</li>
-						);
-					})}
-				</ul>
+										<FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+										<div className="min-w-0 flex-1">
+											<p className="truncate font-medium text-primary text-sm underline-offset-2 hover:underline">
+												{doc.fileName}
+											</p>
+											<p className="text-muted-foreground text-xs">
+												{[sizeLabel ?? doc.fileType, formatDateTimeSecondsDMY(doc.uploadedAt)]
+													.filter(Boolean)
+													.join(" · ")}
+											</p>
+										</div>
+										<Badge
+											variant="secondary"
+											className="shrink-0 text-xs capitalize"
+										>
+											{formatCategory(doc.documentCategory)}
+										</Badge>
+									</button>
+									<div className="flex shrink-0 items-center gap-1">
+										<Button
+											type="button"
+											size="icon"
+											variant="ghost"
+											className="h-8 w-8"
+											title="Download"
+											disabled={busyAction !== null}
+											onClick={() => void handleDownload([doc])}
+										>
+											<Download className="h-4 w-4" />
+											<span className="sr-only">Download</span>
+										</Button>
+										<Button
+											type="button"
+											size="icon"
+											variant="ghost"
+											className="h-8 w-8 text-destructive hover:text-destructive"
+											title="Delete"
+											disabled={busyAction !== null}
+											onClick={() => void handleDelete([doc])}
+										>
+											<Trash2 className="h-4 w-4" />
+											<span className="sr-only">Delete</span>
+										</Button>
+									</div>
+								</li>
+							);
+						})}
+					</ul>
+				</div>
 			)}
 
 			<Dialog

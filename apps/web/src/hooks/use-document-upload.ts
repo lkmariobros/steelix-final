@@ -18,7 +18,11 @@ export type DocumentCategory =
 	| "receipt"
 	| "co_broke_letter"
 	| "tenancy_agreement"
-	| "spa";
+	| "spa"
+	| "co_agency_invoice"
+	| "invoice"
+	| "lo_draft"
+	| "lo_signed";
 
 export interface DocumentFile {
 	id: string;

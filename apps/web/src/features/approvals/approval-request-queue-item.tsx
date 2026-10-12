@@ -6,6 +6,7 @@ import {
 	getStatusBadgeClass,
 } from "@/features/transactions/transaction-detail-utils";
 import { formatRequestItemLabel } from "@/features/transactions/request-items";
+import { formatAgentPickerLabel } from "@/lib/agent-display";
 import { formatDateDMY } from "@/lib/date-format";
 import {
 	RiCheckLine,
@@ -19,8 +20,10 @@ export type ApprovalRequestQueueTransaction = {
 	id: string;
 	caseNo?: string | null;
 	agentName?: string | null;
+	agentNickName?: string | null;
 	agentCode?: string | null;
 	coAgentName?: string | null;
+	coAgentNickName?: string | null;
 	coAgentCode?: string | null;
 	isCoBroking?: boolean | null;
 	status: string | null;
@@ -91,21 +94,18 @@ function DetailField({
 
 function AgentLine({
 	name,
+	nickName,
 	code,
 }: {
 	name?: string | null;
+	nickName?: string | null;
 	code?: string | null;
 }) {
-	if (!name && !code) return <span className="text-muted-foreground">—</span>;
+	if (!name && !code && !nickName) {
+		return <span className="text-muted-foreground">—</span>;
+	}
 	return (
-		<span>
-			{name ?? "—"}
-			{code ? (
-				<span className="ms-1 font-mono text-muted-foreground text-xs">
-					({code})
-				</span>
-			) : null}
-		</span>
+		<span>{formatAgentPickerLabel({ name, nickName, agentCode: code })}</span>
 	);
 }
 
@@ -219,6 +219,7 @@ export function ApprovalRequestQueueItem({
 					<span className="text-sm">
 						<AgentLine
 							name={transaction.agentName}
+							nickName={transaction.agentNickName}
 							code={transaction.agentCode}
 						/>
 						{isCo ? (
@@ -226,6 +227,7 @@ export function ApprovalRequestQueueItem({
 								<span className="mx-1 text-muted-foreground">&</span>
 								<AgentLine
 									name={transaction.coAgentName}
+									nickName={transaction.coAgentNickName}
 									code={transaction.coAgentCode}
 								/>
 							</>

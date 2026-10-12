@@ -7,6 +7,10 @@ const DOCUMENT_CATEGORY_VALUES = [
 	"co_broke_letter",
 	"tenancy_agreement",
 	"spa",
+	"co_agency_invoice",
+	"invoice",
+	"lo_draft",
+	"lo_signed",
 ] as const;
 
 export const DOCUMENT_CATEGORY_SQL_PATCH = `

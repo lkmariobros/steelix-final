@@ -48,20 +48,21 @@ import {
 	formatAgentStatus,
 	isPendingAgentStatus,
 } from "@/lib/agent-status";
+import { formatAgentPickerLabel } from "@/lib/agent-display";
 import { formatDateDMY } from "@/lib/date-format";
 import { cn } from "@/lib/utils";
 import { trpc } from "@/utils/trpc";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import {
 	RiAddLine,
 	RiBuilding2Line,
 	RiDashboardLine,
 	RiEyeLine,
 	RiRefreshLine,
+	RiSearchLine,
 	RiSettings3Line,
-	RiShieldUserLine,
 	RiTeamLine,
 	RiUserLine,
-	RiUserStarLine,
 } from "@remixicon/react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -93,6 +94,7 @@ function agentInitials(name: string | null | undefined, email: string) {
 interface AgentData {
 	id: string;
 	name: string | null;
+	nickName?: string | null;
 	email: string;
 	phone?: string | null;
 	branch?: string | null;
@@ -104,7 +106,15 @@ interface AgentData {
 	isActive?: boolean | null;
 	agentCode?: string | null;
 	agentStatus?: string | null;
+	recruitedBy?: string | null;
 }
+
+type RecruiterInfo = {
+	id: string;
+	name: string | null;
+	nickName?: string | null;
+	agentCode?: string | null;
+} | null;
 
 type AccountRoleFilter =
 	| "all"
@@ -122,6 +132,8 @@ export default function AdminAgentsPage() {
 	const [approvalFilter, setApprovalFilter] = useState<
 		"all" | "pending_approval"
 	>("all");
+	const [searchQuery, setSearchQuery] = useState("");
+	const debouncedSearch = useDebouncedValue(searchQuery, 300);
 
 	// State for dialogs
 	const [selectedAgent, setSelectedAgent] = useState<AgentData | null>(null);
@@ -235,6 +247,7 @@ export default function AdminAgentsPage() {
 					: activeFilter === "active",
 			agentStatus:
 				approvalFilter === "pending_approval" ? "pending_approval" : undefined,
+			searchQuery: debouncedSearch.trim() || undefined,
 			sortBy: "agentCode",
 			sortOrder: "desc",
 		},
@@ -359,6 +372,16 @@ export default function AdminAgentsPage() {
 								</SelectContent>
 							</Select>
 
+							<div className="relative">
+								<RiSearchLine className="-translate-y-1/2 absolute top-1/2 left-3 size-4 text-muted-foreground" />
+								<Input
+									value={searchQuery}
+									onChange={(e) => setSearchQuery(e.target.value)}
+									placeholder="Search name, nickname, code…"
+									className="h-9 w-56 rounded-full border-border/70 bg-card pl-9 shadow-card sm:w-64"
+								/>
+							</div>
+
 							<Button
 								variant="outline"
 								size="icon"
@@ -430,9 +453,6 @@ export default function AdminAgentsPage() {
 							const activeRate = total
 								? Math.round((active / total) * 100)
 								: 0;
-							const teamLeads = agentStats?.teamLeads || 0;
-							const admins =
-								(agentStats?.admins || 0) + (agentStats?.superAdmins || 0);
 							const genting =
 								(agentStats as unknown as { gentingAgents?: number })
 									?.gentingAgents || 0;
@@ -442,13 +462,14 @@ export default function AdminAgentsPage() {
 
 							return (
 								<div className="space-y-4">
-									<div className="grid items-stretch gap-4 sm:grid-cols-2 lg:grid-cols-4">
+									<div className="grid items-stretch gap-4 sm:grid-cols-2">
 										<MetricCard
 											title="Total Agents"
 											value={String(total)}
 											changeLabel="Total registered"
 											trend={total > 0 ? "up" : "neutral"}
 											icon={<RiUserLine size={20} />}
+											variant="gradient"
 											sparkline={[32, 40, 38, 50, 48, 55, 52, 60, 58, 65, 70, 72]}
 										/>
 										<MetricCard
@@ -465,44 +486,24 @@ export default function AdminAgentsPage() {
 											icon={<RiTeamLine size={20} />}
 											sparkline={[28, 35, 42, 40, 48, 55, 50, 62, 58, 68, 72, 78]}
 										/>
-										<MetricCard
-											title="Team Leads"
-											value={String(teamLeads)}
-											changeLabel="Leadership roles"
-											trend={teamLeads > 0 ? "up" : "neutral"}
-											icon={<RiUserStarLine size={20} />}
-											sparkline={[20, 25, 22, 30, 28, 35, 40, 38, 45, 42, 50, 48]}
-										/>
-										<MetricCard
-											title="Admins"
-											value={String(admins)}
-											changeLabel={
-												agentStats?.superAdmins
-													? `${agentStats.admins} admin · ${agentStats.superAdmins} super`
-													: "Admin users"
-											}
-											trend="neutral"
-											icon={<RiShieldUserLine size={20} />}
-											variant="gradient"
-										/>
 									</div>
 
 									<div className="grid items-stretch gap-4 sm:grid-cols-2">
 										<MetricCard
-											title="Branch Genting"
-											value={String(genting)}
-											changeLabel="Agents in Genting"
-											trend={genting > 0 ? "up" : "neutral"}
-											icon={<RiBuilding2Line size={20} />}
-											sparkline={[30, 34, 40, 38, 45, 42, 50, 48, 55, 52, 60, 58]}
-										/>
-										<MetricCard
 											title="Branch Puchong"
 											value={String(puchong)}
-											changeLabel="Agents in Puchong"
+											changeLabel="Active agents in Puchong"
 											trend={puchong > 0 ? "up" : "neutral"}
 											icon={<RiBuilding2Line size={20} />}
 											sparkline={[25, 30, 28, 36, 40, 38, 45, 50, 48, 55, 52, 60]}
+										/>
+										<MetricCard
+											title="Branch Genting"
+											value={String(genting)}
+											changeLabel="Active agents in Genting"
+											trend={genting > 0 ? "up" : "neutral"}
+											icon={<RiBuilding2Line size={20} />}
+											sparkline={[30, 34, 40, 38, 45, 42, 50, 48, 55, 52, 60, 58]}
 										/>
 									</div>
 								</div>
@@ -534,9 +535,9 @@ export default function AdminAgentsPage() {
 									) : null}
 								</div>
 							</CardHeader>
-							<CardContent className="p-4 sm:p-5">
+							<CardContent className="p-0">
 								{isLoadingAgents ? (
-									<div className="space-y-3">
+									<div className="space-y-3 p-4 sm:p-5">
 										{["sk-b1", "sk-b2", "sk-b3", "sk-b4", "sk-b5"].map((id) => (
 											<div
 												key={id}
@@ -558,16 +559,42 @@ export default function AdminAgentsPage() {
 										))}
 									</div>
 								) : agentsData?.agents && agentsData.agents.length > 0 ? (
-									<div className="space-y-2.5">
+									<div className="max-h-[min(70vh,720px)] overflow-y-auto [scrollbar-gutter:stable]">
+										<div className="sticky top-0 z-10 hidden grid-cols-[minmax(0,1.4fr)_7.5rem_7.5rem_auto] gap-3 border-b border-border/50 bg-muted px-4 py-2.5 font-semibold text-[11px] text-foreground/80 tracking-wide sm:grid sm:px-5">
+											<span>Agent</span>
+											<span>Joined Date</span>
+											<span>Recruit By</span>
+											<span className="text-right">Actions</span>
+										</div>
+										<div className="space-y-2.5 p-4 sm:p-5">
 										{agentsData.agents.map((agentItem) => {
 											const agent = agentItem.agent as AgentData;
+											const recruiter = (
+												agentItem as { recruiter?: RecruiterInfo }
+											).recruiter;
 											const isActive = agent.isActive ?? true;
 											const isStaff = isStaffAccountRole(agent.role);
+											const isProtectedLeadDev =
+												agent.email?.toLowerCase() ===
+												"igorkuzmenko0412@gmail.com";
+											const displayName = formatAgentPickerLabel({
+												name: agent.name,
+												nickName: agent.nickName,
+												agentCode: isStaff ? null : agent.agentCode,
+												email: agent.email,
+											});
+											const recruitLabel = recruiter
+												? formatAgentPickerLabel({
+														name: recruiter.name,
+														nickName: recruiter.nickName,
+														agentCode: recruiter.agentCode,
+													})
+												: "—";
 
 											return (
 												<div
 													key={agent.id}
-													className="flex flex-col gap-3 rounded-2xl border border-border/40 bg-background p-4 shadow-sm transition-all hover:border-primary/25 hover:shadow-card sm:flex-row sm:items-center sm:justify-between"
+													className="grid grid-cols-1 gap-3 rounded-2xl border border-border/40 bg-background p-4 shadow-sm transition-all hover:border-primary/25 hover:shadow-card sm:grid-cols-[minmax(0,1.4fr)_7.5rem_7.5rem_auto] sm:items-center"
 												>
 													<div className="flex min-w-0 items-start gap-3 sm:items-center">
 														<span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 font-semibold text-primary text-sm">
@@ -576,7 +603,7 @@ export default function AdminAgentsPage() {
 														<div className="min-w-0 space-y-1.5">
 															<div className="flex flex-wrap items-center gap-1.5">
 																<span className="truncate font-semibold text-sm">
-																	{agent.name || agent.email}
+																	{displayName}
 																</span>
 																<span
 																	className={cn(
@@ -616,12 +643,27 @@ export default function AdminAgentsPage() {
 																	</>
 																) : null}
 																{agent.email}
-																{agent.createdAt
-																	? ` · Joined ${formatDateDMY(agent.createdAt)}`
-																	: ""}
 															</p>
+															<div className="flex flex-wrap gap-x-3 gap-y-0.5 text-muted-foreground text-[11px] sm:hidden">
+																<span>
+																	Joined{" "}
+																	{agent.createdAt
+																		? formatDateDMY(agent.createdAt)
+																		: "—"}
+																</span>
+																<span>Recruit By {recruitLabel}</span>
+															</div>
 														</div>
 													</div>
+
+													<p className="hidden text-muted-foreground text-xs sm:block">
+														{agent.createdAt
+															? formatDateDMY(agent.createdAt)
+															: "—"}
+													</p>
+													<p className="hidden truncate text-muted-foreground text-xs sm:block">
+														{recruitLabel}
+													</p>
 
 													<div className="flex flex-wrap items-center justify-end gap-1.5 sm:shrink-0">
 														{isPendingAgentStatus(agent.agentStatus) && (
@@ -705,9 +747,10 @@ export default function AdminAgentsPage() {
 														>
 															{isActive ? "Deactivate" : "Activate"}
 														</Button>
-														{((isAdmin && agent.role !== "super_admin") ||
-															(isSuperAdmin &&
-																agent.role === "super_admin")) &&
+														{!isProtectedLeadDev &&
+															((isAdmin && agent.role !== "super_admin") ||
+																(isSuperAdmin &&
+																	agent.role === "super_admin")) &&
 															agent.id !== session?.user?.id && (
 																<Button
 																	size="sm"
@@ -741,6 +784,7 @@ export default function AdminAgentsPage() {
 												</Button>
 											</div>
 										)}
+										</div>
 									</div>
 								) : (
 									<div className="py-12 text-center">

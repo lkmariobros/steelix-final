@@ -62,6 +62,10 @@ export const documentCategoryEnum = pgEnum("document_category", [
 	"co_broke_letter",
 	"tenancy_agreement",
 	"spa",
+	"co_agency_invoice",
+	"invoice",
+	"lo_draft",
+	"lo_signed",
 ]);
 
 // Main transactions table — indexes for list/filter/dashboard performance

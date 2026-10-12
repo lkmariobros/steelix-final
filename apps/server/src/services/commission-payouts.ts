@@ -316,6 +316,8 @@ export async function listCommissionPayoutsAdmin(opts: PayoutListFilters) {
 			or(
 				ilike(commissionPayouts.caseNo, q),
 				ilike(user.name, q),
+				ilike(commissionPayouts.projectName, q),
+				ilike(commissionPayouts.unitNo, q),
 			)!,
 		);
 	}
@@ -326,9 +328,14 @@ export async function listCommissionPayoutsAdmin(opts: PayoutListFilters) {
 		.select({
 			payout: commissionPayouts,
 			agentName: user.name,
+			agentNickName: user.nickName,
+			agentCode: user.agentCode,
+			marketType: transactions.marketType,
+			propertyAddress: sql<string | null>`${transactions.propertyData}->>'address'`,
 		})
 		.from(commissionPayouts)
 		.innerJoin(user, eq(commissionPayouts.payeeAgentId, user.id))
+		.leftJoin(transactions, eq(commissionPayouts.transactionId, transactions.id))
 		.where(whereClause)
 		.orderBy(desc(commissionPayouts.updatedAt))
 		.limit(opts.limit)
@@ -338,6 +345,7 @@ export async function listCommissionPayoutsAdmin(opts: PayoutListFilters) {
 		.select({ count: sql<number>`count(*)::int` })
 		.from(commissionPayouts)
 		.innerJoin(user, eq(commissionPayouts.payeeAgentId, user.id))
+		.leftJoin(transactions, eq(commissionPayouts.transactionId, transactions.id))
 		.where(whereClause);
 
 	return { rows, total: count };

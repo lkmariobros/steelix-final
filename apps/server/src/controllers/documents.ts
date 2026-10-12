@@ -23,6 +23,10 @@ const DOCUMENT_CATEGORIES = [
 	"co_broke_letter",
 	"tenancy_agreement",
 	"spa",
+	"co_agency_invoice",
+	"invoice",
+	"lo_draft",
+	"lo_signed",
 ] as const;
 
 const DOCUMENTS_BUCKET = "transaction-documents";

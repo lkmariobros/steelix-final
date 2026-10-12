@@ -29,6 +29,28 @@ export function formatDateTimeDMY(
 	}).format(dateObj);
 }
 
+/** Date + time with seconds as DD/MM/YYYY HH:mm:ss in Malaysia time (e.g. 08/07/2026 14:30:05). */
+export function formatDateTimeSecondsDMY(
+	date: Date | string | null | undefined,
+): string {
+	if (!date) return "—";
+	const dateObj = typeof date === "string" ? new Date(date) : date;
+	if (Number.isNaN(dateObj.getTime())) return "—";
+	const parts = new Intl.DateTimeFormat("en-GB", {
+		timeZone: "Asia/Kuala_Lumpur",
+		day: "2-digit",
+		month: "2-digit",
+		year: "numeric",
+		hour: "2-digit",
+		minute: "2-digit",
+		second: "2-digit",
+		hourCycle: "h23",
+	}).formatToParts(dateObj);
+	const get = (type: Intl.DateTimeFormatPartTypes) =>
+		parts.find((p) => p.type === type)?.value ?? "";
+	return `${get("day")}/${get("month")}/${get("year")} ${get("hour")}:${get("minute")}:${get("second")}`;
+}
+
 /** Value for `<input type="date" />` (YYYY-MM-DD). */
 export function toDateInputValue(
 	date: Date | string | null | undefined,

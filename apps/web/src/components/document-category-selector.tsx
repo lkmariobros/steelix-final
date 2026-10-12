@@ -95,6 +95,30 @@ export function DocumentCategorySelector({
 			description: "Sales & Purchase Agreement",
 		},
 		{
+			value: "co_agency_invoice" as DocumentCategory,
+			label: "Co-Agency Invoice",
+			icon: Receipt,
+			description: "Co-agency invoice",
+		},
+		{
+			value: "invoice" as DocumentCategory,
+			label: "Invoice",
+			icon: Receipt,
+			description: "Invoice document",
+		},
+		{
+			value: "lo_draft" as DocumentCategory,
+			label: "LO Draft",
+			icon: FileText,
+			description: "Letter of offer (draft)",
+		},
+		{
+			value: "lo_signed" as DocumentCategory,
+			label: "LO Signed",
+			icon: ScrollText,
+			description: "Signed letter of offer",
+		},
+		{
 			value: "other" as DocumentCategory,
 			label: "Other",
 			icon: File,

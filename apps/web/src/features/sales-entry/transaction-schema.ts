@@ -306,6 +306,10 @@ export const documentsSchema = z.object({
 						"co_broke_letter",
 						"tenancy_agreement",
 						"spa",
+						"co_agency_invoice",
+						"invoice",
+						"lo_draft",
+						"lo_signed",
 					])
 					.optional(),
 			}),

@@ -924,6 +924,7 @@ export const transactionsRouter = router({
 					createdAt: transactions.createdAt,
 					updatedAt: transactions.updatedAt,
 					agentName: user.name,
+					agentNickName: user.nickName,
 					agentCode: user.agentCode,
 				})
 				.from(transactions)
@@ -961,6 +962,7 @@ export const transactionsRouter = router({
 							.select({
 								id: user.id,
 								name: user.name,
+								nickName: user.nickName,
 								agentCode: user.agentCode,
 							})
 							.from(user)
@@ -977,13 +979,15 @@ export const transactionsRouter = router({
 					const coAgent = co?.internalAgentId
 						? coAgentMap.get(co.internalAgentId)
 						: null;
-					const { agentName, agentCode, ...tx } = r;
+					const { agentName, agentNickName, agentCode, ...tx } = r;
 					return {
 						...tx,
 						status: normalizeLegacyStatus(tx.status),
 						agentName,
+						agentNickName,
 						agentCode,
 						coAgentName: coAgent?.name ?? co?.agentName ?? null,
+						coAgentNickName: coAgent?.nickName ?? null,
 						coAgentCode: coAgent?.agentCode ?? null,
 					};
 				}),

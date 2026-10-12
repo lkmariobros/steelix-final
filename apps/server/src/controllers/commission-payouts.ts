@@ -65,6 +65,11 @@ export const commissionPayoutsRouter = router({
 			items: rows.map((r) => ({
 				...r.payout,
 				agentName: r.agentName,
+				agentNickName: r.agentNickName,
+				agentCode: r.agentCode,
+				marketType: r.marketType,
+				propertyAddress: r.propertyAddress,
+				submitDate: r.payout.createdAt,
 			})),
 			total,
 			hasMore: input.offset + input.limit < total,

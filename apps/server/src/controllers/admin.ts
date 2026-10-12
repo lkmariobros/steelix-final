@@ -188,6 +188,7 @@ export const adminRouter = router({
 						isCoBroking: transactions.isCoBroking,
 						coBrokingData: transactions.coBrokingData,
 						agentName: user.name,
+						agentNickName: user.nickName,
 						agentEmail: user.email,
 						agentImage: user.image,
 						agentCode: user.agentCode,
@@ -224,6 +225,7 @@ export const adminRouter = router({
 							.select({
 								id: user.id,
 								name: user.name,
+								nickName: user.nickName,
 								agentCode: user.agentCode,
 							})
 							.from(user)
@@ -242,6 +244,7 @@ export const adminRouter = router({
 				return {
 					...row,
 					coAgentName: coAgent?.name ?? co?.agentName ?? null,
+					coAgentNickName: coAgent?.nickName ?? null,
 					coAgentCode: coAgent?.agentCode ?? null,
 				};
 			});

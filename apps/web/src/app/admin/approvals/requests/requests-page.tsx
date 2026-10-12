@@ -37,6 +37,7 @@ import {
 	getStatusBadgeClass,
 } from "@/features/transactions/transaction-detail-utils";
 import { formatRequestItemLabel } from "@/features/transactions/request-items";
+import { formatAgentPickerLabel } from "@/lib/agent-display";
 import { formatDateDMY } from "@/lib/date-format";
 import { trpc } from "@/utils/trpc";
 import {
@@ -112,15 +113,20 @@ function formatCashLoan(method?: string | null) {
 
 function AgentCell({
 	name,
+	nickName,
 	code,
 }: {
 	name?: string | null;
+	nickName?: string | null;
 	code?: string | null;
 }) {
-	if (!name && !code) return <span className="text-muted-foreground">—</span>;
+	if (!name && !code && !nickName) {
+		return <span className="text-muted-foreground">—</span>;
+	}
+	const label = formatAgentPickerLabel({ name, nickName, agentCode: code });
 	return (
 		<div className="min-w-0 max-w-full">
-			<p className="truncate font-medium text-sm leading-snug">{name ?? "—"}</p>
+			<p className="truncate font-medium text-sm leading-snug">{label}</p>
 			{code ? (
 				<p className="truncate font-mono text-muted-foreground text-[11px]">
 					{code}
@@ -133,9 +139,17 @@ function AgentCell({
 function AgentsCell({ row }: { row: ApprovalRequestQueueTransaction }) {
 	return (
 		<div className="min-w-0 max-w-full space-y-1">
-			<AgentCell name={row.agentName} code={row.agentCode} />
+			<AgentCell
+				name={row.agentName}
+				nickName={row.agentNickName}
+				code={row.agentCode}
+			/>
 			{row.isCoBroking ? (
-				<AgentCell name={row.coAgentName} code={row.coAgentCode} />
+				<AgentCell
+					name={row.coAgentName}
+					nickName={row.coAgentNickName}
+					code={row.coAgentCode}
+				/>
 			) : null}
 		</div>
 	);
