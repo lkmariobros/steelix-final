@@ -314,8 +314,18 @@ export default function AdminAgentsPage() {
 							</p>
 						</div>
 
-						{/* Agent Controls */}
+						{/* Agent Controls — search first, then filters */}
 						<div className="flex flex-wrap items-center gap-2">
+							<div className="relative">
+								<RiSearchLine className="-translate-y-1/2 absolute top-1/2 left-3 size-4 text-muted-foreground" />
+								<Input
+									value={searchQuery}
+									onChange={(e) => setSearchQuery(e.target.value)}
+									placeholder="Search name, nickname, code…"
+									className="h-9 w-56 rounded-full border-border/70 bg-card pl-9 shadow-card sm:w-64"
+								/>
+							</div>
+
 							<Select
 								value={roleFilter}
 								onValueChange={(value) =>
@@ -371,16 +381,6 @@ export default function AdminAgentsPage() {
 									<SelectItem value="inactive">Inactive</SelectItem>
 								</SelectContent>
 							</Select>
-
-							<div className="relative">
-								<RiSearchLine className="-translate-y-1/2 absolute top-1/2 left-3 size-4 text-muted-foreground" />
-								<Input
-									value={searchQuery}
-									onChange={(e) => setSearchQuery(e.target.value)}
-									placeholder="Search name, nickname, code…"
-									className="h-9 w-56 rounded-full border-border/70 bg-card pl-9 shadow-card sm:w-64"
-								/>
-							</div>
 
 							<Button
 								variant="outline"
