@@ -307,6 +307,8 @@ const createAgentInput = z.object({
 	acceptedNda: z.literal(true),
 	password: z.string().min(8),
 	branch: z.string().min(1).max(120).optional(),
+	recruitedBy: z.string().min(1).optional(),
+	joinedDate: z.coerce.date().optional(),
 	teamId: z.string().uuid().optional(),
 	agencyId: z.string().uuid().optional(),
 	role: z.enum(["agent", "team_lead", "admin"]).default("agent"),
@@ -926,7 +928,22 @@ export const agentsRouter = router({
 			});
 		}
 
+		if (input.recruitedBy) {
+			const [recruiter] = await db
+				.select({ id: user.id })
+				.from(user)
+				.where(eq(user.id, input.recruitedBy))
+				.limit(1);
+			if (!recruiter) {
+				throw new TRPCError({
+					code: "BAD_REQUEST",
+					message: "Recruiter not found",
+				});
+			}
+		}
+
 		const now = new Date();
+		const joinedAt = input.joinedDate ?? now;
 		const userId = crypto.randomUUID();
 		const passwordHash = await hashPassword(input.password);
 		const agentCode = await getNextAgentCode();
@@ -978,11 +995,11 @@ export const agentsRouter = router({
 				companyCommissionSplit: 70,
 				tierEffectiveDate: now,
 				tierPromotedBy: ctx.session.user.id,
-				recruitedBy: null,
-				recruitedAt: null,
+				recruitedBy: input.recruitedBy ?? null,
+				recruitedAt: input.recruitedBy ? joinedAt : null,
 				agentCode,
 				agentStatus: "active",
-				createdAt: now,
+				createdAt: joinedAt,
 				updatedAt: now,
 			})
 			.returning();

@@ -26,7 +26,11 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@/components/ui/card";
+import { formatAgentPickerLabel } from "@/lib/agent-display";
+import { parseDateInputValue, toDateInputValue } from "@/lib/date-format";
 import { trpc } from "@/utils/trpc";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
+import { RiSearchLine } from "@remixicon/react";
 import { RecruitmentFormFields } from "./recruitment-form-fields";
 import { BRANCH_OPTIONS } from "./constants";
 import {
@@ -77,10 +81,33 @@ export function CreateAgentAccountDialog({
 	const [acceptedNda, setAcceptedNda] = useState(false);
 	const [password, setPassword] = useState("");
 	const [branch, setBranch] = useState("");
+	const [joinedDate, setJoinedDate] = useState(() =>
+		toDateInputValue(new Date()),
+	);
+	const [recruitedById, setRecruitedById] = useState("");
+	const [recruiterLabel, setRecruiterLabel] = useState<string | null>(null);
+	const [recruiterSearch, setRecruiterSearch] = useState("");
+	const [recruiterPickerOpen, setRecruiterPickerOpen] = useState(false);
+	const debouncedRecruiterSearch = useDebouncedValue(recruiterSearch, 300);
 	const [role, setRole] = useState<"agent" | "team_lead" | "admin">("agent");
 	const [uploadingDoc, setUploadingDoc] = useState<RecruitmentDocKey | null>(
 		null,
 	);
+
+	const { data: recruiterData, isLoading: recruitersLoading } =
+		trpc.agents.list.useQuery(
+			{
+				limit: 20,
+				offset: 0,
+				role: "agent",
+				isActive: true,
+				searchQuery: debouncedRecruiterSearch.trim() || undefined,
+				sortBy: "name",
+				sortOrder: "asc",
+			},
+			{ enabled: open && recruiterPickerOpen && !recruitedById },
+		);
+	const recruiterCandidates = recruiterData?.agents ?? [];
 
 	const uploadSessionMutation =
 		trpc.agents.createOnboardingUploadSession.useMutation();
@@ -101,6 +128,11 @@ export function CreateAgentAccountDialog({
 		setAcceptedNda(false);
 		setPassword("");
 		setBranch("");
+		setJoinedDate(toDateInputValue(new Date()));
+		setRecruitedById("");
+		setRecruiterLabel(null);
+		setRecruiterSearch("");
+		setRecruiterPickerOpen(false);
 		setRole("agent");
 		setUploadingDoc(null);
 	};
@@ -234,6 +266,8 @@ export function CreateAgentAccountDialog({
 			acceptedNda: true,
 			password,
 			branch: branch.trim() || undefined,
+			joinedDate: parseDateInputValue(joinedDate),
+			recruitedBy: recruitedById || undefined,
 			role: isSuperAdmin ? role : "agent",
 		});
 	};
@@ -298,6 +332,91 @@ export function CreateAgentAccountDialog({
 											))}
 										</SelectContent>
 									</Select>
+								</div>
+								<div className="space-y-2">
+									<Label>Joined Date</Label>
+									<Input
+										type="date"
+										value={joinedDate}
+										max={toDateInputValue(new Date())}
+										onChange={(e) => setJoinedDate(e.target.value)}
+									/>
+								</div>
+								<div className="space-y-2">
+									<Label>Recruit By</Label>
+									{recruitedById && recruiterLabel ? (
+										<div className="flex h-9 items-center justify-between gap-2 rounded-md border bg-muted/40 px-3 text-sm">
+											<span className="truncate">{recruiterLabel}</span>
+											<Button
+												type="button"
+												variant="ghost"
+												size="sm"
+												className="h-7 px-2"
+												onClick={() => {
+													setRecruitedById("");
+													setRecruiterLabel(null);
+													setRecruiterSearch("");
+													setRecruiterPickerOpen(true);
+												}}
+											>
+												Change
+											</Button>
+										</div>
+									) : (
+										<div className="relative">
+											<RiSearchLine className="-translate-y-1/2 absolute top-1/2 left-2.5 size-4 text-muted-foreground" />
+											<Input
+												className="pl-8"
+												placeholder="Search name, nickname, code…"
+												value={recruiterSearch}
+												onChange={(e) => {
+													setRecruiterSearch(e.target.value);
+													setRecruiterPickerOpen(true);
+												}}
+												onFocus={() => setRecruiterPickerOpen(true)}
+												onBlur={() => setRecruiterPickerOpen(false)}
+											/>
+											{recruiterPickerOpen ? (
+												<ul className="absolute z-20 mt-1 max-h-48 w-full space-y-0.5 overflow-y-auto rounded-md border bg-popover p-1 shadow-md">
+													{recruitersLoading ? (
+														<li className="px-2 py-1.5 text-muted-foreground text-sm">
+															Loading agents…
+														</li>
+													) : recruiterCandidates.length === 0 ? (
+														<li className="px-2 py-1.5 text-muted-foreground text-sm">
+															No agents found
+														</li>
+													) : (
+														recruiterCandidates.map((row) => {
+															const label = formatAgentPickerLabel({
+																name: row.agent.name,
+																nickName: row.agent.nickName,
+																agentCode: row.agent.agentCode,
+																email: row.agent.email,
+															});
+															return (
+																<li key={row.agent.id}>
+																	<button
+																		type="button"
+																		className="w-full rounded px-2 py-1.5 text-left text-sm hover:bg-muted"
+																		onMouseDown={(e) => e.preventDefault()}
+																		onClick={() => {
+																			setRecruitedById(row.agent.id);
+																			setRecruiterLabel(label);
+																			setRecruiterSearch("");
+																			setRecruiterPickerOpen(false);
+																		}}
+																	>
+																		{label}
+																	</button>
+																</li>
+															);
+														})
+													)}
+												</ul>
+											) : null}
+										</div>
+									)}
 								</div>
 								{isSuperAdmin ? (
 									<div className="space-y-2">
