@@ -405,46 +405,25 @@ export default function AdminAgentsPage() {
 
 					{/* Agent Summary Cards */}
 					{isLoadingStats ? (
-						<div className="space-y-4">
-							<div className="grid items-stretch gap-4 sm:grid-cols-2 lg:grid-cols-4">
-								{["sk-a1", "sk-a2", "sk-a3", "sk-a4"].map((id) => (
-									<div
-										key={id}
-										className="rounded-3xl border border-border/40 bg-card p-5 shadow-card"
-									>
-										<div className="flex justify-between gap-3">
-											<div className="space-y-2">
-												<Skeleton className="h-3 w-24" />
-												<Skeleton className="h-8 w-16" />
-											</div>
-											<Skeleton className="size-10 rounded-xl" />
+						<div className="grid items-stretch gap-4 sm:grid-cols-2 xl:grid-cols-4">
+							{["sk-a1", "sk-a2", "sk-a3", "sk-a4"].map((id) => (
+								<div
+									key={id}
+									className="rounded-3xl border border-border/40 bg-card p-5 shadow-card"
+								>
+									<div className="flex justify-between gap-3">
+										<div className="space-y-2">
+											<Skeleton className="h-3 w-24" />
+											<Skeleton className="h-8 w-16" />
 										</div>
-										<div className="mt-4 flex items-center justify-between">
-											<Skeleton className="h-5 w-24 rounded-full" />
-											<Skeleton className="h-9 w-20" />
-										</div>
+										<Skeleton className="size-10 rounded-xl" />
 									</div>
-								))}
-							</div>
-							<div className="grid items-stretch gap-4 sm:grid-cols-2">
-								{["sk-branch-1", "sk-branch-2"].map((id) => (
-									<div
-										key={id}
-										className="rounded-3xl border border-border/40 bg-card p-5 shadow-card"
-									>
-										<div className="flex justify-between gap-3">
-											<div className="space-y-2">
-												<Skeleton className="h-3 w-28" />
-												<Skeleton className="h-8 w-16" />
-											</div>
-											<Skeleton className="size-10 rounded-xl" />
-										</div>
-										<div className="mt-4">
-											<Skeleton className="h-5 w-28 rounded-full" />
-										</div>
+									<div className="mt-4 flex items-center justify-between">
+										<Skeleton className="h-5 w-24 rounded-full" />
+										<Skeleton className="h-4 w-20" />
 									</div>
-								))}
-							</div>
+								</div>
+							))}
 						</div>
 					) : (
 						(() => {
@@ -453,69 +432,69 @@ export default function AdminAgentsPage() {
 							const activeRate = total
 								? Math.round((active / total) * 100)
 								: 0;
-							const genting =
-								(agentStats as unknown as { gentingAgents?: number })
-									?.gentingAgents || 0;
-							const puchong =
-								(agentStats as unknown as { puchongAgents?: number })
-									?.puchongAgents || 0;
+							const branchStats = agentStats as unknown as {
+								gentingAgents?: number;
+								puchongAgents?: number;
+								gentingTotalAgents?: number;
+								puchongTotalAgents?: number;
+							};
+							const genting = Number(branchStats?.gentingAgents) || 0;
+							const puchong = Number(branchStats?.puchongAgents) || 0;
+							const gentingTotal =
+								Number(branchStats?.gentingTotalAgents) || 0;
+							const puchongTotal =
+								Number(branchStats?.puchongTotalAgents) || 0;
 
 							return (
-								<div className="space-y-4">
-									<div className="grid items-stretch gap-4 sm:grid-cols-2">
-										<MetricCard
-											title="Total Agents"
-											value={String(total)}
-											changeLabel="Total registered"
-											trend={total > 0 ? "up" : "neutral"}
-											icon={<RiUserLine size={20} />}
-											variant="gradient"
-											sparkline={[32, 40, 38, 50, 48, 55, 52, 60, 58, 65, 70, 72]}
-										/>
-										<MetricCard
-											title="Active Agents"
-											value={String(active)}
-											changeLabel={`${activeRate}% active rate`}
-											trend={
-												activeRate >= 50
-													? "up"
-													: activeRate > 0
-														? "neutral"
-														: "down"
-											}
-											icon={<RiTeamLine size={20} />}
-											sparkline={[28, 35, 42, 40, 48, 55, 50, 62, 58, 68, 72, 78]}
-										/>
-									</div>
-
-									<div className="grid items-stretch gap-4 sm:grid-cols-2">
-										<MetricCard
-											title="Branch Puchong"
-											value={String(puchong)}
-											changeLabel="Active agents in Puchong"
-											trend={puchong > 0 ? "up" : "neutral"}
-											icon={<RiBuilding2Line size={20} />}
-											sparkline={[25, 30, 28, 36, 40, 38, 45, 50, 48, 55, 52, 60]}
-										/>
-										<MetricCard
-											title="Branch Genting"
-											value={String(genting)}
-											changeLabel="Active agents in Genting"
-											trend={genting > 0 ? "up" : "neutral"}
-											icon={<RiBuilding2Line size={20} />}
-											sparkline={[30, 34, 40, 38, 45, 42, 50, 48, 55, 52, 60, 58]}
-										/>
-									</div>
+								<div className="grid items-stretch gap-4 sm:grid-cols-2 xl:grid-cols-4">
+									<MetricCard
+										title="Total Agents"
+										value={String(total)}
+										changeLabel="Total registered"
+										trend={total > 0 ? "up" : "neutral"}
+										icon={<RiUserLine size={20} />}
+										variant="gradient"
+									/>
+									<MetricCard
+										title="Active Agents"
+										value={String(active)}
+										changeLabel={`${activeRate}% active rate`}
+										trend={
+											activeRate >= 50
+												? "up"
+												: activeRate > 0
+													? "neutral"
+													: "down"
+										}
+										icon={<RiTeamLine size={20} />}
+										sparkline={[28, 35, 42, 40, 48, 55, 50, 62, 58, 68, 72, 78]}
+									/>
+									<MetricCard
+										title="Branch Puchong"
+										value={String(puchong)}
+										changeLabel="Active agents"
+										trend={puchong > 0 ? "up" : "neutral"}
+										icon={<RiBuilding2Line size={20} />}
+										footnote={`${puchongTotal} Total registered`}
+									/>
+									<MetricCard
+										title="Branch Genting"
+										value={String(genting)}
+										changeLabel="Active agents"
+										trend={genting > 0 ? "up" : "neutral"}
+										icon={<RiBuilding2Line size={20} />}
+										footnote={`${gentingTotal} Total registered`}
+									/>
 								</div>
 							);
 						})()
 					)}
 
 					{/* Tier Distribution + Account Directory */}
-					<div className="grid items-start gap-4 lg:grid-cols-3 lg:gap-5">
+					<div className="grid items-start gap-4 lg:grid-cols-4 lg:gap-5">
 						<TierDashboardWidget className="w-full lg:col-span-1" />
 
-						<Card className="gap-0 overflow-hidden rounded-3xl border-border/50 bg-card py-0 shadow-card lg:col-span-2">
+						<Card className="gap-0 overflow-hidden rounded-3xl border-border/50 bg-card py-0 shadow-card lg:col-span-3">
 							<CardHeader className="border-border/40 border-b bg-muted/20 px-5 py-4 sm:px-6">
 								<div className="flex flex-wrap items-start justify-between gap-2">
 									<div className="space-y-1">
@@ -560,12 +539,6 @@ export default function AdminAgentsPage() {
 									</div>
 								) : agentsData?.agents && agentsData.agents.length > 0 ? (
 									<div className="max-h-[min(70vh,720px)] overflow-y-auto [scrollbar-gutter:stable]">
-										<div className="sticky top-0 z-10 hidden grid-cols-[minmax(0,1.4fr)_7.5rem_7.5rem_auto] gap-3 border-b border-border/50 bg-muted px-4 py-2.5 font-semibold text-[11px] text-foreground/80 tracking-wide sm:grid sm:px-5">
-											<span>Agent</span>
-											<span>Joined Date</span>
-											<span>Recruit By</span>
-											<span className="text-right">Actions</span>
-										</div>
 										<div className="space-y-2.5 p-4 sm:p-5">
 										{agentsData.agents.map((agentItem) => {
 											const agent = agentItem.agent as AgentData;
@@ -584,17 +557,18 @@ export default function AdminAgentsPage() {
 												email: agent.email,
 											});
 											const recruitLabel = recruiter
-												? formatAgentPickerLabel({
-														name: recruiter.name,
-														nickName: recruiter.nickName,
-														agentCode: recruiter.agentCode,
-													})
-												: "—";
+												? [
+														recruiter.nickName?.trim() || recruiter.name?.trim(),
+														recruiter.agentCode?.trim(),
+													]
+														.filter(Boolean)
+														.join(" ")
+												: "";
 
 											return (
 												<div
 													key={agent.id}
-													className="grid grid-cols-1 gap-3 rounded-2xl border border-border/40 bg-background p-4 shadow-sm transition-all hover:border-primary/25 hover:shadow-card sm:grid-cols-[minmax(0,1.4fr)_7.5rem_7.5rem_auto] sm:items-center"
+													className="flex flex-col gap-3 rounded-2xl border border-border/40 bg-background p-4 shadow-sm transition-all hover:border-primary/25 hover:shadow-card sm:flex-row sm:items-center sm:justify-between"
 												>
 													<div className="flex min-w-0 items-start gap-3 sm:items-center">
 														<span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 font-semibold text-primary text-sm">
@@ -633,37 +607,38 @@ export default function AdminAgentsPage() {
 																	{formatAgentStatus(agent.agentStatus)}
 																</span>
 															</div>
-															<p className="truncate text-muted-foreground text-xs sm:text-sm">
+															<p className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-muted-foreground text-xs">
 																{!isStaff && agent.agentCode ? (
 																	<>
 																		<span className="font-mono">
 																			Code {agent.agentCode}
 																		</span>
-																		<span>{" · "}</span>
+																		<span aria-hidden>·</span>
 																	</>
 																) : null}
-																{agent.email}
+																<span className="break-all">{agent.email}</span>
+																{agent.createdAt ? (
+																	<>
+																		<span aria-hidden>·</span>
+																		<span>
+																			Joined {formatDateDMY(agent.createdAt)}
+																		</span>
+																	</>
+																) : null}
+																{recruitLabel ? (
+																	<>
+																		<span aria-hidden>·</span>
+																		<span>
+																			Recruit{" "}
+																			<span className="font-medium text-foreground/80">
+																				({recruitLabel})
+																			</span>
+																		</span>
+																	</>
+																) : null}
 															</p>
-															<div className="flex flex-wrap gap-x-3 gap-y-0.5 text-muted-foreground text-[11px] sm:hidden">
-																<span>
-																	Joined{" "}
-																	{agent.createdAt
-																		? formatDateDMY(agent.createdAt)
-																		: "—"}
-																</span>
-																<span>Recruit By {recruitLabel}</span>
-															</div>
 														</div>
 													</div>
-
-													<p className="hidden text-muted-foreground text-xs sm:block">
-														{agent.createdAt
-															? formatDateDMY(agent.createdAt)
-															: "—"}
-													</p>
-													<p className="hidden truncate text-muted-foreground text-xs sm:block">
-														{recruitLabel}
-													</p>
 
 													<div className="flex flex-wrap items-center justify-end gap-1.5 sm:shrink-0">
 														{isPendingAgentStatus(agent.agentStatus) && (

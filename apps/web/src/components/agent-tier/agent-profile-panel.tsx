@@ -97,12 +97,28 @@ function openDocument(doc?: RecruitmentUploadedDoc) {
 	}
 }
 
+type RecruiterSummary = {
+	id: string;
+	name: string;
+	nickName?: string | null;
+	agentCode?: string | null;
+};
+
 type AgentProfilePanelProps = {
 	agent: AgentProfile;
-	recruiter?: { id: string; name: string } | null;
+	recruiter?: RecruiterSummary | null;
 	onManage?: () => void;
 	onUpdated?: () => void;
 };
+
+function recruiterDisplayLabel(recruiter?: RecruiterSummary | null) {
+	if (!recruiter) return null;
+	return formatAgentPickerLabel({
+		name: recruiter.name,
+		nickName: recruiter.nickName,
+		agentCode: recruiter.agentCode,
+	});
+}
 
 export function AgentProfilePanel({
 	agent,
@@ -120,12 +136,12 @@ export function AgentProfilePanel({
 	const [recruiterPickerOpen, setRecruiterPickerOpen] = useState(false);
 	const [selectedRecruiterLabel, setSelectedRecruiterLabel] = useState<
 		string | null
-	>(recruiter?.name ?? null);
+	>(recruiterDisplayLabel(recruiter));
 
 	useEffect(() => {
 		setForm(buildFormState(agent, recruiter));
 		setDocuments(agent.onboardingDocuments ?? {});
-		setSelectedRecruiterLabel(recruiter?.name ?? null);
+		setSelectedRecruiterLabel(recruiterDisplayLabel(recruiter));
 	}, [agent, recruiter]);
 
 	const { data: recruiterAgentsData, isLoading: recruitersLoading } =
@@ -311,7 +327,7 @@ export function AgentProfilePanel({
 											setIsEditing(false);
 											setForm(buildFormState(agent, recruiter));
 											setDocuments(agent.onboardingDocuments ?? {});
-											setSelectedRecruiterLabel(recruiter?.name ?? null);
+											setSelectedRecruiterLabel(recruiterDisplayLabel(recruiter));
 											setRecruiterSearch("");
 											setRecruiterPickerOpen(false);
 										}}
@@ -444,7 +460,7 @@ export function AgentProfilePanel({
 						) : (
 							<InfoField
 								label="Recruit by"
-								value={displayValue(recruiter?.name)}
+								value={displayValue(recruiterDisplayLabel(recruiter))}
 							/>
 						)}
 						{isEditing ? (
@@ -736,7 +752,7 @@ export function AgentProfilePanel({
 
 function buildFormState(
 	agent: AgentProfile,
-	recruiter?: { id: string; name: string } | null,
+	recruiter?: RecruiterSummary | null,
 ) {
 	return {
 		fullName: agent.name ?? "",

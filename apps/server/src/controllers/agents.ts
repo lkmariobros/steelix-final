@@ -618,10 +618,20 @@ export const agentsRouter = router({
 			throw new Error("Agent not found");
 		}
 
-		let recruiter: { id: string; name: string } | null = null;
+		let recruiter: {
+			id: string;
+			name: string;
+			nickName: string | null;
+			agentCode: string | null;
+		} | null = null;
 		if (agentData.agent.recruitedBy) {
 			const [row] = await db
-				.select({ id: user.id, name: user.name })
+				.select({
+					id: user.id,
+					name: user.name,
+					nickName: user.nickName,
+					agentCode: user.agentCode,
+				})
 				.from(user)
 				.where(eq(user.id, agentData.agent.recruitedBy))
 				.limit(1);
@@ -1371,7 +1381,7 @@ export const agentsRouter = router({
 		// Overall agent stats
 		const [agentStats] = await db
 			.select({
-				totalAgents: sql<number>`count(*)`,
+				totalAgents: sql<number>`count(*) filter (where role = 'agent')`,
 				activeAgents: sql<number>`count(*) filter (where role = 'agent' and is_active = true)`,
 				teamLeads: sql<number>`count(*) filter (where role = 'team_lead')`,
 				admins: sql<number>`count(*) filter (where role = 'admin')`,
@@ -1381,6 +1391,8 @@ export const agentsRouter = router({
 				pendingApprovals: sql<number>`count(*) filter (where agent_status = 'pending_approval')`,
 				gentingAgents: sql<number>`count(*) filter (where role = 'agent' and is_active = true and branch = 'GENTING')`,
 				puchongAgents: sql<number>`count(*) filter (where role = 'agent' and is_active = true and branch = 'PUCHONG')`,
+				gentingTotalAgents: sql<number>`count(*) filter (where role = 'agent' and branch = 'GENTING')`,
+				puchongTotalAgents: sql<number>`count(*) filter (where role = 'agent' and branch = 'PUCHONG')`,
 			})
 			.from(user);
 

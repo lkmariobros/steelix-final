@@ -11,6 +11,8 @@ interface MetricCardProps {
 	icon?: ReactNode;
 	/** Decorative sparkline heights (0–100). Omit when no real series. */
 	sparkline?: number[];
+	/** Small secondary figure shown bottom-right in place of the sparkline. */
+	footnote?: ReactNode;
 	variant?: "default" | "gradient";
 	className?: string;
 }
@@ -45,6 +47,7 @@ export function MetricCard({
 	trend = "neutral",
 	icon,
 	sparkline,
+	footnote,
 	variant = "default",
 	className,
 }: MetricCardProps) {
@@ -114,8 +117,21 @@ export function MetricCard({
 				) : (
 					<span />
 				)}
-				{!isGradient && sparkline && sparkline.length > 0 && (
-					<MiniSparkline values={sparkline} className="w-20 shrink-0" />
+				{footnote ? (
+					<span
+						className={cn(
+							"shrink-0 whitespace-nowrap text-[11px]",
+							isGradient ? "text-white/80" : "text-muted-foreground",
+						)}
+					>
+						{footnote}
+					</span>
+				) : (
+					!isGradient &&
+					sparkline &&
+					sparkline.length > 0 && (
+						<MiniSparkline values={sparkline} className="w-20 shrink-0" />
+					)
 				)}
 			</div>
 		</div>
