@@ -22,6 +22,21 @@ import type { ERecruitmentDocuments } from "../models/erecruitment";
 import { transactions } from "../models/transactions";
 import { syncAgentProfileFromRecruitmentUserId } from "../services/erecruitment";
 import { getNextAgentCode } from "../services/sequential-codes";
+import {
+	assertAgentCodeAvailable,
+	assertNoOtherActiveAccount,
+	countAgentsWithMultipleActiveAccounts,
+	findAccountByAgentCode,
+	findAccountsByEmailOrNric,
+	findLinkedAccountsFor,
+	getOneActiveAccountPerAgent,
+	getPgErrorInfo,
+	normalizeAgentCode,
+	normalizeEmail,
+	normalizeNric,
+	setOneActiveAccountPerAgent,
+} from "../services/agent-accounts";
+import { ensureAgentAccountSchema } from "../utils/agent-account-schema";
 import { db } from "../utils/db";
 import { invalidateUserCache } from "../utils/context";
 import { hasSuperAdminAccess } from "../utils/user-roles";
@@ -309,9 +324,20 @@ const createAgentInput = z.object({
 	branch: z.string().min(1).max(120).optional(),
 	recruitedBy: z.string().min(1).optional(),
 	joinedDate: z.coerce.date().optional(),
+	/** Optional Agent ID (e.g. an old ID); next sequential code when omitted. */
+	agentCode: z.string().trim().max(32).optional(),
+	/** Admin confirmed this is a separate account for a person who already has one. */
+	allowSharedEmail: z.boolean().optional(),
 	teamId: z.string().uuid().optional(),
 	agencyId: z.string().uuid().optional(),
 	role: z.enum(["agent", "team_lead", "admin"]).default("agent"),
+});
+
+const checkAccountConflictsInput = z.object({
+	email: z.string().trim().max(320).optional(),
+	nric: z.string().trim().max(32).optional(),
+	agentCode: z.string().trim().max(32).optional(),
+	excludeUserId: z.string().optional(),
 });
 
 const updateUserRoleInput = z.object({
@@ -522,6 +548,14 @@ export const agentsRouter = router({
 				: [];
 		const recruiterMap = new Map(recruiters.map((r) => [r.id, r]));
 
+		const linkedMap = await findLinkedAccountsFor(
+			agentsList.map((a) => ({
+				id: a.agent.id,
+				email: a.agent.email,
+				nric: a.agent.nric,
+			})),
+		);
+
 		// Combine agent data with performance metrics + recruiter
 		const agentsWithPerformance = agentsList.map((agentData) => {
 			const performance = performanceData.find(
@@ -540,6 +574,14 @@ export const agentsRouter = router({
 							agentCode: recruiter.agentCode,
 						}
 					: null,
+				linkedAccounts: (linkedMap.get(agentData.agent.id) ?? []).map(
+					(linked) => ({
+						id: linked.id,
+						label: linked.label,
+						agentCode: linked.agentCode,
+						isActive: linked.isActive,
+					}),
+				),
 				performance: performance || {
 					totalTransactions: 0,
 					totalCommission: "0",
@@ -741,33 +783,61 @@ export const agentsRouter = router({
 				}
 			}
 
-			if (updateData.agentCode) {
-				const [duplicate] = await db
-					.select({ id: user.id })
-					.from(user)
-					.where(eq(user.agentCode, updateData.agentCode))
-					.limit(1);
-				if (duplicate && duplicate.id !== id) {
-					throw new TRPCError({
-						code: "BAD_REQUEST",
-						message: "Agent code is already in use",
-					});
+			if (updateData.agentCode !== undefined) {
+				updateData.agentCode =
+					normalizeAgentCode(updateData.agentCode) || undefined;
+				if (updateData.agentCode) {
+					await assertAgentCodeAvailable(updateData.agentCode, id);
 				}
 			}
 
+			const nextNric =
+				updateData.nric !== undefined ? updateData.nric : currentAgent.nric;
 			if (updateData.email) {
-				updateData.email = updateData.email.trim().toLowerCase();
-				const [duplicate] = await db
-					.select({ id: user.id })
-					.from(user)
-					.where(sql`lower(${user.email}) = ${updateData.email}`)
-					.limit(1);
-				if (duplicate && duplicate.id !== id) {
+				updateData.email = normalizeEmail(updateData.email);
+			}
+			const emailChanged =
+				updateData.email !== undefined &&
+				updateData.email !== normalizeEmail(currentAgent.email);
+			const nricChanged =
+				updateData.nric !== undefined &&
+				normalizeNric(updateData.nric) !== normalizeNric(currentAgent.nric);
+
+			if (emailChanged) {
+				const sameEmail = (
+					await findAccountsByEmailOrNric({
+						email: updateData.email,
+						excludeUserId: id,
+					})
+				).filter((a) => a.matchedByEmail);
+				const ownNric = normalizeNric(nextNric);
+				const otherPerson = sameEmail.find(
+					(a) => !a.normalizedNric || !ownNric || a.normalizedNric !== ownNric,
+				);
+				if (otherPerson) {
 					throw new TRPCError({
 						code: "BAD_REQUEST",
-						message: "Email is already in use by another account",
+						message: `Email is already used by ${otherPerson.label}. An email can only be shared by accounts with the same NRIC.`,
 					});
 				}
+				if (sameEmail.length > 0) {
+					const { sharedEmailReady } = await ensureAgentAccountSchema();
+					if (!sharedEmailReady) {
+						throw new TRPCError({
+							code: "INTERNAL_SERVER_ERROR",
+							message:
+								"The database does not allow shared emails yet. Please try again in a minute.",
+						});
+					}
+				}
+			}
+
+			if ((emailChanged || nricChanged) && currentAgent.isActive !== false) {
+				await assertNoOtherActiveAccount({
+					userId: id,
+					email: updateData.email ?? currentAgent.email,
+					nric: nextNric,
+				});
 			}
 
 			let onboardingDocuments = currentAgent.onboardingDocuments;
@@ -796,11 +866,14 @@ export const agentsRouter = router({
 					.where(eq(user.id, id))
 					.returning();
 			} catch (e) {
-				const msg = e instanceof Error ? e.message : String(e);
-				if (/duplicate key/i.test(msg) && /email/i.test(msg)) {
+				const { code, constraint } = getPgErrorInfo(e);
+				if (code === "23505") {
 					throw new TRPCError({
-						code: "BAD_REQUEST",
-						message: "Email is already in use by another account",
+						code: "CONFLICT",
+						message:
+							constraint === "user_agent_code_unique"
+								? "Agent ID is already in use by another account"
+								: "Email is already in use by another account",
 					});
 				}
 				throw e;
@@ -952,11 +1025,54 @@ export const agentsRouter = router({
 			}
 		}
 
+		const email = normalizeEmail(input.email);
+		const nric = input.nric.trim();
+
+		const existingAccounts = await findAccountsByEmailOrNric({ email, nric });
+		if (existingAccounts.length > 0) {
+			const labels = existingAccounts.map((a) => a.label).join(", ");
+			if (!input.allowSharedEmail) {
+				throw new TRPCError({
+					code: "CONFLICT",
+					message: `This email or NRIC is already used by ${labels}. Tick "Create separate account for this agent" to continue.`,
+				});
+			}
+			const inputNric = normalizeNric(nric);
+			const differentPerson = existingAccounts.find(
+				(a) =>
+					a.matchedByEmail &&
+					a.normalizedNric &&
+					inputNric &&
+					a.normalizedNric !== inputNric,
+			);
+			if (differentPerson) {
+				throw new TRPCError({
+					code: "BAD_REQUEST",
+					message: `This email belongs to ${differentPerson.label}, whose NRIC is different. One email can only be shared by accounts of the same person.`,
+				});
+			}
+			const { sharedEmailReady } = await ensureAgentAccountSchema();
+			if (!sharedEmailReady && existingAccounts.some((a) => a.matchedByEmail)) {
+				throw new TRPCError({
+					code: "INTERNAL_SERVER_ERROR",
+					message:
+						"The database does not allow shared emails yet. Please try again in a minute or contact support.",
+				});
+			}
+		}
+
+		await assertNoOtherActiveAccount({ email, nric });
+
+		const requestedAgentCode = normalizeAgentCode(input.agentCode);
+		if (requestedAgentCode) {
+			await assertAgentCodeAvailable(requestedAgentCode);
+		}
+		const agentCode = requestedAgentCode || (await getNextAgentCode());
+
 		const now = new Date();
 		const joinedAt = input.joinedDate ?? now;
 		const userId = crypto.randomUUID();
 		const passwordHash = await hashPassword(input.password);
-		const agentCode = await getNextAgentCode();
 
 		let onboardingDocuments: ERecruitmentDocuments | null;
 		try {
@@ -971,72 +1087,173 @@ export const agentsRouter = router({
 			});
 		}
 
-		const [createdUser] = await db
-			.insert(user)
-			.values({
-				id: userId,
-				name: input.fullName,
-				email: input.email.toLowerCase(),
-				phone: input.contactNo,
-				nickName: input.nickName?.trim() || null,
-				nric: input.nric.trim(),
-				registrationFee: input.registrationFee?.trim() || null,
-				paymentMethod: input.paymentMethod || null,
-				address: input.address?.trim() || null,
-				maritalStatus: input.maritalStatus || null,
-				emergencyName: input.emergencyName?.trim() || null,
-				emergencyContactNo: input.emergencyContactNo?.trim() || null,
-				emergencyRelationship: input.emergencyRelationship?.trim() || null,
-				bankName: input.bankName?.trim() || null,
-				bankAccountNo: input.bankAccountNo?.trim() || null,
-				bankAccountName: input.bankAccountName?.trim() || null,
-				incomeTaxNo: input.incomeTaxNo?.trim() || null,
-				onboardingDocuments,
-				branch: input.branch,
-				emailVerified: false,
-				image: null,
-				isActive: true,
-				deactivatedAt: null,
-				agencyId: input.agencyId,
-				teamId: input.teamId,
-				role: requestedRole,
-				permissions: null,
-				agentTier: "advisor",
-				companyCommissionSplit: 70,
-				tierEffectiveDate: now,
-				tierPromotedBy: ctx.session.user.id,
-				recruitedBy: input.recruitedBy ?? null,
-				recruitedAt: input.recruitedBy ? joinedAt : null,
-				agentCode,
-				agentStatus: "active",
-				createdAt: joinedAt,
-				updatedAt: now,
-			})
-			.returning();
+		try {
+			return await db.transaction(async (tx) => {
+				const [createdUser] = await tx
+					.insert(user)
+					.values({
+						id: userId,
+						name: input.fullName,
+						email,
+						phone: input.contactNo,
+						nickName: input.nickName?.trim() || null,
+						nric,
+						registrationFee: input.registrationFee?.trim() || null,
+						paymentMethod: input.paymentMethod || null,
+						address: input.address?.trim() || null,
+						maritalStatus: input.maritalStatus || null,
+						emergencyName: input.emergencyName?.trim() || null,
+						emergencyContactNo: input.emergencyContactNo?.trim() || null,
+						emergencyRelationship:
+							input.emergencyRelationship?.trim() || null,
+						bankName: input.bankName?.trim() || null,
+						bankAccountNo: input.bankAccountNo?.trim() || null,
+						bankAccountName: input.bankAccountName?.trim() || null,
+						incomeTaxNo: input.incomeTaxNo?.trim() || null,
+						onboardingDocuments,
+						branch: input.branch,
+						emailVerified: false,
+						image: null,
+						isActive: true,
+						deactivatedAt: null,
+						agencyId: input.agencyId,
+						teamId: input.teamId,
+						role: requestedRole,
+						permissions: null,
+						agentTier: "advisor",
+						companyCommissionSplit: 70,
+						tierEffectiveDate: now,
+						tierPromotedBy: ctx.session.user.id,
+						recruitedBy: input.recruitedBy ?? null,
+						recruitedAt: input.recruitedBy ? joinedAt : null,
+						agentCode,
+						agentStatus: "active",
+						createdAt: joinedAt,
+						updatedAt: now,
+					})
+					.returning();
 
-		await db.insert(account).values({
-			id: crypto.randomUUID(),
-			accountId: input.email.toLowerCase(),
-			providerId: "credential",
-			userId,
-			accessToken: null,
-			refreshToken: null,
-			idToken: null,
-			accessTokenExpiresAt: null,
-			refreshTokenExpiresAt: null,
-			scope: null,
-			password: passwordHash,
-			createdAt: now,
-			updatedAt: now,
-		});
+				await tx.insert(account).values({
+					id: crypto.randomUUID(),
+					accountId: email,
+					providerId: "credential",
+					userId,
+					accessToken: null,
+					refreshToken: null,
+					idToken: null,
+					accessTokenExpiresAt: null,
+					refreshTokenExpiresAt: null,
+					scope: null,
+					password: passwordHash,
+					createdAt: now,
+					updatedAt: now,
+				});
 
-		return createdUser;
+				return createdUser;
+			});
+		} catch (e) {
+			const { code, constraint } = getPgErrorInfo(e);
+			if (code === "23505") {
+				console.warn(
+					`⚠️ agents.create unique violation (${constraint ?? "unknown"})`,
+				);
+				throw new TRPCError({
+					code: "CONFLICT",
+					message:
+						constraint === "user_agent_code_unique"
+							? `Agent ID ${agentCode} was just taken. Please use a different Agent ID.`
+							: "This email is already registered. Tick \"Create separate account for this agent\" or use a different email.",
+				});
+			}
+			console.error(
+				"❌ agents.create failed:",
+				e instanceof Error ? e.message.split("\n")[0]?.slice(0, 200) : e,
+			);
+			throw new TRPCError({
+				code: "INTERNAL_SERVER_ERROR",
+				message: "Could not create the account. Please try again.",
+			});
+		}
 	}),
+
+	/** Live checks for the Create agent form: same-person accounts and Agent ID availability. */
+	checkAccountConflicts: adminProcedure
+		.input(checkAccountConflictsInput)
+		.query(async ({ input }) => {
+			const [matches, agentCodeOwner, oneActiveAccountPerAgent] =
+				await Promise.all([
+					findAccountsByEmailOrNric({
+						email: input.email,
+						nric: input.nric,
+						excludeUserId: input.excludeUserId,
+					}),
+					input.agentCode?.trim()
+						? findAccountByAgentCode(input.agentCode, input.excludeUserId)
+						: Promise.resolve(null),
+					getOneActiveAccountPerAgent(),
+				]);
+			const inputNric = normalizeNric(input.nric);
+			return {
+				matches: matches.map((m) => ({
+					id: m.id,
+					label: m.label,
+					agentCode: m.agentCode,
+					isActive: m.isActive,
+					agentStatus: m.agentStatus,
+					matchedByEmail: m.matchedByEmail,
+					matchedByNric: m.matchedByNric,
+					differentNric: Boolean(
+						m.matchedByEmail &&
+							m.normalizedNric &&
+							inputNric &&
+							m.normalizedNric !== inputNric,
+					),
+				})),
+				agentCodeTakenBy: agentCodeOwner?.label ?? null,
+				oneActiveAccountPerAgent,
+			};
+		}),
+
+	getAccountSettings: adminProcedure.query(async () => {
+		const [oneActiveAccountPerAgent, agentsWithMultipleActiveAccounts] =
+			await Promise.all([
+				getOneActiveAccountPerAgent(),
+				countAgentsWithMultipleActiveAccounts(),
+			]);
+		return { oneActiveAccountPerAgent, agentsWithMultipleActiveAccounts };
+	}),
+
+	setOneActiveAccountPerAgent: adminProcedure
+		.input(z.object({ enabled: z.boolean() }))
+		.mutation(async ({ ctx, input }) => {
+			await setOneActiveAccountPerAgent(input.enabled, ctx.session.user.id);
+			return {
+				oneActiveAccountPerAgent: input.enabled,
+				agentsWithMultipleActiveAccounts:
+					await countAgentsWithMultipleActiveAccounts(),
+			};
+		}),
 
 	// Soft deactivate / activate agent (admin only)
 	setActive: adminProcedure
 		.input(setAgentActiveInput)
 		.mutation(async ({ input }) => {
+			if (input.isActive) {
+				const [target] = await db
+					.select({ id: user.id, email: user.email, nric: user.nric })
+					.from(user)
+					.where(eq(user.id, input.agentId))
+					.limit(1);
+				if (!target) {
+					throw new TRPCError({ code: "NOT_FOUND", message: "Agent not found" });
+				}
+				await assertNoOtherActiveAccount({
+					userId: target.id,
+					email: target.email,
+					nric: target.nric,
+				});
+			}
+
 			const now = new Date();
 			const [updated] = await db
 				.update(user)
@@ -1060,6 +1277,8 @@ export const agentsRouter = router({
 			const [existing] = await db
 				.select({
 					id: user.id,
+					email: user.email,
+					nric: user.nric,
 					agentStatus: user.agentStatus,
 					agentCode: user.agentCode,
 				})
@@ -1077,23 +1296,19 @@ export const agentsRouter = router({
 				});
 			}
 
+			await assertNoOtherActiveAccount({
+				userId: existing.id,
+				email: existing.email,
+				nric: existing.nric,
+			});
+
 			const agentCode =
-				input.agentCode?.trim() ||
+				normalizeAgentCode(input.agentCode) ||
 				existing.agentCode?.trim() ||
 				(await getNextAgentCode());
 
 			if (!existing.agentCode?.trim() || input.agentCode?.trim()) {
-				const [duplicate] = await db
-					.select({ id: user.id })
-					.from(user)
-					.where(eq(user.agentCode, agentCode))
-					.limit(1);
-				if (duplicate && duplicate.id !== input.agentId) {
-					throw new TRPCError({
-						code: "BAD_REQUEST",
-						message: "Agent code is already in use",
-					});
-				}
+				await assertAgentCodeAvailable(agentCode, input.agentId);
 			}
 
 			const now = new Date();

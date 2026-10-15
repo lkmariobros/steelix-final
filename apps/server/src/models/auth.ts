@@ -59,7 +59,8 @@ export const user = pgTable(
 	{
 		id: text("id").primaryKey(),
 		name: text("name").notNull(),
-		email: text("email").notNull().unique(),
+		/** Not unique: one person may hold several agent accounts (Agent ID is the unique key). */
+		email: text("email").notNull(),
 		phone: text("phone"),
 		/** Payout profile (Prompt 06) */
 		bankName: text("bank_name"),

@@ -15,6 +15,7 @@ import { ensureDocumentCategoryEnumValues } from "./utils/document-category-sche
 import { ensureTransactionStatusEnumValues } from "./utils/transaction-status-schema";
 import { ensureTransactionListIndexes } from "./utils/transaction-indexes";
 import { ensureLeadListIndexes } from "./utils/lead-indexes";
+import { ensureAgentAccountSchema } from "./utils/agent-account-schema";
 import { backfillDraftCaseNumbers } from "./services/sequential-codes";
 import { isEmailConfigured } from "./services/mailer";
 import {
@@ -156,6 +157,21 @@ void ensureLeadListIndexes()
 	.catch((e) =>
 		console.warn(
 			"⚠️ Lead/queue index bootstrap failed:",
+			e instanceof Error ? e.message : e,
+		),
+	);
+
+void ensureAgentAccountSchema()
+	.then(({ sharedEmailReady }) =>
+		console.log(
+			sharedEmailReady
+				? "✅ Agent account schema ready (shared emails allowed)"
+				: "⚠️ Agent account schema: email is still unique — separate accounts per email will be blocked",
+		),
+	)
+	.catch((e) =>
+		console.warn(
+			"⚠️ Agent account schema bootstrap failed:",
 			e instanceof Error ? e.message : e,
 		),
 	);

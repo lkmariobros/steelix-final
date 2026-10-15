@@ -40,6 +40,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { MetricCard } from "@/dashboards/admin/widgets/metric-card";
 import { useUserRole } from "@/hooks/use-user-role";
 import { accountRoleBadgeClass, formatAccountRole, isStaffAccountRole } from "@/lib/user-role";
@@ -116,6 +117,13 @@ type RecruiterInfo = {
 	agentCode?: string | null;
 } | null;
 
+type LinkedAccountInfo = {
+	id: string;
+	label: string;
+	agentCode: string | null;
+	isActive: boolean;
+};
+
 type AccountRoleFilter =
 	| "all"
 	| "agent"
@@ -176,9 +184,33 @@ export default function AdminAgentsPage() {
 		onSuccess: () => {
 			utils.agents.list.invalidate();
 			utils.agents.getStats.invalidate();
+			utils.agents.getAccountSettings.invalidate();
 		},
 		onError: (e) => toast.error(e.message || "Failed to update agent status"),
 	});
+
+	const accountSettingsQuery = trpc.agents.getAccountSettings.useQuery(
+		undefined,
+		{ enabled: !!session },
+	);
+	const oneActiveAccountPerAgent =
+		accountSettingsQuery.data?.oneActiveAccountPerAgent ?? false;
+	const setOneActiveRuleMutation =
+		trpc.agents.setOneActiveAccountPerAgent.useMutation({
+			onSuccess: (result) => {
+				utils.agents.getAccountSettings.setData(undefined, result);
+				if (!result.oneActiveAccountPerAgent) {
+					toast.success("One active account per agent: off");
+				} else if (result.agentsWithMultipleActiveAccounts > 0) {
+					toast.warning(
+						`Rule is on. ${result.agentsWithMultipleActiveAccounts} agent(s) still have more than one active account — please deactivate the old ones.`,
+					);
+				} else {
+					toast.success("One active account per agent: on");
+				}
+			},
+			onError: (e) => toast.error(e.message || "Failed to update setting"),
+		});
 
 	const approveAgentMutation = trpc.agents.approve.useMutation({
 		onSuccess: () => {
@@ -507,12 +539,43 @@ export default function AdminAgentsPage() {
 												: "Manage agent accounts, tiers, and performance"}
 										</CardDescription>
 									</div>
-									{agentsData?.agents ? (
-										<span className="inline-flex items-center rounded-full bg-primary/12 px-2.5 py-1 font-medium text-[11px] text-primary">
-											{agentsData.agents.length} shown
-										</span>
-									) : null}
+									<div className="flex flex-wrap items-center gap-2">
+										<label
+											htmlFor="one-active-account-rule"
+											className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border/60 bg-background px-3 py-1 text-xs"
+											title="When on, an agent with several accounts (same email or NRIC) can only have one active account at a time."
+										>
+											<Switch
+												id="one-active-account-rule"
+												checked={oneActiveAccountPerAgent}
+												disabled={
+													accountSettingsQuery.isLoading ||
+													setOneActiveRuleMutation.isPending
+												}
+												onCheckedChange={(enabled) =>
+													setOneActiveRuleMutation.mutate({ enabled })
+												}
+											/>
+											<span className="font-medium">
+												One active account per agent
+											</span>
+										</label>
+										{agentsData?.agents ? (
+											<span className="inline-flex items-center rounded-full bg-primary/12 px-2.5 py-1 font-medium text-[11px] text-primary">
+												{agentsData.agents.length} shown
+											</span>
+										) : null}
+									</div>
 								</div>
+								{oneActiveAccountPerAgent &&
+								(accountSettingsQuery.data?.agentsWithMultipleActiveAccounts ??
+									0) > 0 ? (
+									<p className="mt-2 text-amber-700 text-xs dark:text-amber-300">
+										{accountSettingsQuery.data?.agentsWithMultipleActiveAccounts}{" "}
+										agent(s) still have more than one active account. Look for
+										the "Linked" label and deactivate the old account.
+									</p>
+								) : null}
 							</CardHeader>
 							<CardContent className="p-0">
 								{isLoadingAgents ? (
@@ -545,6 +608,9 @@ export default function AdminAgentsPage() {
 											const recruiter = (
 												agentItem as { recruiter?: RecruiterInfo }
 											).recruiter;
+											const linkedAccounts =
+												(agentItem as { linkedAccounts?: LinkedAccountInfo[] })
+													.linkedAccounts ?? [];
 											const isActive = agent.isActive ?? true;
 											const isStaff = isStaffAccountRole(agent.role);
 											const isProtectedLeadDev =
@@ -606,6 +672,29 @@ export default function AdminAgentsPage() {
 																>
 																	{formatAgentStatus(agent.agentStatus)}
 																</span>
+																{linkedAccounts.length > 0 ? (
+																	<Tooltip>
+																		<TooltipTrigger asChild>
+																			<span className="cursor-default rounded-full bg-amber-100 px-2.5 py-0.5 font-medium text-[11px] text-amber-800 dark:bg-amber-500/15 dark:text-amber-200">
+																				Linked{" "}
+																				{linkedAccounts
+																					.map((l) => l.agentCode || "—")
+																					.join(", ")}
+																			</span>
+																		</TooltipTrigger>
+																		<TooltipContent className="max-w-xs">
+																			<p className="mb-1 font-medium">
+																				Same person (email or NRIC):
+																			</p>
+																			{linkedAccounts.map((l) => (
+																				<p key={l.id}>
+																					{l.label} —{" "}
+																					{l.isActive ? "Active" : "Inactive"}
+																				</p>
+																			))}
+																		</TooltipContent>
+																	</Tooltip>
+																) : null}
 															</div>
 															<p className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-muted-foreground text-xs">
 																{!isStaff && agent.agentCode ? (
@@ -852,6 +941,7 @@ export default function AdminAgentsPage() {
 				onSuccess={() => {
 					utils.agents.list.invalidate();
 					utils.agents.getStats.invalidate();
+					utils.agents.getAccountSettings.invalidate();
 				}}
 			/>
 

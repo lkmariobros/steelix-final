@@ -1772,6 +1772,7 @@ async function resolveAssignableAgentIdFromCsv(
 					assignableLeadAgentWhere,
 				),
 			)
+			.orderBy(desc(user.createdAt))
 			.limit(1);
 		return row?.id ?? null;
 	}
@@ -2282,6 +2283,7 @@ export async function importLeadsBulkAdmin(
 						assignableLeadAgentWhere,
 					),
 				)
+				.orderBy(desc(user.createdAt))
 				.limit(1);
 			agentId = uRow?.id ?? null;
 		} else if (agentNameRaw.trim()) {

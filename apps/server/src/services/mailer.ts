@@ -78,14 +78,21 @@ export function passwordResetEmail(params: {
 	name: string | null;
 	resetUrl: string;
 	expiresInMinutes: number;
+	/** Shown when the email owns several accounts, so the agent knows which one this link resets. */
+	agentCode?: string | null;
 }): Omit<SendEmailInput, "to"> {
 	const greeting = params.name?.trim() ? `Hi ${params.name.trim()},` : "Hi,";
 	const url = escapeHtml(params.resetUrl);
+	const agentCode = params.agentCode?.trim();
+	const accountLine = agentCode
+		? `This link resets the password for Agent ID ${agentCode}.`
+		: "";
 
 	const text = [
 		greeting,
 		"",
 		"We received a request to reset your Devots Portal password.",
+		...(accountLine ? [accountLine] : []),
 		`Open this link to set a new password (valid for ${params.expiresInMinutes} minutes):`,
 		params.resetUrl,
 		"",
@@ -101,7 +108,12 @@ export function passwordResetEmail(params: {
 		<tr><td>
 			<h2 style="margin:0 0 16px;font-size:20px;">Reset your password</h2>
 			<p style="margin:0 0 12px;font-size:14px;line-height:1.6;">${escapeHtml(greeting)}</p>
-			<p style="margin:0 0 20px;font-size:14px;line-height:1.6;">We received a request to reset your Devots Portal password. Click the button below to set a new password. This link is valid for ${params.expiresInMinutes} minutes.</p>
+			<p style="margin:0 0 20px;font-size:14px;line-height:1.6;">We received a request to reset your Devots Portal password. Click the button below to set a new password. This link is valid for ${params.expiresInMinutes} minutes.</p>${
+				accountLine
+					? `
+			<p style="margin:0 0 20px;font-size:14px;line-height:1.6;font-weight:bold;">${escapeHtml(accountLine)}</p>`
+					: ""
+			}
 			<p style="margin:0 0 24px;">
 				<a href="${url}" style="display:inline-block;background:#0f766e;color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:8px;font-size:14px;font-weight:bold;">Reset password</a>
 			</p>

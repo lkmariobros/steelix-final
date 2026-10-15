@@ -104,7 +104,14 @@ export default function SignInForm({
 		},
 		validators: {
 			onSubmit: z.object({
-				email: z.email("Invalid email address"),
+				email: z
+					.string()
+					.trim()
+					.min(1, "Enter your email or Agent ID")
+					.refine(
+						(v) => !v.includes("@") || z.email().safeParse(v).success,
+						"Invalid email address",
+					),
 				password: z.string().min(8, "Password must be at least 8 characters"),
 				rememberMe: z.boolean(),
 			}),
@@ -129,15 +136,19 @@ export default function SignInForm({
 					{(field) => (
 						<div className="space-y-2">
 							<Label htmlFor={field.name} className="text-sm font-medium">
-								Email
+								Email or Agent ID
 							</Label>
 							<div className="relative">
 								<Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
 								<Input
 									id={field.name}
 									name={field.name}
-									type="email"
-									placeholder="you@company.com"
+									type="text"
+									inputMode="email"
+									autoComplete="username"
+									autoCapitalize="none"
+									spellCheck={false}
+									placeholder="you@company.com or DT00001"
 									value={field.state.value}
 									onBlur={field.handleBlur}
 									onChange={(e) => field.handleChange(e.target.value)}

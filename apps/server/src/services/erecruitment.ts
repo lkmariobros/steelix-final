@@ -8,6 +8,12 @@ import {
 	type ERecruitmentDocuments,
 } from "../models/erecruitment";
 import { getNextAgentCode } from "./sequential-codes";
+import {
+	assertAgentCodeAvailable,
+	assertNoOtherActiveAccount,
+	findAccountsByEmailOrNric,
+	normalizeAgentCode,
+} from "./agent-accounts";
 import { db } from "../utils/db";
 import { supabaseAdmin } from "../utils/supabase";
 
@@ -284,20 +290,6 @@ export async function backfillApprovedAgentProfiles() {
 	return { total: rows.length, synced };
 }
 
-async function assertAgentCodeAvailable(
-	agentCode: string,
-	excludeUserId?: string,
-) {
-	const [existing] = await db
-		.select({ id: user.id })
-		.from(user)
-		.where(eq(user.agentCode, agentCode))
-		.limit(1);
-	if (existing && existing.id !== excludeUserId) {
-		throw new Error("Agent code is already in use");
-	}
-}
-
 export async function resolveRecruitmentLink(token: string) {
 	const [link] = await db
 		.select()
@@ -513,14 +505,19 @@ export async function approveRecruitmentApplication(opts: {
 		throw new Error("Application has already been reviewed");
 	}
 
-	const [existingEmail] = await db
-		.select({ id: user.id })
-		.from(user)
-		.where(eq(user.email, application.email))
-		.limit(1);
+	const [existingEmail] = await findAccountsByEmailOrNric({
+		email: application.email,
+	});
 	if (existingEmail) {
-		throw new Error("An account with this email already exists");
+		throw new Error(
+			`An account with this email already exists: ${existingEmail.label}. To open a separate account for the same agent, use Agent Management → Add agent.`,
+		);
 	}
+
+	await assertNoOtherActiveAccount({
+		email: application.email,
+		nric: application.nric,
+	});
 
 	const tempPassword =
 		opts.temporaryPassword?.trim() ||
@@ -529,7 +526,7 @@ export async function approveRecruitmentApplication(opts: {
 	const now = new Date();
 	const userId = crypto.randomUUID();
 	const agentCode =
-		opts.agentCode?.trim() || (await getNextAgentCode());
+		normalizeAgentCode(opts.agentCode) || (await getNextAgentCode());
 	await assertAgentCodeAvailable(agentCode);
 
 	// Re-read raw row so document refs stay durable (not short-lived signed URLs)

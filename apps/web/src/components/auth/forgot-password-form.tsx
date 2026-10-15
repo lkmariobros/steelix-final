@@ -25,10 +25,10 @@ export function ForgotPasswordForm({ onBackToSignIn }: ForgotPasswordFormProps) 
     onSubmit: async ({ value }) => {
       try {
         await authClient.forgetPassword({
-          email: value.email,
+          email: value.email.trim(),
           redirectTo: "/reset-password",
         })
-        setSentEmail(value.email)
+        setSentEmail(value.email.trim())
         setEmailSent(true)
         toast.success("Reset link requested. Please check your email.")
       } catch (error) {
@@ -38,7 +38,14 @@ export function ForgotPasswordForm({ onBackToSignIn }: ForgotPasswordFormProps) 
     },
     validators: {
       onSubmit: z.object({
-        email: z.email("Please enter a valid email address"),
+        email: z
+          .string()
+          .trim()
+          .min(1, "Enter your email or Agent ID")
+          .refine(
+            (v) => !v.includes("@") || z.email().safeParse(v).success,
+            "Please enter a valid email address",
+          ),
       }),
     },
   })
@@ -55,7 +62,7 @@ export function ForgotPasswordForm({ onBackToSignIn }: ForgotPasswordFormProps) 
             Check your email
           </h3>
           <p className="text-sm text-slate-600 dark:text-slate-400">
-            If an account exists for this email, a password reset link has been sent to
+            If an account exists, a password reset link has been sent to the email on file for
           </p>
           <p className="font-medium text-slate-900 dark:text-white">
             {sentEmail}
@@ -103,15 +110,18 @@ export function ForgotPasswordForm({ onBackToSignIn }: ForgotPasswordFormProps) 
           {(field) => (
             <div className="space-y-2">
               <Label htmlFor={field.name} className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                Email address
+                Email or Agent ID
               </Label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                 <Input
                   id={field.name}
                   name={field.name}
-                  type="email"
-                  placeholder="name@company.com"
+                  type="text"
+                  inputMode="email"
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  placeholder="name@company.com or DT00001"
                   value={field.state.value}
                   onBlur={field.handleBlur}
                   onChange={(e) => field.handleChange(e.target.value)}

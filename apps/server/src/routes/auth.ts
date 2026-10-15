@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import type { Context } from "hono";
 import { deleteCookie, setCookie } from "hono/cookie";
-import { and, count, eq, gt, sql } from "drizzle-orm";
+import { and, count, desc, eq, gt, sql } from "drizzle-orm";
 import {
 	account,
 	session as sessionTable,
@@ -106,18 +106,27 @@ async function signInEmail(c: Context) {
 		);
 	}
 
-	const [record] = await db
+	// The "email" field also accepts an Agent ID, since one email may own several accounts.
+	const signInByEmail = email.includes("@");
+	const candidates = await db
 		.select()
 		.from(user)
-		.where(sql`lower(${user.email}) = ${email}`)
-		.limit(1);
+		.where(
+			signInByEmail
+				? sql`lower(${user.email}) = ${email}`
+				: sql`upper(trim(${user.agentCode})) = ${email.toUpperCase()}`,
+		)
+		.orderBy(desc(user.createdAt));
 
 	console.log(
-		`🔐 sign-in/email: dbUser=${record ? "found" : "missing"} storedEmail=${record?.email ?? "n/a"} role=${record?.role ?? "n/a"} status=${record?.agentStatus ?? "n/a"}`,
+		`🔐 sign-in/email: by=${signInByEmail ? "email" : "agentId"} accounts=${candidates.length} roles=${candidates.map((r) => r.role ?? "n/a").join(",") || "n/a"}`,
 	);
 
-	const access = evaluateAccountSignInAccess(record);
-	if (!access.allowed || !record) {
+	const allowedCandidates = candidates.filter(
+		(candidate) => evaluateAccountSignInAccess(candidate).allowed,
+	);
+	if (allowedCandidates.length === 0) {
+		const access = evaluateAccountSignInAccess(candidates[0]);
 		return c.json(
 			{
 				code: "FORBIDDEN",
@@ -129,28 +138,40 @@ async function signInEmail(c: Context) {
 		);
 	}
 
-	const credential = await findCredentialAccount(record.id);
-	if (!credential?.password) {
-		console.warn(`🔐 sign-in/email: credential account missing for ${email}`);
+	const passwordMatches: typeof allowedCandidates = [];
+	for (const candidate of allowedCandidates) {
+		const credential = await findCredentialAccount(candidate.id);
+		if (!credential?.password) {
+			console.warn(
+				`🔐 sign-in/email: credential account missing for user ${candidate.id}`,
+			);
+			continue;
+		}
+		if (await verifyPassword({ hash: credential.password, password })) {
+			passwordMatches.push(candidate);
+		}
+	}
+	console.log(`🔐 sign-in/email: passwordMatches=${passwordMatches.length}`);
+
+	if (passwordMatches.length > 1) {
 		return c.json(
 			{
-				code: "INVALID_EMAIL_OR_PASSWORD",
-				message: "Invalid email or password",
+				code: "MULTIPLE_ACCOUNTS",
+				message:
+					"This email is linked to more than one account. Please sign in with your Agent ID instead of your email.",
 			},
-			401,
+			409,
 		);
 	}
 
-	const passwordValid = await verifyPassword({
-		hash: credential.password,
-		password,
-	});
-	console.log(`🔐 sign-in/email: passwordValid=${passwordValid}`);
-	if (!passwordValid) {
+	const [record] = passwordMatches;
+	if (!record) {
 		return c.json(
 			{
 				code: "INVALID_EMAIL_OR_PASSWORD",
-				message: "Invalid email or password",
+				message: signInByEmail
+					? "Invalid email or password"
+					: "Invalid Agent ID or password",
 			},
 			401,
 		);
@@ -309,69 +330,85 @@ function resolvePortalBaseUrl(originHeader: string | undefined): string {
 authRoutes.post("/api/auth/forget-password", async (c) => {
 	try {
 		const body = await c.req.json<{ email?: string }>().catch(() => ({} as { email?: string }));
-		const email = String(body.email ?? "").toLowerCase().trim();
-		if (!email) return c.json({ status: true });
+		const identifierInput = String(body.email ?? "").toLowerCase().trim();
+		if (!identifierInput) return c.json({ status: true });
 
-		const [record] = await db
-			.select({ id: user.id, name: user.name, email: user.email })
+		// Accepts email or Agent ID; a shared email gets one reset link per account.
+		const records = await db
+			.select({
+				id: user.id,
+				name: user.name,
+				email: user.email,
+				agentCode: user.agentCode,
+			})
 			.from(user)
-			.where(sql`lower(${user.email}) = ${email}`)
-			.limit(1);
+			.where(
+				identifierInput.includes("@")
+					? sql`lower(${user.email}) = ${identifierInput}`
+					: sql`upper(trim(${user.agentCode})) = ${identifierInput.toUpperCase()}`,
+			)
+			.orderBy(desc(user.createdAt));
 
 		// Same response whether or not the account exists, so emails cannot be probed.
-		if (!record) {
-			console.log("🔐 forget-password: no account for requested email");
+		if (records.length === 0) {
+			console.log("🔐 forget-password: no account for requested email/Agent ID");
 			return c.json({ status: true });
 		}
 
-		const identifier = `reset:${email}`;
 		const now = new Date();
+		const baseUrl = resolvePortalBaseUrl(c.req.header("origin"));
+		const showAgentId = records.length > 1;
 
-		const [recent] = await db
-			.select({ id: verification.id })
-			.from(verification)
-			.where(
-				and(
-					eq(verification.identifier, identifier),
-					gt(verification.createdAt, new Date(now.getTime() - RESET_RESEND_COOLDOWN_MS)),
-				),
-			)
-			.limit(1);
-		if (recent) {
-			console.log(`🔐 forget-password: cooldown active for ${email}`);
-			return c.json({ status: true });
-		}
+		for (const record of records) {
+			const identifier = `reset:user:${record.id}`;
+			const [recent] = await db
+				.select({ id: verification.id })
+				.from(verification)
+				.where(
+					and(
+						eq(verification.identifier, identifier),
+						gt(verification.createdAt, new Date(now.getTime() - RESET_RESEND_COOLDOWN_MS)),
+					),
+				)
+				.limit(1);
+			if (recent) {
+				console.log(`🔐 forget-password: cooldown active for user ${record.id}`);
+				continue;
+			}
 
-		const tokenBytes = new Uint8Array(32);
-		crypto.getRandomValues(tokenBytes);
-		const token = [...tokenBytes]
-			.map((b) => b.toString(16).padStart(2, "0"))
-			.join("");
+			const tokenBytes = new Uint8Array(32);
+			crypto.getRandomValues(tokenBytes);
+			const token = [...tokenBytes]
+				.map((b) => b.toString(16).padStart(2, "0"))
+				.join("");
 
-		await db.delete(verification).where(eq(verification.identifier, identifier));
-		await db.insert(verification).values({
-			id: crypto.randomUUID(),
-			identifier,
-			value: token,
-			expiresAt: new Date(now.getTime() + RESET_TOKEN_TTL_MINUTES * 60 * 1000),
-			createdAt: now,
-			updatedAt: now,
-		});
+			await db.delete(verification).where(eq(verification.identifier, identifier));
+			await db.insert(verification).values({
+				id: crypto.randomUUID(),
+				identifier,
+				value: token,
+				expiresAt: new Date(now.getTime() + RESET_TOKEN_TTL_MINUTES * 60 * 1000),
+				createdAt: now,
+				updatedAt: now,
+			});
 
-		const resetUrl = `${resolvePortalBaseUrl(c.req.header("origin"))}/reset-password?token=${token}`;
-		const result = await sendEmail({
-			to: record.email,
-			...passwordResetEmail({
-				name: record.name,
-				resetUrl,
-				expiresInMinutes: RESET_TOKEN_TTL_MINUTES,
-			}),
-		});
+			const result = await sendEmail({
+				to: record.email,
+				...passwordResetEmail({
+					name: record.name,
+					resetUrl: `${baseUrl}/reset-password?token=${token}`,
+					expiresInMinutes: RESET_TOKEN_TTL_MINUTES,
+					agentCode: showAgentId || !identifierInput.includes("@")
+						? record.agentCode
+						: null,
+				}),
+			});
 
-		if (result.sent) {
-			console.log(`🔐 forget-password: reset email sent to ${email} (id=${result.id ?? "n/a"})`);
-		} else {
-			console.error(`❌ forget-password: reset email NOT sent to ${email}: ${result.reason}`);
+			if (result.sent) {
+				console.log(`🔐 forget-password: reset email sent for user ${record.id} (id=${result.id ?? "n/a"})`);
+			} else {
+				console.error(`❌ forget-password: reset email NOT sent for user ${record.id}: ${result.reason}`);
+			}
 		}
 		return c.json({ status: true });
 	} catch (error) {
@@ -407,15 +444,24 @@ authRoutes.post("/api/auth/reset-password", async (c) => {
 			return c.json({ message: "Invalid or expired token" }, 400);
 		}
 
-		const email = row.identifier.slice("reset:".length);
-		const [record] = await db
-			.select({ id: user.id })
-			.from(user)
-			.where(sql`lower(${user.email}) = ${email}`)
-			.limit(1);
-		if (!record) {
+		const target = row.identifier.slice("reset:".length);
+		// Links issued before shared emails used "reset:<email>"; only honour them when unambiguous.
+		const matches = target.startsWith("user:")
+			? await db
+					.select({ id: user.id, email: user.email })
+					.from(user)
+					.where(eq(user.id, target.slice("user:".length)))
+					.limit(1)
+			: await db
+					.select({ id: user.id, email: user.email })
+					.from(user)
+					.where(sql`lower(${user.email}) = ${target}`)
+					.limit(2);
+		const [record] = matches;
+		if (!record || matches.length > 1) {
 			return c.json({ message: "Invalid or expired token" }, 400);
 		}
+		const email = record.email.toLowerCase();
 
 		const passwordHash = await hashPassword(newPassword);
 		const now = new Date();

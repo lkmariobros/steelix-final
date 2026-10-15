@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
 	Dialog,
 	DialogContent,
@@ -93,6 +94,55 @@ export function CreateAgentAccountDialog({
 	const [uploadingDoc, setUploadingDoc] = useState<RecruitmentDocKey | null>(
 		null,
 	);
+	const [agentCode, setAgentCode] = useState("");
+	const [agentCodeTouched, setAgentCodeTouched] = useState(false);
+	const [allowSharedEmail, setAllowSharedEmail] = useState(false);
+
+	const nextAgentCodeQuery = trpc.agents.previewNextAgentCode.useQuery(
+		undefined,
+		{ enabled: open },
+	);
+	useEffect(() => {
+		if (open && !agentCodeTouched && nextAgentCodeQuery.data?.agentCode) {
+			setAgentCode(nextAgentCodeQuery.data.agentCode);
+		}
+	}, [open, agentCodeTouched, nextAgentCodeQuery.data?.agentCode]);
+
+	const debouncedEmail = useDebouncedValue(form.email.trim(), 400);
+	const debouncedNric = useDebouncedValue(form.nric.trim(), 400);
+	const debouncedAgentCode = useDebouncedValue(agentCode.trim(), 400);
+	const conflictCheckEmail = debouncedEmail.includes("@")
+		? debouncedEmail
+		: undefined;
+	const conflictCheckNric =
+		debouncedNric.replace(/[^0-9a-z]/gi, "").length >= 6
+			? debouncedNric
+			: undefined;
+	const conflictsQuery = trpc.agents.checkAccountConflicts.useQuery(
+		{
+			email: conflictCheckEmail,
+			nric: conflictCheckNric,
+			agentCode: debouncedAgentCode || undefined,
+		},
+		{
+			enabled:
+				open &&
+				Boolean(conflictCheckEmail || conflictCheckNric || debouncedAgentCode),
+		},
+	);
+	const conflicts = conflictsQuery.data;
+	const existingAccounts = conflicts?.matches ?? [];
+	const differentPersonAccount = existingAccounts.find((a) => a.differentNric);
+	const activeExistingAccounts = existingAccounts.filter((a) => a.isActive);
+	const blockedByOneActiveRule = Boolean(
+		conflicts?.oneActiveAccountPerAgent && activeExistingAccounts.length > 0,
+	);
+	const agentCodeTakenBy = conflicts?.agentCodeTakenBy ?? null;
+	const needsSharedConfirm = existingAccounts.length > 0;
+
+	useEffect(() => {
+		if (!needsSharedConfirm) setAllowSharedEmail(false);
+	}, [needsSharedConfirm]);
 
 	const { data: recruiterData, isLoading: recruitersLoading } =
 		trpc.agents.list.useQuery(
@@ -109,16 +159,26 @@ export function CreateAgentAccountDialog({
 		);
 	const recruiterCandidates = recruiterData?.agents ?? [];
 
+	const utils = trpc.useUtils();
 	const uploadSessionMutation =
 		trpc.agents.createOnboardingUploadSession.useMutation();
 	const createAgentMutation = trpc.agents.create.useMutation({
-		onSuccess: () => {
-			toast.success("Agent account created");
+		onSuccess: (created) => {
+			toast.success(
+				created?.agentCode
+					? `Agent account created (${created.agentCode})`
+					: "Agent account created",
+			);
 			resetForm();
 			onOpenChange(false);
+			void utils.agents.previewNextAgentCode.invalidate();
+			void utils.agents.checkAccountConflicts.invalidate();
 			onSuccess?.();
 		},
-		onError: (e) => toast.error(uploadErrorMessage(e)),
+		onError: (e) => {
+			toast.error(uploadErrorMessage(e));
+			void utils.agents.checkAccountConflicts.invalidate();
+		},
 	});
 
 	const resetForm = () => {
@@ -135,6 +195,9 @@ export function CreateAgentAccountDialog({
 		setRecruiterPickerOpen(false);
 		setRole("agent");
 		setUploadingDoc(null);
+		setAgentCode("");
+		setAgentCodeTouched(false);
+		setAllowSharedEmail(false);
 	};
 
 	const setField = (key: keyof RecruitmentFormState, value: string) => {
@@ -203,7 +266,11 @@ export function CreateAgentAccountDialog({
 		documents.icFront?.storagePath &&
 		documents.icBack?.storagePath &&
 		documents.registrationFeeReceipt?.storagePath &&
-		!uploadingDoc;
+		!uploadingDoc &&
+		!agentCodeTakenBy &&
+		!differentPersonAccount &&
+		!blockedByOneActiveRule &&
+		(!needsSharedConfirm || allowSharedEmail);
 
 	const handleCreate = () => {
 		if (!acceptedPolicy || !acceptedNda) {
@@ -268,6 +335,8 @@ export function CreateAgentAccountDialog({
 			branch: branch.trim() || undefined,
 			joinedDate: parseDateInputValue(joinedDate),
 			recruitedBy: recruitedById || undefined,
+			agentCode: agentCode.trim().toUpperCase() || undefined,
+			allowSharedEmail: needsSharedConfirm ? allowSharedEmail : undefined,
 			role: isSuperAdmin ? role : "agent",
 		});
 	};
@@ -306,7 +375,69 @@ export function CreateAgentAccountDialog({
 								<CardTitle className="text-base">Account setup</CardTitle>
 							</CardHeader>
 							<CardContent className="grid gap-4 px-4 pb-4 sm:grid-cols-2 lg:grid-cols-3">
-								<div className="space-y-2 lg:col-span-3">
+								{needsSharedConfirm ? (
+									<div
+										className={
+											differentPersonAccount || blockedByOneActiveRule
+												? "space-y-2 rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm sm:col-span-2 lg:col-span-3"
+												: "space-y-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-amber-950 text-sm sm:col-span-2 lg:col-span-3 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-100"
+										}
+									>
+										<p className="font-medium">
+											This email or NRIC already has an account:
+										</p>
+										<ul className="list-disc space-y-0.5 pl-5">
+											{existingAccounts.map((account) => (
+												<li key={account.id}>
+													{account.label}
+													<span className="text-muted-foreground">
+														{" "}
+														— {account.isActive ? "Active" : "Inactive"}
+														{account.matchedByEmail && account.matchedByNric
+															? ", same email & NRIC"
+															: account.matchedByEmail
+																? ", same email"
+																: ", same NRIC"}
+													</span>
+												</li>
+											))}
+										</ul>
+										{differentPersonAccount ? (
+											<p className="font-medium text-destructive">
+												This email belongs to {differentPersonAccount.label},
+												whose NRIC is different. Please use a different email.
+											</p>
+										) : blockedByOneActiveRule ? (
+											<p className="font-medium text-destructive">
+												"One active account per agent" is on. Deactivate the
+												existing account first, or turn the rule off in Agent
+												Management.
+											</p>
+										) : (
+											<label
+												htmlFor="allow-shared-email"
+												className="flex cursor-pointer items-start gap-2 pt-1"
+											>
+												<Checkbox
+													id="allow-shared-email"
+													checked={allowSharedEmail}
+													onCheckedChange={(v) => setAllowSharedEmail(Boolean(v))}
+													className="mt-0.5"
+												/>
+												<span>
+													<span className="font-medium">
+														Create separate account for this agent
+													</span>
+													<span className="block text-xs opacity-80">
+														Same person, new account. When an email has more than
+														one account, the agent signs in with their Agent ID.
+													</span>
+												</span>
+											</label>
+										)}
+									</div>
+								) : null}
+								<div className="space-y-2 lg:col-span-2">
 									<Label>Temporary password *</Label>
 									<Input
 										type="password"
@@ -314,6 +445,31 @@ export function CreateAgentAccountDialog({
 										onChange={(e) => setPassword(e.target.value)}
 										minLength={8}
 									/>
+								</div>
+								<div className="space-y-2">
+									<Label>Agent ID</Label>
+									<Input
+										value={agentCode}
+										onChange={(e) => {
+											setAgentCodeTouched(true);
+											setAgentCode(e.target.value.toUpperCase());
+										}}
+										placeholder={
+											nextAgentCodeQuery.data?.agentCode ?? "DT00001"
+										}
+										className="font-mono"
+										maxLength={32}
+										aria-invalid={Boolean(agentCodeTakenBy)}
+									/>
+									{agentCodeTakenBy ? (
+										<p className="text-destructive text-xs">
+											Already used by {agentCodeTakenBy}
+										</p>
+									) : (
+										<p className="text-muted-foreground text-xs">
+											Next available ID. Type an old ID if needed.
+										</p>
+									)}
 								</div>
 								<div className="space-y-2">
 									<Label>Branch</Label>
@@ -444,6 +600,16 @@ export function CreateAgentAccountDialog({
 				</div>
 
 				<DialogFooter className="shrink-0 border-t bg-muted/20 px-8 py-5">
+					{agentCodeTakenBy ||
+					differentPersonAccount ||
+					blockedByOneActiveRule ||
+					(needsSharedConfirm && !allowSharedEmail) ? (
+						<p className="mr-auto self-center text-amber-700 text-xs dark:text-amber-300">
+							{agentCodeTakenBy
+								? "Agent ID is already in use — see Account setup."
+								: "Existing account found — see Account setup below."}
+						</p>
+					) : null}
 					<Button variant="outline" onClick={() => onOpenChange(false)}>
 						Cancel
 					</Button>

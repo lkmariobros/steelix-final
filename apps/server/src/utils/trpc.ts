@@ -9,7 +9,33 @@ import {
 	hasSuperAdminAccess,
 } from "./user-roles";
 
-export const t = initTRPC.context<Context>().create();
+/** Drizzle's "Failed query: <sql> params: <values>" leaks personal data, so never send it to the browser. */
+function isRawDatabaseErrorMessage(message: string | undefined): boolean {
+	return Boolean(message && /^\s*Failed query:/i.test(message));
+}
+
+export const t = initTRPC.context<Context>().create({
+	errorFormatter({ shape, error, path }) {
+		if (
+			isRawDatabaseErrorMessage(error.message) ||
+			(error.cause instanceof Error &&
+				isRawDatabaseErrorMessage(error.cause.message) &&
+				error.message === error.cause.message)
+		) {
+			console.error(
+				`❌ tRPC ${path ?? "unknown"}: database error hidden from client:`,
+				error.message.split("\n")[0]?.slice(0, 160),
+			);
+			return {
+				...shape,
+				message:
+					"Something went wrong while saving. Please try again or contact support.",
+				data: { ...shape.data, stack: undefined },
+			};
+		}
+		return shape;
+	},
+});
 
 export const router = t.router;
 
