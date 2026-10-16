@@ -378,6 +378,49 @@ export async function getTasksForAgentReminders(
 	return res.rows.map(mapRow);
 }
 
+/**
+ * Open tasks for the assistant: due before `dueBefore` (overdue included),
+ * using the same access rule as agent reminders.
+ */
+export async function getOpenTasksForAgentBefore(
+	agentId: string,
+	dueBefore: Date | null,
+	options: { highPriorityOnly?: boolean; limit?: number } = {},
+): Promise<LeadTask[]> {
+	const limit = Math.min(Math.max(options.limit ?? 100, 1), 200);
+	const res = await pool.query(
+		`SELECT
+      t.id,
+      t.prospect_id,
+      p.name                               AS prospect_name,
+      t.title,
+      t.task_type,
+      t.priority,
+      t.due_date,
+      t.completed_at,
+      t.assigned_to,
+      t.created_by,
+      t.notes,
+      t.created_at,
+      t.updated_at,
+      au.name                              AS assigned_to_name,
+      cu.name                              AS created_by_name
+    FROM  public.lead_tasks t
+    INNER JOIN public.prospects p ON p.id = t.prospect_id
+    LEFT JOIN public."user"    au ON au.id = t.assigned_to
+    LEFT JOIN public."user"    cu ON cu.id = t.created_by
+    WHERE t.completed_at IS NULL
+      AND ($2::timestamptz IS NULL OR t.due_date < $2::timestamptz)
+      AND ($3::boolean = false OR t.priority IN ('high', 'urgent'))
+      AND ${AGENT_REMINDER_ACCESS_SQL}
+    ORDER BY t.due_date ASC
+    LIMIT ${limit}`,
+		[agentId, dueBefore, options.highPriorityOnly ?? false],
+	);
+
+	return res.rows.map(mapRow);
+}
+
 export async function getProspectAgentId(
 	prospectId: string,
 ): Promise<string | null> {

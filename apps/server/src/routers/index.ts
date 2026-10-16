@@ -3,6 +3,7 @@ import { adminLeadsRouter } from "../controllers/admin-leads";
 import { agentTiersRouter } from "../controllers/agent-tiers";
 import { agentsRouter } from "../controllers/agents";
 import { approvalsRouter } from "../controllers/approvals";
+import { assistantRouter } from "../controllers/assistant";
 import { autoReplyRouter } from "../controllers/auto-reply";
 import { calendarRouter } from "../controllers/calendar";
 import { commissionPayoutsRouter } from "../controllers/commission-payouts";
@@ -44,6 +45,7 @@ export const appRouter = router({
 	leadTasks: leadTasksRouter,
 	listings: listingsRouter,
 	portalFiles: portalFilesRouter,
+	assistant: assistantRouter,
 });
 
 export type AppRouter = typeof appRouter;

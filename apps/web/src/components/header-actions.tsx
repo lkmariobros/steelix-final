@@ -1,6 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
+import { AssistantButton } from "@/components/assistant-button";
 import { FeedbackButton } from "@/components/feedback-button";
 import { ModeToggle } from "@/components/mode-toggle";
 import { TaskRemindersButton } from "@/components/task-reminders-button";
@@ -13,6 +14,7 @@ export function HeaderActions() {
 	return (
 		<div className="ml-auto flex items-center gap-2">
 			{!isAdminPage && <TaskRemindersButton />}
+			{!isAdminPage && <AssistantButton />}
 			{!isAdminPage && <FeedbackButton />}
 			<ModeToggle />
 			<UserDropdown />
