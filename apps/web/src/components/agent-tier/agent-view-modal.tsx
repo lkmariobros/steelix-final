@@ -8,6 +8,7 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -36,9 +37,15 @@ export function AgentViewModal({
 	agentId,
 	onManage,
 }: AgentViewModalProps) {
-	const { data: agentData, isLoading } = trpc.agents.getById.useQuery(
+	const {
+		data: agentData,
+		isLoading,
+		isError,
+		error,
+		refetch,
+	} = trpc.agents.getById.useQuery(
 		{ id: agentId },
-		{ enabled: open && !!agentId },
+		{ enabled: open && !!agentId, retry: 1 },
 	);
 
 	const agent = agentData?.agent;
@@ -116,8 +123,22 @@ export function AgentViewModal({
 						</Tabs>
 						)
 					) : (
-						<div className="py-8 text-center text-muted-foreground">
-							Agent not found
+						<div className="space-y-3 py-8 text-center">
+							<p className="text-muted-foreground">
+								{isError
+									? error.message || "Could not load this agent profile."
+									: "Agent not found"}
+							</p>
+							{isError ? (
+								<Button
+									variant="outline"
+									size="sm"
+									className="rounded-full"
+									onClick={() => void refetch()}
+								>
+									Retry
+								</Button>
+							) : null}
 						</div>
 					)}
 				</div>

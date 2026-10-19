@@ -657,7 +657,10 @@ export const agentsRouter = router({
 			.limit(1);
 
 		if (!agentData) {
-			throw new Error("Agent not found");
+			throw new TRPCError({
+				code: "NOT_FOUND",
+				message: "Agent not found",
+			});
 		}
 
 		let recruiter: {
@@ -680,57 +683,99 @@ export const agentsRouter = router({
 			recruiter = row ?? null;
 		}
 
-		const onboardingDocuments = await enrichOnboardingDocuments(
-			agentData.agent.onboardingDocuments,
-		);
+		let onboardingDocuments = agentData.agent.onboardingDocuments ?? null;
+		try {
+			onboardingDocuments = await enrichOnboardingDocuments(
+				agentData.agent.onboardingDocuments,
+			);
+		} catch (e) {
+			console.warn(
+				`⚠️ agents.getById: onboarding docs enrich failed for ${input.id}:`,
+				e instanceof Error ? e.message : e,
+			);
+		}
 
-		// Get tier history
-		const tierHistory = await db
-			.select({
-				history: agentTierHistory,
-				promotedByUser: {
-					id: user.id,
-					name: user.name,
-					email: user.email,
-				},
-			})
-			.from(agentTierHistory)
-			.leftJoin(user, eq(agentTierHistory.promotedBy, user.id))
-			.where(eq(agentTierHistory.agentId, input.id))
-			.orderBy(desc(agentTierHistory.createdAt))
-			.limit(10);
+		// Related panels must not block opening the profile
+		const [tierHistoryResult, activitiesResult, goalsResult, performanceResult] =
+			await Promise.allSettled([
+				db
+					.select({
+						history: agentTierHistory,
+						promotedByUser: {
+							id: user.id,
+							name: user.name,
+							email: user.email,
+						},
+					})
+					.from(agentTierHistory)
+					.leftJoin(user, eq(agentTierHistory.promotedBy, user.id))
+					.where(eq(agentTierHistory.agentId, input.id))
+					.orderBy(desc(agentTierHistory.createdAt))
+					.limit(10),
+				db
+					.select()
+					.from(agentActivities)
+					.where(eq(agentActivities.agentId, input.id))
+					.orderBy(desc(agentActivities.timestamp))
+					.limit(20),
+				db
+					.select()
+					.from(agentGoals)
+					.where(
+						and(
+							eq(agentGoals.agentId, input.id),
+							eq(agentGoals.isActive, true),
+						),
+					)
+					.orderBy(desc(agentGoals.createdAt)),
+				(() => {
+					const sixMonthsAgo = new Date();
+					sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+					return db
+						.select()
+						.from(performanceMetrics)
+						.where(
+							and(
+								eq(performanceMetrics.agentId, input.id),
+								gte(performanceMetrics.periodStart, sixMonthsAgo),
+							),
+						)
+						.orderBy(desc(performanceMetrics.periodStart));
+				})(),
+			]);
 
-		// Get recent activities
-		const recentActivities = await db
-			.select()
-			.from(agentActivities)
-			.where(eq(agentActivities.agentId, input.id))
-			.orderBy(desc(agentActivities.timestamp))
-			.limit(20);
-
-		// Get current goals
-		const currentGoals = await db
-			.select()
-			.from(agentGoals)
-			.where(
-				and(eq(agentGoals.agentId, input.id), eq(agentGoals.isActive, true)),
-			)
-			.orderBy(desc(agentGoals.createdAt));
-
-		// Get performance metrics for last 6 months
-		const sixMonthsAgo = new Date();
-		sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
-
-		const performanceHistory = await db
-			.select()
-			.from(performanceMetrics)
-			.where(
-				and(
-					eq(performanceMetrics.agentId, input.id),
-					gte(performanceMetrics.periodStart, sixMonthsAgo),
-				),
-			)
-			.orderBy(desc(performanceMetrics.periodStart));
+		if (tierHistoryResult.status === "rejected") {
+			console.warn(
+				`⚠️ agents.getById: tier history failed for ${input.id}:`,
+				tierHistoryResult.reason instanceof Error
+					? tierHistoryResult.reason.message
+					: tierHistoryResult.reason,
+			);
+		}
+		if (activitiesResult.status === "rejected") {
+			console.warn(
+				`⚠️ agents.getById: activities failed for ${input.id}:`,
+				activitiesResult.reason instanceof Error
+					? activitiesResult.reason.message
+					: activitiesResult.reason,
+			);
+		}
+		if (goalsResult.status === "rejected") {
+			console.warn(
+				`⚠️ agents.getById: goals failed for ${input.id}:`,
+				goalsResult.reason instanceof Error
+					? goalsResult.reason.message
+					: goalsResult.reason,
+			);
+		}
+		if (performanceResult.status === "rejected") {
+			console.warn(
+				`⚠️ agents.getById: performance failed for ${input.id}:`,
+				performanceResult.reason instanceof Error
+					? performanceResult.reason.message
+					: performanceResult.reason,
+			);
+		}
 
 		return {
 			...agentData,
@@ -739,10 +784,16 @@ export const agentsRouter = router({
 				onboardingDocuments,
 			},
 			recruiter,
-			tierHistory,
-			recentActivities,
-			currentGoals,
-			performanceHistory,
+			tierHistory:
+				tierHistoryResult.status === "fulfilled" ? tierHistoryResult.value : [],
+			recentActivities:
+				activitiesResult.status === "fulfilled" ? activitiesResult.value : [],
+			currentGoals:
+				goalsResult.status === "fulfilled" ? goalsResult.value : [],
+			performanceHistory:
+				performanceResult.status === "fulfilled"
+					? performanceResult.value
+					: [],
 		};
 	}),
 

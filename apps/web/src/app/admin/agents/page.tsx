@@ -124,12 +124,20 @@ type LinkedAccountInfo = {
 	isActive: boolean;
 };
 
+type AgentListItem = {
+	agent: AgentData;
+	recruiter?: RecruiterInfo;
+	linkedAccounts?: LinkedAccountInfo[];
+};
+
 type AccountRoleFilter =
 	| "all"
 	| "agent"
 	| "team_lead"
 	| "admin"
 	| "super_admin";
+
+const AGENTS_PAGE_SIZE = 50;
 
 export default function AdminAgentsPage() {
 	const { session, isSuperAdmin, isAdmin } = useUserRole();
@@ -142,6 +150,10 @@ export default function AdminAgentsPage() {
 	>("all");
 	const [searchQuery, setSearchQuery] = useState("");
 	const debouncedSearch = useDebouncedValue(searchQuery, 300);
+	const [listOffset, setListOffset] = useState(0);
+	const [accumulatedAgents, setAccumulatedAgents] = useState<AgentListItem[]>(
+		[],
+	);
 
 	// State for dialogs
 	const [selectedAgent, setSelectedAgent] = useState<AgentData | null>(null);
@@ -180,8 +192,14 @@ export default function AdminAgentsPage() {
 		setIsViewModalOpen(true);
 	};
 
+	const resetAgentList = () => {
+		setListOffset(0);
+		setAccumulatedAgents([]);
+	};
+
 	const setActiveMutation = trpc.agents.setActive.useMutation({
 		onSuccess: () => {
+			resetAgentList();
 			utils.agents.list.invalidate();
 			utils.agents.getStats.invalidate();
 			utils.agents.getAccountSettings.invalidate();
@@ -218,6 +236,7 @@ export default function AdminAgentsPage() {
 			setIsApproveDialogOpen(false);
 			setApproveAgentId(null);
 			setApproveAgentCode("");
+			resetAgentList();
 			utils.agents.list.invalidate();
 			utils.agents.getStats.invalidate();
 		},
@@ -252,6 +271,7 @@ export default function AdminAgentsPage() {
 			setDeleteAgent(null);
 			setDeleteStep(1);
 			setDeleteConfirmText("");
+			resetAgentList();
 			utils.agents.list.invalidate();
 			utils.agents.getStats.invalidate();
 		},
@@ -263,15 +283,23 @@ export default function AdminAgentsPage() {
 		setIsManageDialogOpen(true);
 	};
 
+	// Reset paging when filters / search change
+	useEffect(() => {
+		setListOffset(0);
+		setAccumulatedAgents([]);
+	}, [roleFilter, activeFilter, approvalFilter, debouncedSearch]);
+
 	// Fetch agents data
 	const {
 		data: agentsData,
 		isLoading: isLoadingAgents,
+		isFetching: isFetchingAgents,
 		refetch: refetchAgents,
+		error: agentsListError,
 	} = trpc.agents.list.useQuery(
 		{
-			limit: 50,
-			offset: 0,
+			limit: AGENTS_PAGE_SIZE,
+			offset: listOffset,
 			role: roleFilter === "all" ? undefined : roleFilter,
 			isActive:
 				activeFilter === "all"
@@ -288,6 +316,28 @@ export default function AdminAgentsPage() {
 		},
 	);
 
+	useEffect(() => {
+		if (!agentsData?.agents) return;
+		const page = agentsData.agents as AgentListItem[];
+		if (listOffset === 0) {
+			setAccumulatedAgents(page);
+			return;
+		}
+		setAccumulatedAgents((prev) => {
+			const seen = new Set(prev.map((row) => row.agent.id));
+			const next = page.filter((row) => !seen.has(row.agent.id));
+			return next.length > 0 ? [...prev, ...next] : prev;
+		});
+	}, [agentsData, listOffset]);
+
+	const totalAgentsMatching = Number(agentsData?.total ?? 0);
+	const hasMoreAgents =
+		accumulatedAgents.length > 0 &&
+		accumulatedAgents.length < totalAgentsMatching;
+	const isInitialAgentsLoading =
+		isLoadingAgents && listOffset === 0 && accumulatedAgents.length === 0;
+	const isLoadingMoreAgents = isFetchingAgents && listOffset > 0;
+
 	// Get agent statistics
 	const { data: agentStats, isLoading: isLoadingStats } =
 		trpc.agents.getStats.useQuery(undefined, {
@@ -296,7 +346,18 @@ export default function AdminAgentsPage() {
 
 	// Handle refresh
 	const handleRefresh = async () => {
-		await Promise.all([refetchAgents(), utils.agents.getStats.invalidate()]);
+		setAccumulatedAgents([]);
+		if (listOffset !== 0) {
+			setListOffset(0);
+		} else {
+			await refetchAgents();
+		}
+		await utils.agents.getStats.invalidate();
+	};
+
+	const handleLoadMore = () => {
+		if (isFetchingAgents || !hasMoreAgents) return;
+		setListOffset((prev) => prev + AGENTS_PAGE_SIZE);
 	};
 
 	return (
@@ -560,9 +621,11 @@ export default function AdminAgentsPage() {
 												One active account per agent
 											</span>
 										</label>
-										{agentsData?.agents ? (
+										{accumulatedAgents.length > 0 ? (
 											<span className="inline-flex items-center rounded-full bg-primary/12 px-2.5 py-1 font-medium text-[11px] text-primary">
-												{agentsData.agents.length} shown
+												{totalAgentsMatching > 0
+													? `${accumulatedAgents.length} of ${totalAgentsMatching} shown`
+													: `${accumulatedAgents.length} shown`}
 											</span>
 										) : null}
 									</div>
@@ -578,7 +641,7 @@ export default function AdminAgentsPage() {
 								) : null}
 							</CardHeader>
 							<CardContent className="p-0">
-								{isLoadingAgents ? (
+								{isInitialAgentsLoading ? (
 									<div className="space-y-3 p-4 sm:p-5">
 										{["sk-b1", "sk-b2", "sk-b3", "sk-b4", "sk-b5"].map((id) => (
 											<div
@@ -600,17 +663,27 @@ export default function AdminAgentsPage() {
 											</div>
 										))}
 									</div>
-								) : agentsData?.agents && agentsData.agents.length > 0 ? (
+								) : agentsListError ? (
+									<div className="px-5 py-10 text-center">
+										<p className="mb-3 text-destructive text-sm">
+											{agentsListError.message || "Failed to load agents"}
+										</p>
+										<Button
+											variant="outline"
+											className="rounded-full"
+											onClick={handleRefresh}
+										>
+											<RiRefreshLine className="mr-2 size-4" />
+											Retry
+										</Button>
+									</div>
+								) : accumulatedAgents.length > 0 ? (
 									<div className="max-h-[min(70vh,720px)] overflow-y-auto [scrollbar-gutter:stable]">
 										<div className="space-y-2.5 p-4 sm:p-5">
-										{agentsData.agents.map((agentItem) => {
-											const agent = agentItem.agent as AgentData;
-											const recruiter = (
-												agentItem as { recruiter?: RecruiterInfo }
-											).recruiter;
-											const linkedAccounts =
-												(agentItem as { linkedAccounts?: LinkedAccountInfo[] })
-													.linkedAccounts ?? [];
+										{accumulatedAgents.map((agentItem) => {
+											const agent = agentItem.agent;
+											const recruiter = agentItem.recruiter ?? null;
+											const linkedAccounts = agentItem.linkedAccounts ?? [];
 											const isActive = agent.isActive ?? true;
 											const isStaff = isStaffAccountRole(agent.role);
 											const isProtectedLeadDev =
@@ -835,19 +908,20 @@ export default function AdminAgentsPage() {
 												</div>
 											);
 										})}
-										{agentsData.hasMore && (
+										{hasMoreAgents ? (
 											<div className="pt-2 text-center">
 												<Button
 													variant="outline"
 													className="rounded-full"
-													onClick={() => {
-														// TODO: Implement pagination
-													}}
+													onClick={handleLoadMore}
+													disabled={isLoadingMoreAgents}
 												>
-													Load More
+													{isLoadingMoreAgents
+														? "Loading…"
+														: `Load More (${accumulatedAgents.length} of ${totalAgentsMatching})`}
 												</Button>
 											</div>
-										)}
+										) : null}
 										</div>
 									</div>
 								) : (
@@ -901,11 +975,12 @@ export default function AdminAgentsPage() {
 						primaryCommissionSplit: selectedAgent.primaryCommissionSplit,
 					}}
 					onSuccess={() => {
-						refetchAgents();
+						resetAgentList();
+						void refetchAgents();
 						utils.agents.getStats.invalidate();
 					}}
 				/>
-			)}
+			)}1
 
 			{selectedAgent && (
 				<AgentRoleDialog
@@ -918,7 +993,8 @@ export default function AdminAgentsPage() {
 						role: selectedAgent.role,
 					}}
 					onSuccess={() => {
-						refetchAgents();
+						resetAgentList();
+						void refetchAgents();
 						utils.agents.getStats.invalidate();
 					}}
 				/>
@@ -939,6 +1015,7 @@ export default function AdminAgentsPage() {
 				onOpenChange={setIsCreateDialogOpen}
 				isSuperAdmin={isSuperAdmin}
 				onSuccess={() => {
+					resetAgentList();
 					utils.agents.list.invalidate();
 					utils.agents.getStats.invalidate();
 					utils.agents.getAccountSettings.invalidate();
