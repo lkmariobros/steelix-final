@@ -41,6 +41,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuSeparator,
+	DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { MetricCard } from "@/dashboards/admin/widgets/metric-card";
 import { useUserRole } from "@/hooks/use-user-role";
 import { accountRoleBadgeClass, formatAccountRole, isStaffAccountRole } from "@/lib/user-role";
@@ -58,12 +65,16 @@ import {
 	RiAddLine,
 	RiBuilding2Line,
 	RiDashboardLine,
+	RiDeleteBinLine,
 	RiEyeLine,
+	RiKey2Line,
+	RiMore2Line,
 	RiRefreshLine,
 	RiSearchLine,
 	RiSettings3Line,
 	RiTeamLine,
 	RiUserLine,
+	RiUserSettingsLine,
 } from "@remixicon/react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -707,7 +718,16 @@ export default function AdminAgentsPage() {
 											return (
 												<div
 													key={agent.id}
-													className="flex flex-col gap-3 rounded-2xl border border-border/40 bg-background p-4 shadow-sm transition-all hover:border-primary/25 hover:shadow-card sm:flex-row sm:items-center sm:justify-between"
+													role="button"
+													tabIndex={0}
+													className="flex cursor-pointer flex-col gap-3 rounded-2xl border border-border/40 bg-background p-4 shadow-sm transition-all hover:border-primary/25 hover:shadow-card sm:flex-row sm:items-center sm:justify-between"
+													onClick={() => handleViewAgent(agent)}
+													onKeyDown={(e) => {
+														if (e.key === "Enter" || e.key === " ") {
+															e.preventDefault();
+															handleViewAgent(agent);
+														}
+													}}
 												>
 													<div className="flex min-w-0 items-start gap-3 sm:items-center">
 														<span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 font-semibold text-primary text-sm">
@@ -802,109 +822,137 @@ export default function AdminAgentsPage() {
 														</div>
 													</div>
 
-													<div className="flex flex-wrap items-center justify-end gap-1.5 sm:shrink-0">
-														{isPendingAgentStatus(agent.agentStatus) && (
-															<Button
-																size="sm"
-																className="h-8 rounded-full px-3"
-																onClick={() => {
-																	setApproveAgentId(agent.id);
-																	setIsApproveDialogOpen(true);
-																}}
-																disabled={approveAgentMutation.isPending}
-															>
-																Approve
-															</Button>
-														)}
-														{isSuperAdmin && agent.role !== "super_admin" && (
-															<Button
-																size="sm"
-																variant="outline"
-																className="h-8 rounded-full border-border/60 bg-muted/40 px-3 shadow-none"
-																onClick={() => handleChangeRole(agent)}
-															>
-																Role
-															</Button>
-														)}
-														{(agent.role === "agent" ||
+													{(() => {
+														const canManageTier =
+															agent.role === "agent" ||
 															agent.role === "team_lead" ||
-															!agent.role) && (
-															<Tooltip>
-																<TooltipTrigger asChild>
-																	<Button
-																		variant="ghost"
-																		size="icon"
-																		className={actionBtnClass}
-																		title="Manage"
-																		onClick={() => handleManageAgent(agent)}
-																	>
-																		<RiSettings3Line size={15} />
-																		<span className="sr-only">Manage</span>
-																	</Button>
-																</TooltipTrigger>
-																<TooltipContent>Manage</TooltipContent>
-															</Tooltip>
-														)}
-														<Tooltip>
-															<TooltipTrigger asChild>
-																<Button
-																	variant="ghost"
-																	size="icon"
-																	className={actionBtnClass}
-																	title="View details"
-																	onClick={() => handleViewAgent(agent)}
-																>
-																	<RiEyeLine size={15} />
-																	<span className="sr-only">View</span>
-																</Button>
-															</TooltipTrigger>
-															<TooltipContent>View details</TooltipContent>
-														</Tooltip>
-														<Button
-															size="sm"
-															variant="outline"
-															className="h-8 rounded-full border-border/60 bg-muted/40 px-3 shadow-none"
-															onClick={() => {
-																setResetAgentId(agent.id);
-																setIsResetPasswordOpen(true);
-															}}
-														>
-															Reset
-														</Button>
-														<Button
-															size="sm"
-															variant="outline"
-															className="h-8 rounded-full border-border/60 bg-muted/40 px-3 shadow-none"
-															onClick={() => {
-																setActiveMutation.mutate({
-																	agentId: agent.id,
-																	isActive: !isActive,
-																});
-															}}
-														>
-															{isActive ? "Deactivate" : "Activate"}
-														</Button>
-														{!isProtectedLeadDev &&
+															!agent.role;
+														const canChangeRole =
+															isSuperAdmin && agent.role !== "super_admin";
+														const canDelete =
+															!isProtectedLeadDev &&
 															((isAdmin && agent.role !== "super_admin") ||
 																(isSuperAdmin &&
 																	agent.role === "super_admin")) &&
-															agent.id !== session?.user?.id && (
+															agent.id !== session?.user?.id;
+
+														return (
+															<div
+																className="flex shrink-0 items-center justify-end gap-1.5"
+																onClick={(e) => e.stopPropagation()}
+																onKeyDown={(e) => e.stopPropagation()}
+															>
+																{isPendingAgentStatus(agent.agentStatus) ? (
+																	<Button
+																		size="sm"
+																		className="h-8 rounded-full px-3"
+																		onClick={() => {
+																			setApproveAgentId(agent.id);
+																			setIsApproveDialogOpen(true);
+																		}}
+																		disabled={approveAgentMutation.isPending}
+																	>
+																		Approve
+																	</Button>
+																) : null}
+																<Tooltip>
+																	<TooltipTrigger asChild>
+																		<Button
+																			variant="ghost"
+																			size="icon"
+																			className={actionBtnClass}
+																			title="View details"
+																			onClick={() => handleViewAgent(agent)}
+																		>
+																			<RiEyeLine size={15} />
+																			<span className="sr-only">View</span>
+																		</Button>
+																	</TooltipTrigger>
+																	<TooltipContent>View details</TooltipContent>
+																</Tooltip>
 																<Button
 																	size="sm"
-																	variant="destructive"
-																	className="h-8 shrink-0 rounded-full px-3"
+																	variant="outline"
+																	className="h-8 rounded-full border-border/60 bg-muted/40 px-3 shadow-none"
+																	disabled={setActiveMutation.isPending}
 																	onClick={() => {
-																		setDeleteAgent(agent);
-																		setDeleteStep(1);
-																		setDeleteConfirmText("");
-																		setIsDeleteDialogOpen(true);
+																		setActiveMutation.mutate({
+																			agentId: agent.id,
+																			isActive: !isActive,
+																		});
 																	}}
-																	disabled={deleteAgentMutation.isPending}
 																>
-																	Delete
+																	{isActive ? "Deactivate" : "Activate"}
 																</Button>
-															)}
-													</div>
+																<DropdownMenu>
+																	<DropdownMenuTrigger asChild>
+																		<Button
+																			variant="ghost"
+																			size="icon"
+																			className={actionBtnClass}
+																			aria-label="More actions"
+																		>
+																			<RiMore2Line size={15} />
+																		</Button>
+																	</DropdownMenuTrigger>
+																	<DropdownMenuContent
+																		align="end"
+																		className="min-w-[11.5rem]"
+																	>
+																		{canManageTier ? (
+																			<DropdownMenuItem
+																				onClick={() =>
+																					handleManageAgent(agent)
+																				}
+																			>
+																				<RiSettings3Line size={15} />
+																				Manage
+																			</DropdownMenuItem>
+																		) : null}
+																		{canChangeRole ? (
+																			<DropdownMenuItem
+																				onClick={() =>
+																					handleChangeRole(agent)
+																				}
+																			>
+																				<RiUserSettingsLine size={15} />
+																				Change role
+																			</DropdownMenuItem>
+																		) : null}
+																		<DropdownMenuItem
+																			onClick={() => {
+																				setResetAgentId(agent.id);
+																				setIsResetPasswordOpen(true);
+																			}}
+																		>
+																			<RiKey2Line size={15} />
+																			Reset password
+																		</DropdownMenuItem>
+																		{canDelete ? (
+																			<>
+																				<DropdownMenuSeparator />
+																				<DropdownMenuItem
+																					variant="destructive"
+																					disabled={
+																						deleteAgentMutation.isPending
+																					}
+																					onClick={() => {
+																						setDeleteAgent(agent);
+																						setDeleteStep(1);
+																						setDeleteConfirmText("");
+																						setIsDeleteDialogOpen(true);
+																					}}
+																				>
+																					<RiDeleteBinLine size={15} />
+																					Delete
+																				</DropdownMenuItem>
+																			</>
+																		) : null}
+																	</DropdownMenuContent>
+																</DropdownMenu>
+															</div>
+														);
+													})()}
 												</div>
 											);
 										})}
