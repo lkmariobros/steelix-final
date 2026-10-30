@@ -6,6 +6,7 @@ import {
 	FormControl,
 	FormField,
 	FormItem,
+	FormLabel,
 	FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
@@ -337,6 +338,32 @@ export function SecondaryDealFields({
 											value={field.value ?? ""}
 											placeholder="e.g. 12 months / 1 year"
 											onBlur={() => syncToParent()}
+										/>
+									</FormControl>
+									<FormMessage />
+								</FormItem>
+							)}
+						/>
+						<FormField
+							control={control}
+							name="propertyData.renewOptionYears"
+							render={({ field }) => (
+								<FormItem>
+									<FormLabel>Renew Option (Year)</FormLabel>
+									<FormControl>
+										<Input
+											type="number"
+											min={0}
+											step={1}
+											placeholder="e.g. 1"
+											value={field.value ?? ""}
+											onChange={(e) => {
+												const raw = e.target.value;
+												field.onChange(
+													raw === "" ? undefined : Number(raw),
+												);
+												syncToParent();
+											}}
 										/>
 									</FormControl>
 									<FormMessage />

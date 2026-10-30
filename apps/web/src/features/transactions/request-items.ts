@@ -52,3 +52,28 @@ export function formatRequestItemLabel(
 	if (!value) return "—";
 	return labelByValue.get(value as TransactionRequestItemValue) ?? value;
 }
+
+const REQUEST_ITEM_MARKER = /^\[\[req:([a-z0-9_]+)\]\]\s*/i;
+
+export function encodeRequestItemBody(
+	requestItem: string | undefined,
+	body: string,
+): string {
+	const trimmed = body.trim();
+	if (!requestItem) return trimmed;
+	return `[[req:${requestItem}]]\n${trimmed}`;
+}
+
+export function parseRequestItemFromBody(body: string | null | undefined): {
+	requestItem: TransactionRequestItemValue | null;
+	body: string;
+} {
+	const text = body ?? "";
+	const match = REQUEST_ITEM_MARKER.exec(text);
+	if (!match) return { requestItem: null, body: text };
+	const value = match[1] as TransactionRequestItemValue;
+	return {
+		requestItem: labelByValue.has(value) ? value : null,
+		body: text.slice(match[0].length),
+	};
+}

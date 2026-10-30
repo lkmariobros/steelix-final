@@ -36,6 +36,10 @@ import {
 	formatStatusLabel,
 	getStatusBadgeClass,
 } from "@/features/transactions/transaction-detail-utils";
+import {
+	caseDetailUrl,
+	transactionSegmentFromCase,
+} from "@/features/admin-transactions/segment-config";
 import { formatRequestItemLabel } from "@/features/transactions/request-items";
 import { formatAgentPickerLabel } from "@/lib/agent-display";
 import { formatDateDMY } from "@/lib/date-format";
@@ -172,7 +176,9 @@ function RequestActions({
 				asChild
 				className="h-8 shrink-0 rounded-lg px-2 text-xs"
 			>
-				<Link href={`/admin/transactions/case/${row.id}`}>
+				<Link
+					href={caseDetailUrl(row.id, transactionSegmentFromCase(row))}
+				>
 					<RiFileList3Line className="mr-0.5 size-3.5" />
 					View
 				</Link>

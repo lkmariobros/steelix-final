@@ -6,6 +6,10 @@ import {
 	getStatusBadgeClass,
 } from "@/features/transactions/transaction-detail-utils";
 import { formatAgentPickerLabel } from "@/lib/agent-display";
+import {
+	caseDetailUrl,
+	transactionSegmentFromCase,
+} from "@/features/admin-transactions/segment-config";
 import { formatDateDMY } from "@/lib/date-format";
 import {
 	RiCheckLine,
@@ -228,7 +232,12 @@ export function ApprovalQueueItem({
 			</div>
 			<div className="flex shrink-0 flex-wrap items-center justify-start gap-2 lg:justify-center">
 				<Button size="sm" variant="secondary" className="rounded-lg" asChild>
-					<Link href={`/admin/transactions/case/${transaction.id}`}>
+					<Link
+						href={caseDetailUrl(
+							transaction.id,
+							transactionSegmentFromCase(transaction),
+						)}
+					>
 						<RiFileList3Line className="mr-1 h-4 w-4" />
 						View details
 					</Link>

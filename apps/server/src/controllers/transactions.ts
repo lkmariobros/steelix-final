@@ -693,11 +693,17 @@ export const transactionsRouter = router({
 		}),
 
 	/**
-	 * Secondary market letterhead form (subsale / subrent) — printable HTML.
+	 * Secondary market eForms (Letter of Appointment / Letter of Offer).
 	 * Use browser Print → Save as PDF until official PDF template is supplied.
 	 */
 	generateLetterheadForm: protectedProcedure
-		.input(transactionIdInput)
+		.input(
+			transactionIdInput.extend({
+				formType: z
+					.enum(["letter_of_appointment", "letter_of_offer", "summary"])
+					.default("letter_of_appointment"),
+			}),
+		)
 		.mutation(async ({ ctx, input }) => {
 			const [transaction] = await db
 				.select({ id: transactions.id })
@@ -713,12 +719,15 @@ export const transactionsRouter = router({
 			}
 
 			try {
-				return await generateSecondaryTransactionFormHtml(input.id);
+				return await generateSecondaryTransactionFormHtml(
+					input.id,
+					input.formType,
+				);
 			} catch (e) {
 				throw new TRPCError({
 					code: "BAD_REQUEST",
 					message:
-						e instanceof Error ? e.message : "Failed to generate form",
+						e instanceof Error ? e.message : "Failed to generate eForm",
 				});
 			}
 		}),
@@ -1335,7 +1344,7 @@ export const transactionsRouter = router({
 				throw new TRPCError({ code: "FORBIDDEN", message: "Not allowed" });
 			}
 
-			if (isEditRequest && isTransactionAgent && !input.requestItem) {
+			if (isEditRequest && !input.requestItem) {
 				throw new TRPCError({
 					code: "BAD_REQUEST",
 					message: "Request item is required for edit requests",
@@ -1345,12 +1354,25 @@ export const transactionsRouter = router({
 			if (
 				isEditRequest &&
 				isTransactionAgent &&
+				!isAdmin &&
 				input.requestItem === "add_document" &&
 				(!input.attachments || input.attachments.length === 0)
 			) {
 				throw new TRPCError({
 					code: "BAD_REQUEST",
 					message: "Please upload at least one document for Add Document requests",
+				});
+			}
+
+			if (
+				isEditRequest &&
+				isAdmin &&
+				input.requestItem !== "converted_case" &&
+				input.requestItem !== "cancel_case"
+			) {
+				throw new TRPCError({
+					code: "BAD_REQUEST",
+					message: "Admin requests support Converted Case and Cancel Case only",
 				});
 			}
 
@@ -1363,9 +1385,8 @@ export const transactionsRouter = router({
 				attachments: input.attachments,
 			});
 
-			// Queue for admin Approval Requests when the case owner submits an edit request
-			// (works even if the user also has admin role in their session).
-			if (isEditRequest && isTransactionAgent && input.requestItem) {
+			// Queue for Approval Requests when agent or admin submits an edit request.
+			if (isEditRequest && input.requestItem) {
 				try {
 					await db
 						.update(transactions)

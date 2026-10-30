@@ -28,7 +28,10 @@ import {
 	adminCanDeleteCase,
 } from "@/features/admin-transactions/admin-delete-case-dialog";
 import type { AdminTransactionSegmentConfig } from "@/features/admin-transactions/segment-config";
-import { getSegmentPageUrl } from "@/features/admin-transactions/segment-config";
+import {
+	caseDetailUrl,
+	getSegmentPageUrl,
+} from "@/features/admin-transactions/segment-config";
 import { stashTransactionPrefillOnce } from "@/features/sales-entry/prefill-stash";
 import {
 	formatPaymentMethodField,
@@ -354,7 +357,7 @@ export function AdminTransactionSegmentPage({
 													>
 														<TableCell className={tdClass}>
 															<Link
-																href={`/admin/transactions/case/${row.id}`}
+																href={caseDetailUrl(row.id, config.segment)}
 																className="font-medium font-mono text-primary hover:underline"
 															>
 																{row.caseNo ?? row.id.slice(0, 8)}

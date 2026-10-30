@@ -15,6 +15,9 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import {
 	TRANSACTION_REQUEST_ITEMS,
+	encodeRequestItemBody,
+	formatRequestItemLabel,
+	parseRequestItemFromBody,
 	type TransactionRequestItemValue,
 } from "@/features/transactions/request-items";
 import { trpc } from "@/utils/trpc";
@@ -65,6 +68,9 @@ export function TransactionMessagesPanel({
 	const [requestItem, setRequestItem] = useState<
 		TransactionRequestItemValue | ""
 	>("");
+	const [adminKind, setAdminKind] = useState<
+		"remark" | "admin_reply" | "status_note" | "converted_case" | "cancel_case"
+	>("remark");
 	const [messageType, setMessageType] = useState<
 		"remark" | "edit_request" | "status_note" | "admin_reply"
 	>(locked && !isAdmin ? "edit_request" : "remark");
@@ -87,17 +93,23 @@ export function TransactionMessagesPanel({
 			await utils.transactions.getById.invalidate({ id: transactionId });
 			await utils.documents.list.invalidate({ transactionId });
 			toast.success(
-				messageType === "edit_request"
-					? "Edit request submitted"
+				messageType === "edit_request" ||
+					adminKind === "converted_case" ||
+					adminKind === "cancel_case"
+					? "Request submitted"
 					: "Message sent",
 			);
 		},
 		onError: (e) => toast.error(e.message || "Failed to send message"),
 	});
 
-	const showRequestItemPicker =
+	const showAgentRequestPicker =
 		!isAdmin && locked && messageType === "edit_request";
-	const showUploadField = showRequestItemPicker;
+	const showAdminRequestPicker =
+		isAdmin &&
+		(adminKind === "converted_case" || adminKind === "cancel_case");
+	const showRequestItemPicker = showAgentRequestPicker;
+	const showUploadField = showAgentRequestPicker;
 	const requiresAttachment = requestItem === "add_document";
 
 	const handleFilesSelected = (fileList: FileList | null) => {
@@ -120,7 +132,7 @@ export function TransactionMessagesPanel({
 	const handleSend = async () => {
 		const trimmed = body.trim();
 		if (!trimmed) return;
-		if (!isAdmin && messageType === "edit_request" && !requestItem) {
+		if (showRequestItemPicker && !requestItem) {
 			toast.error("Please select a request item");
 			return;
 		}
@@ -177,14 +189,21 @@ export function TransactionMessagesPanel({
 				});
 			}
 
+			const adminRequestItem = showAdminRequestPicker
+				? adminKind
+				: undefined;
+			const resolvedType = adminRequestItem ? "edit_request" : messageType;
+			const encodedBody = adminRequestItem
+				? encodeRequestItemBody(adminRequestItem, trimmed)
+				: trimmed;
+
 			await addMessage.mutateAsync({
 				transactionId,
-				body: trimmed,
-				messageType,
+				body: encodedBody,
+				messageType: resolvedType,
 				requestItem:
-					!isAdmin && messageType === "edit_request" && requestItem
-						? requestItem
-						: undefined,
+					adminRequestItem ||
+					(showRequestItemPicker && requestItem ? requestItem : undefined),
 				attachments: attachments.length > 0 ? attachments : undefined,
 			});
 		} catch {
@@ -219,6 +238,7 @@ export function TransactionMessagesPanel({
 									}[] | null;
 								}
 							).attachments ?? [];
+						const parsed = parseRequestItemFromBody(m.body);
 						return (
 							<li
 								key={m.id}
@@ -234,11 +254,16 @@ export function TransactionMessagesPanel({
 									<Badge variant="secondary" className="text-xs">
 										{m.messageType.replace(/_/g, " ")}
 									</Badge>
+									{parsed.requestItem ? (
+										<Badge variant="outline" className="text-xs">
+											{formatRequestItemLabel(parsed.requestItem)}
+										</Badge>
+									) : null}
 									<span className="text-muted-foreground text-xs">
 										{formatDateTimeDMY(m.createdAt)}
 									</span>
 								</div>
-								<p className="whitespace-pre-wrap">{m.body}</p>
+								<p className="whitespace-pre-wrap">{parsed.body}</p>
 								{attachments.length > 0 ? (
 									<ul className="mt-2 space-y-1">
 										{attachments.map((file) => (
@@ -287,14 +312,27 @@ export function TransactionMessagesPanel({
 				{isAdmin && (
 					<select
 						className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-						value={messageType}
-						onChange={(e) =>
-							setMessageType(e.target.value as typeof messageType)
-						}
+						value={adminKind}
+						onChange={(e) => {
+							const next = e.target.value as typeof adminKind;
+							setAdminKind(next);
+							if (
+								next === "converted_case" ||
+								next === "cancel_case"
+							) {
+								setMessageType("edit_request");
+								setRequestItem(next);
+							} else {
+								setMessageType(next);
+								setRequestItem("");
+							}
+						}}
 					>
 						<option value="remark">Remark</option>
 						<option value="admin_reply">Admin reply</option>
 						<option value="status_note">Status note</option>
+						<option value="converted_case">Converted Case</option>
+						<option value="cancel_case">Cancel Case</option>
 					</select>
 				)}
 				{showRequestItemPicker ? (
@@ -310,7 +348,10 @@ export function TransactionMessagesPanel({
 								<SelectValue placeholder="Select request type…" />
 							</SelectTrigger>
 							<SelectContent>
-								{TRANSACTION_REQUEST_ITEMS.map((item) => (
+								{(showAdminRequestPicker
+									? ADMIN_REQUEST_ITEMS
+									: TRANSACTION_REQUEST_ITEMS
+								).map((item) => (
 									<SelectItem key={item.value} value={item.value}>
 										{item.label}
 									</SelectItem>
@@ -323,7 +364,9 @@ export function TransactionMessagesPanel({
 					placeholder={
 						locked && !isAdmin
 							? "Describe the changes you need…"
-							: "Write a message…"
+							: showAdminRequestPicker
+								? "Describe the Converted Case or Cancel Case request…"
+								: "Write a message…"
 					}
 					value={body}
 					onChange={(e) => setBody(e.target.value)}
@@ -404,7 +447,9 @@ export function TransactionMessagesPanel({
 						) : (
 							<>
 								<Send className="mr-1 h-4 w-4" />
-								{showRequestItemPicker ? "Submit request" : "Send"}
+								{showRequestItemPicker || showAdminRequestPicker
+									? "Submit request"
+									: "Send"}
 							</>
 						)}
 					</Button>

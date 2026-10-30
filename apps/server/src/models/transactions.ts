@@ -109,6 +109,7 @@ export const transactions = pgTable(
 		rentFrom?: string;
 		rentTo?: string;
 		rentPeriod?: string;
+		renewOptionYears?: number;
 		listingReferralShareType?: "percentage" | "fixed";
 		listingReferralShareValue?: number;
 		bedrooms?: number;

@@ -379,9 +379,16 @@ export const adminRouter = router({
 			};
 
 			if (input.action === "approve") {
-				// Acknowledge the request without unlocking full case-detail editing.
-				// Agents may only edit details in Draft; docs/status go through requests.
-				patch.status = "pending";
+				const item = existingTransaction.requestItem;
+				if (item === "converted_case") {
+					patch.status = "converted";
+					patch.convertedAt = new Date();
+				} else if (item === "cancel_case") {
+					patch.status = "cancelled";
+				} else {
+					// Acknowledge other edit requests without unlocking full case editing.
+					patch.status = "pending";
+				}
 			}
 
 			const [updatedTransaction] = await db

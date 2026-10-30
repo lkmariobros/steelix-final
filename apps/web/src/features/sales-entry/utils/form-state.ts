@@ -71,6 +71,7 @@ export const initialFormData: Partial<CompleteTransactionData> = {
 		rentFrom: undefined,
 		rentTo: undefined,
 		rentPeriod: undefined,
+		renewOptionYears: undefined,
 		purchasingMethod: undefined,
 		sstPayBy: undefined,
 		propertyType: undefined,

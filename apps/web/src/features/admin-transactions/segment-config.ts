@@ -127,6 +127,38 @@ export function resolveSegmentConfig(
 	);
 }
 
+export function transactionSegmentFromCase(tx: {
+	marketType?: string | null;
+	transactionType?: string | null;
+}): TransactionSegment {
+	if (tx.marketType === "primary") return "new-project";
+	if (tx.transactionType === "sale") return "subsale";
+	return "rental";
+}
+
+export function segmentUnitsUrl(segment: TransactionSegment): string {
+	if (segment === "new-project") {
+		return "/admin/transactions/new-project/sold-units";
+	}
+	if (segment === "subsale") return "/admin/transactions/subsale/units";
+	return "/admin/transactions/rental/units";
+}
+
+export function caseDetailUrl(
+	id: string,
+	segment?: TransactionSegment | string | null,
+): string {
+	const base = `/admin/transactions/case/${id}`;
+	if (
+		segment === "new-project" ||
+		segment === "subsale" ||
+		segment === "rental"
+	) {
+		return `${base}?segment=${segment}`;
+	}
+	return base;
+}
+
 export function getSegmentPageUrl(config: AdminTransactionSegmentConfig): string {
 	if (config.view === "requests") {
 		return `/admin/approvals/requests?segment=${config.segment}`;

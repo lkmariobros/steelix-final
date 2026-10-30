@@ -320,6 +320,20 @@ function isNavItemActive(
 		);
 	}
 
+	if (pathname.startsWith("/admin/transactions/case/")) {
+		const seg = searchParams?.get("segment");
+		if (url.includes("/admin/transactions/new-project/")) {
+			return seg === "new-project";
+		}
+		if (url.includes("/admin/transactions/subsale/")) {
+			return seg === "subsale";
+		}
+		if (url.includes("/admin/transactions/rental/")) {
+			return seg === "rental";
+		}
+		return false;
+	}
+
 	const [path, query] = url.split("?");
 	const pathMatch = pathname === path || pathname.startsWith(`${path}/`);
 	if (!pathMatch) return false;
@@ -350,7 +364,7 @@ function NavLink({
 				asChild
 				tooltip={title}
 				isActive={isActive}
-				className="h-9 justify-start gap-3 font-medium data-[active=true]:bg-primary/15 data-[active=true]:text-primary"
+				className="h-9 justify-start gap-3 font-medium data-[active=true]:bg-primary/15 data-[active=true]:font-bold data-[active=true]:text-primary"
 			>
 				<Link href={url}>
 					<Icon

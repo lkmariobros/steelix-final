@@ -49,6 +49,8 @@ export const propertySchema = z.object({
 	rentFrom: z.string().optional(),
 	rentTo: z.string().optional(),
 	rentPeriod: z.string().optional(),
+	/** Optional renewal term in years for rental deals */
+	renewOptionYears: z.number().nonnegative().optional(),
 	listingReferralShareType: z.enum(["percentage", "fixed"]).optional(),
 	listingReferralShareValue: z.number().nonnegative().optional(),
 	address: z.string().optional(),

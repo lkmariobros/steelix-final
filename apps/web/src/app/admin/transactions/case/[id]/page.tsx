@@ -21,6 +21,12 @@ import {
 	AdminDeleteCaseDialog,
 	adminCanDeleteCase,
 } from "@/features/admin-transactions/admin-delete-case-dialog";
+import {
+	caseDetailUrl,
+	segmentUnitsUrl,
+	transactionSegmentFromCase,
+	type TransactionSegment,
+} from "@/features/admin-transactions/segment-config";
 import { TransactionDetailView } from "@/features/transactions/transaction-detail-view";
 import { AdminTransactionStatusPanel } from "@/features/transactions/admin-transaction-status-panel";
 import { TransactionMessagesPanel } from "@/features/transactions/transaction-messages-panel";
@@ -37,21 +43,13 @@ import {
 	RiFileTextLine,
 } from "@remixicon/react";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
-import { useState } from "react";
-
-function segmentListUrl(tx: {
-	marketType?: string | null;
-	transactionType?: string | null;
-}): string {
-	if (tx.marketType === "primary") return "/admin/transactions/new-project/sold-units";
-	if (tx.transactionType === "sale") return "/admin/transactions/subsale/units";
-	return "/admin/transactions/rental/units";
-}
+import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
 
 export default function AdminTransactionDetailPage() {
 	const params = useParams<{ id: string }>();
 	const router = useRouter();
+	const searchParams = useSearchParams();
 	const transactionId = params.id;
 	const { openEditModal } = useTransactionModalActions();
 	const [deleteOpen, setDeleteOpen] = useState(false);
@@ -66,6 +64,32 @@ export default function AdminTransactionDetailPage() {
 		{ id: tx?.agentId ?? "" },
 		{ enabled: !!tx?.agentId },
 	);
+
+	const derivedSegment = tx ? transactionSegmentFromCase(tx) : null;
+	const querySegment = searchParams.get("segment");
+	const segment: TransactionSegment | null =
+		querySegment === "new-project" ||
+		querySegment === "subsale" ||
+		querySegment === "rental"
+			? querySegment
+			: derivedSegment;
+	const listUrl = segment
+		? segmentUnitsUrl(segment)
+		: "/admin/transactions/new-project/sold-units";
+	const segmentLabel =
+		segment === "subsale"
+			? "Subsale"
+			: segment === "rental"
+				? "Rental"
+				: "New Project";
+
+	useEffect(() => {
+		if (!tx || !derivedSegment) return;
+		if (searchParams.get("segment") === derivedSegment) return;
+		router.replace(caseDetailUrl(transactionId, derivedSegment), {
+			scroll: false,
+		});
+	}, [tx, derivedSegment, searchParams, router, transactionId]);
 
 	return (
 		<>
@@ -86,8 +110,8 @@ export default function AdminTransactionDetailPage() {
 							</BreadcrumbItem>
 							<BreadcrumbSeparator className="hidden md:block" />
 							<BreadcrumbItem>
-								<BreadcrumbLink href="/admin/approvals">
-									Approvals
+								<BreadcrumbLink href={listUrl}>
+									{segmentLabel}
 								</BreadcrumbLink>
 							</BreadcrumbItem>
 							<BreadcrumbSeparator />
@@ -109,14 +133,9 @@ export default function AdminTransactionDetailPage() {
 				<div className="flex flex-wrap items-center justify-between gap-2">
 					<div className="flex flex-wrap items-center gap-2">
 						<Button variant="outline" size="sm" asChild>
-							<Link href="/admin/approvals">
+							<Link href={listUrl}>
 								<RiArrowLeftLine className="mr-1 size-4" />
-								Back to approvals
-							</Link>
-						</Button>
-						<Button variant="outline" size="sm" asChild>
-							<Link href="/admin/transactions/new-project/sold-units">
-								All transactions
+								Back to All transactions
 							</Link>
 						</Button>
 					</div>
@@ -148,7 +167,11 @@ export default function AdminTransactionDetailPage() {
 						tx ? { id: tx.id, caseNo: tx.caseNo, status: tx.status } : null
 					}
 					onDeleted={() => {
-						if (tx) router.replace(segmentListUrl(tx));
+						if (tx) {
+							router.replace(
+								segmentUnitsUrl(transactionSegmentFromCase(tx)),
+							);
+						}
 					}}
 				/>
 
