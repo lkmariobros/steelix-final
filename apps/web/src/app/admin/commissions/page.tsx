@@ -314,6 +314,23 @@ export default function AdminCommissionsPage() {
 		staleTime: 10_000,
 	});
 
+	const lbSummaryQuery = trpc.admin.getLeadershipBonusSummary.useQuery(
+		undefined,
+		{ enabled: !!session, staleTime: 10_000 },
+	);
+	const lbListQuery = trpc.admin.getAllLeadershipBonusPayments.useQuery(
+		{ limit: 20, offset: 0 },
+		{ enabled: !!session, staleTime: 10_000 },
+	);
+	const markLbPaid = trpc.admin.markLeadershipBonusPaid.useMutation({
+		onSuccess: () => {
+			toast.success("Leadership bonus marked paid");
+			void lbListQuery.refetch();
+			void lbSummaryQuery.refetch();
+		},
+		onError: (e) => toast.error(e.message || "Failed to mark paid"),
+	});
+
 	const projectsQuery = trpc.commissionSchemes.listProjects.useQuery(undefined, {
 		enabled: !!session,
 	});
@@ -515,6 +532,121 @@ export default function AdminCommissionsPage() {
 						variant="gradient"
 					/>
 				</div>
+
+				<Card className="gap-0 overflow-hidden border-border/70 py-0 shadow-card">
+					<CardContent className="space-y-4 p-5">
+						<div className="flex flex-wrap items-start justify-between gap-3">
+							<div>
+								<h2 className="font-semibold text-base">Leadership bonus</h2>
+								<p className="text-muted-foreground text-sm">
+									Upline bonus from verified cases (1-level recruiter).
+								</p>
+							</div>
+							<div className="flex flex-wrap gap-2 text-sm">
+								<span className="rounded-full bg-amber-100 px-3 py-1 font-medium text-amber-800 dark:bg-amber-900/35 dark:text-amber-300">
+									Pending {formatRm(lbSummaryQuery.data?.pending.total ?? 0)}
+								</span>
+								<span className="rounded-full bg-emerald-100 px-3 py-1 font-medium text-emerald-800 dark:bg-emerald-900/35 dark:text-emerald-300">
+									Paid {formatRm(lbSummaryQuery.data?.paid.total ?? 0)}
+								</span>
+							</div>
+						</div>
+						<div className="overflow-x-auto rounded-xl border border-border/60">
+							<table className="w-full min-w-[720px] text-left">
+								<thead>
+									<tr>
+										<th className={thClass}>Case</th>
+										<th className={thClass}>Downline</th>
+										<th className={thClass}>Upline</th>
+										<th className={thClass}>Rate</th>
+										<th className={`${thClass} text-right`}>Amount</th>
+										<th className={thClass}>Status</th>
+										<th className={thClass} />
+									</tr>
+								</thead>
+								<tbody>
+									{lbListQuery.isLoading ? (
+										<tr>
+											<td className={tdClass} colSpan={7}>
+												Loading leadership bonus…
+											</td>
+										</tr>
+									) : (lbListQuery.data?.payments ?? []).length === 0 ? (
+										<tr>
+											<td
+												className={`${tdClass} text-muted-foreground`}
+												colSpan={7}
+											>
+												No leadership bonus recorded yet. Verify a downline
+												case to create one.
+											</td>
+										</tr>
+									) : (
+										(lbListQuery.data?.payments ?? []).map((row) => (
+											<tr
+												key={row.id}
+												className="border-border/50 border-t"
+											>
+												<td className={tdClass}>
+													{row.caseNo ? (
+														<Link
+															className="font-medium text-primary hover:underline"
+															href={`/admin/transactions/case/${row.transactionId}`}
+														>
+															{row.caseNo}
+														</Link>
+													) : (
+														"—"
+													)}
+												</td>
+												<td className={tdClass}>{row.downlineName ?? "—"}</td>
+												<td className={tdClass}>
+													<div>
+														<p>{row.uplineName ?? "—"}</p>
+														<p className="text-muted-foreground text-xs capitalize">
+															{(row.uplineTier ?? "").replaceAll("_", " ")}
+														</p>
+													</div>
+												</td>
+												<td className={tdClass}>{row.leadershipBonusRate}%</td>
+												<td className={`${tdClass} text-right font-medium`}>
+													{formatRm(row.leadershipBonusAmount)}
+												</td>
+												<td className={tdClass}>
+													<span
+														className={cn(
+															"inline-flex rounded-full px-2.5 py-0.5 font-medium text-[11px]",
+															row.status === "paid"
+																? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/35 dark:text-emerald-300"
+																: "bg-amber-100 text-amber-800 dark:bg-amber-900/35 dark:text-amber-300",
+														)}
+													>
+														{row.status}
+													</span>
+												</td>
+												<td className={tdClass}>
+													{row.status === "pending" ? (
+														<Button
+															size="sm"
+															variant="outline"
+															className="h-8 rounded-full"
+															disabled={markLbPaid.isPending}
+															onClick={() =>
+																markLbPaid.mutate({ paymentId: row.id })
+															}
+														>
+															Mark paid
+														</Button>
+													) : null}
+												</td>
+											</tr>
+										))
+									)}
+								</tbody>
+							</table>
+						</div>
+					</CardContent>
+				</Card>
 
 				<Card className="gap-0 overflow-hidden border-border/70 py-0 shadow-card">
 					<CardContent className="flex flex-col gap-4 p-5">

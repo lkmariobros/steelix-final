@@ -20,6 +20,7 @@ import {
 	logCommissionAudit,
 } from "../services/agent-tier";
 import { lockCommissionOnSubmit } from "../services/commission-calculation";
+import { ensurePayoutsForApprovedTransaction } from "../services/commission-payouts";
 import {
 	draftNeedsCaseNumber,
 	resolveCaseNumberPrefix,
@@ -89,6 +90,22 @@ function updateStatusWithCaseNo(
 		),
 		run,
 	);
+}
+
+async function recordPayoutsIfVerified(
+	updated: typeof transactions.$inferSelect | undefined,
+) {
+	if (!updated) return;
+	if (updated.status !== "verified" && updated.status !== "approved") return;
+	try {
+		await ensurePayoutsForApprovedTransaction(updated);
+	} catch (e) {
+		console.warn(
+			"ensurePayoutsForApprovedTransaction:",
+			updated.caseNo ?? updated.id,
+			e instanceof Error ? e.message : e,
+		);
+	}
 }
 
 // Base transaction input schema (without validation)
@@ -1176,6 +1193,7 @@ export const transactionsRouter = router({
 				});
 			}
 
+			await recordPayoutsIfVerified(updatedTransaction);
 			return updatedTransaction;
 		}),
 
@@ -1225,6 +1243,7 @@ export const transactionsRouter = router({
 				throw new Error("Transaction not found");
 			}
 
+			await recordPayoutsIfVerified(updatedTransaction);
 			return updatedTransaction;
 		}),
 

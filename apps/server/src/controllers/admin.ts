@@ -1,4 +1,5 @@
 import { and, avg, count, desc, eq, gte, inArray, isNull, sql, sum } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import type { SQL } from "drizzle-orm";
 import { z } from "zod";
 import {
@@ -39,6 +40,9 @@ import {
 	hasAgentAccess,
 	hasSuperAdminAccess,
 } from "../utils/user-roles";
+
+const lbDownline = alias(user, "lb_downline");
+const lbUpline = alias(user, "lb_upline");
 
 // Input schemas for admin operations
 const dateRangeInput = z.object({
@@ -970,8 +974,11 @@ export const adminRouter = router({
 				.select({
 					id: leadershipBonusPayments.id,
 					transactionId: leadershipBonusPayments.transactionId,
+					caseNo: transactions.caseNo,
 					downlineAgentId: leadershipBonusPayments.downlineAgentId,
+					downlineName: lbDownline.name,
 					uplineAgentId: leadershipBonusPayments.uplineAgentId,
+					uplineName: lbUpline.name,
 					uplineTier: leadershipBonusPayments.uplineTier,
 					originalCommissionAmount:
 						leadershipBonusPayments.originalCommissionAmount,
@@ -983,6 +990,18 @@ export const adminRouter = router({
 					createdAt: leadershipBonusPayments.createdAt,
 				})
 				.from(leadershipBonusPayments)
+				.leftJoin(
+					transactions,
+					eq(leadershipBonusPayments.transactionId, transactions.id),
+				)
+				.leftJoin(
+					lbDownline,
+					eq(leadershipBonusPayments.downlineAgentId, lbDownline.id),
+				)
+				.leftJoin(
+					lbUpline,
+					eq(leadershipBonusPayments.uplineAgentId, lbUpline.id),
+				)
 				.where(conditions.length > 0 ? and(...conditions) : undefined)
 				.orderBy(desc(leadershipBonusPayments.createdAt))
 				.limit(input.limit)

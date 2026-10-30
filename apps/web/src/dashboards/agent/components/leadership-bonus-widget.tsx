@@ -68,7 +68,8 @@ export function LeadershipBonusWidget({
 	if (!bonusSummary) return null;
 
 	const currentTier = (bonusSummary.currentTier || "advisor") as AgentTier;
-	const hasBonus = hasLeadershipBonus(currentTier);
+	const hasBonus =
+		bonusSummary.leadershipBonusRate > 0 || hasLeadershipBonus(currentTier);
 
 	return (
 		<Card
