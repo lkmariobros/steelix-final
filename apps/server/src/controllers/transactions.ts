@@ -694,7 +694,7 @@ export const transactionsRouter = router({
 
 	/**
 	 * Secondary market eForms (Letter of Appointment / Letter of Offer).
-	 * Use browser Print → Save as PDF until official PDF template is supplied.
+	 * Official Devots letterhead from client pack 30.10.2026. Print → Save as PDF.
 	 */
 	generateLetterheadForm: protectedProcedure
 		.input(

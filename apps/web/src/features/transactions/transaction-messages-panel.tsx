@@ -348,10 +348,7 @@ export function TransactionMessagesPanel({
 								<SelectValue placeholder="Select request type…" />
 							</SelectTrigger>
 							<SelectContent>
-								{(showAdminRequestPicker
-									? ADMIN_REQUEST_ITEMS
-									: TRANSACTION_REQUEST_ITEMS
-								).map((item) => (
+								{TRANSACTION_REQUEST_ITEMS.map((item) => (
 									<SelectItem key={item.value} value={item.value}>
 										{item.label}
 									</SelectItem>
