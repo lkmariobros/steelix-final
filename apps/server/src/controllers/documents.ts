@@ -2,6 +2,10 @@ import { TRPCError } from "@trpc/server";
 import { desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { transactionDocuments, transactions } from "../models/transactions";
+import {
+	ensureStorageBuckets,
+	resetStorageBucketEnsure,
+} from "../services/ensure-storage-buckets";
 import { writeRecordLog } from "../services/record-log";
 import { db } from "../utils/db";
 import { assertSupabaseConfigured, supabaseAdmin } from "../utils/supabase";
@@ -313,9 +317,20 @@ export const documentsRouter = router({
 			const uniqueFileName = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
 			const storagePath = `${userId}/${txSegment}/${input.documentCategory}/${uniqueFileName}`;
 
-			const { data, error } = await supabaseAdmin.storage
+			await ensureStorageBuckets();
+
+			let { data, error } = await supabaseAdmin.storage
 				.from(DOCUMENTS_BUCKET)
 				.createSignedUploadUrl(storagePath);
+
+			// Singapore cutover: bucket may be missing until first ensure pass completes.
+			if (error && /related resource does not exist/i.test(error.message)) {
+				resetStorageBucketEnsure();
+				await ensureStorageBuckets();
+				({ data, error } = await supabaseAdmin.storage
+					.from(DOCUMENTS_BUCKET)
+					.createSignedUploadUrl(storagePath));
+			}
 
 			if (error || !data?.signedUrl) {
 				throw new TRPCError({
@@ -368,6 +383,7 @@ export const documentsRouter = router({
 
 			try {
 				assertAllowedFileType(fileType);
+				await ensureStorageBuckets();
 
 				let storagePath = inputStoragePath;
 

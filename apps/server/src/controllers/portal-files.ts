@@ -31,6 +31,7 @@ import {
 	resolvePortalOwnerUserId,
 	requireSupabaseAdmin,
 } from "../services/portal-files";
+import { ensureStorageBuckets } from "../services/ensure-storage-buckets";
 import { db } from "../utils/db";
 import { hasAdminAccess } from "../utils/user-roles";
 import { protectedProcedure, router } from "../utils/trpc";
@@ -432,6 +433,7 @@ export const portalFilesRouter = router({
 				});
 			}
 
+			await ensureStorageBuckets();
 			const { data, error } = await storage.storage
 				.from(PORTAL_FILES_BUCKET)
 				.createSignedUploadUrl(storagePath);

@@ -22,6 +22,7 @@ import {
 	ensurePortalRecordLogTable,
 	purgeExpiredRecordLogs,
 } from "./services/record-log";
+import { ensureStorageBuckets } from "./services/ensure-storage-buckets";
 
 const app = new Hono();
 
@@ -189,6 +190,15 @@ void ensurePortalRecordLogTable()
 	.catch((e) =>
 		console.warn(
 			"⚠️ Portal record log bootstrap/purge failed:",
+			e instanceof Error ? e.message : e,
+		),
+	);
+
+void ensureStorageBuckets()
+	.then(() => console.log("✅ Supabase storage buckets ready"))
+	.catch((e) =>
+		console.warn(
+			"⚠️ Storage bucket bootstrap failed (uploads may fail until buckets exist):",
 			e instanceof Error ? e.message : e,
 		),
 	);
