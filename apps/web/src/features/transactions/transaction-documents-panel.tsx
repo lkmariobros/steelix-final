@@ -22,13 +22,12 @@ import { formatDateTimeSecondsDMY } from "@/lib/date-format";
 import { trpc } from "@/utils/trpc";
 import {
 	Download,
-	ExternalLink,
 	FileText,
 	Loader2,
 	Trash2,
 	Upload,
 } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 type FallbackDocument = {
@@ -68,16 +67,6 @@ const UPLOAD_CATEGORIES: { value: DocumentCategory; label: string }[] = [
 
 const UUID_RE = /^[0-9a-f-]{36}$/i;
 
-function isImageType(fileType?: string) {
-	if (!fileType) return false;
-	return fileType.startsWith("image/");
-}
-
-function isPdfType(fileType?: string, fileName?: string) {
-	if (fileType === "application/pdf") return true;
-	return Boolean(fileName?.toLowerCase().endsWith(".pdf"));
-}
-
 function formatCategory(category?: string) {
 	if (!category) return "Document";
 	const known = UPLOAD_CATEGORIES.find((c) => c.value === category);
@@ -98,15 +87,74 @@ function guessMime(fileName: string) {
 	if (lower.endsWith(".png")) return "image/png";
 	if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
 	if (lower.endsWith(".webp")) return "image/webp";
+	if (lower.endsWith(".gif")) return "image/gif";
 	return "";
+}
+
+function previewMime(fileType: string, fileName: string) {
+	const generic =
+		!fileType ||
+		fileType === "application/octet-stream" ||
+		fileType === "binary/octet-stream";
+	if (!generic && (fileType.startsWith("image/") || fileType === "application/pdf")) {
+		return fileType;
+	}
+	return guessMime(fileName) || (generic ? "" : fileType);
+}
+
+/** Load the file in-page so the browser shows it instead of downloading the storage link. */
+function useInlineObjectUrl(sourceUrl: string, mime: string, enabled: boolean) {
+	const [objectUrl, setObjectUrl] = useState("");
+	const [phase, setPhase] = useState<"idle" | "loading" | "ready" | "error">(
+		"idle",
+	);
+
+	useEffect(() => {
+		if (!enabled || !sourceUrl || !mime) {
+			setObjectUrl("");
+			setPhase("idle");
+			return;
+		}
+
+		let cancelled = false;
+		let created = "";
+		setPhase("loading");
+		setObjectUrl("");
+
+		(async () => {
+			try {
+				const res = await fetch(sourceUrl);
+				if (!res.ok) throw new Error(`HTTP ${res.status}`);
+				const blob = new Blob([await res.arrayBuffer()], { type: mime });
+				created = URL.createObjectURL(blob);
+				if (cancelled) {
+					URL.revokeObjectURL(created);
+					return;
+				}
+				setObjectUrl(created);
+				setPhase("ready");
+			} catch {
+				if (!cancelled) setPhase("error");
+			}
+		})();
+
+		return () => {
+			cancelled = true;
+			if (created) URL.revokeObjectURL(created);
+		};
+	}, [sourceUrl, mime, enabled]);
+
+	return { objectUrl, phase };
 }
 
 function DocumentViewerBody({
 	transactionId,
 	doc,
+	onDownload,
 }: {
 	transactionId: string;
 	doc: DisplayDocument;
+	onDownload: (doc: DisplayDocument) => void;
 }) {
 	const isUuid = /^[0-9a-f-]{36}$/i.test(doc.id);
 
@@ -138,13 +186,15 @@ function DocumentViewerBody({
 
 	const viewUrl = doc.needsLegacyResolve
 		? (legacy?.url ?? (doc.url.startsWith("data:") ? doc.url : ""))
-		: (signed?.url ?? doc.url);
+		: (signed?.url ?? "");
 
-	const showImage = isImageType(doc.fileType) && viewUrl && !isLoading;
-	const showPdf =
-		isPdfType(doc.fileType, doc.fileName) && viewUrl && !isLoading;
+	const mime = previewMime(doc.fileType, doc.fileName);
+	const canPreview =
+		Boolean(viewUrl) &&
+		(mime === "application/pdf" || mime.startsWith("image/"));
+	const inline = useInlineObjectUrl(viewUrl, mime, canPreview && !isLoading);
 
-	if (isLoading) {
+	if (isLoading || inline.phase === "loading") {
 		return (
 			<div className="flex min-h-[240px] items-center justify-center">
 				<Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -152,22 +202,22 @@ function DocumentViewerBody({
 		);
 	}
 
-	if (showImage) {
+	if (mime.startsWith("image/") && inline.objectUrl) {
 		return (
 			// eslint-disable-next-line @next/next/no-img-element
 			<img
-				src={viewUrl}
+				src={inline.objectUrl}
 				alt={doc.fileName}
 				className="max-h-[70vh] w-full object-contain"
 			/>
 		);
 	}
 
-	if (showPdf) {
+	if (mime === "application/pdf" && inline.objectUrl) {
 		return (
 			<iframe
 				title={doc.fileName}
-				src={viewUrl}
+				src={inline.objectUrl}
 				className="h-[70vh] w-full rounded border"
 			/>
 		);
@@ -176,16 +226,19 @@ function DocumentViewerBody({
 	return (
 		<div className="space-y-3 py-4 text-center">
 			<p className="text-muted-foreground text-sm">
-				Preview not available for this file type.
+				{inline.phase === "error" || (canPreview && !inline.objectUrl)
+					? "This file could not be shown in the viewer. Use Download to save it."
+					: "Preview not available for this file type. Use Download to save it."}
 			</p>
-			{viewUrl ? (
-				<Button variant="outline" size="sm" asChild>
-					<a href={viewUrl} target="_blank" rel="noopener noreferrer">
-						<ExternalLink className="mr-1 h-4 w-4" />
-						Open file
-					</a>
-				</Button>
-			) : null}
+			<Button
+				type="button"
+				variant="outline"
+				size="sm"
+				onClick={() => onDownload(doc)}
+			>
+				<Download className="mr-1 h-4 w-4" />
+				Download
+			</Button>
 		</div>
 	);
 }
@@ -302,7 +355,10 @@ export function TransactionDocumentsPanel({
 		try {
 			const res = await fetch(url);
 			if (!res.ok) throw new Error(`HTTP ${res.status}`);
-			const blobUrl = URL.createObjectURL(await res.blob());
+			const mime = previewMime(doc.fileType, doc.fileName) || "application/octet-stream";
+			const blobUrl = URL.createObjectURL(
+				new Blob([await res.arrayBuffer()], { type: mime }),
+			);
 			triggerDownload(blobUrl);
 			setTimeout(() => URL.revokeObjectURL(blobUrl), 10_000);
 		} catch {
@@ -619,6 +675,7 @@ export function TransactionDocumentsPanel({
 						<DocumentViewerBody
 							transactionId={transactionId}
 							doc={selectedDoc}
+							onDownload={(d) => void handleDownload([d])}
 						/>
 					) : null}
 				</DialogContent>

@@ -117,7 +117,10 @@ async function resolveDocumentViewUrl(doc: {
 	if (storagePath && supabaseAdmin) {
 		const { data, error } = await supabaseAdmin.storage
 			.from(DOCUMENTS_BUCKET)
-			.createSignedUrl(storagePath, SIGNED_URL_TTL_SECONDS);
+			.createSignedUrl(storagePath, SIGNED_URL_TTL_SECONDS, {
+				// View-only: never force Content-Disposition: attachment
+				download: false,
+			});
 
 		if (!error && data?.signedUrl) {
 			return data.signedUrl;
