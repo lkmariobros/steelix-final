@@ -29,6 +29,7 @@ interface Prospect {
 	tagIds?: string[];
 	tagNames?: string[];
 	agentName?: string | null;
+	followerNames?: string[];
 	lastContact: Date | string | null;
 	nextContact: Date | string | null;
 	agentId: string | null;
@@ -303,6 +304,10 @@ export function KanbanBoard({
 								) : (
 									stageProspects.map((prospect) => {
 										const tags = tagSummary(prospect);
+										const followerLabel = (prospect.followerNames ?? [])
+											.map((name) => name.trim())
+											.filter(Boolean)
+											.join(", ");
 										const canClaim =
 											leadsTab === "company" &&
 											prospect.leadType === "company" &&
@@ -354,6 +359,18 @@ export function KanbanBoard({
 														</span>
 														<StatusBadge status={prospect.status} />
 													</div>
+
+													{followerLabel ? (
+														<p
+															className="truncate text-muted-foreground text-xs"
+															title={followerLabel}
+														>
+															<span className="font-medium text-foreground">
+																Lead Follower:
+															</span>{" "}
+															{followerLabel}
+														</p>
+													) : null}
 
 													{tags ? (
 														<div className="flex flex-wrap gap-1">
