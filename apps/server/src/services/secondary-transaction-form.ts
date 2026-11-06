@@ -267,44 +267,51 @@ function legalFooter(): string {
 	return `<p class="footer-legal">All practices are in accordance to the Valuers, Appraisers, Estate Agents and Property Managers Act 1981 and Rules 1981 and Rules 1986 (As Amended). This document is executed in compliance with the requirements of the Personal Data Protection Act 2010. For a detailed explanation, please refer to our website.</p>`;
 }
 
-function letterShell(title: string, caseNo: string, body: string): string {
+function letterShell(
+	title: string,
+	caseNo: string,
+	body: string,
+	opts?: { compact?: boolean },
+): string {
+	const compact = opts?.compact === true;
 	return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <title>${esc(title)} — ${esc(caseNo)}</title>
   <style>
-    @page { size: A4; margin: 10mm 12mm; }
+    @page { size: A4; margin: ${compact ? "7mm 9mm" : "10mm 12mm"}; }
     * { box-sizing: border-box; }
-    body { font-family: "Times New Roman", Times, serif; color: #111; font-size: 11px; line-height: 1.32; margin: 0; }
+    body { font-family: "Times New Roman", Times, serif; color: #111; font-size: ${compact ? "9.25px" : "11px"}; line-height: ${compact ? "1.16" : "1.32"}; margin: 0; }
     .no-print { margin-bottom: 10px; }
-    .header { display: grid; grid-template-columns: 78px 1fr 88px; gap: 10px; align-items: start; margin-bottom: 8px; }
-    .header img.logo { width: 78px; height: 78px; object-fit: contain; }
-    .header img.stamp { width: 88px; height: auto; object-fit: contain; }
-    .co-name { font-size: 16px; font-weight: 700; letter-spacing: 0.02em; }
-    .co-reg { font-size: 11px; font-weight: 400; }
-    .co-meta { font-size: 10px; line-height: 1.35; margin-top: 2px; }
-    h1 { text-align: center; font-size: 14px; margin: 6px 0 4px; letter-spacing: 0.04em; text-decoration: underline; }
-    .case { text-align: right; font-size: 12px; margin: 0 0 8px; }
-    ol.clauses { padding-left: 18px; margin: 6px 0; }
-    ol.clauses li { margin: 0 0 6px; }
-    p { margin: 5px 0; }
+    .header { display: grid; grid-template-columns: ${compact ? "58px 1fr 64px" : "78px 1fr 88px"}; gap: ${compact ? "6px" : "10px"}; align-items: start; margin-bottom: ${compact ? "2px" : "8px"}; }
+    .header img.logo { width: ${compact ? "58px" : "78px"}; height: ${compact ? "58px" : "78px"}; object-fit: contain; }
+    .header img.stamp { width: ${compact ? "64px" : "88px"}; height: auto; object-fit: contain; }
+    .co-name { font-size: ${compact ? "13px" : "16px"}; font-weight: 700; letter-spacing: 0.02em; }
+    .co-reg { font-size: ${compact ? "9px" : "11px"}; font-weight: 400; }
+    .co-meta { font-size: ${compact ? "8.5px" : "10px"}; line-height: 1.25; margin-top: 2px; }
+    h1 { text-align: center; font-size: ${compact ? "12px" : "14px"}; margin: ${compact ? "2px 0 1px" : "6px 0 4px"}; letter-spacing: 0.04em; text-decoration: underline; }
+    .case { text-align: right; font-size: ${compact ? "10px" : "12px"}; margin: 0 0 ${compact ? "2px" : "8px"}; }
+    ol.clauses { padding-left: ${compact ? "15px" : "18px"}; margin: ${compact ? "2px 0" : "6px 0"}; }
+    ol.clauses ol { margin: ${compact ? "1px 0" : "4px 0"}; padding-left: 16px; }
+    ol.clauses li { margin: 0 0 ${compact ? "1px" : "6px"}; }
+    p { margin: ${compact ? "2px 0" : "5px 0"}; }
     .u { display: inline-block; min-height: 1em; border-bottom: 1px solid #111; padding: 0 4px; line-height: 1.2; }
-    .u-block { border-bottom: 1px solid #111; min-height: 1.3em; padding: 1px 4px 2px; margin: 2px 0 6px; }
+    .u-block { border-bottom: 1px solid #111; min-height: ${compact ? "1.05em" : "1.3em"}; padding: 1px 4px ${compact ? "1px" : "2px"}; margin: ${compact ? "1px 0 2px" : "2px 0 6px"}; }
     .intro { text-align: justify; }
-    .sig { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-top: 16px; }
+    .sig { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: ${compact ? "8px" : "16px"}; margin-top: ${compact ? "4px" : "16px"}; }
     .sig.two { grid-template-columns: 1fr 1fr; }
     .sig-col { min-width: 0; }
-    .sig-head { font-weight: 700; min-height: 2.4em; }
-    .sig-line { border-bottom: 1px solid #111; height: 28px; margin: 2px 0 8px; }
-    .sig-row { display: grid; grid-template-columns: 4.6em 0.7em 1fr; gap: 4px; align-items: end; margin: 3px 0; }
-    .rule { border: 0; border-top: 1px dashed #111; margin: 12px 0; }
+    .sig-head { font-weight: 700; min-height: ${compact ? "1.15em" : "2.4em"}; }
+    .sig-line { border-bottom: 1px solid #111; height: ${compact ? "14px" : "28px"}; margin: ${compact ? "0 0 2px" : "2px 0 8px"}; }
+    .sig-row { display: grid; grid-template-columns: 4.6em 0.7em 1fr; gap: 4px; align-items: end; margin: ${compact ? "0" : "3px 0"}; }
+    .rule { border: 0; border-top: 1px dashed #111; margin: ${compact ? "4px 0" : "12px 0"}; }
     .notes { margin-top: 14px; font-size: 8.5px; line-height: 1.25; }
     .notes p { margin: 3px 0; text-align: justify; }
     .tiny { font-size: 8px; font-style: italic; }
-    .footer-legal { margin-top: 10px; font-size: 8px; text-align: justify; }
-    .other { margin-top: 8px; }
-    @media print { .no-print { display: none !important; } body { font-size: 10.5px; } }
+    .other { margin-top: ${compact ? "2px" : "8px"}; }
+    .footer-legal { margin-top: ${compact ? "3px" : "10px"}; font-size: ${compact ? "7.5px" : "8px"}; text-align: justify; }
+    @media print { .no-print { display: none !important; } body { font-size: ${compact ? "9.25px" : "10.5px"}; } }
   </style>
 </head>
 <body>
@@ -673,7 +680,9 @@ export async function generateSecondaryTransactionFormHtml(
 		body = looPurchase(ctx);
 	}
 
-	const html = letterShell(title, ctx.caseNo, body);
+	const html = letterShell(title, ctx.caseNo, body, {
+		compact: formType === "letter_of_offer",
+	});
 	const caseSlug = (tx.caseNo ?? transactionId.slice(0, 8)).replace(
 		/[^\w.-]+/g,
 		"_",
