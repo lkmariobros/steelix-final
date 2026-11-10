@@ -8,11 +8,12 @@ import {
 	user,
 } from "../models/auth";
 import { db } from "../utils/db";
+import { allocateLeadershipBonus } from "./leadership-bonus";
 import { resolveTierConfig, type ResolvedTierConfig } from "./tier-config";
 
 /**
  * Agent tier management utilities for commission calculations
- * Updated for New Leadership Plan with Leadership Bonus support
+ * Leadership bonus: agent receivable × cumulative unclaimed tiers (Elson rules)
  */
 
 export interface TierPromotionResult {
@@ -26,14 +27,17 @@ export interface TierPromotionResult {
 // Simplified representation type - 2 options only
 export type RepresentationType = "direct" | "co_broking";
 
-// Leadership bonus calculation result
+// Leadership bonus calculation result (preview / locked snapshot)
 export interface LeadershipBonusInfo {
 	uplineId: string | null;
 	uplineName?: string;
 	uplineTier: AgentTier | null;
-	bonusRate: number; // Percentage (e.g., 7 = 7%)
+	bonusRate: number; // Effective % of agent receivable for this recipient
 	bonusAmount: number;
-	fromCompanyShare: number; // The company share before bonus deduction
+	/** @deprecated Kept for API compatibility; now stores agent receivable base */
+	fromCompanyShare: number;
+	/** Agent receivable commission used as LB base */
+	fromAgentReceivable?: number;
 }
 
 export interface CommissionBreakdown {
@@ -53,9 +57,9 @@ export interface CommissionBreakdown {
 	companyShare: number;
 	agentEarnings: number;
 
-	// Level 4: Leadership Bonus (from company's share to upline)
+	// Level 4: Leadership Bonus (from agent receivable, cumulative tiers)
 	leadershipBonus?: LeadershipBonusInfo;
-	companyNetShare: number; // Company share after leadership bonus
+	companyNetShare: number;
 
 	// Summary
 	breakdown: {
@@ -63,7 +67,7 @@ export interface CommissionBreakdown {
 		coBrokerShare?: number;
 		agentEarnings: number;
 		leadershipBonus?: number;
-		companyShare: number; // Net company share after all deductions
+		companyShare: number;
 	};
 }
 
@@ -156,8 +160,8 @@ export async function getUplineInfo(agentId: string): Promise<{
 }
 
 /**
- * Calculate enhanced commission with tier-based splits and Leadership Bonus
- * New Leadership Plan: Leadership bonus is calculated from company's share
+ * Calculate enhanced commission with tier-based splits and Leadership Bonus.
+ * LB preview uses agent receivable × cumulative unclaimed tiers.
  */
 export function calculateEnhancedCommission(
 	propertyPrice: number,
@@ -200,21 +204,49 @@ export function calculateEnhancedCommission(
 	const companyShare = agentCommissionShare * (1 - agentSharePercentage);
 	const agentEarnings = agentCommissionShare * agentSharePercentage;
 
-	// Level 4: Calculate Leadership Bonus from company's share
+	// Level 4: LB from agent receivable (seller + immediate upline preview)
 	let leadershipBonus: LeadershipBonusInfo | undefined;
-	let companyNetShare = companyShare;
+	const companyNetShare = companyShare;
 
-	if (uplineInfo && uplineInfo.leadershipBonusRate > 0) {
-		const bonusAmount = companyShare * (uplineInfo.leadershipBonusRate / 100);
-		companyNetShare = companyShare - bonusAmount;
+	if (uplineInfo) {
+		const ownTier: number[] = [
+			AGENT_TIER_CONFIG.sales_leader.leadershipBonusRate,
+			AGENT_TIER_CONFIG.team_leader.leadershipBonusRate,
+			AGENT_TIER_CONFIG.group_leader.leadershipBonusRate,
+			AGENT_TIER_CONFIG.supreme_leader.leadershipBonusRate,
+		];
+		const uplineRank = [
+			"advisor",
+			"sales_leader",
+			"team_leader",
+			"group_leader",
+			"supreme_leader",
+		].indexOf(uplineInfo.uplineTier);
+		if (uplineRank >= 1 && uplineInfo.leadershipBonusRate > 0) {
+			ownTier[uplineRank - 1] = uplineInfo.leadershipBonusRate;
+		}
 
-		leadershipBonus = {
-			uplineId: null, // Will be populated by the calling function
-			uplineTier: uplineInfo.uplineTier,
-			bonusRate: uplineInfo.leadershipBonusRate,
-			bonusAmount: Math.round(bonusAmount * 100) / 100, // Round to 2 decimal places
-			fromCompanyShare: companyShare,
-		};
+		const preview = allocateLeadershipBonus(
+			agentEarnings,
+			[
+				{ agentId: "seller", tier: agentTier },
+				{ agentId: "upline", tier: uplineInfo.uplineTier },
+			],
+			ownTier,
+		);
+		const uplineAlloc = preview.allocations.find(
+			(a) => a.agentId === "upline" && a.amountSen > 0,
+		);
+		if (uplineAlloc) {
+			leadershipBonus = {
+				uplineId: null,
+				uplineTier: uplineInfo.uplineTier,
+				bonusRate: uplineAlloc.effectiveRatePercent,
+				bonusAmount: uplineAlloc.amountRm,
+				fromCompanyShare: agentEarnings,
+				fromAgentReceivable: agentEarnings,
+			};
+		}
 	}
 
 	return {

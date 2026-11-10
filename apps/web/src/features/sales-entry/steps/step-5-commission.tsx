@@ -666,7 +666,7 @@ export function StepCommission({
 													</div>
 													<p className="text-blue-600 text-xs">
 														{enhancedCommission.leadershipBonus.bonusRate}%
-														leadership bonus from company's share
+														leadership bonus from agent receivable
 													</p>
 													<div className="flex justify-between border-t pt-2 text-sm">
 														<span>Company Net Share:</span>

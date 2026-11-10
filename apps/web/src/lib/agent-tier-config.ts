@@ -13,7 +13,8 @@ export type AgentTier =
 
 export interface TierConfig {
 	commissionSplit: number;
-	leadershipBonusRate: number; // Percentage from company's share paid to upline
+	/** Own-tier leadership rate (%). Cumulative chain uses these; admin can amend yearly. */
+	leadershipBonusRate: number;
 	requirements: {
 		monthlySales: number;
 		teamMembers: number;
@@ -33,28 +34,28 @@ export const AGENT_TIER_CONFIG: Record<AgentTier, TierConfig> = {
 	},
 	sales_leader: {
 		commissionSplit: 80,
-		leadershipBonusRate: 7,
+		leadershipBonusRate: 5,
 		requirements: { monthlySales: 0, teamMembers: 2 },
 		displayName: "Sales Leader",
 		description: "2+ direct recruits",
 	},
 	team_leader: {
 		commissionSplit: 85,
-		leadershipBonusRate: 5,
+		leadershipBonusRate: 9,
 		requirements: { monthlySales: 0, teamMembers: 5 },
 		displayName: "Team Leader",
 		description: "5+ direct recruits",
 	},
 	group_leader: {
 		commissionSplit: 90,
-		leadershipBonusRate: 8,
+		leadershipBonusRate: 7,
 		requirements: { monthlySales: 0, teamMembers: 10 },
 		displayName: "Group Leader",
 		description: "10+ direct recruits",
 	},
 	supreme_leader: {
 		commissionSplit: 90,
-		leadershipBonusRate: 6,
+		leadershipBonusRate: 5,
 		requirements: { monthlySales: 0, teamMembers: 20 },
 		displayName: "Supreme Leader",
 		description: "20+ direct recruits",

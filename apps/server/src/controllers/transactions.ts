@@ -20,7 +20,10 @@ import {
 	logCommissionAudit,
 } from "../services/agent-tier";
 import { lockCommissionOnSubmit } from "../services/commission-calculation";
-import { ensurePayoutsForApprovedTransaction } from "../services/commission-payouts";
+import {
+	ensurePayoutsForApprovedTransaction,
+	recallPayoutsOnCaseRevoke,
+} from "../services/commission-payouts";
 import {
 	draftNeedsCaseNumber,
 	resolveCaseNumberPrefix,
@@ -102,6 +105,26 @@ async function recordPayoutsIfVerified(
 	} catch (e) {
 		console.warn(
 			"ensurePayoutsForApprovedTransaction:",
+			updated.caseNo ?? updated.id,
+			e instanceof Error ? e.message : e,
+		);
+	}
+}
+
+async function recallPayoutsIfRevoked(
+	updated: typeof transactions.$inferSelect | undefined,
+	admin: { id: string; name?: string | null },
+) {
+	if (!updated || updated.status !== "revoke") return;
+	try {
+		await recallPayoutsOnCaseRevoke({
+			transactionId: updated.id,
+			adminId: admin.id,
+			adminName: admin.name ?? undefined,
+		});
+	} catch (e) {
+		console.warn(
+			"recallPayoutsOnCaseRevoke:",
 			updated.caseNo ?? updated.id,
 			e instanceof Error ? e.message : e,
 		);
@@ -1194,6 +1217,10 @@ export const transactionsRouter = router({
 			}
 
 			await recordPayoutsIfVerified(updatedTransaction);
+			await recallPayoutsIfRevoked(updatedTransaction, {
+				id: ctx.session.user.id,
+				name: ctx.session.user.name,
+			});
 			return updatedTransaction;
 		}),
 
@@ -1244,6 +1271,10 @@ export const transactionsRouter = router({
 			}
 
 			await recordPayoutsIfVerified(updatedTransaction);
+			await recallPayoutsIfRevoked(updatedTransaction, {
+				id: ctx.session.user.id,
+				name: ctx.session.user.name,
+			});
 			return updatedTransaction;
 		}),
 

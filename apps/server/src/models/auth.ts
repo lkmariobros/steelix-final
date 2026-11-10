@@ -226,7 +226,8 @@ export const tierCommissionConfig = pgTable(
 		id: uuid("id").primaryKey().defaultRandom(),
 		tier: agentTierEnum("tier").notNull().unique(),
 		commissionSplit: integer("commission_split").notNull(), // Agent's percentage (e.g., 70 = 70%)
-		leadershipBonusRate: integer("leadership_bonus_rate").notNull().default(0), // Percentage from company's share
+		// Own-tier leadership rate (%) — cumulative chain uses these (admin-editable yearly)
+		leadershipBonusRate: integer("leadership_bonus_rate").notNull().default(0),
 		requirements: jsonb("requirements")
 			.$type<{
 				monthlySales: number;
@@ -532,7 +533,7 @@ export const AGENT_TIER_CONFIG = {
 	},
 	sales_leader: {
 		commissionSplit: 80,
-		leadershipBonusRate: 7,
+		leadershipBonusRate: 5,
 		requirements: {
 			monthlySales: 0,
 			teamMembers: 2,
@@ -542,7 +543,7 @@ export const AGENT_TIER_CONFIG = {
 	},
 	team_leader: {
 		commissionSplit: 85,
-		leadershipBonusRate: 5,
+		leadershipBonusRate: 9,
 		requirements: {
 			monthlySales: 0,
 			teamMembers: 5,
@@ -552,7 +553,7 @@ export const AGENT_TIER_CONFIG = {
 	},
 	group_leader: {
 		commissionSplit: 90,
-		leadershipBonusRate: 8,
+		leadershipBonusRate: 7,
 		requirements: {
 			monthlySales: 0,
 			teamMembers: 10,
@@ -562,7 +563,7 @@ export const AGENT_TIER_CONFIG = {
 	},
 	supreme_leader: {
 		commissionSplit: 90,
-		leadershipBonusRate: 6,
+		leadershipBonusRate: 5,
 		requirements: {
 			monthlySales: 0,
 			teamMembers: 20,

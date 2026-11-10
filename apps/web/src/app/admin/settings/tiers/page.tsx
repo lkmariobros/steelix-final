@@ -66,7 +66,7 @@ export default function TierConfigurationPage() {
 								<h1 className="font-bold text-3xl">Secondary Market Tiers</h1>
 								<p className="text-muted-foreground">
 									Agent tier commission splits (70/80/85/90), leadership bonus
-									from company share, and promotion rules — separate from
+									from agent receivable, and promotion rules — separate from
 									primary schemes
 								</p>
 							</div>

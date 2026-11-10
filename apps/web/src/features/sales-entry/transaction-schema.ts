@@ -1,4 +1,8 @@
 import { z } from "zod";
+import {
+	AGENT_TIER_CONFIG,
+	type AgentTier,
+} from "@/lib/agent-tier-config";
 
 // Simplified Representation Type - 2 options only
 // "direct" = Direct Representation (you represent your own client exclusively)
@@ -925,19 +929,56 @@ export function calculateEnhancedCommission(
 	const companyShare = agentCommissionShare * (1 - agentSharePercentage);
 	const agentEarnings = agentCommissionShare * agentSharePercentage;
 
-	// Level 4: Calculate Leadership Bonus from company's share (New Leadership Plan)
+	// Level 4: LB preview from agent receivable (seller + immediate upline)
 	let leadershipBonus: LeadershipBonusInfo | undefined;
-	let companyNetShare = companyShare;
+	const companyNetShare = companyShare;
 
-	if (uplineInfo && uplineInfo.leadershipBonusRate > 0) {
-		const bonusAmount = companyShare * (uplineInfo.leadershipBonusRate / 100);
-		companyNetShare = companyShare - bonusAmount;
-		leadershipBonus = {
-			uplineTier: uplineInfo.uplineTier,
-			bonusRate: uplineInfo.leadershipBonusRate,
-			bonusAmount: Math.round(bonusAmount * 100) / 100,
-			fromCompanyShare: companyShare,
-		};
+	if (uplineInfo) {
+		const rankOf = (tier: string) =>
+			(
+				[
+					"advisor",
+					"sales_leader",
+					"team_leader",
+					"group_leader",
+					"supreme_leader",
+				] as const
+			).indexOf(tier as AgentTier);
+		const own = [
+			AGENT_TIER_CONFIG.sales_leader.leadershipBonusRate,
+			AGENT_TIER_CONFIG.team_leader.leadershipBonusRate,
+			AGENT_TIER_CONFIG.group_leader.leadershipBonusRate,
+			AGENT_TIER_CONFIG.supreme_leader.leadershipBonusRate,
+		];
+		const uplineRank = rankOf(uplineInfo.uplineTier);
+		if (uplineRank >= 1 && uplineInfo.leadershipBonusRate > 0) {
+			own[uplineRank - 1] = uplineInfo.leadershipBonusRate;
+		}
+		const cum = [0];
+		let s = 0;
+		for (const p of own) {
+			s += p;
+			cum.push(s);
+		}
+		const sellerRank = Math.max(0, rankOf(agentTier));
+		const uRank = Math.max(0, uplineRank);
+		const highestAfterSeller = sellerRank > 0 ? sellerRank : 0;
+		if (uRank > highestAfterSeller) {
+			const effective = Math.max(
+				0,
+				cum[uRank] - cum[highestAfterSeller],
+			);
+			if (effective > 0) {
+				const bonusAmount =
+					Math.round(agentEarnings * (effective / 100) * 100) / 100;
+				leadershipBonus = {
+					uplineTier: uplineInfo.uplineTier,
+					bonusRate: effective,
+					bonusAmount,
+					fromCompanyShare: agentEarnings,
+				};
+			}
+		}
 	}
 
 	// Calculate "Your Share" percentage for clear display (Issue #6)

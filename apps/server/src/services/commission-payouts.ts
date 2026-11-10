@@ -28,6 +28,7 @@ import {
 	type PrimaryOverrideLayerSnapshot,
 } from "./commission-calculation";
 import { resolveOverrideLayerRates } from "./commission-schemes";
+import { cancelLeadershipBonusForTransaction } from "./leadership-bonus";
 import { db } from "../utils/db";
 
 type TxRow = typeof transactions.$inferSelect;
@@ -668,6 +669,47 @@ export async function setOnHoldAdmin(opts: {
 		.where(eq(commissionPayouts.id, opts.id))
 		.returning();
 	return updated;
+}
+
+/**
+ * Case revoke: recall unpaid/paid commission payouts + cancel leadership bonus.
+ */
+export async function recallPayoutsOnCaseRevoke(opts: {
+	transactionId: string;
+	adminId: string;
+	adminName?: string;
+}) {
+	const now = new Date();
+	const rows = await db
+		.select()
+		.from(commissionPayouts)
+		.where(eq(commissionPayouts.transactionId, opts.transactionId));
+
+	let voided = 0;
+	for (const row of rows) {
+		if (row.status === "voided") continue;
+		const audit = appendAudit(row.auditLog, {
+			at: now.toISOString(),
+			byUserId: opts.adminId,
+			byName: opts.adminName,
+			action: "voided",
+			notes: "Case revoked — commission recalled",
+		});
+		await db
+			.update(commissionPayouts)
+			.set({
+				status: "voided",
+				auditLog: audit,
+				updatedAt: now,
+			})
+			.where(eq(commissionPayouts.id, row.id));
+		voided += 1;
+	}
+
+	const cancelledLb = await cancelLeadershipBonusForTransaction(
+		opts.transactionId,
+	);
+	return { voidedPayouts: voided, cancelledLeadershipBonus: cancelledLb };
 }
 
 export async function voidPayoutAdmin(opts: {
