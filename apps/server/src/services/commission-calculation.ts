@@ -16,6 +16,7 @@ import {
 import {
 	calculateLeadershipBonusForSeller,
 	recordLeadershipBonusForTransaction,
+	toLeadershipBreakdownSnapshot,
 } from "./leadership-bonus";
 import { resolveTierConfig } from "./tier-config";
 
@@ -234,12 +235,14 @@ export async function buildPrimaryCommissionPatch(
 		0,
 	);
 
-	// Leadership Bonus: agent receivable (scheme net) × cumulative unclaimed tiers.
-	// Agent still receives 100% of scheme net; LB is paid separately after verify.
-	const leadershipBonus = await resolveLeadershipBonusForAgent(
+	// Leadership Bonus is part of the main Primary case calculation:
+	// base = scheme agent receivable; rates = tier leadership %.
+	// Project override layers stay in the scheme (paid separately, not deducted).
+	const lbCalc = await calculateLeadershipBonusForSeller(
 		tx.agentId,
 		breakdown.agentNetCommission,
 	);
+	const leadershipBonus = toLeadershipBreakdownSnapshot(lbCalc);
 
 	return {
 		commissionType: "percentage" as const,
@@ -281,44 +284,13 @@ export async function buildPrimaryCommissionPatch(
 			overrideGrossCommission,
 			overrideNetCommission,
 			overrideLayers,
-			...(leadershipBonus ? { leadershipBonus } : {}),
+			...(leadershipBonus.recipients.length > 0
+				? { leadershipBonus }
+				: {}),
 		},
 	};
 }
 
-/**
- * Preview helper: first positive upline allocation on agent receivable base.
- * Full multi-recipient recording happens in recordLeadershipBonusForTransaction.
- */
-async function resolveLeadershipBonusForAgent(
-	agentId: string,
-	agentReceivableCommission: number,
-): Promise<{
-	uplineId: string | null;
-	uplineTier: AgentTier;
-	bonusRate: number;
-	bonusAmount: number;
-	fromCompanyShare: number;
-	fromAgentReceivable: number;
-} | null> {
-	if (agentReceivableCommission <= 0) return null;
-	const result = await calculateLeadershipBonusForSeller(
-		agentId,
-		agentReceivableCommission,
-	);
-	const firstUpline = result.allocations.find(
-		(a, idx) => idx > 0 && a.amountSen > 0,
-	);
-	if (!firstUpline) return null;
-	return {
-		uplineId: firstUpline.agentId,
-		uplineTier: firstUpline.tier,
-		bonusRate: firstUpline.effectiveRatePercent,
-		bonusAmount: firstUpline.amountRm,
-		fromCompanyShare: result.baseRm,
-		fromAgentReceivable: result.baseRm,
-	};
-}
 
 /**
  * Secondary market: lock agent tier split (70/80/85/90%) + leadership bonus preview.
@@ -369,6 +341,12 @@ export async function buildSecondaryCommissionPatch(
 		uplineForCalc,
 	);
 
+	const lbCalc = await calculateLeadershipBonusForSeller(
+		agentId,
+		enhanced.agentEarnings,
+	);
+	const leadershipBonus = toLeadershipBreakdownSnapshot(lbCalc);
+
 	return {
 		commissionType: tx.commissionType,
 		commissionValue: commissionValue.toFixed(2),
@@ -384,20 +362,9 @@ export async function buildSecondaryCommissionPatch(
 			companyShare: enhanced.companyShare,
 			companyNetShare: enhanced.companyNetShare,
 			coBrokerShare: enhanced.coBrokerShare,
-			leadershipBonus: enhanced.leadershipBonus
-				? {
-						uplineId: upline?.uplineId ?? null,
-						uplineTier: enhanced.leadershipBonus.uplineTier,
-						bonusRate: enhanced.leadershipBonus.bonusRate,
-						bonusAmount: enhanced.leadershipBonus.bonusAmount,
-						fromCompanyShare:
-							enhanced.leadershipBonus.fromAgentReceivable ??
-							enhanced.agentEarnings,
-						fromAgentReceivable:
-							enhanced.leadershipBonus.fromAgentReceivable ??
-							enhanced.agentEarnings,
-					}
-				: undefined,
+			...(leadershipBonus.recipients.length > 0
+				? { leadershipBonus }
+				: {}),
 			agentTier: tier,
 			lockedAt: new Date().toISOString(),
 		},
@@ -440,6 +407,7 @@ export async function resolvePrimaryOverridePayeeAgentId(
 export async function recordSecondaryLeadershipBonus(
 	tx: TxRow,
 	breakdown: {
+		marketType?: "primary" | "secondary";
 		grossCommission?: number;
 		agentNetCommission?: number;
 		agentEarnings?: number;
@@ -456,6 +424,11 @@ export async function recordSecondaryLeadershipBonus(
 	},
 ): Promise<void> {
 	await recordLeadershipBonusForTransaction(tx, {
+		marketType:
+			breakdown.marketType ??
+			(tx.marketType === "primary" || tx.marketType === "secondary"
+				? tx.marketType
+				: undefined),
 		grossCommission: breakdown.grossCommission,
 		agentNetCommission:
 			breakdown.agentNetCommission ??

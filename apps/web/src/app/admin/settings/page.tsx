@@ -166,7 +166,9 @@ export default function AdminSettingsPage() {
 										<RiArrowRightLine className="size-5 text-foreground/50 transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
 									</div>
 									<p className="text-foreground/75 text-sm leading-relaxed">
-										Project schemes, commission %, SST, and 4-layer upline override.
+										Project schemes, commission %, SST, and project upline
+										override. Leadership bonus uses scheme agent receivable ×
+										tier rates.
 									</p>
 									<p className="mt-3 font-medium text-primary text-sm">
 										Open schemes
@@ -188,7 +190,8 @@ export default function AdminSettingsPage() {
 										<RiArrowRightLine className="size-5 text-foreground/50 transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
 									</div>
 									<p className="text-foreground/75 text-sm leading-relaxed">
-										Commission tier splits and leadership bonus rates.
+										Secondary tier splits and leadership bonus rates (also used
+										for Primary leadership %).
 									</p>
 									<p className="mt-3 font-medium text-primary text-sm">
 										Open tiers

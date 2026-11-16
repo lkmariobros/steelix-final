@@ -292,8 +292,10 @@ export async function calculateLeadershipBonusForSeller(
 }
 
 /**
- * Idempotent: if any non-cancelled LB rows exist for this case, skip.
- * Creates one payment row per positive recipient.
+ * Record leadership bonus for a verified/approved case.
+ * - Paid rows are never changed.
+ * - Pending-only rows are replaced so Primary can follow the latest scheme + tier rules.
+ * - Creates one payment row per positive recipient.
  */
 export async function recordLeadershipBonusForTransaction(
 	tx: TxRow,
@@ -302,23 +304,49 @@ export async function recordLeadershipBonusForTransaction(
 		agentEarnings?: number;
 		grossCommission?: number;
 		agentSharePercent?: number;
+		marketType?: "primary" | "secondary";
 	} | null,
 ): Promise<LeadershipCalculationResult | null> {
 	if (!tx.agentId) return null;
 
-	const [existing] = await db
-		.select({ id: leadershipBonusPayments.id })
+	const existing = await db
+		.select({
+			id: leadershipBonusPayments.id,
+			status: leadershipBonusPayments.status,
+		})
 		.from(leadershipBonusPayments)
 		.where(
 			and(
 				eq(leadershipBonusPayments.transactionId, tx.id),
 				ne(leadershipBonusPayments.status, "cancelled"),
 			),
-		)
-		.limit(1);
-	if (existing) return null;
+		);
 
-	const baseRm = resolveAgentReceivableCommission(tx, breakdown);
+	const hasPaid = existing.some((r) => r.status === "paid");
+	if (hasPaid) return null;
+
+	if (existing.length > 0) {
+		await db
+			.delete(leadershipBonusPayments)
+			.where(
+				and(
+					eq(leadershipBonusPayments.transactionId, tx.id),
+					eq(leadershipBonusPayments.status, "pending"),
+				),
+			);
+	}
+
+	const marketType = breakdown?.marketType ?? tx.marketType ?? undefined;
+	const sharePct =
+		breakdown?.agentSharePercent ??
+		(marketType === "primary" ? 100 : undefined);
+
+	const baseRm = resolveAgentReceivableCommission(tx, {
+		agentNetCommission: breakdown?.agentNetCommission,
+		agentEarnings: breakdown?.agentEarnings,
+		grossCommission: breakdown?.grossCommission,
+		agentSharePercent: sharePct,
+	});
 	if (baseRm <= 0) return null;
 
 	const result = await calculateLeadershipBonusForSeller(tx.agentId, baseRm);
@@ -331,7 +359,7 @@ export async function recordLeadershipBonusForTransaction(
 			downlineAgentId: tx.agentId,
 			uplineAgentId: alloc.agentId,
 			uplineTier: alloc.tier,
-			// original = agent receivable base; companyShare column reused as base snapshot
+			// original = agent receivable base; companyShare column stores the same base snapshot
 			originalCommissionAmount: result.baseRm.toFixed(2),
 			companyShareAmount: result.baseRm.toFixed(2),
 			leadershipBonusRate: Math.round(alloc.effectiveRatePercent),
@@ -341,6 +369,41 @@ export async function recordLeadershipBonusForTransaction(
 	}
 
 	return result;
+}
+
+/** Snapshot shape stored inside commissionBreakdown (main case calculation). */
+export function toLeadershipBreakdownSnapshot(
+	result: LeadershipCalculationResult,
+) {
+	const recipients = result.allocations
+		.filter((a) => a.amountSen > 0)
+		.map((a) => ({
+			agentId: a.agentId,
+			tier: a.tier,
+			bonusRate: a.effectiveRatePercent,
+			bonusAmount: a.amountRm,
+			claimedFromRank: a.claimedFromRank,
+			claimedToRank: a.claimedToRank,
+		}));
+	const first = recipients[0];
+	return {
+		fromAgentReceivable: result.baseRm,
+		fromCompanyShare: result.baseRm,
+		allocatedAmount: senToRm(result.allocatedSen),
+		unclaimedAmount: senToRm(result.unclaimedSen),
+		ownTierPercents: result.ownTierPercents,
+		cumulativePercents: result.cumulativePercents,
+		recipients,
+		// Compatibility fields used by older UI / previews
+		...(first
+			? {
+					uplineId: first.agentId,
+					uplineTier: first.tier,
+					bonusRate: first.bonusRate,
+					bonusAmount: first.bonusAmount,
+				}
+			: {}),
+	};
 }
 
 /** Recall leadership bonus when a case is revoked. */

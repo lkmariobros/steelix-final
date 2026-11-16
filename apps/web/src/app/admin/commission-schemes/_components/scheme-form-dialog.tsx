@@ -224,8 +224,10 @@ export function SchemeFormDialog({
 					<DialogTitle>{isEdit ? "Edit scheme" : "New scheme"}</DialogTitle>
 					<DialogDescription>
 						Primary market: set <strong>Commission %</strong> (agent receives
-						100% of scheme net) and up to <strong>4 upline override %</strong>{" "}
-						layers (paid separately; not deducted from agent).
+						100% of scheme net) and project-related{" "}
+						<strong>4 upline override %</strong> layers (paid separately; not
+						deducted from agent). Leadership bonus still uses this scheme&apos;s
+						agent receivable × the agent tier leadership %.
 					</DialogDescription>
 				</DialogHeader>
 

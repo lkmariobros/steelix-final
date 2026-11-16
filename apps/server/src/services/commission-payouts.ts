@@ -268,17 +268,25 @@ export async function ensurePayoutsForApprovedTransaction(tx: TxRow) {
 		}
 	}
 
-	// Leadership Bonus only after Verified (idempotent). Runs even when payout
-	// rows already exist so re-verify / legacy cases still get LB for New Project.
+	// Leadership Bonus after Verified. Pending rows may be refreshed to match
+	// Primary scheme agent receivable × tier leadership %. Paid rows stay fixed.
 	if (tx.status === "verified") {
 		try {
-			if (breakdown) {
-				await recordSecondaryLeadershipBonus(tx, breakdown);
-			} else {
-				await recordSecondaryLeadershipBonus(tx, {
-					grossCommission: grossN,
-				});
-			}
+			const marketType =
+				breakdown?.marketType ??
+				(tx.marketType === "primary" || tx.marketType === "secondary"
+					? tx.marketType
+					: undefined);
+			await recordSecondaryLeadershipBonus(tx, {
+				marketType,
+				grossCommission: grossN,
+				agentNetCommission: netN,
+				agentSharePercent:
+					breakdown?.agentSharePercent ??
+					(marketType === "primary" ? 100 : undefined),
+				companyShare: breakdown?.companyShare,
+				leadershipBonus: breakdown?.leadershipBonus,
+			});
 		} catch (e) {
 			console.warn(
 				"[ensurePayouts] leadership bonus record failed:",
