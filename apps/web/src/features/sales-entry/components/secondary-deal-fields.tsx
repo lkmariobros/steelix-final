@@ -469,6 +469,49 @@ export function SecondaryDealFields({
 					)}
 				/>
 
+				{form.watch("propertyData.sstPayBy") === "agent" ? (
+					<>
+						<FormField
+							control={control}
+							name="propertyData.sstBearTransactionAgent"
+							render={({ field }) => (
+								<FormItem>
+									<FormLabel>SST borne by Transaction agent (RM)</FormLabel>
+									<FormControl>
+										<CurrencyInput
+											value={field.value ?? 0}
+											onChange={(v) => {
+												field.onChange(v || 0);
+												syncToParent();
+											}}
+										/>
+									</FormControl>
+									<FormMessage />
+								</FormItem>
+							)}
+						/>
+						<FormField
+							control={control}
+							name="propertyData.sstBearCoBrokeAgent"
+							render={({ field }) => (
+								<FormItem>
+									<FormLabel>SST borne by Co-broke agent (RM)</FormLabel>
+									<FormControl>
+										<CurrencyInput
+											value={field.value ?? 0}
+											onChange={(v) => {
+												field.onChange(v || 0);
+												syncToParent();
+											}}
+										/>
+									</FormControl>
+									<FormMessage />
+								</FormItem>
+							)}
+						/>
+					</>
+				) : null}
+
 				<FormField
 					control={control}
 					name="propertyData.earnestDeposit"
@@ -488,6 +531,71 @@ export function SecondaryDealFields({
 						</FormItem>
 					)}
 				/>
+
+				{!isSubsale ? (
+					<>
+						<FormField
+							control={control}
+							name="propertyData.securityDeposit"
+							render={({ field }) => (
+								<FormItem>
+									<FormLabel>Security Deposit (RM)</FormLabel>
+									<FormControl>
+										<CurrencyInput
+											value={field.value ?? 0}
+											onChange={(v) => {
+												field.onChange(v || 0);
+												syncToParent();
+											}}
+										/>
+									</FormControl>
+									{Number(form.watch("propertyData.price") ?? 0) > 0 &&
+									Number(field.value ?? 0) > 0 ? (
+										<p className="text-muted-foreground text-xs">
+											≈{" "}
+											{(
+												Number(field.value ?? 0) /
+												Number(form.watch("propertyData.price") ?? 1)
+											).toFixed(2)}{" "}
+											month(s) rental
+										</p>
+									) : null}
+									<FormMessage />
+								</FormItem>
+							)}
+						/>
+						<FormField
+							control={control}
+							name="propertyData.utilityDeposit"
+							render={({ field }) => (
+								<FormItem>
+									<FormLabel>Utility Deposit (RM)</FormLabel>
+									<FormControl>
+										<CurrencyInput
+											value={field.value ?? 0}
+											onChange={(v) => {
+												field.onChange(v || 0);
+												syncToParent();
+											}}
+										/>
+									</FormControl>
+									{Number(form.watch("propertyData.price") ?? 0) > 0 &&
+									Number(field.value ?? 0) > 0 ? (
+										<p className="text-muted-foreground text-xs">
+											≈{" "}
+											{(
+												Number(field.value ?? 0) /
+												Number(form.watch("propertyData.price") ?? 1)
+											).toFixed(2)}{" "}
+											month(s) rental
+										</p>
+									) : null}
+									<FormMessage />
+								</FormItem>
+							)}
+						/>
+					</>
+				) : null}
 
 				{isSubsale ? (
 					<FormField

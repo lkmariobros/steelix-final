@@ -63,12 +63,12 @@ export default function AdminIncentivesPage() {
 					</h1>
 					<p className="mt-4 max-w-md text-base text-muted-foreground leading-relaxed sm:text-lg">
 						Incentive management will be available in a future update. Use
-						Commissions Approval and Commission payout for commission workflows
+						Commissions Approval and Commissions Payout for commission workflows
 						in the meantime.
 					</p>
 					<div className="mt-8 flex flex-wrap items-center justify-center gap-3">
 						<Button className="h-11 rounded-full px-6" asChild>
-							<Link href="/admin/commissions?status=pending_approval">
+							<Link href="/admin/commissions/approval">
 								Commissions Approval
 							</Link>
 						</Button>
@@ -77,7 +77,7 @@ export default function AdminIncentivesPage() {
 							className="h-11 rounded-full border-border/70 px-6 shadow-card"
 							asChild
 						>
-							<Link href="/admin/commissions">Commission payout</Link>
+							<Link href="/admin/commissions/payout">Commissions Payout</Link>
 						</Button>
 					</div>
 				</div>

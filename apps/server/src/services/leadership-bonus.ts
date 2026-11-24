@@ -309,6 +309,10 @@ export async function recordLeadershipBonusForTransaction(
 ): Promise<LeadershipCalculationResult | null> {
 	if (!tx.agentId) return null;
 
+	// Subsale & Rental: no leadership bonus at all
+	const marketType = breakdown?.marketType ?? tx.marketType ?? undefined;
+	if (marketType === "secondary") return null;
+
 	const existing = await db
 		.select({
 			id: leadershipBonusPayments.id,
@@ -318,12 +322,15 @@ export async function recordLeadershipBonusForTransaction(
 		.where(
 			and(
 				eq(leadershipBonusPayments.transactionId, tx.id),
+				eq(leadershipBonusPayments.downlineAgentId, tx.agentId),
 				ne(leadershipBonusPayments.status, "cancelled"),
 			),
 		);
 
-	const hasPaid = existing.some((r) => r.status === "paid");
-	if (hasPaid) return null;
+	const hasLocked = existing.some(
+		(r) => r.status === "paid" || r.status === "approved",
+	);
+	if (hasLocked) return null;
 
 	if (existing.length > 0) {
 		await db
@@ -331,12 +338,12 @@ export async function recordLeadershipBonusForTransaction(
 			.where(
 				and(
 					eq(leadershipBonusPayments.transactionId, tx.id),
+					eq(leadershipBonusPayments.downlineAgentId, tx.agentId),
 					eq(leadershipBonusPayments.status, "pending"),
 				),
 			);
 	}
 
-	const marketType = breakdown?.marketType ?? tx.marketType ?? undefined;
 	const sharePct =
 		breakdown?.agentSharePercent ??
 		(marketType === "primary" ? 100 : undefined);
@@ -365,6 +372,7 @@ export async function recordLeadershipBonusForTransaction(
 			leadershipBonusRate: Math.round(alloc.effectiveRatePercent),
 			leadershipBonusAmount: alloc.amountRm.toFixed(2),
 			status: "pending",
+			paidAmount: "0",
 		});
 	}
 

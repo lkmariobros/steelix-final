@@ -204,14 +204,14 @@ export const TRANSACTIONS_SIDEBAR_SECTIONS = TRANSACTIONS_SIDEBAR_ITEMS;
 export const FINANCE_SIDEBAR_ITEMS = [
 	{
 		title: "Commissions Approval",
-		url: "/admin/commissions?status=pending_approval",
+		url: "/admin/commissions/approval",
 	},
 	{
 		title: "Incentive",
 		url: "/admin/incentives",
 	},
 	{
-		title: "Commission payout",
-		url: "/admin/commissions",
+		title: "Commissions Payout",
+		url: "/admin/commissions/payout",
 	},
 ] as const;

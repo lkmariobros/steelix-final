@@ -282,8 +282,11 @@ export const leadershipBonusPayments = pgTable(
 			precision: 15,
 			scale: 2,
 		}).notNull(),
-		// Status
-		status: text("status").default("pending").notNull(), // pending, paid, cancelled
+		// Status: pending → approved → paid; cancelled on reject/recall
+		status: text("status").default("pending").notNull(),
+		paidAmount: decimal("paid_amount", { precision: 14, scale: 2 })
+			.notNull()
+			.default("0"),
 		paidAt: timestamp("paid_at"),
 		// Audit
 		createdAt: timestamp("created_at").defaultNow().notNull(),

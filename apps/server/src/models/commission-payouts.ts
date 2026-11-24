@@ -1,4 +1,5 @@
 import {
+	boolean,
 	decimal,
 	index,
 	integer,
@@ -20,6 +21,7 @@ export const commissionPayoutStatusEnum = pgEnum("commission_payout_status", [
 	"paid",
 	"on_hold",
 	"voided",
+	"cancelled",
 ]);
 
 export const commissionPayoutTypeEnum = pgEnum("commission_payout_type", [
@@ -48,9 +50,9 @@ export const commissionPayouts = pgTable(
 		transactionId: uuid("transaction_id")
 			.notNull()
 			.references(() => transactions.id, { onDelete: "cascade" }),
-		payeeAgentId: text("payee_agent_id")
-			.notNull()
-			.references(() => user.id, { onDelete: "cascade" }),
+		payeeAgentId: text("payee_agent_id").references(() => user.id, {
+			onDelete: "cascade",
+		}),
 		payoutType: commissionPayoutTypeEnum("payout_type")
 			.notNull()
 			.default("negotiator"),
@@ -78,6 +80,12 @@ export const commissionPayouts = pgTable(
 			.notNull()
 			.default("0"),
 		netCommission: decimal("net_commission", { precision: 14, scale: 2 }).notNull(),
+		sharePercent: decimal("share_percent", { precision: 7, scale: 4 }),
+		shareLabel: text("share_label"),
+		isCompanyShare: boolean("is_company_share").notNull().default(false),
+		paidAmount: decimal("paid_amount", { precision: 14, scale: 2 })
+			.notNull()
+			.default("0"),
 
 		commissionSchemeSnapshot: jsonb("commission_scheme_snapshot"),
 		claimStageLabel: text("claim_stage_label"),
@@ -115,6 +123,44 @@ export const commissionPayouts = pgTable(
 	}),
 );
 
+export const commissionPayoutPayments = pgTable(
+	"commission_payout_payments",
+	{
+		id: uuid("id").primaryKey().defaultRandom(),
+		payoutId: uuid("payout_id")
+			.notNull()
+			.references(() => commissionPayouts.id, { onDelete: "cascade" }),
+		paymentDate: timestamp("payment_date").notNull(),
+		amount: decimal("amount", { precision: 14, scale: 2 }).notNull(),
+		receiptUrl: text("receipt_url"),
+		note: text("note"),
+		createdBy: text("created_by").references(() => user.id),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+	},
+	(t) => ({
+		payoutIdx: index("idx_commission_payout_payments_payout").on(t.payoutId),
+	}),
+);
+
+export const leadershipBonusPaymentItems = pgTable(
+	"leadership_bonus_payment_items",
+	{
+		id: uuid("id").primaryKey().defaultRandom(),
+		leadershipBonusPaymentId: uuid("leadership_bonus_payment_id").notNull(),
+		paymentDate: timestamp("payment_date").notNull(),
+		amount: decimal("amount", { precision: 14, scale: 2 }).notNull(),
+		receiptUrl: text("receipt_url"),
+		note: text("note"),
+		createdBy: text("created_by").references(() => user.id),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+	},
+	(t) => ({
+		parentIdx: index("idx_lb_payment_items_parent").on(
+			t.leadershipBonusPaymentId,
+		),
+	}),
+);
+
 export const projectClaimSchedules = pgTable(
 	"project_claim_schedules",
 	{
@@ -141,4 +187,20 @@ export const releasePayoutInputSchema = z.object({
 	paymentReferenceNo: z.string().min(1),
 	paymentReceiptUrl: z.string().optional(),
 	internalNote: z.string().optional(),
+});
+
+export const addPayoutPaymentInputSchema = z.object({
+	payoutId: z.string().uuid(),
+	paymentDate: z.coerce.date(),
+	amount: z.number().positive(),
+	receiptUrl: z.string().url().optional().or(z.literal("")),
+	note: z.string().optional(),
+});
+
+export const addLeadershipBonusPaymentInputSchema = z.object({
+	paymentId: z.string().uuid(),
+	paymentDate: z.coerce.date(),
+	amount: z.number().positive(),
+	receiptUrl: z.string().url().optional().or(z.literal("")),
+	note: z.string().optional(),
 });

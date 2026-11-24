@@ -80,6 +80,8 @@ type AdminTxRow = {
 	coAgentName?: string | null;
 	coAgentNickName?: string | null;
 	coAgentCode?: string | null;
+	agentSharePercent?: number | null;
+	coAgentSharePercent?: number | null;
 	propertyData?: {
 		address?: string;
 		price?: number;
@@ -94,10 +96,12 @@ function AgentCell({
 	name,
 	nickName,
 	code,
+	sharePercent,
 }: {
 	name?: string | null;
 	nickName?: string | null;
 	code?: string | null;
+	sharePercent?: number | null;
 }) {
 	if (!name && !code && !nickName) {
 		return <span className="text-muted-foreground text-sm">—</span>;
@@ -120,7 +124,11 @@ function AgentCell({
 				<p className="truncate font-medium text-foreground text-sm leading-snug">
 					{label}
 				</p>
-				{code ? (
+				{sharePercent != null ? (
+					<p className="text-muted-foreground text-[11px] tabular-nums">
+						{sharePercent}%
+					</p>
+				) : code ? (
 					<p className="truncate font-mono text-muted-foreground text-[11px]">
 						Code {code}
 					</p>
@@ -138,12 +146,14 @@ function AgentsCell({ row }: { row: AdminTxRow }) {
 				name={row.agentName}
 				nickName={row.agentNickName}
 				code={row.agentCode}
+				sharePercent={row.agentSharePercent ?? (isCo ? null : 100)}
 			/>
 			{isCo ? (
 				<AgentCell
 					name={row.coAgentName}
 					nickName={row.coAgentNickName}
 					code={row.coAgentCode}
+					sharePercent={row.coAgentSharePercent}
 				/>
 			) : null}
 		</div>

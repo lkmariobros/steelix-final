@@ -959,7 +959,11 @@ export const adminRouter = router({
 	getAllLeadershipBonusPayments: adminProcedure
 		.input(
 			z.object({
-				status: z.enum(["pending", "paid", "cancelled"]).optional(),
+				status: z
+					.enum(["pending", "approved", "paid", "cancelled"])
+					.optional(),
+				/** New Project only by default for Finance screens */
+				primaryOnly: z.boolean().optional().default(true),
 				limit: z.number().min(1).max(100).default(50),
 				offset: z.number().min(0).default(0),
 			}),
@@ -969,12 +973,21 @@ export const adminRouter = router({
 			if (input.status) {
 				conditions.push(eq(leadershipBonusPayments.status, input.status));
 			}
+			if (input.primaryOnly !== false) {
+				conditions.push(eq(transactions.marketType, "primary"));
+			}
+
+			const whereClause =
+				conditions.length > 0 ? and(...conditions) : undefined;
 
 			const payments = await db
 				.select({
 					id: leadershipBonusPayments.id,
 					transactionId: leadershipBonusPayments.transactionId,
 					caseNo: transactions.caseNo,
+					projectName: transactions.projectName,
+					unitNo: transactions.unitNo,
+					verifiedDate: transactions.updatedAt,
 					downlineAgentId: leadershipBonusPayments.downlineAgentId,
 					downlineName: lbDownline.name,
 					uplineAgentId: leadershipBonusPayments.uplineAgentId,
@@ -986,6 +999,7 @@ export const adminRouter = router({
 					leadershipBonusRate: leadershipBonusPayments.leadershipBonusRate,
 					leadershipBonusAmount: leadershipBonusPayments.leadershipBonusAmount,
 					status: leadershipBonusPayments.status,
+					paidAmount: leadershipBonusPayments.paidAmount,
 					paidAt: leadershipBonusPayments.paidAt,
 					createdAt: leadershipBonusPayments.createdAt,
 				})
@@ -1002,25 +1016,39 @@ export const adminRouter = router({
 					lbUpline,
 					eq(leadershipBonusPayments.uplineAgentId, lbUpline.id),
 				)
-				.where(conditions.length > 0 ? and(...conditions) : undefined)
+				.where(whereClause)
 				.orderBy(desc(leadershipBonusPayments.createdAt))
 				.limit(input.limit)
 				.offset(input.offset);
 
-			// Get total count
 			const [countResult] = await db
 				.select({ count: count() })
 				.from(leadershipBonusPayments)
-				.where(conditions.length > 0 ? and(...conditions) : undefined);
+				.leftJoin(
+					transactions,
+					eq(leadershipBonusPayments.transactionId, transactions.id),
+				)
+				.where(whereClause);
 
 			return {
-				payments,
+				payments: payments.map((p) => {
+					const amount = Number(p.leadershipBonusAmount ?? 0);
+					const paid = Number(p.paidAmount ?? 0);
+					return {
+						...p,
+						paidAmountRm: paid,
+						outstandingAmountRm: Math.max(
+							0,
+							Math.round((amount - paid) * 100) / 100,
+						),
+					};
+				}),
 				totalCount: countResult.count,
 				hasMore: input.offset + input.limit < countResult.count,
 			};
 		}),
 
-	// Mark leadership bonus as paid
+	// Legacy: mark LB paid in one step (prefer approve + add payment on Payout)
 	markLeadershipBonusPaid: adminProcedure
 		.input(
 			z.object({
@@ -1045,37 +1073,52 @@ export const adminRouter = router({
 			return updated;
 		}),
 
-	// Get leadership bonus summary for admin dashboard
-	getLeadershipBonusSummary: adminProcedure.query(async () => {
-		const [pendingStats] = await db
-			.select({
-				count: count(),
-				total: sum(
-					sql`CAST(${leadershipBonusPayments.leadershipBonusAmount} AS DECIMAL)`,
-				),
-			})
-			.from(leadershipBonusPayments)
-			.where(eq(leadershipBonusPayments.status, "pending"));
+	getLeadershipBonusSummary: adminProcedure
+		.input(
+			z
+				.object({
+					primaryOnly: z.boolean().optional().default(true),
+				})
+				.optional(),
+		)
+		.query(async ({ input }) => {
+			const primaryOnly = input?.primaryOnly !== false;
+			const baseJoin = primaryOnly
+				? eq(transactions.marketType, "primary")
+				: undefined;
 
-		const [paidStats] = await db
-			.select({
-				count: count(),
-				total: sum(
-					sql`CAST(${leadershipBonusPayments.leadershipBonusAmount} AS DECIMAL)`,
-				),
-			})
-			.from(leadershipBonusPayments)
-			.where(eq(leadershipBonusPayments.status, "paid"));
+			const sumFor = async (status: string) => {
+				const conditions = [eq(leadershipBonusPayments.status, status)];
+				if (baseJoin) conditions.push(baseJoin);
+				const [stats] = await db
+					.select({
+						count: count(),
+						total: sum(
+							sql`CAST(${leadershipBonusPayments.leadershipBonusAmount} AS DECIMAL)`,
+						),
+					})
+					.from(leadershipBonusPayments)
+					.leftJoin(
+						transactions,
+						eq(leadershipBonusPayments.transactionId, transactions.id),
+					)
+					.where(and(...conditions));
+				return {
+					count: stats.count || 0,
+					total: Number.parseFloat(String(stats.total || 0)),
+				};
+			};
 
-		return {
-			pending: {
-				count: pendingStats.count || 0,
-				total: Number.parseFloat(String(pendingStats.total || 0)),
-			},
-			paid: {
-				count: paidStats.count || 0,
-				total: Number.parseFloat(String(paidStats.total || 0)),
-			},
-		};
-	}),
+			const pending = await sumFor("pending");
+			const approved = await sumFor("approved");
+			const cancelled = await sumFor("cancelled");
+			const paid = await sumFor("paid");
+
+			return {
+				pending,
+				approved,
+				cancelled,
+				paid,
+			};
+		}),
 });

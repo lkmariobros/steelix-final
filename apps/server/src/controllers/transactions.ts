@@ -155,12 +155,17 @@ const baseTransactionInput = z.object({
 			purchasingMethod: z.enum(["cash", "loan"]).optional(),
 			sstPayBy: z.enum(["client", "landlord", "agent"]).optional(),
 			sstPercent: z.number().nonnegative().optional(),
+			sstBearTransactionAgent: z.number().nonnegative().optional(),
+			sstBearCoBrokeAgent: z.number().nonnegative().optional(),
 			earnestDeposit: z.number().nonnegative().optional(),
+			securityDeposit: z.number().nonnegative().optional(),
+			utilityDeposit: z.number().nonnegative().optional(),
 			offerDate: z.string().optional(),
 			submitDate: z.string().optional(),
 			rentFrom: z.string().optional(),
 			rentTo: z.string().optional(),
 			rentPeriod: z.string().optional(),
+			renewOptionYears: z.number().nonnegative().optional(),
 			listingReferralShareType: z.enum(["percentage", "fixed"]).optional(),
 			listingReferralShareValue: z.number().nonnegative().optional(),
 			price: z.number().nonnegative("Price must be non-negative").optional(),
@@ -168,6 +173,7 @@ const baseTransactionInput = z.object({
 			nettPrice: z.number().nonnegative().optional(),
 			description: z.string().optional(),
 		})
+		.passthrough()
 		.optional(),
 	projectName: z.string().optional(),
 	unitNo: z.string().optional(),
@@ -1023,11 +1029,23 @@ export const transactionsRouter = router({
 			return {
 				transactions: rows.map((r) => {
 					const co = r.coBrokingData as
-						| { internalAgentId?: string; agentName?: string }
+						| {
+								internalAgentId?: string;
+								agentName?: string;
+								commissionSplit?: number;
+								agents?: Array<{ commissionSplit?: number }>;
+						  }
 						| null;
 					const coAgent = co?.internalAgentId
 						? coAgentMap.get(co.internalAgentId)
 						: null;
+					const coSplit =
+						co?.agents && co.agents.length > 0
+							? co.agents.reduce(
+									(s, a) => s + (Number(a.commissionSplit) || 0),
+									0,
+								)
+							: Number(co?.commissionSplit) || 0;
 					const { agentName, agentNickName, agentCode, ...tx } = r;
 					return {
 						...tx,
@@ -1035,9 +1053,11 @@ export const transactionsRouter = router({
 						agentName,
 						agentNickName,
 						agentCode,
+						agentSharePercent: Math.max(0, 100 - coSplit),
 						coAgentName: coAgent?.name ?? co?.agentName ?? null,
 						coAgentNickName: coAgent?.nickName ?? null,
 						coAgentCode: coAgent?.agentCode ?? null,
+						coAgentSharePercent: coSplit > 0 ? coSplit : null,
 					};
 				}),
 				total: count,

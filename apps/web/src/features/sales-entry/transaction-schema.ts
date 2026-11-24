@@ -47,7 +47,13 @@ export const propertySchema = z.object({
 	purchasingMethod: z.enum(["cash", "loan"]).optional(),
 	sstPayBy: z.enum(["client", "landlord", "agent"]).optional(),
 	sstPercent: z.number().nonnegative().optional(),
+	/** When SST Pay by = Agent — RM borne by transaction agent */
+	sstBearTransactionAgent: z.number().nonnegative().optional(),
+	/** When SST Pay by = Agent — RM borne by co-broke agent */
+	sstBearCoBrokeAgent: z.number().nonnegative().optional(),
 	earnestDeposit: z.number().nonnegative().optional(),
+	securityDeposit: z.number().nonnegative().optional(),
+	utilityDeposit: z.number().nonnegative().optional(),
 	offerDate: z.string().optional(),
 	submitDate: z.string().optional(),
 	rentFrom: z.string().optional(),

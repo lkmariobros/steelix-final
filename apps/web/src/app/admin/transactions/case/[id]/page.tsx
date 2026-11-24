@@ -225,6 +225,8 @@ export default function AdminTransactionDetailPage() {
 										tx={tx}
 										agentName={agentData?.agent?.name}
 										agentEmail={agentData?.agent?.email}
+										agentNickName={agentData?.agent?.nickName}
+										agentCode={agentData?.agent?.agentCode}
 										allowDocumentUpload
 									/>
 								</TabsContent>

@@ -87,7 +87,7 @@ const FINANCE_ICONS: Record<
 > = {
 	"Commissions Approval": RiHandCoinLine,
 	Incentive: RiGiftLine,
-	"Commission payout": RiWallet3Line,
+	"Commissions Payout": RiWallet3Line,
 };
 
 type NavItem = {
@@ -304,20 +304,21 @@ function isNavItemActive(
 		}
 		return pathname === "/admin/approvals";
 	}
-	if (url.startsWith("/admin/commissions?")) {
-		if (pathname !== "/admin/commissions" || !searchParams) return false;
-		const urlParams = new URLSearchParams(url.split("?")[1]);
-		const status = urlParams.get("status");
-		if (status) {
-			return searchParams.get("status") === status;
-		}
-		return !searchParams.get("status");
-	}
-	if (url === "/admin/commissions") {
+	if (url === "/admin/commissions/approval") {
 		return (
-			pathname === "/admin/commissions" &&
-			(!searchParams || !searchParams.get("status"))
+			pathname === "/admin/commissions/approval" ||
+			pathname.startsWith("/admin/commissions/approval/")
 		);
+	}
+	if (url === "/admin/commissions/payout") {
+		return (
+			pathname === "/admin/commissions/payout" ||
+			pathname.startsWith("/admin/commissions/payout/")
+		);
+	}
+	// Exact /admin/commissions only — do not mark active for approval/payout/claim-schedules
+	if (url === "/admin/commissions" || url.startsWith("/admin/commissions?")) {
+		return pathname === "/admin/commissions";
 	}
 
 	if (pathname.startsWith("/admin/transactions/case/")) {

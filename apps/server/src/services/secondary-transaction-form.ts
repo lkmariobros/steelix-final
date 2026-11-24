@@ -351,6 +351,8 @@ type FormCtx = {
 		rentPeriod?: string;
 		renewOptionYears?: number;
 		earnestDeposit?: number;
+		securityDeposit?: number;
+		utilityDeposit?: number;
 		sstPercent?: number;
 		sstPayBy?: string;
 		purchasingMethod?: string;
@@ -410,8 +412,18 @@ function loaRent(ctx: FormCtx): string {
 function looRent(ctx: FormCtx): string {
 	const monthly = num(ctx.prop.price);
 	const earnest = num(ctx.prop.earnestDeposit) || monthly;
-	const security = monthly * 2;
-	const utilities = monthly * 0.5;
+	const security =
+		num(ctx.prop.securityDeposit) > 0
+			? num(ctx.prop.securityDeposit)
+			: monthly * 2;
+	const utilities =
+		num(ctx.prop.utilityDeposit) > 0
+			? num(ctx.prop.utilityDeposit)
+			: monthly * 0.5;
+	const securityMonths =
+		monthly > 0 ? trimNum(Math.round((security / monthly) * 100) / 100) : "";
+	const utilityMonths =
+		monthly > 0 ? trimNum(Math.round((utilities / monthly) * 100) / 100) : "";
 	const stamping = 0;
 	const total = earnest + security + utilities + stamping;
 	const from = parseDate(ctx.prop.rentFrom);
@@ -430,8 +442,8 @@ function looRent(ctx: FormCtx): string {
   <p class="intro">I/We (“Tenant”) have inspected the above property and hereby offer to rent the said property on the following terms &amp; conditions:-</p>
   <ol class="clauses">
     <li>Advance Rental for one month (inclusive / exclusive of service charge) : RM ${u(formatMoney(earnest), 8)}</li>
-    <li>Security Deposit (equivalent to ${u("2", 2)} month/s rental) : RM ${u(formatMoney(security), 8)}</li>
-    <li>Utility Deposit (Electricity, Water and Sewerage) (equivalent to ${u("0.5", 3)} month/s rental) : RM ${u(formatMoney(utilities), 8)}</li>
+    <li>Security Deposit (equivalent to ${u(securityMonths, 2)} month/s rental) : RM ${u(formatMoney(security), 8)}</li>
+    <li>Utility Deposit (Electricity, Water and Sewerage) (equivalent to ${u(utilityMonths, 3)} month/s rental) : RM ${u(formatMoney(utilities), 8)}</li>
     <li>Stamping fee and disbursement of Tenancy Agreement : RM ${u(formatMoney(stamping), 8)}</li>
   </ol>
   <p><strong>Total to be paid before the release of keys : RM ${u(formatMoney(total), 8)}</strong></p>

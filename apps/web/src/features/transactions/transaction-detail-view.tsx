@@ -17,6 +17,7 @@ import { trpc } from "@/utils/trpc";
 import { ChevronDown, FileText, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { TransactionDocumentsPanel } from "./transaction-documents-panel";
+import { formatAgentPickerLabel } from "@/lib/agent-display";
 import {
 	formatRm,
 	formatStatusLabel,
@@ -70,8 +71,12 @@ export type TransactionDetailRecord = {
 		rentPeriod?: string;
 		renewOptionYears?: number;
 		earnestDeposit?: number;
+		securityDeposit?: number;
+		utilityDeposit?: number;
 		sstPercent?: number;
 		sstPayBy?: string;
+		sstBearTransactionAgent?: number;
+		sstBearCoBrokeAgent?: number;
 		purchasingMethod?: string;
 	} | null;
 	clientData?: {
@@ -87,6 +92,15 @@ export type TransactionDetailRecord = {
 		vendors?: Party[];
 	} | null;
 	coBrokingData?: {
+		agents?: Array<{
+			agentName?: string;
+			agencyName?: string;
+			commissionSplit?: number;
+			agentEmail?: string;
+			agentPhone?: string;
+			contactInfo?: string;
+			internalAgentId?: string;
+		}>;
 		agentName?: string;
 		agencyName?: string;
 		commissionSplit?: number;
@@ -174,22 +188,83 @@ export function TransactionDetailView({
 	tx,
 	agentName,
 	agentEmail,
+	agentNickName,
+	agentCode,
 	allowDocumentUpload = false,
 }: {
 	tx: TransactionDetailRecord;
 	agentName?: string | null;
 	agentEmail?: string | null;
+	agentNickName?: string | null;
+	agentCode?: string | null;
 	/** When true, show upload controls (admin anytime; agent even when case details are locked). */
 	allowDocumentUpload?: boolean;
 }) {
 	const prop = tx.propertyData;
 	const client = tx.clientData;
-	const bd = tx.commissionBreakdown;
+	const bd = (tx.commissionBreakdown ?? null) as {
+		grossCommission?: number;
+		sstAmount?: number;
+		sstPercent?: number;
+		agentNetCommission?: number;
+		spaPrice?: number;
+		nettPrice?: number;
+		commissionRatePercent?: number;
+		[key: string]: unknown;
+	} | null;
 	const spa = prop?.spaPrice ?? prop?.price;
 	const nett = prop?.nettPrice ?? prop?.price;
 	const coBroking = tx.coBrokingData;
 	const isSecondary = (tx.marketType ?? "").toLowerCase() === "secondary";
 	const isRental = isRentalTransactionType(tx.transactionType);
+	const agentLabel = formatAgentPickerLabel({
+		name: agentName,
+		nickName: agentNickName,
+		agentCode,
+		email: agentEmail,
+	});
+	const caseAgentShare =
+		coBroking?.agents && coBroking.agents.length > 0
+			? Math.max(
+					0,
+					100 -
+						coBroking.agents.reduce(
+							(s, a) => s + (Number(a.commissionSplit) || 0),
+							0,
+						),
+				)
+			: coBroking?.commissionSplit != null
+				? Math.max(0, 100 - Number(coBroking.commissionSplit))
+				: 100;
+	const coAgentEntries =
+		coBroking?.agents && coBroking.agents.length > 0
+			? coBroking.agents
+			: coBroking?.agentName || coBroking?.commissionSplit != null
+				? [
+						{
+							agentName: coBroking.agentName,
+							commissionSplit: coBroking.commissionSplit,
+							agencyName: coBroking.agencyName,
+						},
+					]
+				: [];
+	const sstPercent =
+		prop?.sstPercent ?? bd?.sstPercent ?? (isSecondary ? 8 : undefined);
+	const totalCommission = Number(tx.commissionAmount ?? bd?.grossCommission ?? 0);
+	const sstAmount =
+		bd?.sstAmount != null
+			? Number(bd.sstAmount)
+			: sstPercent != null && totalCommission > 0
+				? Math.round(totalCommission * (Number(sstPercent) / 100) * 100) / 100
+				: undefined;
+	const netCommission =
+		bd?.agentNetCommission != null
+			? Number(bd.agentNetCommission)
+			: sstAmount != null && prop?.sstPayBy === "agent"
+				? Math.max(0, totalCommission - sstAmount)
+				: totalCommission > 0
+					? totalCommission
+					: undefined;
 	const marketLabel = isSecondary
 		? "Secondary"
 		: (tx.marketType ?? "").toLowerCase() === "primary"
@@ -307,12 +382,29 @@ export function TransactionDetailView({
 				) : null}
 			</div>
 
-			{(agentName || agentEmail) && (
+			{(agentName || agentEmail || coAgentEntries.length > 0) && (
 				<>
 					<Section title="Agent">
 						<div className="grid gap-3 rounded-lg border bg-muted/30 p-4 sm:grid-cols-2">
-							<DetailRow label="Agent name" value={agentName ?? undefined} />
-							<DetailRow label="Agent email" value={agentEmail ?? undefined} />
+							<div>
+								<p className="text-muted-foreground text-xs">Agent</p>
+								<p className="font-medium text-sm">{agentLabel}</p>
+								<p className="text-muted-foreground text-sm">
+									{caseAgentShare}%
+								</p>
+							</div>
+							{coAgentEntries.map((a, i) => (
+								<div key={`${a.agentName ?? "co"}-${i}`}>
+									<p className="text-muted-foreground text-xs">Co-agent</p>
+									<p className="font-medium text-sm">
+										{a.agentName?.trim() || "Co-agent"}
+										{a.agencyName ? ` (${a.agencyName})` : ""}
+									</p>
+									<p className="text-muted-foreground text-sm">
+										{Number(a.commissionSplit) || 0}%
+									</p>
+								</div>
+							))}
 						</div>
 					</Section>
 					<Separator />
@@ -342,6 +434,22 @@ export function TransactionDetailView({
 										value={
 											prop?.earnestDeposit != null
 												? formatRm(prop.earnestDeposit)
+												: undefined
+										}
+									/>
+									<DetailRow
+										label="Security Deposit"
+										value={
+											prop?.securityDeposit != null
+												? formatRm(prop.securityDeposit)
+												: undefined
+										}
+									/>
+									<DetailRow
+										label="Utility Deposit"
+										value={
+											prop?.utilityDeposit != null
+												? formatRm(prop.utilityDeposit)
 												: undefined
 										}
 									/>
@@ -589,23 +697,49 @@ export function TransactionDetailView({
 					<DetailRow
 						label="Total commission"
 						value={
-							tx.commissionAmount != null
-								? formatRm(tx.commissionAmount)
-								: undefined
+							totalCommission > 0 ? formatRm(totalCommission) : undefined
+						}
+					/>
+					<DetailRow
+						label="SST Percent"
+						value={sstPercent != null ? `${sstPercent}%` : undefined}
+					/>
+					<DetailRow
+						label="SST Amount"
+						value={sstAmount != null ? formatRm(sstAmount) : undefined}
+					/>
+					<DetailRow
+						label="Net Commission"
+						value={
+							netCommission != null ? formatRm(netCommission) : undefined
 						}
 					/>
 					{isSecondary ? (
 						<>
 							<DetailRow
-								label="SST Percent"
-								value={
-									prop?.sstPercent != null ? `${prop.sstPercent}%` : undefined
-								}
-							/>
-							<DetailRow
 								label="SST Pay By"
 								value={formatSstPayBy(prop?.sstPayBy)}
 							/>
+							{prop?.sstPayBy === "agent" ? (
+								<>
+									<DetailRow
+										label="SST borne — Transaction agent"
+										value={
+											prop.sstBearTransactionAgent != null
+												? formatRm(prop.sstBearTransactionAgent)
+												: undefined
+										}
+									/>
+									<DetailRow
+										label="SST borne — Co-broke agent"
+										value={
+											prop.sstBearCoBrokeAgent != null
+												? formatRm(prop.sstBearCoBrokeAgent)
+												: undefined
+										}
+									/>
+								</>
+							) : null}
 							{isRental && prop?.renewOptionYears != null ? (
 								<DetailRow
 									label="Renew Option"

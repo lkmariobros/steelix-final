@@ -1,17 +1,28 @@
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { user } from "../models/auth";
-import { releasePayoutInputSchema } from "../models/commission-payouts";
 import {
+	addLeadershipBonusPaymentInputSchema,
+	addPayoutPaymentInputSchema,
+	releasePayoutInputSchema,
+} from "../models/commission-payouts";
+import {
+	addLeadershipBonusPaymentAdmin,
+	addPayoutPaymentAdmin,
 	adminAgentCommissionSummary,
+	approveLeadershipBonusAdmin,
 	approvePayoutAdmin,
 	bulkApproveAdmin,
 	bulkReleaseAdmin,
+	cancelLeadershipBonusAdmin,
+	cancelPayoutAdmin,
 	deleteClaimScheduleAdmin,
 	getCommissionPayoutById,
 	listClaimSchedulesAdmin,
 	listCommissionPayoutsAdmin,
 	listCommissionPayoutsAgent,
+	listLeadershipBonusPaymentItems,
+	listPayoutPayments,
 	markPaidAdmin,
 	releasePayoutAdmin,
 	setOnHoldAdmin,
@@ -30,7 +41,10 @@ const payoutStatusZod = z.enum([
 	"paid",
 	"on_hold",
 	"voided",
+	"cancelled",
 ]);
+
+const segmentZod = z.enum(["new_project", "subsale", "rental"]);
 
 const listAdminInput = z.object({
 	limit: z.number().min(1).max(100).default(20),
@@ -39,6 +53,8 @@ const listAdminInput = z.object({
 	agentId: z.string().optional(),
 	projectName: z.string().optional(),
 	status: payoutStatusZod.optional(),
+	statuses: z.array(payoutStatusZod).optional(),
+	segment: segmentZod.optional(),
 	dateFrom: z.coerce.date().optional(),
 	dateTo: z.coerce.date().optional(),
 });
@@ -62,15 +78,25 @@ export const commissionPayoutsRouter = router({
 			offset: input.offset,
 		});
 		return {
-			items: rows.map((r) => ({
-				...r.payout,
-				agentName: r.agentName,
-				agentNickName: r.agentNickName,
-				agentCode: r.agentCode,
-				marketType: r.marketType,
-				propertyAddress: r.propertyAddress,
-				submitDate: r.payout.createdAt,
-			})),
+			items: rows.map((r) => {
+				const paid = Number(r.payout.paidAmount ?? 0);
+				const net = Number(r.payout.netCommission ?? 0);
+				return {
+					...r.payout,
+					agentName: r.payout.isCompanyShare
+						? r.payout.shareLabel || "Devots"
+						: r.agentName,
+					agentNickName: r.agentNickName,
+					agentCode: r.agentCode,
+					marketType: r.marketType,
+					transactionType: r.transactionType,
+					propertyAddress: r.propertyAddress,
+					verifiedDate: r.verifiedDate,
+					submitDate: r.payout.createdAt,
+					paidAmountRm: paid,
+					outstandingAmountRm: Math.max(0, Math.round((net - paid) * 100) / 100),
+				};
+			}),
 			total,
 			hasMore: input.offset + input.limit < total,
 		};
@@ -83,6 +109,7 @@ export const commissionPayoutsRouter = router({
 				projectName: z.string().optional(),
 				dateFrom: z.coerce.date().optional(),
 				dateTo: z.coerce.date().optional(),
+				segment: segmentZod.optional(),
 			}),
 		)
 		.query(async ({ input }) => summarizePayoutTotalsAdmin(input)),
@@ -90,7 +117,15 @@ export const commissionPayoutsRouter = router({
 	adminGet: adminProcedure.input(idInput).query(async ({ input }) => {
 		const row = await getCommissionPayoutById(input.id);
 		if (!row) throw new Error("Not found");
-		return row;
+		const payments = await listPayoutPayments(input.id);
+		const paid = Number(row.payout.paidAmount ?? 0);
+		const net = Number(row.payout.netCommission ?? 0);
+		return {
+			...row,
+			payments,
+			paidAmountRm: paid,
+			outstandingAmountRm: Math.max(0, Math.round((net - paid) * 100) / 100),
+		};
 	}),
 
 	adminApprove: adminProcedure
@@ -183,6 +218,70 @@ export const commissionPayoutsRouter = router({
 				reason: input.reason,
 			});
 		}),
+
+	adminCancel: adminProcedure
+		.input(z.object({ id: z.string().uuid(), reason: z.string().optional() }))
+		.mutation(async ({ ctx, input }) => {
+			const [me] = await db
+				.select({ name: user.name })
+				.from(user)
+				.where(eq(user.id, ctx.session.user.id))
+				.limit(1);
+			return cancelPayoutAdmin({
+				id: input.id,
+				adminId: ctx.session.user.id,
+				adminName: me?.name,
+				reason: input.reason,
+			});
+		}),
+
+	adminAddPayment: adminProcedure
+		.input(addPayoutPaymentInputSchema)
+		.mutation(async ({ ctx, input }) => {
+			const [me] = await db
+				.select({ name: user.name })
+				.from(user)
+				.where(eq(user.id, ctx.session.user.id))
+				.limit(1);
+			return addPayoutPaymentAdmin({
+				payoutId: input.payoutId,
+				adminId: ctx.session.user.id,
+				adminName: me?.name,
+				paymentDate: input.paymentDate,
+				amount: input.amount,
+				receiptUrl: input.receiptUrl || undefined,
+				note: input.note,
+			});
+		}),
+
+	adminListPayments: adminProcedure
+		.input(z.object({ payoutId: z.string().uuid() }))
+		.query(async ({ input }) => listPayoutPayments(input.payoutId)),
+
+	adminApproveLeadershipBonus: adminProcedure
+		.input(z.object({ paymentId: z.string().uuid() }))
+		.mutation(async ({ input }) => approveLeadershipBonusAdmin(input.paymentId)),
+
+	adminCancelLeadershipBonus: adminProcedure
+		.input(z.object({ paymentId: z.string().uuid() }))
+		.mutation(async ({ input }) => cancelLeadershipBonusAdmin(input.paymentId)),
+
+	adminAddLeadershipBonusPayment: adminProcedure
+		.input(addLeadershipBonusPaymentInputSchema)
+		.mutation(async ({ ctx, input }) =>
+			addLeadershipBonusPaymentAdmin({
+				paymentId: input.paymentId,
+				adminId: ctx.session.user.id,
+				paymentDate: input.paymentDate,
+				amount: input.amount,
+				receiptUrl: input.receiptUrl || undefined,
+				note: input.note,
+			}),
+		),
+
+	adminListLeadershipBonusPayments: adminProcedure
+		.input(z.object({ paymentId: z.string().uuid() }))
+		.query(async ({ input }) => listLeadershipBonusPaymentItems(input.paymentId)),
 
 	adminBulkApprove: adminProcedure
 		.input(z.object({ ids: z.array(z.string().uuid()).min(1).max(50) }))

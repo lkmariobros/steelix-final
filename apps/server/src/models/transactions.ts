@@ -103,7 +103,13 @@ export const transactions = pgTable(
 		purchasingMethod?: "cash" | "loan";
 		sstPayBy?: "client" | "landlord" | "agent";
 		sstPercent?: number;
+		/** When SST Pay by = Agent: amount borne by transaction agent (RM) */
+		sstBearTransactionAgent?: number;
+		/** When SST Pay by = Agent: amount borne by co-broke agent (RM) */
+		sstBearCoBrokeAgent?: number;
 		earnestDeposit?: number;
+		securityDeposit?: number;
+		utilityDeposit?: number;
 		offerDate?: string;
 		submitDate?: string;
 		rentFrom?: string;
