@@ -4,16 +4,19 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import {
 	RiAlarmWarningLine,
 	RiArrowRightLine,
+	RiBriefcaseLine,
 	RiCalendarCheckLine,
 	RiCalendarEventLine,
 	RiCloseLine,
 	RiFlag2Line,
+	RiFolderOpenLine,
 	RiInformationLine,
 	RiLoader4Line,
 	RiSendPlane2Fill,
 	RiSparkling2Line,
 	RiTimeLine,
 	RiTodoLine,
+	RiUserLine,
 } from "@remixicon/react";
 import type { inferRouterOutputs } from "@trpc/server";
 import Link from "next/link";
@@ -25,7 +28,14 @@ import { trpc } from "@/utils/trpc";
 import type { AppRouter } from "../../../server/src/routers";
 
 type AssistantAnswer = inferRouterOutputs<AppRouter>["assistant"]["ask"];
-type QuickIntent = "today" | "upcoming" | "overdue" | "urgent";
+type QuickIntent =
+	| "today"
+	| "upcoming"
+	| "overdue"
+	| "urgent"
+	| "leads_by_stage"
+	| "cases_pending"
+	| "cases_by_status";
 
 type ChatMessage =
 	| { id: number; role: "user"; text: string; at: Date }
@@ -47,6 +57,9 @@ const QUICK_ACTIONS: Array<{
 	{ intent: "upcoming", label: "Next 3 days", icon: RiCalendarEventLine },
 	{ intent: "overdue", label: "Overdue", icon: RiTimeLine },
 	{ intent: "urgent", label: "Urgent", icon: RiFlag2Line },
+	{ intent: "leads_by_stage", label: "My pipeline", icon: RiUserLine },
+	{ intent: "cases_pending", label: "Pending cases", icon: RiBriefcaseLine },
+	{ intent: "cases_by_status", label: "All cases", icon: RiFolderOpenLine },
 ];
 
 const INTENT_LABELS: Record<AssistantAnswer["intent"], string> = {
@@ -54,6 +67,9 @@ const INTENT_LABELS: Record<AssistantAnswer["intent"], string> = {
 	upcoming: "Next 3 days",
 	overdue: "Overdue tasks",
 	urgent: "Urgent tasks",
+	leads_by_stage: "Leads by stage",
+	cases_pending: "Pending cases",
+	cases_by_status: "Cases by status",
 	unsupported: "Not a supported question yet",
 };
 
@@ -66,8 +82,59 @@ const PRIORITY_BADGE: Record<string, string> = {
 
 const SHOW_DEMO_BADGE = process.env.NEXT_PUBLIC_ASSISTANT_DEMO === "true";
 
+const BUSINESS_INTENTS = new Set([
+	"leads_by_stage",
+	"cases_pending",
+	"cases_by_status",
+]);
+
 function formatClock(at: Date): string {
 	return at.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+}
+
+function sourceCaption(intent: AssistantAnswer["intent"]): string {
+	if (intent === "leads_by_stage") return "From your CRM leads (personal).";
+	if (intent === "cases_pending" || intent === "cases_by_status") {
+		return "From your visible cases/projects.";
+	}
+	return "From your portal tasks and calendar.";
+}
+
+function itemKindLabel(kind: AssistantAnswer["groups"][number]["items"][number]["kind"]) {
+	switch (kind) {
+		case "task":
+			return "Task";
+		case "event":
+			return "Calendar";
+		case "lead":
+			return "Lead";
+		case "case":
+			return "Case";
+	}
+}
+
+function itemOpenLabel(kind: AssistantAnswer["groups"][number]["items"][number]["kind"]) {
+	switch (kind) {
+		case "task":
+			return "Open lead";
+		case "event":
+			return "Open calendar";
+		case "lead":
+			return "Open lead";
+		case "case":
+			return "Open case";
+	}
+}
+
+function ItemIcon({
+	kind,
+}: {
+	kind: AssistantAnswer["groups"][number]["items"][number]["kind"];
+}) {
+	if (kind === "task") return <RiTodoLine className="size-4" />;
+	if (kind === "event") return <RiCalendarEventLine className="size-4" />;
+	if (kind === "lead") return <RiUserLine className="size-4" />;
+	return <RiBriefcaseLine className="size-4" />;
 }
 
 function IntentNote({ answer }: { answer: AssistantAnswer }) {
@@ -108,7 +175,7 @@ function AnswerBlock({
 				<p className="font-medium">{answer.summary}</p>
 				{answer.intent !== "unsupported" && answer.totalCount > 0 ? (
 					<p className="mt-0.5 text-muted-foreground text-xs">
-						From your portal tasks and calendar.
+						{sourceCaption(answer.intent)}
 					</p>
 				) : null}
 				<IntentNote answer={answer} />
@@ -126,10 +193,17 @@ function AnswerBlock({
 					>
 						{group.key === "overdue" ? (
 							<RiAlarmWarningLine className="size-3.5" />
+						) : BUSINESS_INTENTS.has(answer.intent) ? (
+							answer.intent === "leads_by_stage" ? (
+								<RiUserLine className="size-3.5" />
+							) : (
+								<RiBriefcaseLine className="size-3.5" />
+							)
 						) : (
 							<RiCalendarEventLine className="size-3.5" />
 						)}
-						{group.label} ({group.items.length})
+						{group.label}
+						{!/\(\d+\)$/.test(group.label) ? ` (${group.items.length})` : null}
 					</h4>
 					<ul className="space-y-2">
 						{group.items.map((item) => (
@@ -140,16 +214,16 @@ function AnswerBlock({
 								<div
 									className={cn(
 										"mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md",
-										item.kind === "task"
-											? "bg-primary/10 text-primary"
-											: "bg-violet-100 text-violet-700 dark:bg-violet-900/20 dark:text-violet-400",
+										item.kind === "task" && "bg-primary/10 text-primary",
+										item.kind === "event" &&
+											"bg-violet-100 text-violet-700 dark:bg-violet-900/20 dark:text-violet-400",
+										item.kind === "lead" &&
+											"bg-teal-100 text-teal-700 dark:bg-teal-900/20 dark:text-teal-400",
+										item.kind === "case" &&
+											"bg-amber-100 text-amber-800 dark:bg-amber-900/20 dark:text-amber-300",
 									)}
 								>
-									{item.kind === "task" ? (
-										<RiTodoLine className="size-4" />
-									) : (
-										<RiCalendarEventLine className="size-4" />
-									)}
+									<ItemIcon kind={item.kind} />
 								</div>
 								<div className="min-w-0 flex-1">
 									<div className="flex items-start justify-between gap-2">
@@ -175,7 +249,7 @@ function AnswerBlock({
 									<div className="mt-2 flex items-center justify-between gap-2">
 										<div className="flex min-w-0 items-center gap-1.5 text-xs">
 											<span className="rounded bg-muted px-1.5 py-0.5 text-[0.65rem] text-muted-foreground">
-												{item.kind === "task" ? "Task" : "Calendar"}
+												{itemKindLabel(item.kind)}
 											</span>
 											<span
 												className={cn(
@@ -193,7 +267,7 @@ function AnswerBlock({
 											onClick={onNavigate}
 											className="inline-flex shrink-0 items-center gap-0.5 font-medium text-primary text-xs hover:underline"
 										>
-											{item.kind === "task" ? "Open lead" : "Open calendar"}
+											{itemOpenLabel(item.kind)}
 											<RiArrowRightLine className="size-3" />
 										</Link>
 									</div>
@@ -247,7 +321,7 @@ export function AssistantButton() {
 			onError: () =>
 				push({
 					role: "error",
-					text: "Sorry, I couldn't load your tasks right now. Please try again.",
+					text: "Sorry, I couldn't load your portal data right now. Please try again.",
 				}),
 		});
 	};
@@ -326,6 +400,9 @@ export function AssistantButton() {
 										"size-4",
 										intent === "urgent" && "text-red-500",
 										intent === "overdue" && "text-amber-500",
+										intent === "leads_by_stage" && "text-teal-600",
+										(intent === "cases_pending" || intent === "cases_by_status") &&
+											"text-amber-700",
 									)}
 								/>
 								{label}
@@ -338,9 +415,9 @@ export function AssistantButton() {
 							<div className="space-y-2 rounded-xl border border-dashed p-4 text-sm">
 								<p className="font-medium">Hi! What would you like to check?</p>
 								<p className="text-muted-foreground text-xs">
-									Tap a quick button, or ask something like "what are my tasks for
-									the next few days?" or "anything overdue?". I only show tasks
-									and calendar events you can already see in the portal.
+									Tap a quick button, or ask about tasks, calendar, leads by stage,
+									or pending cases. I only show records you can already see in the
+									portal.
 								</p>
 							</div>
 						) : null}
@@ -380,7 +457,7 @@ export function AssistantButton() {
 						{askMutation.isPending ? (
 							<div className="flex items-center gap-2 text-muted-foreground text-xs">
 								<RiLoader4Line className="size-4 animate-spin" />
-								Checking your tasks and calendar…
+								Checking your portal data…
 							</div>
 						) : null}
 					</div>
@@ -391,7 +468,7 @@ export function AssistantButton() {
 								value={text}
 								onChange={(e) => setText(e.target.value)}
 								maxLength={300}
-								placeholder="Ask about your work…"
+								placeholder="Ask about tasks, leads, or cases…"
 								className="h-10 flex-1 rounded-md border bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
 								aria-label="Ask the assistant"
 							/>
@@ -408,7 +485,7 @@ export function AssistantButton() {
 						<div className="flex items-center justify-between gap-2 text-[0.65rem] text-muted-foreground">
 							<span className="inline-flex items-center gap-1">
 								<RiInformationLine className="size-3" />
-								Based on your portal tasks and calendar
+								Tasks · calendar · leads · cases
 								{status ? (
 									<span>· JEV {status.jevAvailable ? "connected" : "offline (keyword mode)"}</span>
 								) : null}

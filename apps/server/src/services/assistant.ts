@@ -1,6 +1,13 @@
-import { and, asc, eq, gte, isNull, lt, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import { calendarEvents } from "../models/calendar";
+import {
+	normalisePipelineStage,
+	pipelineStageSchema,
+	prospects,
+	type PipelineStage,
+} from "../models/crm";
 import type { LeadTask } from "../models/lead-tasks";
+import { transactions } from "../models/transactions";
 import { db } from "../utils/db";
 import {
 	formatMalaysiaShortDate,
@@ -9,18 +16,74 @@ import {
 	malaysiaDayKey,
 	startOfMalaysiaDay,
 } from "../utils/malaysia-time";
+import {
+	formatTransactionStatusLabel,
+	normalizeTransactionStatus,
+	type CanonicalTransactionStatus,
+} from "../utils/transaction-status";
+import { agentVisibleTransactionsSql } from "../utils/transaction-visibility";
 import type { AnsweredIntent, IntentResult } from "./assistant-intent";
+import { buildAgentPersonalLeadsCondition } from "./leads";
 import { getOpenTasksForAgentBefore } from "./lead-tasks";
 
 /** "Next 3 days" = today plus the following two Malaysia calendar days. */
 export const UPCOMING_DAYS = 3;
 const MAX_EVENTS = 50;
+const MAX_LEADS = 60;
+const MAX_CASES = 60;
+const MAX_ITEMS_PER_GROUP = 8;
+
+/** Pipeline column order (active stages only). */
+const PIPELINE_STAGE_ORDER: PipelineStage[] = [
+	"new_lead",
+	"first_follow_up",
+	"second_follow_up",
+	"third_follow_up",
+	"fourth_follow_up",
+	"potential_lead",
+	"appointment_made",
+	"need_consider",
+	"reject_project",
+	"booking_made",
+	"spam_fake_lead",
+];
+
+const PIPELINE_STAGE_LABELS: Record<PipelineStage, string> = {
+	new_lead: "New Lead",
+	first_follow_up: "1 First Follow Up",
+	second_follow_up: "2 Second Follow Up",
+	third_follow_up: "3 Third Follow Up",
+	fourth_follow_up: "Last Follow Up (Can Recycle)",
+	potential_lead: "Potential Lead",
+	appointment_made: "Appointment Made",
+	need_consider: "Need Consider",
+	reject_project: "Reject Project",
+	booking_made: "Booking Made",
+	spam_fake_lead: "Spam/Fake Lead",
+};
+
+const CASE_STATUS_ORDER: CanonicalTransactionStatus[] = [
+	"draft",
+	"pending",
+	"verified",
+	"converted",
+	"cancelled",
+	"revoke",
+	"void",
+];
+
+/** Cases that have not converted yet (still in the active case path). */
+const PENDING_CASE_STATUSES: CanonicalTransactionStatus[] = [
+	"draft",
+	"pending",
+	"verified",
+];
 
 export const SUPPORTED_HINT =
-	"For this first version I can help with Today, Next 3 days, Overdue and Urgent work.";
+	"I can help with Today, Next 3 days, Overdue, Urgent work, your leads by stage, pending cases, and cases by status.";
 
 export interface AssistantItem {
-	kind: "task" | "event";
+	kind: "task" | "event" | "lead" | "case";
 	id: string;
 	title: string;
 	subtitle: string | null;
@@ -62,6 +125,10 @@ function dayLabel(now: Date, at: Date): string {
 
 function isMalaysiaMidnight(at: Date): boolean {
 	return startOfMalaysiaDay(at).getTime() === at.getTime();
+}
+
+function plural(count: number, word: string): string {
+	return `${count} ${word}${count === 1 ? "" : "s"}`;
 }
 
 function taskToItem(now: Date, task: LeadTask, overdue: boolean): AssistantItem {
@@ -128,12 +195,134 @@ async function getEventsForAgentBetween(
 		.limit(MAX_EVENTS);
 }
 
-function plural(count: number, word: string): string {
-	return `${count} ${word}${count === 1 ? "" : "s"}`;
+type LeadRow = {
+	id: string;
+	name: string;
+	stage: string;
+	property: string;
+	status: string;
+	updatedAt: Date;
+};
+
+async function getLeadsForAgent(agentId: string): Promise<LeadRow[]> {
+	return db
+		.select({
+			id: prospects.id,
+			name: prospects.name,
+			stage: prospects.stage,
+			property: prospects.property,
+			status: prospects.status,
+			updatedAt: prospects.updatedAt,
+		})
+		.from(prospects)
+		.where(
+			and(
+				eq(prospects.leadType, "personal"),
+				buildAgentPersonalLeadsCondition(agentId),
+			),
+		)
+		.orderBy(desc(prospects.updatedAt))
+		.limit(MAX_LEADS);
 }
 
-function buildSummary(
-	intent: AnsweredIntent,
+function leadToItem(lead: LeadRow): AssistantItem {
+	const stage = normalisePipelineStage(lead.stage);
+	return {
+		kind: "lead",
+		id: lead.id,
+		title: lead.name,
+		subtitle: lead.property || null,
+		priority: null,
+		at: lead.updatedAt.toISOString(),
+		timeLabel: PIPELINE_STAGE_LABELS[stage] ?? stage,
+		href: `/dashboard/crm?lead=${encodeURIComponent(lead.id)}`,
+	};
+}
+
+type CaseRow = {
+	id: string;
+	caseNo: string | null;
+	projectName: string | null;
+	unitNo: string | null;
+	status: string | null;
+	propertyData: { address?: string | null } | null;
+	updatedAt: Date;
+	createdAt: Date;
+};
+
+async function getCasesForAgent(
+	agentId: string,
+	statusFilter?: CanonicalTransactionStatus[],
+): Promise<CaseRow[]> {
+	const visibility = agentVisibleTransactionsSql(agentId);
+	const conditions = [visibility];
+
+	if (statusFilter && statusFilter.length > 0) {
+		const dbStatuses = [
+			...new Set(
+				statusFilter.flatMap((s) => {
+					switch (s) {
+						case "pending":
+							return ["pending", "submitted", "under_review"] as const;
+						case "verified":
+							return ["verified", "approved", "commission_released"] as const;
+						case "converted":
+							return ["converted", "completed"] as const;
+						case "cancelled":
+							return ["cancelled", "rejected"] as const;
+						default:
+							return [s] as const;
+					}
+				}),
+			),
+		];
+		conditions.push(inArray(transactions.status, dbStatuses as typeof transactions.status.enumValues));
+	}
+
+	return db
+		.select({
+			id: transactions.id,
+			caseNo: transactions.caseNo,
+			projectName: transactions.projectName,
+			unitNo: transactions.unitNo,
+			status: transactions.status,
+			propertyData: transactions.propertyData,
+			updatedAt: transactions.updatedAt,
+			createdAt: transactions.createdAt,
+		})
+		.from(transactions)
+		.where(and(...conditions))
+		.orderBy(desc(transactions.updatedAt))
+		.limit(MAX_CASES);
+}
+
+function caseToItem(row: CaseRow): AssistantItem {
+	const status = normalizeTransactionStatus(row.status);
+	const statusLabel = formatTransactionStatusLabel(row.status);
+	const title =
+		row.projectName?.trim() ||
+		row.propertyData?.address?.trim() ||
+		(row.caseNo ? `Case ${row.caseNo}` : "Untitled case");
+	const subtitleParts = [
+		row.caseNo ? `Case ${row.caseNo}` : null,
+		row.unitNo ? `Unit ${row.unitNo}` : null,
+		statusLabel,
+	].filter(Boolean);
+
+	return {
+		kind: "case",
+		id: row.id,
+		title,
+		subtitle: subtitleParts.join(" · "),
+		priority: null,
+		at: row.updatedAt.toISOString(),
+		timeLabel: statusLabel,
+		href: `/dashboard/transactions/${encodeURIComponent(row.id)}`,
+	};
+}
+
+function buildScheduleSummary(
+	intent: Extract<AnsweredIntent, "today" | "upcoming" | "overdue" | "urgent">,
 	overdueCount: number,
 	windowCount: number,
 ): string {
@@ -157,28 +346,12 @@ function buildSummary(
 	}
 }
 
-/** Builds the answer from the agent's permitted tasks and calendar events. Dates are Malaysia time. */
-export async function buildAssistantAnswer(
+async function buildScheduleAnswer(
 	agentId: string,
+	intent: Extract<AnsweredIntent, "today" | "upcoming" | "overdue" | "urgent">,
 	intentResult: IntentResult,
-	now = new Date(),
+	now: Date,
 ): Promise<AssistantAnswer> {
-	const base = {
-		...intentResult,
-		generatedAt: now.toISOString(),
-	};
-
-	if (intentResult.intent === "unsupported") {
-		return {
-			...base,
-			summary: SUPPORTED_HINT,
-			groups: [],
-			totalCount: 0,
-			overdueCount: 0,
-		};
-	}
-
-	const intent = intentResult.intent;
 	const todayStart = startOfMalaysiaDay(now);
 	const windowEnd =
 		intent === "today"
@@ -231,10 +404,186 @@ export async function buildAssistantAnswer(
 	const windowCount = groups.reduce((sum, g) => sum + g.items.length, 0) - overdueCount;
 
 	return {
-		...base,
-		summary: buildSummary(intent, overdueCount, windowCount),
+		...intentResult,
+		generatedAt: now.toISOString(),
+		summary: buildScheduleSummary(intent, overdueCount, windowCount),
 		groups,
 		totalCount: overdueCount + windowCount,
 		overdueCount,
+	};
+}
+
+async function buildLeadsByStageAnswer(
+	agentId: string,
+	intentResult: IntentResult,
+	now: Date,
+): Promise<AssistantAnswer> {
+	const leads = await getLeadsForAgent(agentId);
+	const byStage = new Map<PipelineStage, LeadRow[]>();
+
+	for (const lead of leads) {
+		const stage = normalisePipelineStage(lead.stage);
+		const list = byStage.get(stage) ?? [];
+		list.push(lead);
+		byStage.set(stage, list);
+	}
+
+	const groups: AssistantGroup[] = [];
+	for (const stage of PIPELINE_STAGE_ORDER) {
+		const list = byStage.get(stage);
+		if (!list || list.length === 0) continue;
+		groups.push({
+			key: stage,
+			label: `${PIPELINE_STAGE_LABELS[stage]} (${list.length})`,
+			items: list.slice(0, MAX_ITEMS_PER_GROUP).map(leadToItem),
+		});
+	}
+
+	// Any unexpected stage values still get a group
+	for (const [stage, list] of byStage) {
+		if (PIPELINE_STAGE_ORDER.includes(stage)) continue;
+		if (list.length === 0) continue;
+		const parsed = pipelineStageSchema.safeParse(stage);
+		const label = parsed.success
+			? PIPELINE_STAGE_LABELS[parsed.data]
+			: String(stage).replace(/_/g, " ");
+		groups.push({
+			key: stage,
+			label: `${label} (${list.length})`,
+			items: list.slice(0, MAX_ITEMS_PER_GROUP).map(leadToItem),
+		});
+	}
+
+	const totalCount = leads.length;
+	const stageCount = groups.length;
+	const summary =
+		totalCount === 0
+			? "You have no personal leads in your CRM right now."
+			: `You have ${plural(totalCount, "lead")} across ${plural(stageCount, "stage")}.`;
+
+	return {
+		...intentResult,
+		generatedAt: now.toISOString(),
+		summary,
+		groups,
+		totalCount,
+		overdueCount: 0,
+	};
+}
+
+function groupCasesByStatus(rows: CaseRow[]): AssistantGroup[] {
+	const byStatus = new Map<CanonicalTransactionStatus | string, CaseRow[]>();
+	for (const row of rows) {
+		const status = normalizeTransactionStatus(row.status);
+		const list = byStatus.get(status) ?? [];
+		list.push(row);
+		byStatus.set(status, list);
+	}
+
+	const groups: AssistantGroup[] = [];
+	for (const status of CASE_STATUS_ORDER) {
+		const list = byStatus.get(status);
+		if (!list || list.length === 0) continue;
+		groups.push({
+			key: status,
+			label: `${formatTransactionStatusLabel(status)} (${list.length})`,
+			items: list.slice(0, MAX_ITEMS_PER_GROUP).map(caseToItem),
+		});
+	}
+	for (const [status, list] of byStatus) {
+		if (CASE_STATUS_ORDER.includes(status as CanonicalTransactionStatus)) continue;
+		if (list.length === 0) continue;
+		groups.push({
+			key: String(status),
+			label: `${formatTransactionStatusLabel(status)} (${list.length})`,
+			items: list.slice(0, MAX_ITEMS_PER_GROUP).map(caseToItem),
+		});
+	}
+	return groups;
+}
+
+async function buildCasesAnswer(
+	agentId: string,
+	intent: Extract<AnsweredIntent, "cases_pending" | "cases_by_status">,
+	intentResult: IntentResult,
+	now: Date,
+): Promise<AssistantAnswer> {
+	const rows =
+		intent === "cases_pending"
+			? await getCasesForAgent(agentId, PENDING_CASE_STATUSES)
+			: await getCasesForAgent(agentId);
+
+	const groups = groupCasesByStatus(rows);
+	const totalCount = rows.length;
+
+	let summary: string;
+	if (intent === "cases_pending") {
+		summary =
+			totalCount === 0
+				? "You have no pending cases that still need to convert."
+				: `You have ${plural(totalCount, "case")} not converted yet (draft, pending, or verified).`;
+	} else {
+		summary =
+			totalCount === 0
+				? "You have no cases/projects visible in the portal."
+				: `You have ${plural(totalCount, "case")} across ${plural(groups.length, "status")}.`;
+	}
+
+	return {
+		...intentResult,
+		generatedAt: now.toISOString(),
+		summary,
+		groups,
+		totalCount,
+		overdueCount: 0,
+	};
+}
+
+/** Builds the answer from the agent's permitted portal records. Dates are Malaysia time. */
+export async function buildAssistantAnswer(
+	agentId: string,
+	intentResult: IntentResult,
+	now = new Date(),
+): Promise<AssistantAnswer> {
+	const base = {
+		...intentResult,
+		generatedAt: now.toISOString(),
+	};
+
+	if (intentResult.intent === "unsupported") {
+		return {
+			...base,
+			summary: SUPPORTED_HINT,
+			groups: [],
+			totalCount: 0,
+			overdueCount: 0,
+		};
+	}
+
+	const intent = intentResult.intent;
+
+	if (
+		intent === "today" ||
+		intent === "upcoming" ||
+		intent === "overdue" ||
+		intent === "urgent"
+	) {
+		return buildScheduleAnswer(agentId, intent, intentResult, now);
+	}
+
+	if (intent === "leads_by_stage") {
+		return buildLeadsByStageAnswer(agentId, intentResult, now);
+	}
+
+	if (intent === "cases_pending" || intent === "cases_by_status") {
+		return buildCasesAnswer(agentId, intent, intentResult, now);
+	}
+
+	return {
+		...base,
+		summary: SUPPORTED_HINT,
+		groups: [],
+		totalCount: 0,
+		overdueCount: 0,
 	};
 }

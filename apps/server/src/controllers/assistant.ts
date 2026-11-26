@@ -4,10 +4,20 @@ import { classifyQuestion } from "../services/assistant-intent";
 import { isTypeSafeConfigured } from "../services/typesafe";
 import { protectedProcedure, router } from "../utils/trpc";
 
+const buttonIntentSchema = z.enum([
+	"today",
+	"upcoming",
+	"overdue",
+	"urgent",
+	"leads_by_stage",
+	"cases_pending",
+	"cases_by_status",
+]);
+
 const askInput = z.discriminatedUnion("mode", [
 	z.object({
 		mode: z.literal("button"),
-		intent: z.enum(["today", "upcoming", "overdue", "urgent"]),
+		intent: buttonIntentSchema,
 	}),
 	z.object({
 		mode: z.literal("text"),
@@ -16,7 +26,7 @@ const askInput = z.discriminatedUnion("mode", [
 ]);
 
 export const assistantRouter = router({
-	/** Read-only: answers only from the signed-in user's permitted tasks and calendar events. */
+	/** Read-only: answers from the signed-in user's permitted tasks, calendar, leads, and cases. */
 	ask: protectedProcedure.input(askInput).mutation(async ({ input, ctx }) => {
 		const startedAt = Date.now();
 		const intentResult =
