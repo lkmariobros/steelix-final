@@ -21,8 +21,12 @@ import {
 	normalizeTransactionStatus,
 	type CanonicalTransactionStatus,
 } from "../utils/transaction-status";
-import { agentVisibleTransactionsSql } from "../utils/transaction-visibility";
+import {
+	agentVisibleTransactionsSql,
+	resolveViewerCommission,
+} from "../utils/transaction-visibility";
 import type { AnsweredIntent, IntentResult } from "./assistant-intent";
+import { summarizeAgentPayoutDashboard } from "./commission-payouts";
 import { buildAgentPersonalLeadsCondition } from "./leads";
 import { getOpenTasksForAgentBefore } from "./lead-tasks";
 
@@ -79,11 +83,23 @@ const PENDING_CASE_STATUSES: CanonicalTransactionStatus[] = [
 	"verified",
 ];
 
+/** Completed / converted cases (canonical + legacy completed). */
+const COMPLETED_CASE_STATUSES: CanonicalTransactionStatus[] = ["converted"];
+
+/** Dashboard-style “pending commission” statuses (owner share still open). */
+const PENDING_COMMISSION_STATUSES = new Set([
+	"approved",
+	"under_review",
+	"verified",
+	"pending",
+	"submitted",
+]);
+
 export const SUPPORTED_HINT =
-	"I can help with Today, Next 3 days, Overdue, Urgent work, your leads by stage, pending cases, and cases by status.";
+	"I can help with Today, Next 3 days, Overdue, Urgent work, leads by stage, pending/all cases, completed cases, and commission summary.";
 
 export interface AssistantItem {
-	kind: "task" | "event" | "lead" | "case";
+	kind: "task" | "event" | "lead" | "case" | "stat";
 	id: string;
 	title: string;
 	subtitle: string | null;
@@ -129,6 +145,33 @@ function isMalaysiaMidnight(at: Date): boolean {
 
 function plural(count: number, word: string): string {
 	return `${count} ${word}${count === 1 ? "" : "s"}`;
+}
+
+function formatRm(amount: number): string {
+	return `RM ${amount.toLocaleString("en-MY", {
+		minimumFractionDigits: amount % 1 === 0 ? 0 : 2,
+		maximumFractionDigits: 2,
+	})}`;
+}
+
+function statItem(opts: {
+	id: string;
+	title: string;
+	subtitle: string;
+	timeLabel: string;
+	href: string;
+	at?: string;
+}): AssistantItem {
+	return {
+		kind: "stat",
+		id: opts.id,
+		title: opts.title,
+		subtitle: opts.subtitle,
+		priority: null,
+		at: opts.at ?? new Date(0).toISOString(),
+		timeLabel: opts.timeLabel,
+		href: opts.href,
+	};
 }
 
 function taskToItem(now: Date, task: LeadTask, overdue: boolean): AssistantItem {
@@ -539,6 +582,170 @@ async function buildCasesAnswer(
 	};
 }
 
+async function buildCompletedCasesAnswer(
+	agentId: string,
+	intentResult: IntentResult,
+	now: Date,
+): Promise<AssistantAnswer> {
+	const rows = await getCasesForAgent(agentId, COMPLETED_CASE_STATUSES);
+	const groups =
+		rows.length === 0
+			? []
+			: [
+					{
+						key: "converted",
+						label: `Converted (${rows.length})`,
+						items: rows.slice(0, MAX_ITEMS_PER_GROUP).map(caseToItem),
+					},
+				];
+
+	return {
+		...intentResult,
+		generatedAt: now.toISOString(),
+		summary:
+			rows.length === 0
+				? "You have no completed (converted) cases yet."
+				: `You have ${plural(rows.length, "completed case")}.`,
+		groups,
+		totalCount: rows.length,
+		overdueCount: 0,
+	};
+}
+
+async function getCommissionOverview(agentId: string) {
+	const visibility = agentVisibleTransactionsSql(agentId);
+	const visibleRows = await db
+		.select({
+			agentId: transactions.agentId,
+			status: transactions.status,
+			commissionAmount: transactions.commissionAmount,
+			coBrokingData: transactions.coBrokingData,
+			commissionBreakdown: transactions.commissionBreakdown,
+		})
+		.from(transactions)
+		.where(visibility);
+
+	let totalCommission = 0;
+	let pendingCommission = 0;
+	let completedDeals = 0;
+	for (const row of visibleRows) {
+		const mine = resolveViewerCommission({
+			viewerId: agentId,
+			agentId: row.agentId,
+			commissionAmount: row.commissionAmount,
+			coBrokingData: row.coBrokingData,
+			commissionBreakdown: row.commissionBreakdown,
+		}).myCommissionAmount;
+		totalCommission += mine;
+		if (row.status && PENDING_COMMISSION_STATUSES.has(row.status)) {
+			pendingCommission += mine;
+		}
+		const canonical = normalizeTransactionStatus(row.status);
+		if (canonical === "converted") completedDeals += 1;
+	}
+
+	const payout = await summarizeAgentPayoutDashboard(agentId);
+
+	return {
+		totalCommission: Math.round(totalCommission * 100) / 100,
+		pendingCommission: Math.round(pendingCommission * 100) / 100,
+		completedDeals,
+		visibleCaseCount: visibleRows.length,
+		totalEarnedRm: Math.round(payout.totalEarnedRm * 100) / 100,
+		totalReceivedRm: Math.round(payout.totalReceivedRm * 100) / 100,
+		outstandingRm: Math.round(payout.outstandingRm * 100) / 100,
+	};
+}
+
+async function buildCommissionSummaryAnswer(
+	agentId: string,
+	intentResult: IntentResult,
+	now: Date,
+): Promise<AssistantAnswer> {
+	const [overview, completedRows] = await Promise.all([
+		getCommissionOverview(agentId),
+		getCasesForAgent(agentId, COMPLETED_CASE_STATUSES),
+	]);
+
+	const generatedAt = now.toISOString();
+	const summaryItems: AssistantItem[] = [
+		statItem({
+			id: "total-commission",
+			title: formatRm(overview.totalCommission),
+			subtitle: "Your share across visible cases",
+			timeLabel: "Total commission",
+			href: "/dashboard/commissions",
+			at: generatedAt,
+		}),
+		statItem({
+			id: "pending-commission",
+			title: formatRm(overview.pendingCommission),
+			subtitle: "Still in pending / verified path",
+			timeLabel: "Pending commission",
+			href: "/dashboard/transactions",
+			at: generatedAt,
+		}),
+		statItem({
+			id: "completed-deals",
+			title: String(overview.completedDeals),
+			subtitle: "Converted / completed cases",
+			timeLabel: "Completed cases",
+			href: "/dashboard/transactions",
+			at: generatedAt,
+		}),
+		statItem({
+			id: "payout-earned",
+			title: formatRm(overview.totalEarnedRm),
+			subtitle: "From your commission payouts",
+			timeLabel: "Payout earned",
+			href: "/dashboard/commissions",
+			at: generatedAt,
+		}),
+		statItem({
+			id: "payout-received",
+			title: formatRm(overview.totalReceivedRm),
+			subtitle: "Marked paid",
+			timeLabel: "Payout received",
+			href: "/dashboard/commissions",
+			at: generatedAt,
+		}),
+		statItem({
+			id: "payout-outstanding",
+			title: formatRm(overview.outstandingRm),
+			subtitle: "Not paid yet",
+			timeLabel: "Outstanding",
+			href: "/dashboard/commissions",
+			at: generatedAt,
+		}),
+	];
+
+	const groups: AssistantGroup[] = [
+		{ key: "summary", label: "Commission overview", items: summaryItems },
+	];
+
+	if (completedRows.length > 0) {
+		groups.push({
+			key: "converted",
+			label: `Completed cases (${completedRows.length})`,
+			items: completedRows.slice(0, MAX_ITEMS_PER_GROUP).map(caseToItem),
+		});
+	}
+
+	const summary =
+		overview.visibleCaseCount === 0 && overview.totalEarnedRm === 0
+			? "No commission data yet for your visible cases and payouts."
+			: `Commission: ${formatRm(overview.totalCommission)} total · ${formatRm(overview.pendingCommission)} pending · ${plural(overview.completedDeals, "completed case")}.`;
+
+	return {
+		...intentResult,
+		generatedAt,
+		summary,
+		groups,
+		totalCount: overview.completedDeals + summaryItems.length,
+		overdueCount: 0,
+	};
+}
+
 /** Builds the answer from the agent's permitted portal records. Dates are Malaysia time. */
 export async function buildAssistantAnswer(
 	agentId: string,
@@ -577,6 +784,14 @@ export async function buildAssistantAnswer(
 
 	if (intent === "cases_pending" || intent === "cases_by_status") {
 		return buildCasesAnswer(agentId, intent, intentResult, now);
+	}
+
+	if (intent === "completed_cases") {
+		return buildCompletedCasesAnswer(agentId, intentResult, now);
+	}
+
+	if (intent === "commission_summary") {
+		return buildCommissionSummaryAnswer(agentId, intentResult, now);
 	}
 
 	return {

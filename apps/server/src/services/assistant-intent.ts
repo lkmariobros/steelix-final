@@ -8,6 +8,8 @@ export const ASSISTANT_INTENTS = [
 	"leads_by_stage",
 	"cases_pending",
 	"cases_by_status",
+	"completed_cases",
+	"commission_summary",
 	"unsupported",
 ] as const;
 
@@ -44,11 +46,25 @@ const JEV_CRITERIA: Record<AssistantIntent, string> = {
 		"Pending projects/cases/transactions that are not converted yet, drafts, waiting for approval, or stalled before conversion",
 	cases_by_status:
 		"Overview of projects/cases/transactions by status (draft, pending, verified, converted, cancelled, etc.)",
+	completed_cases:
+		"Completed or converted cases/deals — how many finished cases, converted transactions, closed deals",
+	commission_summary:
+		"Finance or commission overview — total commission, pending commission, payout earned/received/outstanding, money summary",
 	unsupported:
-		"Anything else: commissions/finance payouts, missing documents, writing messages, general chat, or topics outside the agent's tasks, calendar, leads pipeline, and cases",
+		"Anything else: missing documents, writing messages, general chat, or topics outside tasks, calendar, leads, cases, completed deals, and commission",
 };
 
 const KEYWORD_RULES: Array<{ intent: AnsweredIntent; pattern: RegExp }> = [
+	{
+		intent: "commission_summary",
+		pattern:
+			/\b(commission|payout|finance|earnings?|how much (did|have)?\s*i\s*(earn|make)|outstanding (pay|commission)|total earned)\b/i,
+	},
+	{
+		intent: "completed_cases",
+		pattern:
+			/\b(completed (cases?|deals?|projects?|transactions?)|converted (cases?|deals?|projects?|transactions?)|closed (cases?|deals?)|finished (cases?|deals?))\b/i,
+	},
 	{
 		intent: "leads_by_stage",
 		pattern:

@@ -12,6 +12,8 @@ const buttonIntentSchema = z.enum([
 	"leads_by_stage",
 	"cases_pending",
 	"cases_by_status",
+	"completed_cases",
+	"commission_summary",
 ]);
 
 const askInput = z.discriminatedUnion("mode", [
@@ -26,7 +28,7 @@ const askInput = z.discriminatedUnion("mode", [
 ]);
 
 export const assistantRouter = router({
-	/** Read-only: answers from the signed-in user's permitted tasks, calendar, leads, and cases. */
+	/** Read-only: tasks, calendar, leads, cases, completed deals, and commission summary. */
 	ask: protectedProcedure.input(askInput).mutation(async ({ input, ctx }) => {
 		const startedAt = Date.now();
 		const intentResult =

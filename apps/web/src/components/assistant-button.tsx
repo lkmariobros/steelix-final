@@ -7,11 +7,13 @@ import {
 	RiBriefcaseLine,
 	RiCalendarCheckLine,
 	RiCalendarEventLine,
+	RiCheckboxCircleLine,
 	RiCloseLine,
 	RiFlag2Line,
 	RiFolderOpenLine,
 	RiInformationLine,
 	RiLoader4Line,
+	RiMoneyDollarCircleLine,
 	RiSendPlane2Fill,
 	RiSparkling2Line,
 	RiTimeLine,
@@ -35,7 +37,9 @@ type QuickIntent =
 	| "urgent"
 	| "leads_by_stage"
 	| "cases_pending"
-	| "cases_by_status";
+	| "cases_by_status"
+	| "completed_cases"
+	| "commission_summary";
 
 type ChatMessage =
 	| { id: number; role: "user"; text: string; at: Date }
@@ -60,6 +64,8 @@ const QUICK_ACTIONS: Array<{
 	{ intent: "leads_by_stage", label: "My pipeline", icon: RiUserLine },
 	{ intent: "cases_pending", label: "Pending cases", icon: RiBriefcaseLine },
 	{ intent: "cases_by_status", label: "All cases", icon: RiFolderOpenLine },
+	{ intent: "completed_cases", label: "Completed", icon: RiCheckboxCircleLine },
+	{ intent: "commission_summary", label: "Commission", icon: RiMoneyDollarCircleLine },
 ];
 
 const INTENT_LABELS: Record<AssistantAnswer["intent"], string> = {
@@ -70,6 +76,8 @@ const INTENT_LABELS: Record<AssistantAnswer["intent"], string> = {
 	leads_by_stage: "Leads by stage",
 	cases_pending: "Pending cases",
 	cases_by_status: "Cases by status",
+	completed_cases: "Completed cases",
+	commission_summary: "Commission summary",
 	unsupported: "Not a supported question yet",
 };
 
@@ -86,7 +94,11 @@ const BUSINESS_INTENTS = new Set([
 	"leads_by_stage",
 	"cases_pending",
 	"cases_by_status",
+	"completed_cases",
+	"commission_summary",
 ]);
+
+const FINANCE_INTENTS = new Set(["completed_cases", "commission_summary"]);
 
 function formatClock(at: Date): string {
 	return at.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
@@ -94,8 +106,15 @@ function formatClock(at: Date): string {
 
 function sourceCaption(intent: AssistantAnswer["intent"]): string {
 	if (intent === "leads_by_stage") return "From your CRM leads (personal).";
-	if (intent === "cases_pending" || intent === "cases_by_status") {
+	if (
+		intent === "cases_pending" ||
+		intent === "cases_by_status" ||
+		intent === "completed_cases"
+	) {
 		return "From your visible cases/projects.";
+	}
+	if (intent === "commission_summary") {
+		return "From your case commission share and payouts.";
 	}
 	return "From your portal tasks and calendar.";
 }
@@ -110,6 +129,8 @@ function itemKindLabel(kind: AssistantAnswer["groups"][number]["items"][number][
 			return "Lead";
 		case "case":
 			return "Case";
+		case "stat":
+			return "Finance";
 	}
 }
 
@@ -123,6 +144,8 @@ function itemOpenLabel(kind: AssistantAnswer["groups"][number]["items"][number][
 			return "Open lead";
 		case "case":
 			return "Open case";
+		case "stat":
+			return "Open";
 	}
 }
 
@@ -134,6 +157,7 @@ function ItemIcon({
 	if (kind === "task") return <RiTodoLine className="size-4" />;
 	if (kind === "event") return <RiCalendarEventLine className="size-4" />;
 	if (kind === "lead") return <RiUserLine className="size-4" />;
+	if (kind === "stat") return <RiMoneyDollarCircleLine className="size-4" />;
 	return <RiBriefcaseLine className="size-4" />;
 }
 
@@ -193,6 +217,12 @@ function AnswerBlock({
 					>
 						{group.key === "overdue" ? (
 							<RiAlarmWarningLine className="size-3.5" />
+						) : FINANCE_INTENTS.has(answer.intent) ? (
+							answer.intent === "commission_summary" ? (
+								<RiMoneyDollarCircleLine className="size-3.5" />
+							) : (
+								<RiCheckboxCircleLine className="size-3.5" />
+							)
 						) : BUSINESS_INTENTS.has(answer.intent) ? (
 							answer.intent === "leads_by_stage" ? (
 								<RiUserLine className="size-3.5" />
@@ -221,6 +251,8 @@ function AnswerBlock({
 											"bg-teal-100 text-teal-700 dark:bg-teal-900/20 dark:text-teal-400",
 										item.kind === "case" &&
 											"bg-amber-100 text-amber-800 dark:bg-amber-900/20 dark:text-amber-300",
+										item.kind === "stat" &&
+											"bg-emerald-100 text-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300",
 									)}
 								>
 									<ItemIcon kind={item.kind} />
@@ -403,6 +435,8 @@ export function AssistantButton() {
 										intent === "leads_by_stage" && "text-teal-600",
 										(intent === "cases_pending" || intent === "cases_by_status") &&
 											"text-amber-700",
+										intent === "completed_cases" && "text-emerald-600",
+										intent === "commission_summary" && "text-emerald-700",
 									)}
 								/>
 								{label}
@@ -415,9 +449,9 @@ export function AssistantButton() {
 							<div className="space-y-2 rounded-xl border border-dashed p-4 text-sm">
 								<p className="font-medium">Hi! What would you like to check?</p>
 								<p className="text-muted-foreground text-xs">
-									Tap a quick button, or ask about tasks, calendar, leads by stage,
-									or pending cases. I only show records you can already see in the
-									portal.
+									Tap a quick button, or ask about tasks, leads, cases, completed
+									deals, or commission. I only show records you can already see in
+									the portal.
 								</p>
 							</div>
 						) : null}
@@ -468,7 +502,7 @@ export function AssistantButton() {
 								value={text}
 								onChange={(e) => setText(e.target.value)}
 								maxLength={300}
-								placeholder="Ask about tasks, leads, or cases…"
+								placeholder="Ask about tasks, leads, cases, or commission…"
 								className="h-10 flex-1 rounded-md border bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
 								aria-label="Ask the assistant"
 							/>
@@ -485,7 +519,7 @@ export function AssistantButton() {
 						<div className="flex items-center justify-between gap-2 text-[0.65rem] text-muted-foreground">
 							<span className="inline-flex items-center gap-1">
 								<RiInformationLine className="size-3" />
-								Tasks · calendar · leads · cases
+								Tasks · leads · cases · commission
 								{status ? (
 									<span>· JEV {status.jevAvailable ? "connected" : "offline (keyword mode)"}</span>
 								) : null}
