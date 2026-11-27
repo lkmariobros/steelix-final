@@ -9,6 +9,8 @@ import {
 	RiCalendarEventLine,
 	RiCheckboxCircleLine,
 	RiCloseLine,
+	RiFileWarningLine,
+	RiFileList3Line,
 	RiFlag2Line,
 	RiFolderOpenLine,
 	RiInformationLine,
@@ -39,7 +41,9 @@ type QuickIntent =
 	| "cases_pending"
 	| "cases_by_status"
 	| "completed_cases"
-	| "commission_summary";
+	| "commission_summary"
+	| "missing_documents"
+	| "case_files";
 
 type ChatMessage =
 	| { id: number; role: "user"; text: string; at: Date }
@@ -66,6 +70,8 @@ const QUICK_ACTIONS: Array<{
 	{ intent: "cases_by_status", label: "All cases", icon: RiFolderOpenLine },
 	{ intent: "completed_cases", label: "Completed", icon: RiCheckboxCircleLine },
 	{ intent: "commission_summary", label: "Commission", icon: RiMoneyDollarCircleLine },
+	{ intent: "missing_documents", label: "Missing docs", icon: RiFileWarningLine },
+	{ intent: "case_files", label: "Case files", icon: RiFileList3Line },
 ];
 
 const INTENT_LABELS: Record<AssistantAnswer["intent"], string> = {
@@ -78,6 +84,8 @@ const INTENT_LABELS: Record<AssistantAnswer["intent"], string> = {
 	cases_by_status: "Cases by status",
 	completed_cases: "Completed cases",
 	commission_summary: "Commission summary",
+	missing_documents: "Missing documents",
+	case_files: "Case files",
 	unsupported: "Not a supported question yet",
 };
 
@@ -96,9 +104,12 @@ const BUSINESS_INTENTS = new Set([
 	"cases_by_status",
 	"completed_cases",
 	"commission_summary",
+	"missing_documents",
+	"case_files",
 ]);
 
 const FINANCE_INTENTS = new Set(["completed_cases", "commission_summary"]);
+const DOCS_INTENTS = new Set(["missing_documents", "case_files"]);
 
 function formatClock(at: Date): string {
 	return at.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
@@ -116,6 +127,9 @@ function sourceCaption(intent: AssistantAnswer["intent"]): string {
 	if (intent === "commission_summary") {
 		return "From your case commission share and payouts.";
 	}
+	if (intent === "missing_documents" || intent === "case_files") {
+		return "From case documents (same rules as submit).";
+	}
 	return "From your portal tasks and calendar.";
 }
 
@@ -131,6 +145,8 @@ function itemKindLabel(kind: AssistantAnswer["groups"][number]["items"][number][
 			return "Case";
 		case "stat":
 			return "Finance";
+		case "file":
+			return "File";
 	}
 }
 
@@ -146,6 +162,8 @@ function itemOpenLabel(kind: AssistantAnswer["groups"][number]["items"][number][
 			return "Open case";
 		case "stat":
 			return "Open";
+		case "file":
+			return "Open case";
 	}
 }
 
@@ -158,6 +176,7 @@ function ItemIcon({
 	if (kind === "event") return <RiCalendarEventLine className="size-4" />;
 	if (kind === "lead") return <RiUserLine className="size-4" />;
 	if (kind === "stat") return <RiMoneyDollarCircleLine className="size-4" />;
+	if (kind === "file") return <RiFileList3Line className="size-4" />;
 	return <RiBriefcaseLine className="size-4" />;
 }
 
@@ -217,6 +236,12 @@ function AnswerBlock({
 					>
 						{group.key === "overdue" ? (
 							<RiAlarmWarningLine className="size-3.5" />
+						) : DOCS_INTENTS.has(answer.intent) ? (
+							answer.intent === "missing_documents" ? (
+								<RiFileWarningLine className="size-3.5" />
+							) : (
+								<RiFileList3Line className="size-3.5" />
+							)
 						) : FINANCE_INTENTS.has(answer.intent) ? (
 							answer.intent === "commission_summary" ? (
 								<RiMoneyDollarCircleLine className="size-3.5" />
@@ -253,6 +278,8 @@ function AnswerBlock({
 											"bg-amber-100 text-amber-800 dark:bg-amber-900/20 dark:text-amber-300",
 										item.kind === "stat" &&
 											"bg-emerald-100 text-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300",
+										item.kind === "file" &&
+											"bg-sky-100 text-sky-800 dark:bg-sky-900/20 dark:text-sky-300",
 									)}
 								>
 									<ItemIcon kind={item.kind} />
@@ -437,6 +464,8 @@ export function AssistantButton() {
 											"text-amber-700",
 										intent === "completed_cases" && "text-emerald-600",
 										intent === "commission_summary" && "text-emerald-700",
+										intent === "missing_documents" && "text-rose-600",
+										intent === "case_files" && "text-sky-600",
 									)}
 								/>
 								{label}
@@ -449,9 +478,9 @@ export function AssistantButton() {
 							<div className="space-y-2 rounded-xl border border-dashed p-4 text-sm">
 								<p className="font-medium">Hi! What would you like to check?</p>
 								<p className="text-muted-foreground text-xs">
-									Tap a quick button, or ask about tasks, leads, cases, completed
-									deals, or commission. I only show records you can already see in
-									the portal.
+									Tap a quick button, or ask about tasks, leads, cases, commission,
+									missing docs, or case files. I only show records you can already
+									see in the portal.
 								</p>
 							</div>
 						) : null}
@@ -502,7 +531,7 @@ export function AssistantButton() {
 								value={text}
 								onChange={(e) => setText(e.target.value)}
 								maxLength={300}
-								placeholder="Ask about tasks, leads, cases, or commission…"
+								placeholder="Ask about tasks, cases, commission, or documents…"
 								className="h-10 flex-1 rounded-md border bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
 								aria-label="Ask the assistant"
 							/>
@@ -519,7 +548,7 @@ export function AssistantButton() {
 						<div className="flex items-center justify-between gap-2 text-[0.65rem] text-muted-foreground">
 							<span className="inline-flex items-center gap-1">
 								<RiInformationLine className="size-3" />
-								Tasks · leads · cases · commission
+								Tasks · cases · commission · docs
 								{status ? (
 									<span>· JEV {status.jevAvailable ? "connected" : "offline (keyword mode)"}</span>
 								) : null}

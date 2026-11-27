@@ -10,6 +10,8 @@ export const ASSISTANT_INTENTS = [
 	"cases_by_status",
 	"completed_cases",
 	"commission_summary",
+	"missing_documents",
+	"case_files",
 	"unsupported",
 ] as const;
 
@@ -50,11 +52,25 @@ const JEV_CRITERIA: Record<AssistantIntent, string> = {
 		"Completed or converted cases/deals — how many finished cases, converted transactions, closed deals",
 	commission_summary:
 		"Finance or commission overview — total commission, pending commission, payout earned/received/outstanding, money summary",
+	missing_documents:
+		"Cases or projects missing required documents, incomplete uploads, need IC/passport, or documents not uploaded yet",
+	case_files:
+		"List or browse uploaded case documents/files across projects (what files are attached to my cases)",
 	unsupported:
-		"Anything else: missing documents, writing messages, general chat, or topics outside tasks, calendar, leads, cases, completed deals, and commission",
+		"Anything else: writing messages, general chat, or topics outside tasks, calendar, leads, cases, commission, and case documents",
 };
 
 const KEYWORD_RULES: Array<{ intent: AnsweredIntent; pattern: RegExp }> = [
+	{
+		intent: "missing_documents",
+		pattern:
+			/\b(missing (docs?|documents?)|incomplete (docs?|documents?)|no documents?|need(s)? (ic|passport|documents?)|documents? (missing|incomplete|required)|upload.*(ic|passport|document))\b/i,
+	},
+	{
+		intent: "case_files",
+		pattern:
+			/\b((case|project|transaction) (files?|documents?|uploads?)|(files?|documents?) (on|for|across) (my )?(cases?|projects?|transactions?)|uploaded (files?|documents?)|my (case )?files?)\b/i,
+	},
 	{
 		intent: "commission_summary",
 		pattern:

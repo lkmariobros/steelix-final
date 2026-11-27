@@ -7,7 +7,7 @@ import {
 	type PipelineStage,
 } from "../models/crm";
 import type { LeadTask } from "../models/lead-tasks";
-import { transactions } from "../models/transactions";
+import { transactionDocuments, transactions } from "../models/transactions";
 import { db } from "../utils/db";
 import {
 	formatMalaysiaShortDate,
@@ -35,6 +35,7 @@ export const UPCOMING_DAYS = 3;
 const MAX_EVENTS = 50;
 const MAX_LEADS = 60;
 const MAX_CASES = 60;
+const MAX_FILES = 50;
 const MAX_ITEMS_PER_GROUP = 8;
 
 /** Pipeline column order (active stages only). */
@@ -96,10 +97,10 @@ const PENDING_COMMISSION_STATUSES = new Set([
 ]);
 
 export const SUPPORTED_HINT =
-	"I can help with Today, Next 3 days, Overdue, Urgent work, leads by stage, pending/all cases, completed cases, and commission summary.";
+	"I can help with Today, Next 3 days, Overdue, Urgent, leads by stage, cases, completed cases, commission, missing documents, and case files.";
 
 export interface AssistantItem {
-	kind: "task" | "event" | "lead" | "case" | "stat";
+	kind: "task" | "event" | "lead" | "case" | "stat" | "file";
 	id: string;
 	title: string;
 	subtitle: string | null;
@@ -107,6 +108,49 @@ export interface AssistantItem {
 	at: string;
 	timeLabel: string;
 	href: string;
+}
+
+const DOC_CATEGORY_LABELS: Record<string, string> = {
+	contract: "Contract",
+	identification: "Identification",
+	financial: "Financial",
+	miscellaneous: "Miscellaneous",
+	ic_passport: "IC / Passport",
+	sales_form: "Sales form",
+	bank_letter: "Bank letter",
+	payment_proof: "Payment proof",
+	other: "Other",
+	booking_form: "Booking form",
+	receipt: "Receipt",
+	co_broke_letter: "Co-broke letter",
+	tenancy_agreement: "Tenancy agreement",
+	spa: "SPA",
+	co_agency_invoice: "Co-Agency Invoice",
+	invoice: "Invoice",
+	lo_draft: "LO Draft",
+	lo_signed: "LO Signed",
+};
+
+function formatDocCategory(category: string): string {
+	return DOC_CATEGORY_LABELS[category] ?? category.replace(/_/g, " ");
+}
+
+/**
+ * Same rules as sales-entry submit (step-3-verify):
+ * - primary → need IC/Passport (or legacy identification)
+ * - secondary → at least one supporting document
+ */
+function missingDocumentReasons(
+	marketType: string | null | undefined,
+	categories: string[],
+): string[] {
+	if (marketType === "primary") {
+		const hasIc = categories.some(
+			(c) => c === "ic_passport" || c === "identification",
+		);
+		return hasIc ? [] : ["Missing purchaser IC / Passport"];
+	}
+	return categories.length === 0 ? ["No supporting documents uploaded"] : [];
 }
 
 export interface AssistantGroup {
@@ -746,6 +790,253 @@ async function buildCommissionSummaryAnswer(
 	};
 }
 
+type CaseDocSummary = {
+	id: string;
+	caseNo: string | null;
+	projectName: string | null;
+	unitNo: string | null;
+	status: string | null;
+	marketType: string | null;
+	propertyData: { address?: string | null } | null;
+	updatedAt: Date;
+	categories: string[];
+	docCount: number;
+};
+
+async function getActiveCasesWithDocCategories(
+	agentId: string,
+): Promise<CaseDocSummary[]> {
+	const visibility = agentVisibleTransactionsSql(agentId);
+	const activeDbStatuses = [
+		...new Set(
+			PENDING_CASE_STATUSES.flatMap((s) => {
+				switch (s) {
+					case "pending":
+						return ["pending", "submitted", "under_review"] as const;
+					case "verified":
+						return ["verified", "approved", "commission_released"] as const;
+					default:
+						return [s] as const;
+				}
+			}),
+		),
+	];
+
+	const rows = await db
+		.select({
+			id: transactions.id,
+			caseNo: transactions.caseNo,
+			projectName: transactions.projectName,
+			unitNo: transactions.unitNo,
+			status: transactions.status,
+			marketType: transactions.marketType,
+			propertyData: transactions.propertyData,
+			updatedAt: transactions.updatedAt,
+			categories: sql<string[]>`coalesce(
+				array_agg(distinct ${transactionDocuments.documentCategory})
+					filter (where ${transactionDocuments.id} is not null),
+				'{}'::text[]
+			)`,
+			docCount: sql<number>`count(${transactionDocuments.id})::int`,
+		})
+		.from(transactions)
+		.leftJoin(
+			transactionDocuments,
+			eq(transactionDocuments.transactionId, transactions.id),
+		)
+		.where(
+			and(
+				visibility,
+				inArray(
+					transactions.status,
+					activeDbStatuses as typeof transactions.status.enumValues,
+				),
+			),
+		)
+		.groupBy(
+			transactions.id,
+			transactions.caseNo,
+			transactions.projectName,
+			transactions.unitNo,
+			transactions.status,
+			transactions.marketType,
+			transactions.propertyData,
+			transactions.updatedAt,
+		)
+		.orderBy(desc(transactions.updatedAt))
+		.limit(MAX_CASES);
+
+	return rows.map((r) => ({
+		...r,
+		marketType: r.marketType ?? null,
+		categories: Array.isArray(r.categories) ? r.categories.filter(Boolean) : [],
+		docCount: Number(r.docCount) || 0,
+	}));
+}
+
+type CaseFileRow = {
+	id: string;
+	fileName: string;
+	documentCategory: string;
+	uploadedAt: Date;
+	transactionId: string;
+	caseNo: string | null;
+	projectName: string | null;
+	propertyData: { address?: string | null } | null;
+};
+
+async function getCaseFilesForAgent(agentId: string): Promise<CaseFileRow[]> {
+	const visibility = agentVisibleTransactionsSql(agentId);
+	return db
+		.select({
+			id: transactionDocuments.id,
+			fileName: transactionDocuments.fileName,
+			documentCategory: transactionDocuments.documentCategory,
+			uploadedAt: transactionDocuments.uploadedAt,
+			transactionId: transactions.id,
+			caseNo: transactions.caseNo,
+			projectName: transactions.projectName,
+			propertyData: transactions.propertyData,
+		})
+		.from(transactionDocuments)
+		.innerJoin(
+			transactions,
+			eq(transactions.id, transactionDocuments.transactionId),
+		)
+		.where(visibility)
+		.orderBy(desc(transactionDocuments.uploadedAt))
+		.limit(MAX_FILES);
+}
+
+function caseTitleFromParts(row: {
+	projectName: string | null;
+	propertyData: { address?: string | null } | null;
+	caseNo: string | null;
+}): string {
+	return (
+		row.projectName?.trim() ||
+		row.propertyData?.address?.trim() ||
+		(row.caseNo ? `Case ${row.caseNo}` : "Untitled case")
+	);
+}
+
+async function buildMissingDocumentsAnswer(
+	agentId: string,
+	intentResult: IntentResult,
+	now: Date,
+): Promise<AssistantAnswer> {
+	const cases = await getActiveCasesWithDocCategories(agentId);
+	const missing = cases
+		.map((c) => {
+			const reasons = missingDocumentReasons(c.marketType, c.categories);
+			return { case: c, reasons };
+		})
+		.filter((x) => x.reasons.length > 0);
+
+	const items: AssistantItem[] = missing
+		.slice(0, MAX_ITEMS_PER_GROUP * 2)
+		.map(({ case: c, reasons }) => {
+			const statusLabel = formatTransactionStatusLabel(c.status);
+			const market =
+				c.marketType === "primary"
+					? "Primary"
+					: c.marketType === "secondary"
+						? "Secondary"
+						: null;
+			return {
+				kind: "case" as const,
+				id: c.id,
+				title: caseTitleFromParts(c),
+				subtitle: [
+					c.caseNo ? `Case ${c.caseNo}` : null,
+					market,
+					statusLabel,
+					reasons.join("; "),
+				]
+					.filter(Boolean)
+					.join(" · "),
+				priority: null,
+				at: c.updatedAt.toISOString(),
+				timeLabel: reasons[0] ?? "Missing documents",
+				href: `/dashboard/transactions/${encodeURIComponent(c.id)}`,
+			};
+		});
+
+	const groups: AssistantGroup[] =
+		items.length > 0
+			? [{ key: "missing_docs", label: `Missing documents (${missing.length})`, items }]
+			: [];
+
+	return {
+		...intentResult,
+		generatedAt: now.toISOString(),
+		summary:
+			missing.length === 0
+				? "No active cases are missing required documents."
+				: `${plural(missing.length, "active case")} ${missing.length === 1 ? "is" : "are"} missing required documents.`,
+		groups,
+		totalCount: missing.length,
+		overdueCount: 0,
+	};
+}
+
+async function buildCaseFilesAnswer(
+	agentId: string,
+	intentResult: IntentResult,
+	now: Date,
+): Promise<AssistantAnswer> {
+	const files = await getCaseFilesForAgent(agentId);
+	const byCase = new Map<string, { title: string; files: CaseFileRow[] }>();
+
+	for (const file of files) {
+		const existing = byCase.get(file.transactionId);
+		if (existing) {
+			existing.files.push(file);
+		} else {
+			byCase.set(file.transactionId, {
+				title: caseTitleFromParts(file),
+				files: [file],
+			});
+		}
+	}
+
+	const groups: AssistantGroup[] = [];
+	for (const [transactionId, bucket] of byCase) {
+		groups.push({
+			key: transactionId,
+			label: `${bucket.title} (${bucket.files.length})`,
+			items: bucket.files.slice(0, MAX_ITEMS_PER_GROUP).map((file) => ({
+				kind: "file" as const,
+				id: file.id,
+				title: file.fileName,
+				subtitle: [
+					file.caseNo ? `Case ${file.caseNo}` : null,
+					formatDocCategory(file.documentCategory),
+				]
+					.filter(Boolean)
+					.join(" · "),
+				priority: null,
+				at: file.uploadedAt.toISOString(),
+				timeLabel: formatMalaysiaShortDate(file.uploadedAt),
+				href: `/dashboard/transactions/${encodeURIComponent(file.transactionId)}`,
+			})),
+		});
+		if (groups.length >= 8) break;
+	}
+
+	return {
+		...intentResult,
+		generatedAt: now.toISOString(),
+		summary:
+			files.length === 0
+				? "No case documents found on your visible projects."
+				: `You have ${plural(files.length, "case document")} across ${plural(byCase.size, "case")}.`,
+		groups,
+		totalCount: files.length,
+		overdueCount: 0,
+	};
+}
+
 /** Builds the answer from the agent's permitted portal records. Dates are Malaysia time. */
 export async function buildAssistantAnswer(
 	agentId: string,
@@ -792,6 +1083,14 @@ export async function buildAssistantAnswer(
 
 	if (intent === "commission_summary") {
 		return buildCommissionSummaryAnswer(agentId, intentResult, now);
+	}
+
+	if (intent === "missing_documents") {
+		return buildMissingDocumentsAnswer(agentId, intentResult, now);
+	}
+
+	if (intent === "case_files") {
+		return buildCaseFilesAnswer(agentId, intentResult, now);
 	}
 
 	return {
